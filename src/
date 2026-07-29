@@ -1,0 +1,401 @@
+[1mdiff --git a/PilotIntel.Integration/zKill/IzKillClient.cs b/PilotIntel.Integration/zKill/IzKillClient.cs[m
+[1mindex 85de042..30f77dd 100644[m
+[1m--- a/PilotIntel.Integration/zKill/IzKillClient.cs[m
+[1m+++ b/PilotIntel.Integration/zKill/IzKillClient.cs[m
+[36m@@ -1,15 +1,10 @@[m
+[31m-﻿namespace PilotIntel.Integration.zKill;[m
+[31m-using PilotIntel.Shared.zKill;[m
+[31m-[m
+[32m+[m[32m﻿using PilotIntel.Shared.zKill;[m
+ using PilotIntel.Shared.Killmails;[m
+ [m
+[32m+[m[32mnamespace PilotIntel.Integration.zKill;[m
+[32m+[m
+ public interface IzKillClient[m
+ {[m
+[31m-    Task<zKillActivity> GetActivityAsync([m
+[31m-        long characterId,[m
+[31m-        int windowDays = 7,[m
+[31m-        CancellationToken cancellationToken = default);[m
+[31m-[m
+     Task<IReadOnlyList<KillmailRecord>> GetRecentKillmailsAsync([m
+         long characterId,[m
+         int pastSeconds,[m
+[1mdiff --git a/PilotIntel.Integration/zKill/zKillClient.cs b/PilotIntel.Integration/zKill/zKillClient.cs[m
+[1mindex 9619839..ffab926 100644[m
+[1m--- a/PilotIntel.Integration/zKill/zKillClient.cs[m
+[1m+++ b/PilotIntel.Integration/zKill/zKillClient.cs[m
+[36m@@ -24,82 +24,12 @@[m [mpublic sealed class zKillClient : IzKillClient[m
+             _http.DefaultRequestHeaders.AcceptEncoding.Add(new StringWithQualityHeaderValue("gzip"));[m
+     }[m
+ [m
+[31m-    public async Task<zKillActivity> GetActivityAsync([m
+[31m-        long characterId,[m
+[31m-        int windowDays = 7,[m
+[31m-        CancellationToken cancellationToken = default)[m
+[31m-    {[m
+[31m-        try[m
+[31m-        {[m
+[31m-            var safeWindowDays = Math.Max(1, windowDays);[m
+[31m-            var pastSeconds = safeWindowDays * 24 * 60 * 60;[m
+[31m-            var sinceUtc = ApplicationClock.UtcNow.AddDays(-safeWindowDays);[m
+[31m-[m
+[31m-            var killmails = await LoadzKillKillmailsAsync([m
+[31m-                $"api/characterID/{characterId}/pastSeconds/{pastSeconds}/",[m
+[31m-                cancellationToken);[m
+[31m-[m
+[31m-            var hasPublicActivityData = false;[m
+[31m-            var killsWeek = 0;[m
+[31m-            var soloWeek = 0;[m
+[31m-            DateTimeOffset? lastActiveUtc = null;[m
+[31m-            zKillActivityType? lastActivityType = null;[m
+[31m-[m
+[31m-            foreach (var killmail in killmails)[m
+[31m-            {[m
+[31m-                if (killmail.killmail_time < sinceUtc)[m
+[31m-                    continue;[m
+[31m-[m
+[31m-                var isKill = killmail.attackers.Any(attacker => attacker.character_id == characterId);[m
+[31m-                var isLoss = !isKill;[m
+[31m-[m
+[31m-                hasPublicActivityData = true;[m
+[31m-[m
+[31m-                if (isKill)[m
+[31m-                {[m
+[31m-                    killsWeek++;[m
+[31m-[m
+[31m-                    if (killmail.attackers.Count == 1 && killmail.zkb.solo)[m
+[31m-                        soloWeek++;[m
+[31m-                }[m
+[31m-[m
+[31m-                if (lastActiveUtc is null || killmail.killmail_time > lastActiveUtc.Value)[m
+[31m-                {[m
+[31m-                    lastActiveUtc = killmail.killmail_time;[m
+[31m-                    lastActivityType = isLoss ? zKillActivityType.Loss : zKillActivityType.Kill;[m
+[31m-                }[m
+[31m-            }[m
+[31m-[m
+[31m-            return new zKillActivity([m
+[31m-                characterId,[m
+[31m-                hasPublicActivityData,[m
+[31m-                hasPublicActivityData ? killsWeek : null,[m
+[31m-                hasPublicActivityData ? soloWeek : null,[m
+[31m-                lastActiveUtc,[m
+[31m-                lastActivityType,[m
+[31m-                ApplicationClock.UtcNow);[m
+[31m-        }[m
+[31m-        catch (Exception ex)[m
+[31m-        {[m
+[31m-            return new zKillActivity([m
+[31m-                characterId,[m
+[31m-                false,[m
+[31m-                null,[m
+[31m-                null,[m
+[31m-                null,[m
+[31m-                null,[m
+[31m-                ApplicationClock.UtcNow,[m
+[31m-                ex.Message);[m
+[31m-        }[m
+[31m-    }[m
+[31m-[m
+     public async Task<IReadOnlyList<KillmailRecord>> GetRecentKillmailsAsync([m
+         long characterId,[m
+         int pastSeconds,[m
+         CancellationToken cancellationToken = default)[m
+     {[m
+         var safePastSeconds = Math.Max(1, pastSeconds);[m
+[31m-[m
+         return await LoadKillmailsAsync([m
+             $"api/characterID/{characterId}/pastSeconds/{safePastSeconds}/",[m
+             characterId,[m
+[36m@@ -120,7 +50,6 @@[m [mpublic sealed class zKillClient : IzKillClient[m
+                 return null;[m
+ [m
+             await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);[m
+[31m-[m
+             return await JsonSerializer.DeserializeAsync<zKillStatistics>([m
+                 stream,[m
+                 cancellationToken: cancellationToken);[m
+[36m@@ -143,7 +72,6 @@[m [mpublic sealed class zKillClient : IzKillClient[m
+         foreach (var killmail in payload)[m
+         {[m
+             var isLoss = killmail.victim.character_id == characterId;[m
+[31m-[m
+             var shipTypeId = isLoss[m
+                 ? killmail.victim.ship_type_id[m
+                 : killmail.attackers[m
+[36m@@ -181,7 +109,6 @@[m [mpublic sealed class zKillClient : IzKillClient[m
+             return [];[m
+ [m
+         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);[m
+[31m-[m
+         return await JsonSerializer.DeserializeAsync<List<zKillRecentKillmailDto>>([m
+             stream,[m
+             cancellationToken: cancellationToken) ?? [];[m
+[1mdiff --git a/PilotIntel.Integration/zKill/zKillClientOptions.cs b/PilotIntel.Integration/zKill/zKillClientOptions.cs[m
+[1mindex 79cfd1e..69fe08d 100644[m
+[1m--- a/PilotIntel.Integration/zKill/zKillClientOptions.cs[m
+[1m+++ b/PilotIntel.Integration/zKill/zKillClientOptions.cs[m
+[36m@@ -2,6 +2,6 @@[m
+ [m
+ public sealed record zKillClientOptions[m
+ {[m
+[31m-    public Uri BaseUri { get; init; } = new("https://zkillboard.com/");[m
+[32m+[m[32m        public Uri BaseUri { get; init; } = new("https://zkillboard.com/");[m
+     public string UserAgent { get; init; } = "PilotIntel/1.0 (Developer: T'ral Vsengne)";[m
+ }[m
+\ No newline at end of file[m
+[1mdiff --git a/PilotIntel.Storage/Killmails/DuckDbRecentKillmailCache.cs b/PilotIntel.Storage/Killmails/DuckDbRecentKillmailCache.cs[m
+[1mindex 064ed1c..8b25e88 100644[m
+[1m--- a/PilotIntel.Storage/Killmails/DuckDbRecentKillmailCache.cs[m
+[1m+++ b/PilotIntel.Storage/Killmails/DuckDbRecentKillmailCache.cs[m
+[36m@@ -1,11 +1,11 @@[m
+ ﻿using DuckDB.NET.Data;[m
+[32m+[m[32musing PilotIntel.Integration.zKill;[m
+ using PilotIntel.Shared.Data;[m
+ using PilotIntel.Shared.Killmails;[m
+[32m+[m[32musing PilotIntel.Shared.Time;[m
+ using PilotIntel.Storage.Database;[m
+ [m
+ namespace PilotIntel.Storage.Killmails;[m
+[31m-using PilotIntel.Shared.Time;[m
+[31m-[m
+ [m
+ public sealed class DuckDbRecentKillmailCache : IRecentKillmailCache[m
+ {[m
+[36m@@ -65,6 +65,67 @@[m [mpublic sealed class DuckDbRecentKillmailCache : IRecentKillmailCache[m
+         return Task.FromResult<IReadOnlyList<KillmailRecord>>(results);[m
+     }[m
+ [m
+[32m+[m[32m    public Task<zKillActivity> GetDerivedActivityAsync([m
+[32m+[m[32m        long characterId,[m
+[32m+[m[32m        CancellationToken cancellationToken = default)[m
+[32m+[m[32m    {[m
+[32m+[m[32m        var cutoffUtc = ApplicationClock.UtcNow.AddDays(-7);[m
+[32m+[m
+[32m+[m[32m        using var connection = new DuckDBConnection(_database.ConnectionString);[m
+[32m+[m[32m        connection.Open();[m
+[32m+[m
+[32m+[m[32m        using var command = connection.CreateCommand();[m
+[32m+[m[32m        command.CommandText = $"""[m
+[32m+[m[32m                              SELECT kill_time_utc,[m
+[32m+[m[32m                                     is_loss,[m
+[32m+[m[32m                                     is_solo[m
+[32m+[m[32m                              FROM main.zkill_recent_killmail_cache[m
+[32m+[m[32m                              WHERE character_id = {characterId}[m
+[32m+[m[32m                                AND kill_time_utc >= {SqlValueFormatter.Date(cutoffUtc)}[m
+[32m+[m[32m                              ORDER BY kill_time_utc DESC;[m
+[32m+[m[32m                              """;[m
+[32m+[m
+[32m+[m[32m        using var reader = command.ExecuteReader();[m
+[32m+[m
+[32m+[m[32m        var hasPublicActivityData = false;[m
+[32m+[m[32m        var killsWeek = 0;[m
+[32m+[m[32m        var soloWeek = 0;[m
+[32m+[m[32m        DateTimeOffset? lastActiveUtc = null;[m
+[32m+[m[32m        zKillActivityType? lastActivityType = null;[m
+[32m+[m
+[32m+[m[32m        while (reader.Read())[m
+[32m+[m[32m        {[m
+[32m+[m[32m            hasPublicActivityData = true;[m
+[32m+[m
+[32m+[m[32m            var killTimeUtc = reader.GetDateTimeOffset(0);[m
+[32m+[m[32m            var isLoss = reader.GetBoolean(1);[m
+[32m+[m[32m            var isSolo = reader.GetBoolean(2);[m
+[32m+[m
+[32m+[m[32m            if (!isLoss)[m
+[32m+[m[32m            {[m
+[32m+[m[32m                killsWeek++;[m
+[32m+[m
+[32m+[m[32m                if (isSolo)[m
+[32m+[m[32m                    soloWeek++;[m
+[32m+[m[32m            }[m
+[32m+[m
+[32m+[m[32m            if (lastActiveUtc is null || killTimeUtc > lastActiveUtc.Value)[m
+[32m+[m[32m            {[m
+[32m+[m[32m                lastActiveUtc = killTimeUtc;[m
+[32m+[m[32m                lastActivityType = isLoss ? zKillActivityType.Loss : zKillActivityType.Kill;[m
+[32m+[m[32m            }[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m        return Task.FromResult(new zKillActivity([m
+[32m+[m[32m            characterId,[m
+[32m+[m[32m            hasPublicActivityData,[m
+[32m+[m[32m            hasPublicActivityData ? killsWeek : null,[m
+[32m+[m[32m            hasPublicActivityData ? soloWeek : null,[m
+[32m+[m[32m            lastActiveUtc,[m
+[32m+[m[32m            lastActivityType,[m
+[32m+[m[32m            ApplicationClock.UtcNow));[m
+[32m+[m[32m    }[m
+[32m+[m
+     public Task UpsertAsync([m
+         IReadOnlyList<KillmailRecord> killmails,[m
+         CancellationToken cancellationToken = default)[m
+[36m@@ -136,7 +197,7 @@[m [mpublic sealed class DuckDbRecentKillmailCache : IRecentKillmailCache[m
+ [m
+         return Task.CompletedTask;[m
+     }[m
+[31m-    [m
+[32m+[m
+     public Task<DateTimeOffset?> GetMostRecentKillmailAsync([m
+         long characterId,[m
+         CancellationToken cancellationToken = default)[m
+[36m@@ -146,10 +207,10 @@[m [mpublic sealed class DuckDbRecentKillmailCache : IRecentKillmailCache[m
+ [m
+         using var command = connection.CreateCommand();[m
+         command.CommandText = $"""[m
+[31m-                               SELECT MAX(kill_time_utc)[m
+[31m-                               FROM main.zkill_recent_killmail_cache[m
+[31m-                               WHERE character_id = {characterId};[m
+[31m-                               """;[m
+[32m+[m[32m                              SELECT MAX(kill_time_utc)[m
+[32m+[m[32m                              FROM main.zkill_recent_killmail_cache[m
+[32m+[m[32m                              WHERE character_id = {characterId};[m
+[32m+[m[32m                              """;[m
+ [m
+         var value = command.ExecuteScalar();[m
+ [m
+[1mdiff --git a/PilotIntel.Storage/Killmails/IRecentKillmailCache.cs b/PilotIntel.Storage/Killmails/IRecentKillmailCache.cs[m
+[1mindex 4f073dc..1acfcd2 100644[m
+[1m--- a/PilotIntel.Storage/Killmails/IRecentKillmailCache.cs[m
+[1m+++ b/PilotIntel.Storage/Killmails/IRecentKillmailCache.cs[m
+[36m@@ -1,4 +1,5 @@[m
+[31m-﻿using PilotIntel.Shared.Killmails;[m
+[32m+[m[32m﻿using PilotIntel.Integration.zKill;[m
+[32m+[m[32musing PilotIntel.Shared.Killmails;[m
+ [m
+ namespace PilotIntel.Storage.Killmails;[m
+ [m
+[36m@@ -8,15 +9,18 @@[m [mpublic interface IRecentKillmailCache[m
+         long characterId,[m
+         CancellationToken cancellationToken = default);[m
+ [m
+[32m+[m[32m    Task<zKillActivity> GetDerivedActivityAsync([m
+[32m+[m[32m        long characterId,[m
+[32m+[m[32m        CancellationToken cancellationToken = default);[m
+[32m+[m
+     Task UpsertAsync([m
+         IReadOnlyList<KillmailRecord> killmails,[m
+         CancellationToken cancellationToken = default);[m
+ [m
+     Task RemoveExpiredAsync([m
+         CancellationToken cancellationToken = default);[m
+[31m-   [m
+[32m+[m
+     Task<DateTimeOffset?> GetMostRecentKillmailAsync([m
+         long characterId,[m
+         CancellationToken cancellationToken = default);[m
+[31m-    [m
+ }[m
+\ No newline at end of file[m
+[1mdiff --git a/PilotIntel.UI/Diagnostics/DiagnosticsWindow.xaml.cs b/PilotIntel.UI/Diagnostics/DiagnosticsWindow.xaml.cs[m
+[1mindex fb32a3b..d66dd7a 100644[m
+[1m--- a/PilotIntel.UI/Diagnostics/DiagnosticsWindow.xaml.cs[m
+[1m+++ b/PilotIntel.UI/Diagnostics/DiagnosticsWindow.xaml.cs[m
+[36m@@ -9,6 +9,16 @@[m [mpublic partial class DiagnosticsWindow : Window[m
+ {[m
+     private static readonly Dictionary<string, string> DiagnosticQueries = new()[m
+     {[m
+[32m+[m[32m        ["Pilot Refresh Status"] = """[m
+[32m+[m[32m            SELECT character_id,[m
+[32m+[m[32m                   MAX(kill_time_utc) AS latest_killmail_utc,[m
+[32m+[m[32m                   MAX(cached_at_utc) AS latest_cache_write_utc,[m
+[32m+[m[32m                   COUNT(*) AS cached_killmails[m
+[32m+[m[32m            FROM main.zkill_recent_killmail_cache[m
+[32m+[m[32m            GROUP BY character_id[m
+[32m+[m[32m            ORDER BY latest_killmail_utc DESC;[m
+[32m+[m[32m            """,[m
+[32m+[m
+         ["Latest Killmail Per Pilot"] = """[m
+             SELECT character_id,[m
+                    MAX(kill_time_utc) AS latest_killmail_utc[m
+[36m@@ -295,7 +305,7 @@[m [mpublic partial class DiagnosticsWindow : Window[m
+ [m
+     private void ClearActivity_Click(object sender, RoutedEventArgs e)[m
+     {[m
+[31m-        if (!Confirm("Clear Activity Cache?\n\nThis will force fresh zKill activity lookups."))[m
+[32m+[m[32m        if (!Confirm("Clear Activity Cache?\n\nThis will clear derived activity rows."))[m
+             return;[m
+ [m
+         _service.ExecuteNonQuery("DELETE FROM main.zkill_activity_cache;");[m
+[1mdiff --git a/PilotIntel.UI/MainWindow.xaml.cs b/PilotIntel.UI/MainWindow.xaml.cs[m
+[1mindex 35ef6e7..64b3bef 100644[m
+[1m--- a/PilotIntel.UI/MainWindow.xaml.cs[m
+[1m+++ b/PilotIntel.UI/MainWindow.xaml.cs[m
+[36m@@ -51,9 +51,7 @@[m [mpublic partial class MainWindow : Window[m
+ [m
+         foreach (var pilotName in pilotNames)[m
+         {[m
+[31m-            var pilot = await App.PilotIdentityCache.GetAsync([m
+[31m-                pilotName,[m
+[31m-                CacheDurations.PilotIdentity);[m
+[32m+[m[32m            var pilot = await App.PilotIdentityCache.GetAsync(pilotName, CacheDurations.PilotIdentity);[m
+ [m
+             if (pilot is null)[m
+             {[m
+[36m@@ -68,14 +66,16 @@[m [mpublic partial class MainWindow : Window[m
+             if (pilot.VerifyStatus == VerifyStatus.NoMatch)[m
+                 continue;[m
+ [m
+[31m-            var activity = await LoadzKillActivityAsync(pilot.CharacterId);[m
+[31m-            var statistics = await LoadzKillStatisticsAsync(pilot.CharacterId);[m
+[32m+[m[32m            zKillActivity? activity = null;[m
+ [m
+             if (pilot.CharacterId is not null)[m
+             {[m
+                 await RefreshRecentKillmailsAsync(pilot.CharacterId.Value);[m
+[32m+[m[32m                activity = await LoadDerivedActivityAsync(pilot.CharacterId.Value);[m
+             }[m
+ [m
+[32m+[m[32m            var statistics = await LoadzKillStatisticsAsync(pilot.CharacterId);[m
+[32m+[m
+             rows.Add(PilotReportRowFactory.FromPilot(pilot, activity, statistics));[m
+         }[m
+ [m
+[36m@@ -90,35 +90,24 @@[m [mpublic partial class MainWindow : Window[m
+         }[m
+     }[m
+ [m
+[31m-    private static async Task<zKillActivity?> LoadzKillActivityAsync(long? characterId)[m
+[32m+[m[32m    private static async Task<zKillActivity?> LoadDerivedActivityAsync(long characterId)[m
+     {[m
+[31m-        if (characterId is null)[m
+[31m-            return null;[m
+[31m-[m
+[31m-        try[m
+[31m-        {[m
+[31m-            var cached = await App.zKillActivityCache.GetAsync(characterId.Value, CacheDurations.zKillActivity);[m
+[31m-[m
+[31m-            if (cached is not null)[m
+[31m-                return cached;[m
+[31m-        }[m
+[31m-        catch[m
+[31m-        {[m
+[31m-            // Cache failures should not prevent live zKill lookup.[m
+[31m-        }[m
+[31m-[m
+[31m-        var activity = await App.zKillClient.GetActivityAsync(characterId.Value);[m
+[31m-[m
+         try[m
+         {[m
+[31m-            await App.zKillActivityCache.UpsertAsync(activity);[m
+[32m+[m[32m            return await App.RecentKillmailCache.GetDerivedActivityAsync(characterId);[m
+         }[m
+         catch[m
+         {[m
+[31m-            // Live zKill data should still be displayed even if caching fails.[m
+[32m+[m[32m            return new zKillActivity([m
+[32m+[m[32m                characterId,[m
+[32m+[m[32m                false,[m
+[32m+[m[32m                null,[m
+[32m+[m[32m                null,[m
+[32m+[m[32m                null,[m
+[32m+[m[32m                null,[m
+[32m+[m[32m                ApplicationClock.UtcNow,[m
+[32m+[m[32m                "Recent killmail activity derivation failed.");[m
+         }[m
+[31m-[m
+[31m-        return activity;[m
+     }[m
+ [m
+     private static async Task<zKillStatistics?> LoadzKillStatisticsAsync(long? characterId)[m

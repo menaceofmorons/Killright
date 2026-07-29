@@ -1,0 +1,48 @@
+﻿<Window x:Class="PilotIntel.UI.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="PilotIntel"
+        Height="650"
+        Width="1450"
+        Topmost="True">
+    <DockPanel Margin="8">
+        <Menu DockPanel.Dock="Top">
+            <MenuItem Header="_Developer">
+                <MenuItem Header="Diagnostics"
+                          Click="Diagnostics_Click" />
+                <Separator />
+                <MenuItem Header="Reset Developer Clock"
+                          Click="ResetDeveloperClock_Click" />
+            </MenuItem>
+        </Menu>
+
+        <Grid>
+            <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                          VerticalScrollBarVisibility="Disabled">
+                <DataGrid ItemsSource="{Binding Pilots}"
+                          AutoGenerateColumns="False"
+                          IsReadOnly="True"
+                          CanUserSortColumns="True"
+                          GridLinesVisibility="Horizontal"
+                          HeadersVisibility="Column"
+                          MinWidth="1960">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Pilot" Binding="{Binding Pilot}" Width="170" />
+                        <DataGridTextColumn Header="Verify" Binding="{Binding Verify}" Width="70" />
+                        <DataGridTextColumn Header="Threat" Binding="{Binding Threat}" Width="90" />
+                        <DataGridTextColumn Header="Sec" Binding="{Binding SecurityStatus}" Width="70" />
+                        <DataGridTextColumn Header="Group" Binding="{Binding Group}" Width="90" />
+                        <DataGridTextColumn Header="Corporation" Binding="{Binding Corporation}" Width="210" />
+                        <DataGridTextColumn Header="Alliance" Binding="{Binding Alliance}" Width="210" />
+                        <DataGridTextColumn Header="General Style" Binding="{Binding GeneralStyle}" Width="120" />
+                        <DataGridTextColumn Header="Recent Style" Binding="{Binding RecentStyle}" Width="120" />
+                        <DataGridTextColumn Header="Kills Week" Binding="{Binding KillsWeek}" Width="95" />
+                        <DataGridTextColumn Header="Solo Week" Binding="{Binding SoloWeek}" Width="95" />
+                        <DataGridTextColumn Header="Last Active" Binding="{Binding LastActive}" Width="160" />
+                        <DataGridTextColumn Header="Notes" Binding="{Binding Notes}" Width="260" />
+                    </DataGrid.Columns>
+                </DataGrid>
+            </ScrollViewer>
+        </Grid>
+    </DockPanel>
+</Window>
