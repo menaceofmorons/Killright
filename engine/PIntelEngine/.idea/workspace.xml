@@ -12,14 +12,24 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="7537d910-e661-4511-954a-c27da130aea1" name="Changes" comment="blah">
-      <change afterPath="$PROJECT_DIR$/config/ship-classifications.json" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/pintel_engine/ship_library/classifier.rs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/pintel_engine/ship_library/configuration.rs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/pintel_engine/ship_library/models.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/pintel_engine/recent_style/classifier.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/pintel_engine/recent_style/classifier.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/pintel_engine/recent_style/victim_classifier.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/pintel_engine/recent_style/victim_classifier.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/pintel_engine/ship_library/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/pintel_engine/ship_library/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pintel_engine/contracts/analysis_request.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/pintel_engine/contracts/analysis_request.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pintel_engine/contracts/killmail_input.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/pintel_engine/contracts/killmail_input.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pintel_engine/contracts/mod.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pintel_engine/fleet_analysis/mod.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pintel_engine/group_analysis/mod.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pintel_engine/mod.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pintel_engine/recent_style/classifier.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pintel_engine/recent_style/kill_style_classifier.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/pintel_engine/recent_style/kill_style_classifier.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pintel_engine/recent_style/mod.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pintel_engine/recent_style/victim_classifier.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pintel_engine/shared/mod.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pintel_engine/ship_library/classifier.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pintel_engine/ship_library/configuration.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pintel_engine/ship_library/mod.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pintel_engine/ship_library/models.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pintel_engine/threat_analysis/mod.rs" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -37,79 +47,82 @@
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$/../.." />
   </component>
-  <component name="GitHubPullRequestSearchHistory"><![CDATA[{
-  "lastFilter": {
-    "state": "OPEN",
-    "assignee": "menaceofmorons"
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;menaceofmorons&quot;
   }
-}]]></component>
-  <component name="GithubPullRequestsUISettings"><![CDATA[{
-  "selectedUrlAndAccountId": {
-    "url": "https://github.com/menaceofmorons/Killright.git",
-    "accountId": "08cb3053-4ccf-47ee-8389-f9bb7b99db0e"
+}</component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/menaceofmorons/Killright.git&quot;,
+    &quot;accountId&quot;: &quot;08cb3053-4ccf-47ee-8389-f9bb7b99db0e&quot;
   }
-}]]></component>
+}</component>
   <component name="MacroExpansionManager">
     <option name="directoryName" value="QRbxBa42" />
   </component>
   <component name="NextEditCompletionFeaturesState">
     <decayedCancelled>
-      <entry key="MS100" value="1.2497222440298161" />
-      <entry key="MS500" value="3.156831694998579" />
-      <entry key="S2" value="5.973250588935272" />
-      <entry key="S5" value="7.081622305234848" />
-      <entry key="S10" value="7.5204493844543245" />
-      <entry key="S30" value="7.850750267393357" />
-      <entry key="S60" value="8.299298953120037" />
-      <entry key="M2" value="10.783056587168037" />
-      <entry key="M5" value="20.959646161485377" />
-      <entry key="M10" value="32.11347595202156" />
-      <entry key="M15" value="38.21200822119791" />
-      <entry key="M30" value="46.257691841392216" />
-      <entry key="H1" value="51.233688003468885" />
-      <entry key="H2" value="54.00959229536455" />
-      <entry key="H4" value="55.47683912109542" />
-      <entry key="D1" value="56.74215550582243" />
-      <entry key="W1" value="56.96306614362172" />
+      <entry key="MS100" value="1.2332582478842018" />
+      <entry key="MS500" value="1.7474246243174691" />
+      <entry key="S2" value="1.9298049426196462" />
+      <entry key="S5" value="1.9714204930623005" />
+      <entry key="S10" value="2.018342698979299" />
+      <entry key="S30" value="3.54420244356909" />
+      <entry key="S60" value="6.112634508802555" />
+      <entry key="M2" value="8.738263189147846" />
+      <entry key="M5" value="12.665113044971763" />
+      <entry key="M10" value="19.805331139813706" />
+      <entry key="M15" value="26.22943436899755" />
+      <entry key="M30" value="41.811934398415396" />
+      <entry key="H1" value="61.587099880702766" />
+      <entry key="H2" value="79.36081120295978" />
+      <entry key="H4" value="91.62203437137256" />
+      <entry key="D1" value="104.18555534309972" />
+      <entry key="W1" value="106.59126116039018" />
     </decayedCancelled>
     <decayedSelected>
       <entry key="MS100" value="0.0" />
       <entry key="MS500" value="0.0" />
-      <entry key="S2" value="0.0" />
-      <entry key="S5" value="0.0" />
-      <entry key="S10" value="0.0" />
-      <entry key="S30" value="0.0" />
-      <entry key="S60" value="0.0" />
-      <entry key="M2" value="0.0" />
-      <entry key="M5" value="0.0" />
-      <entry key="M10" value="0.0" />
-      <entry key="M15" value="0.0" />
-      <entry key="M30" value="0.0" />
-      <entry key="H1" value="0.0" />
-      <entry key="H2" value="0.0" />
-      <entry key="H4" value="0.0" />
-      <entry key="D1" value="0.0" />
-      <entry key="W1" value="0.0" />
+      <entry key="S2" value="2.912813456113958E-188" />
+      <entry key="S5" value="1.4079510729390031E-75" />
+      <entry key="S10" value="5.26768499292096E-38" />
+      <entry key="S30" value="5.940753030138554E-13" />
+      <entry key="S60" value="1.089797139944612E-6" />
+      <entry key="M2" value="0.001476268322290751" />
+      <entry key="M5" value="0.11175802293543649" />
+      <entry key="M10" value="0.47277385521645066" />
+      <entry key="M15" value="0.7646196111851543" />
+      <entry key="M30" value="1.2366238381732864" />
+      <entry key="H1" value="1.572656157970483" />
+      <entry key="H2" value="1.7735028123135637" />
+      <entry key="H4" value="1.8833495690042323" />
+      <entry key="D1" value="1.9800682150533002" />
+      <entry key="W1" value="1.997140365047229" />
     </decayedSelected>
     <decayedShown>
-      <entry key="MS100" value="1.2219954728733662" />
-      <entry key="MS500" value="3.1385978042005376" />
-      <entry key="S2" value="5.9649744395768955" />
-      <entry key="S5" value="7.077767234984963" />
-      <entry key="S10" value="7.5184157207807285" />
-      <entry key="S30" value="7.850044683599839" />
-      <entry key="S60" value="8.298900761597844" />
-      <entry key="M2" value="10.782729842090903" />
-      <entry key="M5" value="20.959357683666507" />
-      <entry key="M10" value="32.11326074168328" />
-      <entry key="M15" value="38.21184075570392" />
-      <entry key="M30" value="46.257592873377746" />
-      <entry key="H1" value="51.233633930236465" />
-      <entry key="H2" value="54.00956399468766" />
-      <entry key="H4" value="55.47682463873314" />
-      <entry key="D1" value="56.74215304455043" />
-      <entry key="W1" value="56.96306579082789" />
+      <entry key="MS100" value="1.1995347362415756" />
+      <entry key="MS500" value="1.7377616608887219" />
+      <entry key="S2" value="1.9271315184142142" />
+      <entry key="S5" value="1.9703274943991973" />
+      <entry key="S10" value="2.0177692856519793" />
+      <entry key="S30" value="3.543695775536523" />
+      <entry key="S60" value="6.112130137006357" />
+      <entry key="M2" value="8.739342135494606" />
+      <entry key="M5" value="12.776062159185123" />
+      <entry key="M10" value="20.276688208133265" />
+      <entry key="M15" value="26.99256043199974" />
+      <entry key="M30" value="43.047355925875436" />
+      <entry key="H1" value="63.158983544176905" />
+      <entry key="H2" value="81.13387348767992" />
+      <entry key="H4" value="93.50514818427074" />
+      <entry key="D1" value="106.16558191722078" />
+      <entry key="W1" value="108.58839551638572" />
     </decayedShown>
+  </component>
+  <component name="ProblemsViewState">
+    <option name="selectedTabId" value="CurrentFile" />
   </component>
   <component name="ProjectColorInfo">{
   &quot;customColor&quot;: &quot;&quot;,
@@ -123,30 +136,32 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "Cargo.Run pintelengine.executor": "Run",
-    "CidrDebugProfileConversion": "true",
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "RunOnceActivity.rust.reset.selective.auto.import": "true",
-    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
-    "codeWithMe.voiceChat.enabledByDefault": "false",
-    "git-widget-placeholder": "feature/16.01.00-external-ship-classification-library",
-    "ignore.virus.scanning.warn.message": "true",
-    "node.js.detected.package.eslint": "true",
-    "node.js.detected.package.jshint": "true",
-    "node.js.detected.package.tslint": "true",
-    "node.js.selected.package.eslint": "(autodetect)",
-    "node.js.selected.package.jshint": "",
-    "node.js.selected.package.tslint": "(autodetect)",
-    "nodejs_package_manager_path": "npm",
-    "org.rust.cargo.project.model.PROJECT_DISCOVERY": "true",
-    "org.rust.first.attach.projects": "true",
-    "settings.editor.selected.configurable": "Errors"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;Cargo.Run pintelengine.executor&quot;: &quot;Run&quot;,
+    &quot;CidrDebugProfileConversion&quot;: &quot;true&quot;,
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.rust.reset.selective.auto.import&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
+    &quot;codeWithMe.voiceChat.enabledByDefault&quot;: &quot;false&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;feature/16.02.01-pintelengine-module-naming-cleanup&quot;,
+    &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.jshint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.jshint&quot;: &quot;&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;org.rust.cargo.project.model.PROJECT_DISCOVERY&quot;: &quot;true&quot;,
+    &quot;org.rust.cargo.project.model.impl.CargoExternalSystemProjectAware.subscribe.first.balloon&quot;: &quot;&quot;,
+    &quot;org.rust.disableDetachedFileInspectionC:/Users/TomMulledy/OneDrive/Documents/Code/PilotIntel/Code/engine/PIntelEngine/src/pintel_engine/contracts/mod_contracts.rs&quot;: &quot;true&quot;,
+    &quot;org.rust.first.attach.projects&quot;: &quot;true&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;Errors&quot;
   }
-}]]></component>
+}</component>
   <component name="RecentsManager">
     <key name="MoveFile.RECENT_KEYS">
       <recent name="C:\Users\TomMulledy\OneDrive\Documents\Code\PilotIntel\Code\engine\PIntelEngine" />

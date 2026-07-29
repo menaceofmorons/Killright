@@ -1,33 +1,33 @@
-﻿use crate::pintel_engine::contracts::KillmailInput;
+﻿use crate::pintel_engine::contracts::killmail_input::KillmailInput;
 
-pub fn classify_kill_style(kills: &[&KillmailInput]) -> String {
+pub fn classify_kill_style(kills: &[KillmailInput]) -> String {
+    if kills.is_empty() {
+        return "Unk".to_string();
+    }
+
     let solo_kills = kills
         .iter()
-        .filter(|killmail| killmail.is_solo || killmail.attacker_count == 1)
+        .filter(|kill| kill.is_solo || kill.attacker_count == 1)
         .count();
 
     let solo_ratio = solo_kills as f64 / kills.len() as f64;
 
-    if solo_ratio >= 0.60 {
+    if solo_ratio >= 0.6 {
         return "Solo".to_string();
     }
 
-    let total_attackers: i32 = kills
+    let average_attackers = kills
         .iter()
-        .map(|killmail| killmail.attacker_count.max(1))
-        .sum();
-
-    let average_attackers = total_attackers as f64 / kills.len() as f64;
+        .map(|kill| kill.attacker_count as f64)
+        .sum::<f64>() / kills.len() as f64;
 
     if average_attackers < 5.0 {
-        return "Gang".to_string();
+        "Gang".to_string()
+    } else if average_attackers < 11.0 {
+        "Blob".to_string()
+    } else {
+        "Fleet".to_string()
     }
-
-    if average_attackers < 11.0 {
-        return "Blob".to_string();
-    }
-
-    "Fleet".to_string()
 }
 
 #[cfg(test)]
@@ -46,25 +46,42 @@ mod tests {
 
     #[test]
     fn solo_heavy_kills_return_solo() {
-        let killmail = kill(1, true);
-        assert_eq!(classify_kill_style(&[&killmail]), "Solo");
+        let result = classify_kill_style(&[
+            kill(1, true),
+            kill(1, true),
+            kill(3, false),
+        ]);
+
+        assert_eq!(result, "Solo");
     }
 
     #[test]
     fn small_average_gang_returns_gang() {
-        let killmail = kill(4, false);
-        assert_eq!(classify_kill_style(&[&killmail]), "Gang");
+        let result = classify_kill_style(&[
+            kill(2, false),
+            kill(3, false),
+        ]);
+
+        assert_eq!(result, "Gang");
     }
 
     #[test]
     fn medium_average_gang_returns_blob() {
-        let killmail = kill(7, false);
-        assert_eq!(classify_kill_style(&[&killmail]), "Blob");
+        let result = classify_kill_style(&[
+            kill(6, false),
+            kill(8, false),
+        ]);
+
+        assert_eq!(result, "Blob");
     }
 
     #[test]
     fn large_average_gang_returns_fleet() {
-        let killmail = kill(12, false);
-        assert_eq!(classify_kill_style(&[&killmail]), "Fleet");
+        let result = classify_kill_style(&[
+            kill(12, false),
+            kill(20, false),
+        ]);
+
+        assert_eq!(result, "Fleet");
     }
 }

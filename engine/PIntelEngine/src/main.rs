@@ -1,43 +1,29 @@
 use std::io::{self, Read};
 
-use pintel_engine::contracts::{AnalysisRequest, AnalysisResult};
-use pintel_engine::recent_style::analyze_recent_style;
-
+#[path = "pintel_engine/mod_pintel_engine.rs"]
 mod pintel_engine;
+
+use pintel_engine::contracts::analysis_request::AnalysisRequest;
+use pintel_engine::recent_style::analyze_recent_style;
 
 fn main() {
     let mut input = String::new();
 
-    if io::stdin().read_to_string(&mut input).is_err() {
-        print_error();
+    io::stdin()
+        .read_to_string(&mut input)
+        .expect("failed to read stdin");
+
+    if input.trim().is_empty() {
         return;
     }
 
-    let request: AnalysisRequest = match serde_json::from_str(&input) {
-        Ok(value) => value,
-        Err(_) => {
-            print_error();
-            return;
-        }
-    };
+    let request: AnalysisRequest = serde_json::from_str(&input)
+        .expect("failed to parse analysis request");
 
     let result = analyze_recent_style(request);
 
-    match serde_json::to_string(&result) {
-        Ok(json) => println!("{}", json),
-        Err(_) => print_error(),
-    }
-}
+    let output = serde_json::to_string(&result)
+        .expect("failed to serialize analysis result");
 
-fn print_error() {
-    let result = AnalysisResult {
-        character_id: 0,
-        recent_style: "Unknown".to_string(),
-        analyzed_killmails: 0,
-        kills: 0,
-        losses: 0,
-        solo_losses: 0,
-    };
-
-    println!("{}", serde_json::to_string(&result).unwrap());
+    println!("{}", output);
 }

@@ -1,7 +1,6 @@
 ﻿use serde::Deserialize;
 
-#[allow(dead_code)]
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct KillmailInput {
     pub killmail_id: i64,
     pub is_loss: bool,

@@ -1,6 +1,6 @@
 ﻿use serde::Deserialize;
 
-use super::KillmailInput;
+use crate::pintel_engine::contracts::killmail_input::KillmailInput;
 
 #[derive(Debug, Deserialize)]
 pub struct AnalysisRequest {

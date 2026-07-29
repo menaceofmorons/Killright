@@ -7,7 +7,7 @@ pub struct ShipClassificationConfiguration {
     pub classifications: Vec<ShipClassificationDefinition>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct ShipClassificationDefinition {
     pub name: String,
     pub recent_style_label: String,
@@ -15,16 +15,8 @@ pub struct ShipClassificationDefinition {
     pub ships: Vec<ShipDefinition>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct ShipDefinition {
     pub type_id: i64,
     pub name: String,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct ShipClassification {
-    pub name: String,
-    pub recent_style_label: String,
-    pub priority: i32,
-    pub ship_name: String,
 }
