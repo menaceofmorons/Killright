@@ -1,0 +1,182 @@
+﻿{
+  "version": "1.0",
+  "last_updated": "2026-07-29",
+  "classifications": [
+    {
+      "name": "PI",
+      "recent_style_label": "PI",
+      "priority": 10,
+      "ships": [
+        {
+          "type_id": 655,
+          "name": "Epithal"
+        }
+      ]
+    },
+    {
+      "name": "Miner",
+      "recent_style_label": "Miner",
+      "priority": 20,
+      "ships": [
+        {
+          "type_id": 32880,
+          "name": "Venture"
+        },
+        {
+          "type_id": 17476,
+          "name": "Covetor"
+        },
+        {
+          "type_id": 17478,
+          "name": "Retriever"
+        },
+        {
+          "type_id": 17480,
+          "name": "Procurer"
+        },
+        {
+          "type_id": 22544,
+          "name": "Hulk"
+        },
+        {
+          "type_id": 22546,
+          "name": "Skiff"
+        },
+        {
+          "type_id": 22548,
+          "name": "Mackinaw"
+        },
+        {
+          "type_id": 28606,
+          "name": "Orca"
+        },
+        {
+          "type_id": 42244,
+          "name": "Porpoise"
+        },
+        {
+          "type_id": 28352,
+          "name": "Rorqual"
+        }
+      ]
+    },
+    {
+      "name": "Explorer",
+      "recent_style_label": "Explorer",
+      "priority": 30,
+      "ships": [
+        {
+          "type_id": 605,
+          "name": "Heron"
+        },
+        {
+          "type_id": 607,
+          "name": "Imicus"
+        },
+        {
+          "type_id": 586,
+          "name": "Probe"
+        },
+        {
+          "type_id": 593,
+          "name": "Magnate"
+        },
+        {
+          "type_id": 33468,
+          "name": "Astero"
+        },
+        {
+          "type_id": 11192,
+          "name": "Buzzard"
+        },
+        {
+          "type_id": 11188,
+          "name": "Anathema"
+        },
+        {
+          "type_id": 11172,
+          "name": "Helios"
+        },
+        {
+          "type_id": 11182,
+          "name": "Cheetah"
+        }
+      ]
+    },
+    {
+      "name": "Hauler",
+      "recent_style_label": "Hauler",
+      "priority": 40,
+      "ships": [
+        {
+          "type_id": 648,
+          "name": "Badger"
+        },
+        {
+          "type_id": 649,
+          "name": "Tayra"
+        },
+        {
+          "type_id": 650,
+          "name": "Nereus"
+        },
+        {
+          "type_id": 652,
+          "name": "Mammoth"
+        },
+        {
+          "type_id": 655,
+          "name": "Epithal"
+        },
+        {
+          "type_id": 656,
+          "name": "Miasmos"
+        },
+        {
+          "type_id": 657,
+          "name": "Wreathe"
+        },
+        {
+          "type_id": 1944,
+          "name": "Bestower"
+        },
+        {
+          "type_id": 19744,
+          "name": "Sigil"
+        },
+        {
+          "type_id": 20183,
+          "name": "Providence"
+        },
+        {
+          "type_id": 20185,
+          "name": "Charon"
+        },
+        {
+          "type_id": 20187,
+          "name": "Obelisk"
+        },
+        {
+          "type_id": 20189,
+          "name": "Fenrir"
+        },
+        {
+          "type_id": 28844,
+          "name": "Rhea"
+        },
+        {
+          "type_id": 28846,
+          "name": "Nomad"
+        },
+        {
+          "type_id": 28848,
+          "name": "Anshar"
+        },
+        {
+          "type_id": 28850,
+          "name": "Ark"
+        }
+      ]
+    }
+  ]
+}
