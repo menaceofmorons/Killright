@@ -142,22 +142,6 @@ public sealed class RustRecentStyleClient
 
             RecentStyleContract.PI =>
                 StyleClassification.PI,
-
-            LegacyRecentStyleDisplay.Unknown =>
-                StyleClassification.Unknown,
-
-            LegacyRecentStyleDisplay.Victim =>
-                StyleClassification.Victim,
-
-            LegacyRecentStyleDisplay.Miner =>
-                StyleClassification.Miner,
-
-            LegacyRecentStyleDisplay.Explorer =>
-                StyleClassification.Explorer,
-
-            LegacyRecentStyleDisplay.Hauler =>
-                StyleClassification.Hauler,
-
             _ =>
                 StyleClassification.Unknown
         };
@@ -177,14 +161,7 @@ public sealed class RustRecentStyleClient
         public const string PI = "PI";
     }
 
-    private static class LegacyRecentStyleDisplay
-    {
-        public const string Unknown = "Unk";
-        public const string Victim = "Vict";
-        public const string Miner = "Mine";
-        public const string Explorer = "Explo";
-        public const string Hauler = "Haul";
-    }
+
 
     private sealed record RustAnalysisRequest(
         long character_id,
