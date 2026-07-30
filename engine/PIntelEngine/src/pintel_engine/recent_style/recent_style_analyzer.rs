@@ -28,13 +28,13 @@ pub fn analyze_recent_style(request: AnalysisRequest) -> AnalysisResult {
         .count();
 
     let recent_style = if analyzed_killmails == 0 {
-        "Unk".to_string()
+        "Unknown".to_string()
     } else if is_recent_victim(kill_count, loss_count, solo_losses) {
         classify_victim_style(&losses)
     } else if kill_count > 0 {
         classify_kill_style(&kills)
     } else {
-        "Vict".to_string()
+        "Victim".to_string()
     };
 
     AnalysisResult {
@@ -104,7 +104,7 @@ mod tests {
     fn empty_request_returns_unknown() {
         let result = analyze_recent_style(request(vec![]));
 
-        assert_eq!(result.recent_style, "Unk");
+        assert_eq!(result.recent_style, "Unknown");
         assert_eq!(result.analyzed_killmails, 0);
     }
 
@@ -120,15 +120,26 @@ mod tests {
     }
 
     #[test]
-    fn victim_ratio_with_pi_loss_returns_pi_or_vict() {
+    fn victim_ratio_with_unknown_ship_returns_victim() {
         let result = analyze_recent_style(request(vec![
-            loss(1, 1, true, Some(655)),
-            loss(2, 1, true, Some(655)),
-            loss(3, 1, true, Some(655)),
+            loss(1, 1, true, Some(999999)),
+            loss(2, 1, true, Some(999999)),
+            loss(3, 1, true, Some(999999)),
         ]));
 
-        assert!(result.recent_style == "PI" || result.recent_style == "Vict");
+        assert_eq!(result.recent_style, "Victim");
         assert_eq!(result.losses, 3);
         assert_eq!(result.solo_losses, 3);
+    }
+
+    #[test]
+    fn victim_ratio_requires_low_kill_loss_ratio() {
+        let result = analyze_recent_style(request(vec![
+            kill(1, 1, true, None),
+            loss(2, 1, true, Some(999999)),
+            loss(3, 1, true, Some(999999)),
+        ]));
+
+        assert_ne!(result.recent_style, "Victim");
     }
 }

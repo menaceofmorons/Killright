@@ -13,23 +13,8 @@
   <component name="ChangeListManager">
     <list default="true" id="7537d910-e661-4511-954a-c27da130aea1" name="Changes" comment="blah">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/pintel_engine/contracts/analysis_request.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/pintel_engine/contracts/analysis_request.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/pintel_engine/contracts/killmail_input.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/pintel_engine/contracts/killmail_input.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/pintel_engine/contracts/mod.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/pintel_engine/fleet_analysis/mod.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/pintel_engine/group_analysis/mod.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/pintel_engine/mod.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/pintel_engine/recent_style/classifier.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/pintel_engine/recent_style/kill_style_classifier.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/pintel_engine/recent_style/kill_style_classifier.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/pintel_engine/recent_style/mod.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/pintel_engine/recent_style/victim_classifier.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/pintel_engine/shared/mod.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/pintel_engine/ship_library/classifier.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/pintel_engine/ship_library/configuration.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/pintel_engine/ship_library/mod.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/pintel_engine/ship_library/models.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/pintel_engine/threat_analysis/mod.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pintel_engine/recent_style/recent_style_analyzer.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/pintel_engine/recent_style/recent_style_analyzer.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pintel_engine/recent_style/victim_style_classifier.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/pintel_engine/recent_style/victim_style_classifier.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -64,61 +49,61 @@
   </component>
   <component name="NextEditCompletionFeaturesState">
     <decayedCancelled>
-      <entry key="MS100" value="1.2332582478842018" />
-      <entry key="MS500" value="1.7474246243174691" />
-      <entry key="S2" value="1.9298049426196462" />
-      <entry key="S5" value="1.9714204930623005" />
-      <entry key="S10" value="2.018342698979299" />
-      <entry key="S30" value="3.54420244356909" />
-      <entry key="S60" value="6.112634508802555" />
-      <entry key="M2" value="8.738263189147846" />
-      <entry key="M5" value="12.665113044971763" />
-      <entry key="M10" value="19.805331139813706" />
-      <entry key="M15" value="26.22943436899755" />
-      <entry key="M30" value="41.811934398415396" />
-      <entry key="H1" value="61.587099880702766" />
-      <entry key="H2" value="79.36081120295978" />
-      <entry key="H4" value="91.62203437137256" />
-      <entry key="D1" value="104.18555534309972" />
-      <entry key="W1" value="106.59126116039018" />
+      <entry key="MS100" value="1.1814332746536857" />
+      <entry key="MS500" value="2.9351721557716743" />
+      <entry key="S2" value="5.4893482070358015" />
+      <entry key="S5" value="6.937736340712375" />
+      <entry key="S10" value="7.96432441197749" />
+      <entry key="S30" value="10.198512341527826" />
+      <entry key="S60" value="12.953521074973514" />
+      <entry key="M2" value="15.902468568918342" />
+      <entry key="M5" value="20.17952086652805" />
+      <entry key="M10" value="27.429587381041074" />
+      <entry key="M15" value="33.899493246537794" />
+      <entry key="M30" value="49.5507289194604" />
+      <entry key="H1" value="69.39545670996138" />
+      <entry key="H2" value="87.23755338211714" />
+      <entry key="H4" value="99.55094001976245" />
+      <entry key="D1" value="112.17208954352645" />
+      <entry key="W1" value="114.5892932448556" />
     </decayedCancelled>
     <decayedSelected>
       <entry key="MS100" value="0.0" />
       <entry key="MS500" value="0.0" />
-      <entry key="S2" value="2.912813456113958E-188" />
-      <entry key="S5" value="1.4079510729390031E-75" />
-      <entry key="S10" value="5.26768499292096E-38" />
-      <entry key="S30" value="5.940753030138554E-13" />
-      <entry key="S60" value="1.089797139944612E-6" />
-      <entry key="M2" value="0.001476268322290751" />
-      <entry key="M5" value="0.11175802293543649" />
-      <entry key="M10" value="0.47277385521645066" />
-      <entry key="M15" value="0.7646196111851543" />
-      <entry key="M30" value="1.2366238381732864" />
-      <entry key="H1" value="1.572656157970483" />
-      <entry key="H2" value="1.7735028123135637" />
-      <entry key="H4" value="1.8833495690042323" />
-      <entry key="D1" value="1.9800682150533002" />
-      <entry key="W1" value="1.997140365047229" />
+      <entry key="S2" value="1.1362414987858683E-190" />
+      <entry key="S5" value="1.5312663996924128E-76" />
+      <entry key="S10" value="1.7372062822722214E-38" />
+      <entry key="S30" value="4.1044222178403445E-13" />
+      <entry key="S60" value="9.058388222211205E-7" />
+      <entry key="M2" value="0.0013459159309582409" />
+      <entry key="M5" value="0.10770100686699016" />
+      <entry key="M10" value="0.4641132617328525" />
+      <entry key="M15" value="0.7552529850684927" />
+      <entry key="M30" value="1.2290261484379532" />
+      <entry key="H1" value="1.5678175957309926" />
+      <entry key="H2" value="1.7707724588676148" />
+      <entry key="H4" value="1.8818992779147035" />
+      <entry key="D1" value="1.979814005109986" />
+      <entry key="W1" value="1.9971037342114417" />
     </decayedSelected>
     <decayedShown>
-      <entry key="MS100" value="1.1995347362415756" />
-      <entry key="MS500" value="1.7377616608887219" />
-      <entry key="S2" value="1.9271315184142142" />
-      <entry key="S5" value="1.9703274943991973" />
-      <entry key="S10" value="2.0177692856519793" />
-      <entry key="S30" value="3.543695775536523" />
-      <entry key="S60" value="6.112130137006357" />
-      <entry key="M2" value="8.739342135494606" />
-      <entry key="M5" value="12.776062159185123" />
-      <entry key="M10" value="20.276688208133265" />
-      <entry key="M15" value="26.99256043199974" />
-      <entry key="M30" value="43.047355925875436" />
-      <entry key="H1" value="63.158983544176905" />
-      <entry key="H2" value="81.13387348767992" />
-      <entry key="H4" value="93.50514818427074" />
-      <entry key="D1" value="106.16558191722078" />
-      <entry key="W1" value="108.58839551638572" />
+      <entry key="MS100" value="1.1467437317731244" />
+      <entry key="MS500" value="2.897732835369081" />
+      <entry key="S2" value="5.470049930397492" />
+      <entry key="S5" value="6.9284056251796615" />
+      <entry key="S10" value="7.959219992661432" />
+      <entry key="S30" value="10.196447324681595" />
+      <entry key="S60" value="12.95223423005715" />
+      <entry key="M2" value="15.903015862082684" />
+      <entry key="M5" value="20.28626715125715" />
+      <entry key="M10" value="27.89222211578844" />
+      <entry key="M15" value="34.65321249366544" />
+      <entry key="M30" value="50.778530889507806" />
+      <entry key="H1" value="70.96248955772494" />
+      <entry key="H2" value="89.00787867577057" />
+      <entry key="H4" value="101.43260006502283" />
+      <entry key="D1" value="114.15186130334256" />
+      <entry key="W1" value="116.58639088302384" />
     </decayedShown>
   </component>
   <component name="ProblemsViewState">
@@ -136,32 +121,32 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;Cargo.Run pintelengine.executor&quot;: &quot;Run&quot;,
-    &quot;CidrDebugProfileConversion&quot;: &quot;true&quot;,
-    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.rust.reset.selective.auto.import&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
-    &quot;codeWithMe.voiceChat.enabledByDefault&quot;: &quot;false&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;feature/16.02.01-pintelengine-module-naming-cleanup&quot;,
-    &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
-    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
-    &quot;node.js.detected.package.jshint&quot;: &quot;true&quot;,
-    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
-    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
-    &quot;node.js.selected.package.jshint&quot;: &quot;&quot;,
-    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
-    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
-    &quot;org.rust.cargo.project.model.PROJECT_DISCOVERY&quot;: &quot;true&quot;,
-    &quot;org.rust.cargo.project.model.impl.CargoExternalSystemProjectAware.subscribe.first.balloon&quot;: &quot;&quot;,
-    &quot;org.rust.disableDetachedFileInspectionC:/Users/TomMulledy/OneDrive/Documents/Code/PilotIntel/Code/engine/PIntelEngine/src/pintel_engine/contracts/mod_contracts.rs&quot;: &quot;true&quot;,
-    &quot;org.rust.first.attach.projects&quot;: &quot;true&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;Errors&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "Cargo.Run pintelengine.executor": "Run",
+    "CidrDebugProfileConversion": "true",
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "RunOnceActivity.rust.reset.selective.auto.import": "true",
+    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
+    "codeWithMe.voiceChat.enabledByDefault": "false",
+    "git-widget-placeholder": "feature/16.03.00-recent-style-hardening",
+    "ignore.virus.scanning.warn.message": "true",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.jshint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.jshint": "",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "org.rust.cargo.project.model.PROJECT_DISCOVERY": "true",
+    "org.rust.cargo.project.model.impl.CargoExternalSystemProjectAware.subscribe.first.balloon": "",
+    "org.rust.disableDetachedFileInspectionC:/Users/TomMulledy/OneDrive/Documents/Code/PilotIntel/Code/engine/PIntelEngine/src/pintel_engine/contracts/mod_contracts.rs": "true",
+    "org.rust.first.attach.projects": "true",
+    "settings.editor.selected.configurable": "Errors"
   }
-}</component>
+}]]></component>
   <component name="RecentsManager">
     <key name="MoveFile.RECENT_KEYS">
       <recent name="C:\Users\TomMulledy\OneDrive\Documents\Code\PilotIntel\Code\engine\PIntelEngine" />
