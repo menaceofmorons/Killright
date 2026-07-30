@@ -42,12 +42,13 @@ public sealed class RustRecentStyleClient
             };
 
             process.Start();
-            
+
             await process.StandardInput.WriteAsync(json);
             await process.StandardInput.FlushAsync(cancellationToken);
             process.StandardInput.Close();
 
             var output = await process.StandardOutput.ReadToEndAsync(cancellationToken);
+
             await process.WaitForExitAsync(cancellationToken);
 
             if (process.ExitCode != 0 || string.IsNullOrWhiteSpace(output))
@@ -112,39 +113,77 @@ public sealed class RustRecentStyleClient
 
         return normalized switch
         {
-            "Unknown" or "Unk" =>
+            RecentStyleContract.Unknown =>
                 StyleClassification.Unknown,
 
-            "Victim" or "Vict" =>
+            RecentStyleContract.Victim =>
                 StyleClassification.Victim,
 
-            "Solo" =>
+            RecentStyleContract.Solo =>
                 StyleClassification.Solo,
 
-            "Gang" =>
+            RecentStyleContract.Gang =>
                 StyleClassification.Gang,
 
-            "Blob" =>
+            RecentStyleContract.Blob =>
                 StyleClassification.Blob,
 
-            "Fleet" =>
+            RecentStyleContract.Fleet =>
                 StyleClassification.Fleet,
 
-            "Miner" or "Mine" =>
+            RecentStyleContract.Miner =>
                 StyleClassification.Miner,
 
-            "Explorer" or "Explo" =>
+            RecentStyleContract.Explorer =>
                 StyleClassification.Explorer,
 
-            "Hauler" or "Haul" =>
+            RecentStyleContract.Hauler =>
                 StyleClassification.Hauler,
 
-            "PI" =>
+            RecentStyleContract.PI =>
                 StyleClassification.PI,
+
+            LegacyRecentStyleDisplay.Unknown =>
+                StyleClassification.Unknown,
+
+            LegacyRecentStyleDisplay.Victim =>
+                StyleClassification.Victim,
+
+            LegacyRecentStyleDisplay.Miner =>
+                StyleClassification.Miner,
+
+            LegacyRecentStyleDisplay.Explorer =>
+                StyleClassification.Explorer,
+
+            LegacyRecentStyleDisplay.Hauler =>
+                StyleClassification.Hauler,
 
             _ =>
                 StyleClassification.Unknown
         };
+    }
+
+    private static class RecentStyleContract
+    {
+        public const string Unknown = "Unknown";
+        public const string Victim = "Victim";
+        public const string Solo = "Solo";
+        public const string Gang = "Gang";
+        public const string Blob = "Blob";
+        public const string Fleet = "Fleet";
+        public const string Miner = "Miner";
+        public const string Explorer = "Explorer";
+        public const string Hauler = "Hauler";
+        public const string PI = "PI";
+    }
+
+    private static class LegacyRecentStyleDisplay
+    {
+        public const string Unknown = "Unk";
+        public const string Victim = "Vict";
+        public const string Miner = "Mine";
+        public const string Explorer = "Explo";
+        public const string Hauler = "Haul";
     }
 
     private sealed record RustAnalysisRequest(
@@ -180,3 +219,31 @@ public sealed class RustRecentStyleClient
         public int solo_losses { get; set; }
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

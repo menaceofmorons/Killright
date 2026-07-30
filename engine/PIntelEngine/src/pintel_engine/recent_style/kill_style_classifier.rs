@@ -1,8 +1,12 @@
 ﻿use crate::pintel_engine::contracts::killmail_input::KillmailInput;
+use crate::pintel_engine::shared::recent_style_contract::*;
 
-pub fn classify_kill_style(kills: &[KillmailInput]) -> String {
+pub fn classify_kill_style(
+    kills: &[KillmailInput])
+    -> String
+{
     if kills.is_empty() {
-        return "Unk".to_string();
+        return STYLE_UNKNOWN.to_string();
     }
 
     let solo_kills = kills
@@ -13,7 +17,7 @@ pub fn classify_kill_style(kills: &[KillmailInput]) -> String {
     let solo_ratio = solo_kills as f64 / kills.len() as f64;
 
     if solo_ratio >= 0.6 {
-        return "Solo".to_string();
+        return STYLE_SOLO.to_string();
     }
 
     let average_attackers = kills
@@ -22,11 +26,11 @@ pub fn classify_kill_style(kills: &[KillmailInput]) -> String {
         .sum::<f64>() / kills.len() as f64;
 
     if average_attackers < 5.0 {
-        "Gang".to_string()
+        STYLE_GANG.to_string()
     } else if average_attackers < 11.0 {
-        "Blob".to_string()
+        STYLE_BLOB.to_string()
     } else {
-        "Fleet".to_string()
+        STYLE_FLEET.to_string()
     }
 }
 
@@ -34,7 +38,11 @@ pub fn classify_kill_style(kills: &[KillmailInput]) -> String {
 mod tests {
     use super::*;
 
-    fn kill(attacker_count: i32, is_solo: bool) -> KillmailInput {
+    fn kill(
+        attacker_count: i32,
+        is_solo: bool)
+        -> KillmailInput
+    {
         KillmailInput {
             killmail_id: 1,
             is_loss: false,
@@ -52,7 +60,7 @@ mod tests {
             kill(3, false),
         ]);
 
-        assert_eq!(result, "Solo");
+        assert_eq!(result, STYLE_SOLO);
     }
 
     #[test]
@@ -62,7 +70,7 @@ mod tests {
             kill(3, false),
         ]);
 
-        assert_eq!(result, "Gang");
+        assert_eq!(result, STYLE_GANG);
     }
 
     #[test]
@@ -72,7 +80,7 @@ mod tests {
             kill(8, false),
         ]);
 
-        assert_eq!(result, "Blob");
+        assert_eq!(result, STYLE_BLOB);
     }
 
     #[test]
@@ -82,6 +90,6 @@ mod tests {
             kill(20, false),
         ]);
 
-        assert_eq!(result, "Fleet");
+        assert_eq!(result, STYLE_FLEET);
     }
 }

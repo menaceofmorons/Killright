@@ -3,8 +3,12 @@ use crate::pintel_engine::contracts::analysis_result::AnalysisResult;
 use crate::pintel_engine::contracts::killmail_input::KillmailInput;
 use crate::pintel_engine::recent_style::kill_style_classifier::classify_kill_style;
 use crate::pintel_engine::recent_style::victim_style_classifier::classify_victim_style;
+use crate::pintel_engine::shared::recent_style_contract::*;
 
-pub fn analyze_recent_style(request: AnalysisRequest) -> AnalysisResult {
+pub fn analyze_recent_style(
+    request: AnalysisRequest)
+    -> AnalysisResult
+{
     let analyzed_killmails = request.killmails.len();
 
     let kills: Vec<KillmailInput> = request.killmails
@@ -28,13 +32,13 @@ pub fn analyze_recent_style(request: AnalysisRequest) -> AnalysisResult {
         .count();
 
     let recent_style = if analyzed_killmails == 0 {
-        "Unknown".to_string()
+        STYLE_UNKNOWN.to_string()
     } else if is_recent_victim(kill_count, loss_count, solo_losses) {
         classify_victim_style(&losses)
     } else if kill_count > 0 {
         classify_kill_style(&kills)
     } else {
-        "Victim".to_string()
+        STYLE_VICTIM.to_string()
     };
 
     AnalysisResult {
@@ -50,7 +54,9 @@ pub fn analyze_recent_style(request: AnalysisRequest) -> AnalysisResult {
 fn is_recent_victim(
     kill_count: usize,
     loss_count: usize,
-    solo_losses: usize) -> bool {
+    solo_losses: usize)
+    -> bool
+{
     if loss_count == 0 {
         return false;
     }
@@ -76,7 +82,9 @@ mod tests {
         killmail_id: i64,
         attacker_count: i32,
         is_solo: bool,
-        ship_type_id: Option<i64>) -> KillmailInput {
+        ship_type_id: Option<i64>)
+        -> KillmailInput
+    {
         KillmailInput {
             killmail_id,
             is_loss: false,
@@ -90,7 +98,9 @@ mod tests {
         killmail_id: i64,
         attacker_count: i32,
         is_solo: bool,
-        ship_type_id: Option<i64>) -> KillmailInput {
+        ship_type_id: Option<i64>)
+        -> KillmailInput
+    {
         KillmailInput {
             killmail_id,
             is_loss: true,
@@ -101,33 +111,33 @@ mod tests {
     }
 
     #[test]
-    fn empty_request_returns_unknown() {
+    fn empty_request_returns_unknown_contract_value() {
         let result = analyze_recent_style(request(vec![]));
 
-        assert_eq!(result.recent_style, "Unknown");
+        assert_eq!(result.recent_style, STYLE_UNKNOWN);
         assert_eq!(result.analyzed_killmails, 0);
     }
 
     #[test]
-    fn solo_kill_returns_solo() {
+    fn solo_kill_returns_solo_contract_value() {
         let result = analyze_recent_style(request(vec![
             kill(1, 1, true, Some(33468)),
         ]));
 
-        assert_eq!(result.recent_style, "Solo");
+        assert_eq!(result.recent_style, STYLE_SOLO);
         assert_eq!(result.kills, 1);
         assert_eq!(result.losses, 0);
     }
 
     #[test]
-    fn victim_ratio_with_unknown_ship_returns_victim() {
+    fn victim_ratio_with_unknown_ship_returns_victim_contract_value() {
         let result = analyze_recent_style(request(vec![
             loss(1, 1, true, Some(999999)),
             loss(2, 1, true, Some(999999)),
             loss(3, 1, true, Some(999999)),
         ]));
 
-        assert_eq!(result.recent_style, "Victim");
+        assert_eq!(result.recent_style, STYLE_VICTIM);
         assert_eq!(result.losses, 3);
         assert_eq!(result.solo_losses, 3);
     }
@@ -140,6 +150,6 @@ mod tests {
             loss(3, 1, true, Some(999999)),
         ]));
 
-        assert_ne!(result.recent_style, "Victim");
+        assert_ne!(result.recent_style, STYLE_VICTIM);
     }
 }

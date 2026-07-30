@@ -1,1 +1,1 @@
-﻿// Shared utilities for future PIntelEngine modules.
+﻿pub mod recent_style_contract;

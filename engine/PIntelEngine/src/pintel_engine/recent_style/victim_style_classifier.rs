@@ -1,20 +1,25 @@
 ﻿use std::collections::HashMap;
 
 use crate::pintel_engine::contracts::killmail_input::KillmailInput;
+use crate::pintel_engine::shared::recent_style_contract::*;
 use crate::pintel_engine::ship_library::ship_classifier::classify_ship;
 
-pub fn classify_victim_style(losses: &[KillmailInput]) -> String {
+pub fn classify_victim_style(
+    losses: &[KillmailInput])
+    -> String
+{
     classify_victim_style_with_lookup(losses, classify_ship)
 }
 
 fn classify_victim_style_with_lookup<F>(
     losses: &[KillmailInput],
-    lookup: F) -> String
+    lookup: F)
+    -> String
 where
     F: Fn(Option<i64>) -> Option<String>,
 {
     if losses.is_empty() {
-        return "Victim".to_string();
+        return STYLE_VICTIM.to_string();
     }
 
     let mut counts: HashMap<String, usize> = HashMap::new();
@@ -29,7 +34,7 @@ where
         .into_iter()
         .max_by_key(|(_, count)| *count)
         .map(|(classification, _)| classification)
-        .unwrap_or_else(|| "Victim".to_string())
+        .unwrap_or_else(|| STYLE_VICTIM.to_string())
 }
 
 #[cfg(test)]
@@ -52,7 +57,7 @@ mod tests {
             &[loss(None)],
             |_| None);
 
-        assert_eq!(result, "Victim");
+        assert_eq!(result, STYLE_VICTIM);
     }
 
     #[test]
@@ -61,7 +66,7 @@ mod tests {
             &[loss(Some(999999))],
             |_| None);
 
-        assert_eq!(result, "Victim");
+        assert_eq!(result, STYLE_VICTIM);
     }
 
     #[test]
@@ -73,15 +78,15 @@ mod tests {
                 loss(Some(655)),
             ],
             |ship_type_id| match ship_type_id {
-                Some(655) => Some("PI".to_string()),
+                Some(655) => Some(STYLE_PI.to_string()),
                 _ => None,
             });
 
-        assert_eq!(result, "PI");
+        assert_eq!(result, STYLE_PI);
     }
 
     #[test]
-    fn explorer_loss_returns_explorer() {
+    fn explorer_loss_returns_explorer_contract_value() {
         let result = classify_victim_style_with_lookup(
             &[
                 loss(Some(605)),
@@ -89,11 +94,11 @@ mod tests {
                 loss(Some(605)),
             ],
             |ship_type_id| match ship_type_id {
-                Some(605) => Some("Explorer".to_string()),
+                Some(605) => Some(STYLE_EXPLORER.to_string()),
                 _ => None,
             });
 
-        assert_eq!(result, "Explorer");
+        assert_eq!(result, STYLE_EXPLORER);
     }
 
     #[test]
@@ -105,11 +110,11 @@ mod tests {
                 loss(Some(605)),
             ],
             |ship_type_id| match ship_type_id {
-                Some(655) => Some("PI".to_string()),
-                Some(605) => Some("Explorer".to_string()),
+                Some(655) => Some(STYLE_PI.to_string()),
+                Some(605) => Some(STYLE_EXPLORER.to_string()),
                 _ => None,
             });
 
-        assert_eq!(result, "Explorer");
+        assert_eq!(result, STYLE_EXPLORER);
     }
 }
