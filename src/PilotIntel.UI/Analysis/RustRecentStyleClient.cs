@@ -1,5 +1,5 @@
-﻿using System.IO;
-using System.Diagnostics;
+﻿using System.Diagnostics;
+using System.IO;
 using System.Text.Json;
 using PilotIntel.Core.Style;
 using PilotIntel.Shared.Killmails;
@@ -30,6 +30,7 @@ public sealed class RustRecentStyleClient
             var json = JsonSerializer.Serialize(request);
 
             using var process = new Process();
+
             process.StartInfo = new ProcessStartInfo
             {
                 FileName = executablePath,
@@ -41,7 +42,7 @@ public sealed class RustRecentStyleClient
             };
 
             process.Start();
-
+            
             await process.StandardInput.WriteAsync(json);
             await process.StandardInput.FlushAsync(cancellationToken);
             process.StandardInput.Close();
@@ -53,6 +54,7 @@ public sealed class RustRecentStyleClient
                 return StyleClassification.Unknown;
 
             var result = JsonSerializer.Deserialize<RustAnalysisResult>(output);
+
             return MapRecentStyle(result?.recent_style);
         }
         catch
@@ -67,7 +69,9 @@ public sealed class RustRecentStyleClient
             ? "pintelengine.exe"
             : "pintelengine";
 
-        var deployedPath = Path.Combine(AppContext.BaseDirectory, executableName);
+        var deployedPath = Path.Combine(
+            AppContext.BaseDirectory,
+            executableName);
 
         if (File.Exists(deployedPath))
             return deployedPath;
@@ -76,7 +80,9 @@ public sealed class RustRecentStyleClient
                ?? ResolveRepositoryExecutablePath(executableName, "release");
     }
 
-    private static string? ResolveRepositoryExecutablePath(string executableName, string profile)
+    private static string? ResolveRepositoryExecutablePath(
+        string executableName,
+        string profile)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
 
@@ -99,20 +105,45 @@ public sealed class RustRecentStyleClient
         return null;
     }
 
-    private static StyleClassification MapRecentStyle(string? value)
+    private static StyleClassification MapRecentStyle(
+        string? value)
     {
-        return value switch
+        var normalized = value?.Trim();
+
+        return normalized switch
         {
-            "Victim" => StyleClassification.Victim,
-            "Solo" => StyleClassification.Solo,
-            "Gang" => StyleClassification.Gang,
-            "Blob" => StyleClassification.Blob,
-            "Fleet" => StyleClassification.Fleet,
-            "Miner" => StyleClassification.Miner,
-            "Explorer" => StyleClassification.Explorer,
-            "Hauler" => StyleClassification.Hauler,
-            "PI" => StyleClassification.PI,
-            _ => StyleClassification.Unknown
+            "Unknown" or "Unk" =>
+                StyleClassification.Unknown,
+
+            "Victim" or "Vict" =>
+                StyleClassification.Victim,
+
+            "Solo" =>
+                StyleClassification.Solo,
+
+            "Gang" =>
+                StyleClassification.Gang,
+
+            "Blob" =>
+                StyleClassification.Blob,
+
+            "Fleet" =>
+                StyleClassification.Fleet,
+
+            "Miner" or "Mine" =>
+                StyleClassification.Miner,
+
+            "Explorer" or "Explo" =>
+                StyleClassification.Explorer,
+
+            "Hauler" or "Haul" =>
+                StyleClassification.Hauler,
+
+            "PI" =>
+                StyleClassification.PI,
+
+            _ =>
+                StyleClassification.Unknown
         };
     }
 
@@ -127,7 +158,8 @@ public sealed class RustRecentStyleClient
         bool is_solo,
         long? ship_type_id)
     {
-        public static RustKillmailInput FromKillmail(KillmailRecord killmail)
+        public static RustKillmailInput FromKillmail(
+            KillmailRecord killmail)
         {
             return new RustKillmailInput(
                 killmail.KillmailId,
