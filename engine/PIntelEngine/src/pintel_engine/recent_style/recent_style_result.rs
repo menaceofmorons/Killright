@@ -1,7 +1,7 @@
 ﻿use serde::Serialize;
 
-#[derive(Debug, Serialize)]
-pub struct AnalysisResult {
+#[derive(Debug, Clone, Serialize)]
+pub struct RecentStyleResult {
     pub character_id: i64,
     pub recent_style: String,
     pub analyzed_killmails: usize,

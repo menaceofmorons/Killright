@@ -1,7 +1,7 @@
 ﻿use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct KillmailInput {
+pub struct RecentKillmailInput {
     pub killmail_id: i64,
     pub is_loss: bool,
     pub attacker_count: i32,

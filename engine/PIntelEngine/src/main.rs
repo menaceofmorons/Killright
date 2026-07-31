@@ -3,8 +3,12 @@ use std::io::{self, Read};
 #[path = "pintel_engine/mod_pintel_engine.rs"]
 mod pintel_engine;
 
-use pintel_engine::contracts::analysis_request::AnalysisRequest;
-use pintel_engine::recent_style::analyze_recent_style;
+use pintel_engine::recent_style::{
+    RecentKillmailInput,
+    RecentStyleRequest,
+};
+
+use pintel_engine::recent_style::recent_style_analyzer::analyze_recent_style;
 
 fn main() {
     let mut input = String::new();
@@ -17,7 +21,7 @@ fn main() {
         return;
     }
 
-    let request: AnalysisRequest = serde_json::from_str(&input)
+    let request: RecentStyleRequest = serde_json::from_str(&input)
         .expect("failed to parse analysis request");
 
     let result = analyze_recent_style(request);

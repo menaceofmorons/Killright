@@ -1,8 +1,8 @@
-﻿use crate::pintel_engine::contracts::killmail_input::KillmailInput;
+﻿use crate::pintel_engine::recent_style::RecentKillmailInput;
 use crate::pintel_engine::shared::recent_style_contract::*;
 
 pub fn classify_kill_style(
-    kills: &[KillmailInput])
+    kills: &[RecentKillmailInput])
     -> String
 {
     if kills.is_empty() {
@@ -41,9 +41,9 @@ mod tests {
     fn kill(
         attacker_count: i32,
         is_solo: bool)
-        -> KillmailInput
+        -> RecentKillmailInput
     {
-        KillmailInput {
+        RecentKillmailInput {
             killmail_id: 1,
             is_loss: false,
             attacker_count,

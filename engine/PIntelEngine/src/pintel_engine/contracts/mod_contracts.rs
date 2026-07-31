@@ -1,3 +1,5 @@
-﻿pub mod analysis_request;
-pub mod analysis_result;
-pub mod killmail_input;
+﻿pub mod pilot_analysis_request;
+pub mod pilot_analysis_response;
+
+pub use pilot_analysis_request::PilotAnalysisRequest;
+pub use pilot_analysis_response::PilotAnalysisResponse;

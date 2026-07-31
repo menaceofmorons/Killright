@@ -1,23 +1,26 @@
-﻿use crate::pintel_engine::contracts::analysis_request::AnalysisRequest;
-use crate::pintel_engine::contracts::analysis_result::AnalysisResult;
-use crate::pintel_engine::contracts::killmail_input::KillmailInput;
+﻿
 use crate::pintel_engine::recent_style::kill_style_classifier::classify_kill_style;
 use crate::pintel_engine::recent_style::victim_style_classifier::classify_victim_style;
 use crate::pintel_engine::shared::recent_style_contract::*;
+use crate::pintel_engine::recent_style::{
+    RecentKillmailInput,
+    RecentStyleRequest,
+    RecentStyleResult,
+};
 
 pub fn analyze_recent_style(
-    request: AnalysisRequest)
-    -> AnalysisResult
+    request: RecentStyleRequest)
+    -> RecentStyleResult
 {
     let analyzed_killmails = request.killmails.len();
 
-    let kills: Vec<KillmailInput> = request.killmails
+    let kills: Vec<RecentKillmailInput> = request.killmails
         .iter()
         .filter(|killmail| !killmail.is_loss)
         .cloned()
         .collect();
 
-    let losses: Vec<KillmailInput> = request.killmails
+    let losses: Vec<RecentKillmailInput> = request.killmails
         .iter()
         .filter(|killmail| killmail.is_loss)
         .cloned()
@@ -41,7 +44,7 @@ pub fn analyze_recent_style(
         STYLE_VICTIM.to_string()
     };
 
-    AnalysisResult {
+    RecentStyleResult {
         character_id: request.character_id,
         recent_style,
         analyzed_killmails,
@@ -71,8 +74,11 @@ fn is_recent_victim(
 mod tests {
     use super::*;
 
-    fn request(killmails: Vec<KillmailInput>) -> AnalysisRequest {
-        AnalysisRequest {
+    fn request(
+        killmails: Vec<RecentKillmailInput>)
+        -> RecentStyleRequest
+    {
+        RecentStyleRequest {
             character_id: 123,
             killmails,
         }
@@ -83,9 +89,9 @@ mod tests {
         attacker_count: i32,
         is_solo: bool,
         ship_type_id: Option<i64>)
-        -> KillmailInput
+        -> RecentKillmailInput
     {
-        KillmailInput {
+        RecentKillmailInput {
             killmail_id,
             is_loss: false,
             attacker_count,
@@ -99,9 +105,9 @@ mod tests {
         attacker_count: i32,
         is_solo: bool,
         ship_type_id: Option<i64>)
-        -> KillmailInput
+        -> RecentKillmailInput
     {
-        KillmailInput {
+        RecentKillmailInput {
             killmail_id,
             is_loss: true,
             attacker_count,

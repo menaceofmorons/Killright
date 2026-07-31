@@ -1,18 +1,18 @@
 ﻿use std::collections::HashMap;
 
-use crate::pintel_engine::contracts::killmail_input::KillmailInput;
+use crate::pintel_engine::recent_style::RecentKillmailInput;
 use crate::pintel_engine::shared::recent_style_contract::*;
 use crate::pintel_engine::ship_library::ship_classifier::classify_ship;
 
 pub fn classify_victim_style(
-    losses: &[KillmailInput])
+    losses: &[RecentKillmailInput])
     -> String
 {
     classify_victim_style_with_lookup(losses, classify_ship)
 }
 
 fn classify_victim_style_with_lookup<F>(
-    losses: &[KillmailInput],
+    losses: &[RecentKillmailInput],
     lookup: F)
     -> String
 where
@@ -41,8 +41,8 @@ where
 mod tests {
     use super::*;
 
-    fn loss(ship_type_id: Option<i64>) -> KillmailInput {
-        KillmailInput {
+    fn loss(ship_type_id: Option<i64>) -> RecentKillmailInput {
+        RecentKillmailInput {
             killmail_id: 1,
             is_loss: true,
             attacker_count: 1,
