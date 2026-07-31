@@ -1,6 +1,10 @@
 ﻿namespace PilotIntel.UI.Analysis;
 
-public class IPIntelEngineRuntime
+public interface IPIntelEngineRuntime : IDisposable
 {
-    
+    bool IsAvailable { get; }
+
+    Task<string> AnalyzePilotAsync(
+        string requestJson,
+        CancellationToken cancellationToken = default);
 }

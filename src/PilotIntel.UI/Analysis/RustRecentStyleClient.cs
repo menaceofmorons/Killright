@@ -1,109 +1,47 @@
-﻿using System.Diagnostics;
-using System.IO;
-using System.Text.Json;
+﻿using System.Text.Json;
 using PilotIntel.Core.Style;
-using PilotIntel.Shared.Killmails;
 
 namespace PilotIntel.UI.Analysis;
 
 public sealed class RustRecentStyleClient
 {
-    private const string EngineProjectDirectoryName = "PIntelEngine";
-    private const string EngineRootDirectoryName = "engine";
+    private readonly IPIntelEngineRuntime _runtime;
+
+    public RustRecentStyleClient(
+        IPIntelEngineRuntime runtime)
+    {
+        _runtime = runtime;
+    }
 
     public async Task<StyleClassification> AnalyzeAsync(
         long characterId,
-        IReadOnlyList<KillmailRecord> killmails,
         CancellationToken cancellationToken = default)
     {
         try
         {
-            var executablePath = ResolveExecutablePath();
+            var request =
+                new PilotAnalysisRequest(
+                    characterId);
 
-            if (string.IsNullOrWhiteSpace(executablePath) || !File.Exists(executablePath))
-                return StyleClassification.Unknown;
+            var requestJson =
+                JsonSerializer.Serialize(request);
 
-            var request = new RustAnalysisRequest(
-                characterId,
-                killmails.Select(RustKillmailInput.FromKillmail).ToList());
+            var responseJson =
+                await _runtime.AnalyzePilotAsync(
+                    requestJson,
+                    cancellationToken);
 
-            var json = JsonSerializer.Serialize(request);
+            var response =
+                JsonSerializer.Deserialize<PilotAnalysisResponse>(
+                    responseJson);
 
-            using var process = new Process();
-
-            process.StartInfo = new ProcessStartInfo
-            {
-                FileName = executablePath,
-                RedirectStandardInput = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-
-            process.Start();
-
-            await process.StandardInput.WriteAsync(json);
-            await process.StandardInput.FlushAsync(cancellationToken);
-            process.StandardInput.Close();
-
-            var output = await process.StandardOutput.ReadToEndAsync(cancellationToken);
-
-            await process.WaitForExitAsync(cancellationToken);
-
-            if (process.ExitCode != 0 || string.IsNullOrWhiteSpace(output))
-                return StyleClassification.Unknown;
-
-            var result = JsonSerializer.Deserialize<RustAnalysisResult>(output);
-
-            return MapRecentStyle(result?.recent_style);
+            return MapRecentStyle(
+                response?.recent_style);
         }
         catch
         {
             return StyleClassification.Unknown;
         }
-    }
-
-    private static string? ResolveExecutablePath()
-    {
-        var executableName = OperatingSystem.IsWindows()
-            ? "pintelengine.exe"
-            : "pintelengine";
-
-        var deployedPath = Path.Combine(
-            AppContext.BaseDirectory,
-            executableName);
-
-        if (File.Exists(deployedPath))
-            return deployedPath;
-
-        return ResolveRepositoryExecutablePath(executableName, "debug")
-               ?? ResolveRepositoryExecutablePath(executableName, "release");
-    }
-
-    private static string? ResolveRepositoryExecutablePath(
-        string executableName,
-        string profile)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-
-        while (directory is not null)
-        {
-            var candidate = Path.Combine(
-                directory.FullName,
-                EngineRootDirectoryName,
-                EngineProjectDirectoryName,
-                "target",
-                profile,
-                executableName);
-
-            if (File.Exists(candidate))
-                return candidate;
-
-            directory = directory.Parent;
-        }
-
-        return null;
     }
 
     private static StyleClassification MapRecentStyle(
@@ -142,6 +80,7 @@ public sealed class RustRecentStyleClient
 
             RecentStyleContract.PI =>
                 StyleClassification.PI,
+
             _ =>
                 StyleClassification.Unknown
         };
@@ -161,66 +100,13 @@ public sealed class RustRecentStyleClient
         public const string PI = "PI";
     }
 
+    private sealed record PilotAnalysisRequest(
+        long character_id);
 
-
-    private sealed record RustAnalysisRequest(
-        long character_id,
-        IReadOnlyList<RustKillmailInput> killmails);
-
-    private sealed record RustKillmailInput(
-        long killmail_id,
-        bool is_loss,
-        int attacker_count,
-        bool is_solo,
-        long? ship_type_id)
-    {
-        public static RustKillmailInput FromKillmail(
-            KillmailRecord killmail)
-        {
-            return new RustKillmailInput(
-                killmail.KillmailId,
-                killmail.IsLoss,
-                killmail.AttackerCount,
-                killmail.IsSolo,
-                killmail.ShipTypeId);
-        }
-    }
-
-    private sealed class RustAnalysisResult
+    private sealed class PilotAnalysisResponse
     {
         public long character_id { get; set; }
+
         public string? recent_style { get; set; }
-        public int analyzed_killmails { get; set; }
-        public int kills { get; set; }
-        public int losses { get; set; }
-        public int solo_losses { get; set; }
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

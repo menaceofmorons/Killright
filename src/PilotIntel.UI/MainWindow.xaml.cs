@@ -74,10 +74,9 @@ public partial class MainWindow : Window
                 await RefreshRecentKillmailsAsync(pilot.CharacterId.Value);
                 activity = await LoadDerivedActivityAsync(pilot.CharacterId.Value);
 
-                var recentKillmails = await App.RecentKillmailCache.GetForCharacterAsync(pilot.CharacterId.Value);
-                recentStyle = await App.RecentStyleClient.AnalyzeAsync(
-                    pilot.CharacterId.Value,
-                    recentKillmails);
+                //var recentKillmails = await App.RecentKillmailCache.GetForCharacterAsync(pilot.CharacterId.Value);
+                recentStyle = await App.RecentStyleClient.AnalyzeAsync(pilot.CharacterId.Value);
+                    //,recentKillmails);
             }
 
             var statistics = await LoadzKillStatisticsAsync(pilot.CharacterId);

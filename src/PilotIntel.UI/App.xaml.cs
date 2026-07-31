@@ -21,36 +21,89 @@ public partial class App : Application
     public static IRecentKillmailCache RecentKillmailCache { get; private set; } = null!;
     public static IzKillStatisticsCache zKillStatisticsCache { get; private set; } = null!;
     public static RustRecentStyleClient RecentStyleClient { get; private set; } = null!;
+    public static IPIntelEngineRuntime EngineRuntime { get; private set; } = null!;
     public static PilotIntelDatabase Database { get; private set; } = null!;
 
-    protected override void OnStartup(StartupEventArgs e)
+    protected override void OnStartup(
+        StartupEventArgs e)
     {
         base.OnStartup(e);
 
         var databasePath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            Environment.GetFolderPath(
+                Environment.SpecialFolder.LocalApplicationData),
             "PilotIntel",
             "PilotIntel.duckdb");
 
-        var database = new PilotIntelDatabase(new PilotIntelDatabaseOptions { DatabasePath = databasePath });
+        var database =
+            new PilotIntelDatabase(
+                new PilotIntelDatabaseOptions
+                {
+                    DatabasePath = databasePath
+                });
+
         Database = database;
+
         database.EnsureCreated();
 
-        PilotIdentityCache = new DuckDbPilotIdentityCache(database);
-        zKillActivityCache = new DuckDbzKillActivityCache(database);
-        RecentKillmailCache = new DuckDbRecentKillmailCache(database);
-        zKillStatisticsCache = new DuckDbzKillStatisticsCache(database);
-        RecentStyleClient = new RustRecentStyleClient();
+        PilotIdentityCache =
+            new DuckDbPilotIdentityCache(database);
+
+        zKillActivityCache =
+            new DuckDbzKillActivityCache(database);
+
+        RecentKillmailCache =
+            new DuckDbRecentKillmailCache(database);
+
+        zKillStatisticsCache =
+            new DuckDbzKillStatisticsCache(database);
+
+        var dllPath = Path.Combine(
+            AppContext.BaseDirectory,
+            "pintelengine.dll");
+
+        EngineRuntime =
+            new PIntelEngineRuntime(
+                dllPath,
+                databasePath);
+
+        RecentStyleClient =
+            new RustRecentStyleClient(
+                EngineRuntime);
 
         var esiHttpClient = new HttpClient();
-        EsiClient = new EsiClient(esiHttpClient);
 
-        var zKillHandler = new HttpClientHandler
+        EsiClient =
+            new EsiClient(
+                esiHttpClient);
+
+        var zKillHandler =
+            new HttpClientHandler
+            {
+                AutomaticDecompression =
+                    DecompressionMethods.GZip
+                    | DecompressionMethods.Deflate
+            };
+
+        var zKillHttpClient =
+            new HttpClient(
+                zKillHandler);
+
+        zKillClient =
+            new zKillClient(
+                zKillHttpClient);
+    }
+
+    protected override void OnExit(
+        ExitEventArgs e)
+    {
+        try
         {
-            AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
-        };
-
-        var zKillHttpClient = new HttpClient(zKillHandler);
-        zKillClient = new zKillClient(zKillHttpClient);
+            EngineRuntime?.Dispose();
+        }
+        finally
+        {
+            base.OnExit(e);
+        }
     }
 }
