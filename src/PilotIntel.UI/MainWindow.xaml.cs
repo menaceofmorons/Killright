@@ -27,6 +27,7 @@ public partial class MainWindow : Window
     protected override void OnSourceInitialized(EventArgs e)
     {
         base.OnSourceInitialized(e);
+
         _clipboardMonitor = new ClipboardMonitor(new WindowInteropHelper(this).Handle);
         _clipboardMonitor.ClipboardChanged += ClipboardChanged;
     }
@@ -68,15 +69,19 @@ public partial class MainWindow : Window
 
             zKillActivity? activity = null;
             var recentStyle = StyleClassification.Unknown;
+            var threatBand = "Unk";
 
             if (pilot.CharacterId is not null)
             {
                 await RefreshRecentKillmailsAsync(pilot.CharacterId.Value);
+
                 activity = await LoadDerivedActivityAsync(pilot.CharacterId.Value);
 
-                //var recentKillmails = await App.RecentKillmailCache.GetForCharacterAsync(pilot.CharacterId.Value);
-                recentStyle = await App.RecentStyleClient.AnalyzeAsync(pilot.CharacterId.Value);
-                    //,recentKillmails);
+                var analysisResult = await App.RecentStyleClient.AnalyzeAsync(
+                    pilot.CharacterId.Value);
+
+                recentStyle = analysisResult.RecentStyle;
+                threatBand = analysisResult.ThreatBand;
             }
 
             var statistics = await LoadzKillStatisticsAsync(pilot.CharacterId);
@@ -85,7 +90,8 @@ public partial class MainWindow : Window
                 pilot,
                 activity,
                 statistics,
-                recentStyle));
+                recentStyle,
+                threatBand));
         }
 
         if (rows.Count == 0)

@@ -13,7 +13,8 @@ public static class PilotReportRowFactory
         Pilot pilot,
         zKillActivity? activity,
         zKillStatistics? statistics,
-        StyleClassification recentStyle)
+        StyleClassification recentStyle,
+        string threatBand)
     {
         var generalStyle = GeneralStyleClassifier.Classify(statistics);
 
@@ -21,7 +22,9 @@ public static class PilotReportRowFactory
         {
             Pilot = GetPilotName(pilot),
             Verify = GetVerifyDisplay(pilot.VerifyStatus),
-            Threat = "unk",
+            Threat = string.IsNullOrWhiteSpace(threatBand)
+                ? "Unk"
+                : threatBand,
             SecurityStatus = pilot.SecurityStatus?.ToString("0.00") ?? "unk",
             Group = "unk",
             Corporation = pilot.Corporation?.Name ?? "unk",

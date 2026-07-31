@@ -1,0 +1,141 @@
+﻿{
+  "version": "1.0",
+  "lastUpdated": "2026-07-31",
+
+  "bands": [
+    { "name": "Unknown", "minimumScore": 0, "maximumScore": 0 },
+    { "name": "Low", "minimumScore": 1, "maximumScore": 20 },
+    { "name": "Medium", "minimumScore": 21, "maximumScore": 40 },
+    { "name": "High", "minimumScore": 41, "maximumScore": 60 },
+    { "name": "Very High", "minimumScore": 61, "maximumScore": 80 },
+    { "name": "Extreme", "minimumScore": 81, "maximumScore": 100 }
+  ],
+
+  "componentWeights": {
+    "historicalCapability": { "maximumScore": 40 },
+    "survivability": { "maximumScore": 25 },
+    "lossQuality": { "maximumScore": 20 },
+    "recentActivity": { "maximumScore": 10 },
+    "securityStatus": { "maximumScore": 5 }
+  },
+
+  "historicalCapability": {
+    "killVolumeBands": [
+      { "maximumKills": 0, "score": 0 },
+      { "maximumKills": 24, "score": 4 },
+      { "maximumKills": 99, "score": 8 },
+      { "maximumKills": 499, "score": 14 },
+      { "maximumKills": 1999, "score": 22 },
+      { "maximumKills": 9999, "score": 30 },
+      { "maximumKills": 999999999, "score": 34 }
+    ],
+    "soloKillBands": [
+      { "maximumSoloKills": 0, "score": 0 },
+      { "maximumSoloKills": 24, "score": 1 },
+      { "maximumSoloKills": 99, "score": 2 },
+      { "maximumSoloKills": 499, "score": 4 },
+      { "maximumSoloKills": 999999999, "score": 6 }
+    ],
+    "soloRatio": { "minimumRatio": 60.0, "score": 2 },
+    "styleModifiers": [
+      { "style": "Solo", "score": 4 },
+      { "style": "Gang", "score": 3 },
+      { "style": "Fleet", "score": 2 },
+      { "style": "Blob", "score": 2 }
+    ]
+  },
+
+  "survivability": {
+    "ratios": [
+      { "maximumRatio": 0.25, "score": 2 },
+      { "maximumRatio": 0.50, "score": 5 },
+      { "maximumRatio": 1.00, "score": 8 },
+      { "maximumRatio": 2.00, "score": 13 },
+      { "maximumRatio": 5.00, "score": 19 },
+      { "maximumRatio": 999999.0, "score": 25 }
+    ],
+    "noLossBands": [
+      { "minimumKills": 100, "score": 25 },
+      { "minimumKills": 25, "score": 18 },
+      { "minimumKills": 1, "score": 10 }
+    ]
+  },
+
+  "lossQuality": {
+    "styles": [
+      {
+        "style": "Solo",
+        "bands": [
+          { "minimumSoloLossRatio": 0.70, "score": 2 },
+          { "minimumSoloLossRatio": 0.50, "score": 6 },
+          { "minimumSoloLossRatio": 0.30, "score": 12 },
+          { "minimumSoloLossRatio": 0.00, "score": 18 }
+        ]
+      },
+      {
+        "style": "Gang",
+        "bands": [
+          { "minimumSoloLossRatio": 0.70, "score": 5 },
+          { "minimumSoloLossRatio": 0.50, "score": 9 },
+          { "minimumSoloLossRatio": 0.30, "score": 14 },
+          { "minimumSoloLossRatio": 0.00, "score": 18 }
+        ]
+      },
+      {
+        "style": "Fleet",
+        "bands": [
+          { "minimumSoloLossRatio": 0.70, "score": 8 },
+          { "minimumSoloLossRatio": 0.50, "score": 11 },
+          { "minimumSoloLossRatio": 0.30, "score": 14 },
+          { "minimumSoloLossRatio": 0.00, "score": 16 }
+        ]
+      },
+      {
+        "style": "Blob",
+        "bands": [
+          { "minimumSoloLossRatio": 0.70, "score": 8 },
+          { "minimumSoloLossRatio": 0.50, "score": 11 },
+          { "minimumSoloLossRatio": 0.30, "score": 14 },
+          { "minimumSoloLossRatio": 0.00, "score": 16 }
+        ]
+      }
+    ],
+    "defaultStyle": {
+      "bands": [
+        { "minimumSoloLossRatio": 0.70, "score": 5 },
+        { "minimumSoloLossRatio": 0.50, "score": 9 },
+        { "minimumSoloLossRatio": 0.30, "score": 13 },
+        { "minimumSoloLossRatio": 0.00, "score": 16 }
+      ]
+    },
+    "noLossesWithKillsScore": 15
+  },
+
+  "recentActivity": {
+    "bands": [
+      { "maximumRecentKills": 0, "score": 0 },
+      { "maximumRecentKills": 5, "score": 2 },
+      { "maximumRecentKills": 20, "score": 5 },
+      { "maximumRecentKills": 50, "score": 8 },
+      { "maximumRecentKills": 999999, "score": 10 }
+    ]
+  },
+
+  "securityStatus": {
+    "bands": [
+      { "minimumSecurityStatus": 0.0, "score": 0 },
+      { "minimumSecurityStatus": -2.0, "score": 1 },
+      { "minimumSecurityStatus": -5.0, "score": 3 },
+      { "minimumSecurityStatus": -10.0, "score": 5 }
+    ]
+  },
+
+  "confidence": {
+    "low": { "minimumHistoricalVolume": 0 },
+    "medium": { "minimumHistoricalVolume": 25 },
+    "high": {
+      "minimumHistoricalVolume": 100,
+      "requiresRecentActivity": true
+    }
+  }
+}

@@ -13,77 +13,60 @@ public sealed class RustRecentStyleClient
         _runtime = runtime;
     }
 
-    public async Task<StyleClassification> AnalyzeAsync(
+    public async Task<PilotEngineAnalysisResult> AnalyzeAsync(
         long characterId,
         CancellationToken cancellationToken = default)
     {
         try
         {
-            var request =
-                new PilotAnalysisRequest(
-                    characterId);
+            var request = new PilotAnalysisRequest(characterId);
+            var requestJson = JsonSerializer.Serialize(request);
 
-            var requestJson =
-                JsonSerializer.Serialize(request);
+            var responseJson = await _runtime.AnalyzePilotAsync(
+                requestJson,
+                cancellationToken);
 
-            var responseJson =
-                await _runtime.AnalyzePilotAsync(
-                    requestJson,
-                    cancellationToken);
+            var response = JsonSerializer.Deserialize<PilotAnalysisResponse>(responseJson);
 
-            var response =
-                JsonSerializer.Deserialize<PilotAnalysisResponse>(
-                    responseJson);
-
-            return MapRecentStyle(
-                response?.recent_style);
+            return new PilotEngineAnalysisResult(
+                MapRecentStyle(response?.recent_style),
+                MapThreatBand(response?.threat?.band));
         }
         catch
         {
-            return StyleClassification.Unknown;
+            return PilotEngineAnalysisResult.Unknown;
         }
     }
 
-    private static StyleClassification MapRecentStyle(
-        string? value)
+    private static StyleClassification MapRecentStyle(string? value)
     {
         var normalized = value?.Trim();
 
         return normalized switch
         {
-            RecentStyleContract.Unknown =>
-                StyleClassification.Unknown,
-
-            RecentStyleContract.Victim =>
-                StyleClassification.Victim,
-
-            RecentStyleContract.Solo =>
-                StyleClassification.Solo,
-
-            RecentStyleContract.Gang =>
-                StyleClassification.Gang,
-
-            RecentStyleContract.Blob =>
-                StyleClassification.Blob,
-
-            RecentStyleContract.Fleet =>
-                StyleClassification.Fleet,
-
-            RecentStyleContract.Miner =>
-                StyleClassification.Miner,
-
-            RecentStyleContract.Explorer =>
-                StyleClassification.Explorer,
-
-            RecentStyleContract.Hauler =>
-                StyleClassification.Hauler,
-
-            RecentStyleContract.PI =>
-                StyleClassification.PI,
-
-            _ =>
-                StyleClassification.Unknown
+            RecentStyleContract.Unknown => StyleClassification.Unknown,
+            RecentStyleContract.Victim => StyleClassification.Victim,
+            RecentStyleContract.Solo => StyleClassification.Solo,
+            RecentStyleContract.Gang => StyleClassification.Gang,
+            RecentStyleContract.Blob => StyleClassification.Blob,
+            RecentStyleContract.Fleet => StyleClassification.Fleet,
+            RecentStyleContract.Miner => StyleClassification.Miner,
+            RecentStyleContract.Explorer => StyleClassification.Explorer,
+            RecentStyleContract.Hauler => StyleClassification.Hauler,
+            RecentStyleContract.PI => StyleClassification.PI,
+            _ => StyleClassification.Unknown
         };
+    }
+
+    private static string MapThreatBand(string? value)
+    {
+        var normalized = value?.Trim();
+
+        return string.IsNullOrWhiteSpace(normalized)
+            ? "Unk"
+            : normalized == "Unknown"
+                ? "Unk"
+                : normalized;
     }
 
     private static class RecentStyleContract
@@ -100,13 +83,29 @@ public sealed class RustRecentStyleClient
         public const string PI = "PI";
     }
 
-    private sealed record PilotAnalysisRequest(
-        long character_id);
+    private sealed record PilotAnalysisRequest(long character_id);
 
     private sealed class PilotAnalysisResponse
     {
         public long character_id { get; set; }
-
         public string? recent_style { get; set; }
+        public ThreatAnalysisResponse? threat { get; set; }
     }
+
+    private sealed class ThreatAnalysisResponse
+    {
+        public int score { get; set; }
+        public string? band { get; set; }
+        public string? confidence { get; set; }
+    }
+}
+
+public sealed record PilotEngineAnalysisResult(
+    StyleClassification RecentStyle,
+    string ThreatBand)
+{
+    public static PilotEngineAnalysisResult Unknown { get; } =
+        new(
+            StyleClassification.Unknown,
+            "Unk");
 }
