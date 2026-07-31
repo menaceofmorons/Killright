@@ -10,6 +10,9 @@ pub mod group_analysis;
 #[path = "recent_style/mod_recent_style.rs"]
 pub mod recent_style;
 
+#[path = "repositories/mod_repositories.rs"]
+pub mod repositories;
+
 #[path = "shared/mod_shared.rs"]
 pub mod shared;
 
