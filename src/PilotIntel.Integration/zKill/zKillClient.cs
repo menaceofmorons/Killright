@@ -16,20 +16,50 @@ public sealed class zKillClient : IzKillClient
         _http = http;
         _options = options ?? new zKillClientOptions();
         _http.BaseAddress ??= _options.BaseUri;
+
         if (!_http.DefaultRequestHeaders.UserAgent.Any())
             _http.DefaultRequestHeaders.UserAgent.ParseAdd(_options.UserAgent);
+
         if (!_http.DefaultRequestHeaders.AcceptEncoding.Any(x => x.Value.Equals("gzip", StringComparison.OrdinalIgnoreCase)))
             _http.DefaultRequestHeaders.AcceptEncoding.Add(new StringWithQualityHeaderValue("gzip"));
     }
 
     public async Task<IReadOnlyList<KillmailRecord>> GetRecentKillmailsAsync(
         long characterId,
+        int pastSeconds,
         CancellationToken cancellationToken = default)
     {
+        var safePastSeconds = Math.Max(1, pastSeconds);
+
         return await LoadKillmailsAsync(
-            $"api/characterID/{characterId}/",
+            $"api/characterID/{characterId}/pastSeconds/{safePastSeconds}/",
             characterId,
             cancellationToken);
+    }
+
+    public async Task<zKillActivity?> GetLatestActivityAsync(
+        long characterId,
+        CancellationToken cancellationToken = default)
+    {
+        var payload = await LoadzKillKillmailsAsync(
+            $"api/characterID/{characterId}/",
+            cancellationToken);
+
+        var latest = payload.FirstOrDefault();
+
+        if (latest is null)
+            return null;
+
+        var isLoss = latest.victim.character_id == characterId;
+
+        return new zKillActivity(
+            characterId,
+            true,
+            0,
+            0,
+            latest.killmail_time,
+            isLoss ? zKillActivityType.Loss : zKillActivityType.Kill,
+            ApplicationClock.UtcNow);
     }
 
     public async Task<zKillStatistics?> GetStatisticsAsync(
@@ -41,9 +71,12 @@ public sealed class zKillClient : IzKillClient
             using var response = await _http.GetAsync(
                 $"api/stats/characterID/{characterId}/kills/",
                 cancellationToken);
+
             if (!response.IsSuccessStatusCode)
                 return null;
+
             await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+
             return await JsonSerializer.DeserializeAsync<zKillStatistics>(
                 stream,
                 cancellationToken: cancellationToken);
@@ -62,12 +95,14 @@ public sealed class zKillClient : IzKillClient
         var payload = await LoadzKillKillmailsAsync(requestUri, cancellationToken);
         var records = new List<KillmailRecord>();
         var cachedAtUtc = ApplicationClock.UtcNow;
+
         foreach (var killmail in payload)
         {
             var isLoss = killmail.victim.character_id == characterId;
             var shipTypeId = isLoss
                 ? killmail.victim.ship_type_id
                 : killmail.attackers.FirstOrDefault(attacker => attacker.character_id == characterId)?.ship_type_id;
+
             records.Add(new KillmailRecord(
                 killmail.killmail_id,
                 killmail.zkb.hash,
@@ -82,6 +117,7 @@ public sealed class zKillClient : IzKillClient
                 killmail.zkb.npc,
                 cachedAtUtc));
         }
+
         return records;
     }
 
@@ -89,15 +125,26 @@ public sealed class zKillClient : IzKillClient
         string requestUri,
         CancellationToken cancellationToken)
     {
-        using var response = await _http.GetAsync(requestUri, cancellationToken);
-        if ((int)response.StatusCode == 204)
+        try
+        {
+            using var response = await _http.GetAsync(requestUri, cancellationToken);
+
+            if ((int)response.StatusCode == 204)
+                return [];
+
+            if (!response.IsSuccessStatusCode)
+                return [];
+
+            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+
+            return await JsonSerializer.DeserializeAsync<List<zKillRecentKillmailDto>>(
+                stream,
+                cancellationToken: cancellationToken) ?? [];
+        }
+        catch
+        {
             return [];
-        if (!response.IsSuccessStatusCode)
-            return [];
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-        return await JsonSerializer.DeserializeAsync<List<zKillRecentKillmailDto>>(
-            stream,
-            cancellationToken: cancellationToken) ?? [];
+        }
     }
 
     private sealed class zKillRecentKillmailDto
