@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>WinExe</OutputType>
+        <TargetFramework>net9.0-windows</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <UseWPF>true</UseWPF>
+        <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\Killright.Core\Killright.Core.csproj" />
+      <ProjectReference Include="..\Killright.Integration\Killright.Integration.csproj" />
+      <ProjectReference Include="..\Killright.Shared\Killright.Shared.csproj" />
+      <ProjectReference Include="..\Killright.Storage\Killright.Storage.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="DuckDB.NET.Data.Full" Version="1.5.3" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Include="$(NuGetPackageRoot)duckdb.net.bindings.full\1.5.3\runtimes\win-x64\native\duckdb.dll"
+              Link="duckdb.dll"
+              CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
+    
+
+</Project>
