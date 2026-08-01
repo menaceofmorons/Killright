@@ -6,6 +6,7 @@ public static class StyleDisplayFormatter
     {
         return style switch
         {
+            StyleClassification.Inactive => "Inactive",
             StyleClassification.Victim => "Vict",
             StyleClassification.SoloBeginner => "Solo(b)",
             StyleClassification.Solo => "Solo",

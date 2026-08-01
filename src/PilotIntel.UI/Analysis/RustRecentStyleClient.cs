@@ -7,8 +7,7 @@ public sealed class RustRecentStyleClient
 {
     private readonly IPIntelEngineRuntime _runtime;
 
-    public RustRecentStyleClient(
-        IPIntelEngineRuntime runtime)
+    public RustRecentStyleClient(IPIntelEngineRuntime runtime)
     {
         _runtime = runtime;
     }
@@ -21,13 +20,8 @@ public sealed class RustRecentStyleClient
         {
             var request = new PilotAnalysisRequest(characterId);
             var requestJson = JsonSerializer.Serialize(request);
-
-            var responseJson = await _runtime.AnalyzePilotAsync(
-                requestJson,
-                cancellationToken);
-
+            var responseJson = await _runtime.AnalyzePilotAsync(requestJson, cancellationToken);
             var response = JsonSerializer.Deserialize<PilotAnalysisResponse>(responseJson);
-
             return new PilotEngineAnalysisResult(
                 MapRecentStyle(response?.recent_style),
                 MapThreatBand(response?.threat?.band));
@@ -41,10 +35,10 @@ public sealed class RustRecentStyleClient
     private static StyleClassification MapRecentStyle(string? value)
     {
         var normalized = value?.Trim();
-
         return normalized switch
         {
             RecentStyleContract.Unknown => StyleClassification.Unknown,
+            RecentStyleContract.Inactive => StyleClassification.Inactive,
             RecentStyleContract.Victim => StyleClassification.Victim,
             RecentStyleContract.Solo => StyleClassification.Solo,
             RecentStyleContract.Gang => StyleClassification.Gang,
@@ -61,7 +55,6 @@ public sealed class RustRecentStyleClient
     private static string MapThreatBand(string? value)
     {
         var normalized = value?.Trim();
-
         return string.IsNullOrWhiteSpace(normalized)
             ? "Unk"
             : normalized == "Unknown"
@@ -72,6 +65,7 @@ public sealed class RustRecentStyleClient
     private static class RecentStyleContract
     {
         public const string Unknown = "Unknown";
+        public const string Inactive = "Inactive";
         public const string Victim = "Victim";
         public const string Solo = "Solo";
         public const string Gang = "Gang";
@@ -104,8 +98,7 @@ public sealed record PilotEngineAnalysisResult(
     StyleClassification RecentStyle,
     string ThreatBand)
 {
-    public static PilotEngineAnalysisResult Unknown { get; } =
-        new(
-            StyleClassification.Unknown,
-            "Unk");
+    public static PilotEngineAnalysisResult Unknown { get; } = new(
+        StyleClassification.Unknown,
+        "Unk");
 }

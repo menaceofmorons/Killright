@@ -24,10 +24,7 @@ pub struct RecentKillmailRepository {
 }
 
 impl RecentKillmailRepository {
-    pub fn new(
-        database_path: PathBuf)
-        -> Self
-    {
+    pub fn new(database_path: PathBuf) -> Self {
         Self {
             database_path,
         }

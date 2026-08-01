@@ -3,6 +3,7 @@
 public enum StyleClassification
 {
     Unknown,
+    Inactive,
     Victim,
     SoloBeginner,
     Solo,
