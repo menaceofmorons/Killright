@@ -2,5 +2,5 @@
 
 public interface IZkillHistoryClient
 {
-    Task<ZkillHistoryPeriodResult> CountWinterNexusQuarterAsync(CancellationToken cancellationToken = default);
+    Task<ZkillHistoryPeriodResult> CountCalendarYear2025Async(CancellationToken cancellationToken = default);
 }

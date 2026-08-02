@@ -5,6 +5,7 @@ namespace Killright.Integration.zKill.History;
 
 public sealed class ZkillHistoryPeriodResult
 {
+    public required string ReportTitle { get; init; }
     public required DateOnly StartDate { get; init; }
     public required DateOnly EndDate { get; init; }
     public required TimeSpan Elapsed { get; init; }
@@ -59,7 +60,7 @@ public sealed class ZkillHistoryPeriodResult
         var culture = CultureInfo.InvariantCulture;
 
         builder.AppendLine("====================================================");
-        builder.AppendLine("KillRight Group Detection Winter Nexus Quarter Pilot");
+        builder.AppendLine(ReportTitle);
         builder.AppendLine("====================================================");
         builder.AppendLine();
         builder.AppendLine($"Period: {PeriodLabel}");
@@ -79,7 +80,7 @@ public sealed class ZkillHistoryPeriodResult
             builder.AppendLine();
             builder.AppendLine("Failed days:");
 
-            foreach (var failedDay in Days.Where(x => !x.Succeeded))
+            foreach (var failedDay in Days.Where(x => !x.Succeeded).OrderBy(x => x.Date))
                 builder.AppendLine($"- {failedDay.Date:yyyy-MM-dd}: {failedDay.ErrorMessage}");
         }
 
@@ -89,6 +90,7 @@ public sealed class ZkillHistoryPeriodResult
         builder.AppendLine("- Candidate rows are measurement-only and are not written to DuckDB.");
         builder.AppendLine("- Candidate compressed relationship rows are unique unordered pilot pairs across the full period.");
         builder.AppendLine("- Relationship frequency distribution counts qualifying pair appearances across the full period.");
+        builder.AppendLine("- HTTP requests are parallelised but globally rate-limited to 10 request starts per second.");
         builder.AppendLine();
         builder.AppendLine("====================================================");
 

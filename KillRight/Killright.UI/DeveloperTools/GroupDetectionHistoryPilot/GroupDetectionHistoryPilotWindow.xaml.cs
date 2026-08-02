@@ -19,7 +19,7 @@ public partial class GroupDetectionHistoryPilotWindow : Window
         StartButton.IsEnabled = false;
         CopyResultsButton.IsEnabled = false;
         _lastResults = null;
-        ResultTextBox.Text = "Running Winter Nexus quarter history pilot...";
+        ResultTextBox.Text = "Running calendar year 2025 history pilot with parallel workers...";
 
         try
         {
@@ -30,7 +30,7 @@ public partial class GroupDetectionHistoryPilotWindow : Window
 
             using var httpClient = new HttpClient(handler);
             var client = new ZkillHistoryClient(httpClient);
-            var result = await client.CountWinterNexusQuarterAsync();
+            var result = await client.CountCalendarYear2025Async();
 
             _lastResults = result.ToShareableReport();
             ResultTextBox.Text = _lastResults;
@@ -38,7 +38,7 @@ public partial class GroupDetectionHistoryPilotWindow : Window
         }
         catch (Exception ex)
         {
-            _lastResults = $"History quarter pilot failed: {ex.Message}";
+            _lastResults = $"Calendar year history pilot failed: {ex.Message}";
             ResultTextBox.Text = _lastResults;
             CopyResultsButton.IsEnabled = true;
         }
