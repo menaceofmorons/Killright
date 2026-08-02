@@ -7,6 +7,7 @@ using Killright.Shared.Constants;
 using Killright.Shared.Time;
 using Killright.Shared.zKill;
 using Killright.UI.ClipboardMonitoring;
+using Killright.UI.DeveloperTools.GroupDetectionHistoryPilot;
 using Killright.UI.Diagnostics;
 using Killright.UI.ViewModels;
 
@@ -235,4 +236,14 @@ public partial class MainWindow : Window
     {
         ApplicationClock.Reset();
     }
+    
+    private void GroupDetectionHistoryPilot_Click(object sender, RoutedEventArgs e)
+    {
+        var window = new GroupDetectionHistoryPilotWindow
+        {
+            Owner = this
+        };
+
+        window.ShowDialog();
+    }    
 }

@@ -1,0 +1,3 @@
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+cd C:\Users\TomMulledy\OneDrive\Documents\Code\PilotIntel\Code
+.\ExportStructure.ps1
