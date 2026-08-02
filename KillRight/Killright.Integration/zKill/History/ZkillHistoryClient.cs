@@ -11,6 +11,8 @@ public sealed class ZkillHistoryClient : IZkillHistoryClient
     private const int MinimumQualifyingAttackers = 2;
     private const int FleetMinimumAttackers = 11;
 
+    private static readonly DateOnly WinterNexusStartDate = new(2025, 11, 1);
+    private static readonly DateOnly WinterNexusEndDate = new(2026, 1, 31);
     private static readonly TimeSpan RequestSpacing = TimeSpan.FromSeconds(1);
     private static readonly HashSet<long> PodShipTypeIds = new() { 670 };
 
@@ -21,21 +23,14 @@ public sealed class ZkillHistoryClient : IZkillHistoryClient
         _httpClient = httpClient;
     }
 
-    public async Task<ZkillHistoryMonthResult> CountPreviousCompleteMonthAsync(CancellationToken cancellationToken = default)
+    public async Task<ZkillHistoryPeriodResult> CountWinterNexusQuarterAsync(CancellationToken cancellationToken = default)
     {
         var stopwatch = Stopwatch.StartNew();
-        var todayUtc = DateTime.UtcNow.Date;
-        var firstDayOfCurrentMonth = new DateTime(todayUtc.Year, todayUtc.Month, 1);
-        var firstDayOfTargetMonth = firstDayOfCurrentMonth.AddMonths(-1);
-        var daysInTargetMonth = DateTime.DaysInMonth(firstDayOfTargetMonth.Year, firstDayOfTargetMonth.Month);
-
-        var startDate = DateOnly.FromDateTime(firstDayOfTargetMonth);
-        var endDate = DateOnly.FromDateTime(firstDayOfTargetMonth.AddDays(daysInTargetMonth - 1));
         var results = new List<ZkillHistoryDayResult>();
         var uniqueQualifyingPilots = new HashSet<long>();
-        var uniqueCandidateRelationships = new HashSet<PilotPair>();
+        var relationshipOccurrenceCounts = new Dictionary<PilotPair, int>();
 
-        for (var date = startDate; date <= endDate; date = date.AddDays(1))
+        for (var date = WinterNexusStartDate; date <= WinterNexusEndDate; date = date.AddDays(1))
         {
             cancellationToken.ThrowIfCancellationRequested();
             var processingResult = await CountDayAsync(date, cancellationToken);
@@ -44,23 +39,27 @@ public sealed class ZkillHistoryClient : IZkillHistoryClient
             foreach (var pilotId in processingResult.UniqueQualifyingPilots)
                 uniqueQualifyingPilots.Add(pilotId);
 
-            foreach (var pair in processingResult.UniqueCandidateRelationships)
-                uniqueCandidateRelationships.Add(pair);
+            foreach (var pair in processingResult.CandidateRelationshipOccurrences)
+            {
+                relationshipOccurrenceCounts.TryGetValue(pair, out var currentCount);
+                relationshipOccurrenceCounts[pair] = currentCount + 1;
+            }
 
-            if (date < endDate)
+            if (date < WinterNexusEndDate)
                 await Task.Delay(RequestSpacing, cancellationToken);
         }
 
         stopwatch.Stop();
 
-        return new ZkillHistoryMonthResult
+        return new ZkillHistoryPeriodResult
         {
-            StartDate = startDate,
-            EndDate = endDate,
+            StartDate = WinterNexusStartDate,
+            EndDate = WinterNexusEndDate,
             Elapsed = stopwatch.Elapsed,
             Days = results,
             UniqueQualifyingPilots = uniqueQualifyingPilots.Count,
-            UniqueCandidateRelationships = uniqueCandidateRelationships.Count
+            UniqueCandidateRelationships = relationshipOccurrenceCounts.Count,
+            RelationshipFrequencyDistribution = RelationshipFrequencyDistribution.FromCounts(relationshipOccurrenceCounts.Values)
         };
     }
 
@@ -72,7 +71,7 @@ public sealed class ZkillHistoryClient : IZkillHistoryClient
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
-            request.Headers.UserAgent.Add(new ProductInfoHeaderValue("KillRight", "19.00.02"));
+            request.Headers.UserAgent.Add(new ProductInfoHeaderValue("KillRight", "19.00.03"));
             request.Headers.AcceptEncoding.Add(new StringWithQualityHeaderValue("gzip"));
             request.Headers.AcceptEncoding.Add(new StringWithQualityHeaderValue("deflate"));
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
@@ -82,25 +81,8 @@ public sealed class ZkillHistoryClient : IZkillHistoryClient
 
             if (!response.IsSuccessStatusCode)
             {
-                var failedDay = new ZkillHistoryDayResult(
-                    date,
-                    url,
-                    false,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
-
-                return new ZkillHistoryDayProcessingResult(
-                    failedDay,
-                    new HashSet<long>(),
-                    new HashSet<PilotPair>());
+                var failedDay = CreateFailedDay(date, url, $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
+                return new ZkillHistoryDayProcessingResult(failedDay, new HashSet<long>(), new List<PilotPair>());
             }
 
             using var document = JsonDocument.Parse(content);
@@ -108,25 +90,8 @@ public sealed class ZkillHistoryClient : IZkillHistoryClient
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            var failedDay = new ZkillHistoryDayResult(
-                date,
-                url,
-                false,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                ex.Message);
-
-            return new ZkillHistoryDayProcessingResult(
-                failedDay,
-                new HashSet<long>(),
-                new HashSet<PilotPair>());
+            var failedDay = CreateFailedDay(date, url, ex.Message);
+            return new ZkillHistoryDayProcessingResult(failedDay, new HashSet<long>(), new List<PilotPair>());
         }
     }
 
@@ -134,25 +99,8 @@ public sealed class ZkillHistoryClient : IZkillHistoryClient
     {
         if (root.ValueKind != JsonValueKind.Object)
         {
-            var invalidDay = new ZkillHistoryDayResult(
-                date,
-                url,
-                false,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                "Root JSON was not an object.");
-
-            return new ZkillHistoryDayProcessingResult(
-                invalidDay,
-                new HashSet<long>(),
-                new HashSet<PilotPair>());
+            var invalidDay = CreateFailedDay(date, url, "Root JSON was not an object.");
+            return new ZkillHistoryDayProcessingResult(invalidDay, new HashSet<long>(), new List<PilotPair>());
         }
 
         var rawKillmailCount = 0;
@@ -165,7 +113,7 @@ public sealed class ZkillHistoryClient : IZkillHistoryClient
         var candidatePairOccurrenceRows = 0L;
         var maxQualifyingAttackersOnKillmail = 0;
         var uniqueQualifyingPilots = new HashSet<long>();
-        var uniqueCandidateRelationships = new HashSet<PilotPair>();
+        var candidateRelationshipOccurrences = new List<PilotPair>();
 
         foreach (var killmailProperty in root.EnumerateObject())
         {
@@ -208,7 +156,7 @@ public sealed class ZkillHistoryClient : IZkillHistoryClient
             foreach (var characterId in attackerCharacterIds)
                 uniqueQualifyingPilots.Add(characterId);
 
-            AddCandidatePairs(attackerCharacterIds, uniqueCandidateRelationships);
+            AddCandidatePairs(attackerCharacterIds, candidateRelationshipOccurrences);
         }
 
         var dayResult = new ZkillHistoryDayResult(
@@ -226,10 +174,25 @@ public sealed class ZkillHistoryClient : IZkillHistoryClient
             maxQualifyingAttackersOnKillmail,
             null);
 
-        return new ZkillHistoryDayProcessingResult(
-            dayResult,
-            uniqueQualifyingPilots,
-            uniqueCandidateRelationships);
+        return new ZkillHistoryDayProcessingResult(dayResult, uniqueQualifyingPilots, candidateRelationshipOccurrences);
+    }
+
+    private static ZkillHistoryDayResult CreateFailedDay(DateOnly date, string url, string errorMessage)
+    {
+        return new ZkillHistoryDayResult(
+            date,
+            url,
+            false,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            errorMessage);
     }
 
     private static bool IsPodKillmail(JsonElement killmail)
@@ -274,13 +237,13 @@ public sealed class ZkillHistoryClient : IZkillHistoryClient
         return participantCount < 2 ? 0 : participantCount * (long)(participantCount - 1) / 2;
     }
 
-    private static void AddCandidatePairs(IReadOnlyList<long> attackerCharacterIds, HashSet<PilotPair> uniqueCandidateRelationships)
+    private static void AddCandidatePairs(IReadOnlyList<long> attackerCharacterIds, List<PilotPair> candidateRelationshipOccurrences)
     {
         for (var outerIndex = 0; outerIndex < attackerCharacterIds.Count - 1; outerIndex++)
         {
             for (var innerIndex = outerIndex + 1; innerIndex < attackerCharacterIds.Count; innerIndex++)
             {
-                uniqueCandidateRelationships.Add(new PilotPair(
+                candidateRelationshipOccurrences.Add(new PilotPair(
                     attackerCharacterIds[outerIndex],
                     attackerCharacterIds[innerIndex]));
             }
@@ -290,7 +253,7 @@ public sealed class ZkillHistoryClient : IZkillHistoryClient
     private sealed record ZkillHistoryDayProcessingResult(
         ZkillHistoryDayResult DayResult,
         HashSet<long> UniqueQualifyingPilots,
-        HashSet<PilotPair> UniqueCandidateRelationships);
+        List<PilotPair> CandidateRelationshipOccurrences);
 
     private readonly record struct PilotPair(long PilotA, long PilotB);
 }
