@@ -2,8 +2,8 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Group Detection History Pilot"
-        Height="520"
-        Width="760"
+        Height="560"
+        Width="820"
         WindowStartupLocation="CenterOwner">
     <Grid Margin="16">
         <Grid.RowDefinitions>
@@ -13,7 +13,7 @@
         </Grid.RowDefinitions>
 
         <TextBlock Grid.Row="0"
-                   Text="Counts zKill R2 history rows and attacker totals for the previous complete UTC calendar month. No data is stored."
+                   Text="Counts zKill R2 history volume, qualification filters, and candidate storage row counts for the previous complete UTC calendar month. No data is stored."
                    TextWrapping="Wrap"
                    Margin="0,0,0,12" />
 
