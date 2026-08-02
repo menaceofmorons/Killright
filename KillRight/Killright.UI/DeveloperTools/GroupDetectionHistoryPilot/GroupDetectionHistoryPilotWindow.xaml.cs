@@ -7,6 +7,8 @@ namespace Killright.UI.DeveloperTools.GroupDetectionHistoryPilot;
 
 public partial class GroupDetectionHistoryPilotWindow : Window
 {
+    private string? _lastResults;
+
     public GroupDetectionHistoryPilotWindow()
     {
         InitializeComponent();
@@ -15,7 +17,9 @@ public partial class GroupDetectionHistoryPilotWindow : Window
     private async void StartButton_Click(object sender, RoutedEventArgs e)
     {
         StartButton.IsEnabled = false;
-        ResultTextBlock.Text = "Running history volume pilot...";
+        CopyResultsButton.IsEnabled = false;
+        _lastResults = null;
+        ResultTextBox.Text = "Running history volume pilot...";
 
         try
         {
@@ -28,19 +32,27 @@ public partial class GroupDetectionHistoryPilotWindow : Window
             var client = new ZkillHistoryClient(httpClient);
             var result = await client.CountPreviousCompleteMonthAsync();
 
-            ResultTextBlock.Text =
-                $"Month: {result.MonthLabel}\n" +
-                $"Successful days: {result.SuccessfulDays}\n" +
-                $"Failed days: {result.FailedDays}\n" +
-                $"Rows returned: {result.TotalRows:N0}";
+            _lastResults = result.ToShareableReport();
+            ResultTextBox.Text = _lastResults;
+            CopyResultsButton.IsEnabled = true;
         }
         catch (Exception ex)
         {
-            ResultTextBlock.Text = $"History volume pilot failed: {ex.Message}";
+            _lastResults = $"History volume pilot failed: {ex.Message}";
+            ResultTextBox.Text = _lastResults;
+            CopyResultsButton.IsEnabled = true;
         }
         finally
         {
             StartButton.IsEnabled = true;
         }
+    }
+
+    private void CopyResultsButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(_lastResults))
+            return;
+
+        Clipboard.SetText(_lastResults);
     }
 }

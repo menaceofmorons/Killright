@@ -4,5 +4,7 @@ public sealed record ZkillHistoryDayResult(
     DateOnly Date,
     string Url,
     bool Succeeded,
-    int RowCount,
+    int KillmailCount,
+    int AttackerCount,
+    int MaxAttackersOnKillmail,
     string? ErrorMessage);

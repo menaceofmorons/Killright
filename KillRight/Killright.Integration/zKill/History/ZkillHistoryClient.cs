@@ -1,4 +1,5 @@
-﻿using System.Globalization;
+﻿using System.Diagnostics;
+using System.Globalization;
 using System.Net.Http.Headers;
 using System.Text.Json;
 
@@ -6,7 +7,7 @@ namespace Killright.Integration.zKill.History;
 
 public sealed class ZkillHistoryClient : IZkillHistoryClient
 {
-    private const string HistoryEndpointFormat = "https://zkillboard.com/api/history/{0}.json";
+    private const string HistoryEndpointFormat = "https://r2z2.zkillboard.com/history/raw/{0}.json";
     private static readonly TimeSpan RequestSpacing = TimeSpan.FromSeconds(1);
 
     private readonly HttpClient _httpClient;
@@ -18,6 +19,7 @@ public sealed class ZkillHistoryClient : IZkillHistoryClient
 
     public async Task<ZkillHistoryMonthResult> CountPreviousCompleteMonthAsync(CancellationToken cancellationToken = default)
     {
+        var stopwatch = Stopwatch.StartNew();
         var todayUtc = DateTime.UtcNow.Date;
         var firstDayOfCurrentMonth = new DateTime(todayUtc.Year, todayUtc.Month, 1);
         var firstDayOfTargetMonth = firstDayOfCurrentMonth.AddMonths(-1);
@@ -36,10 +38,13 @@ public sealed class ZkillHistoryClient : IZkillHistoryClient
                 await Task.Delay(RequestSpacing, cancellationToken);
         }
 
+        stopwatch.Stop();
+
         return new ZkillHistoryMonthResult
         {
             StartDate = startDate,
             EndDate = endDate,
+            Elapsed = stopwatch.Elapsed,
             Days = results
         };
     }
@@ -52,7 +57,7 @@ public sealed class ZkillHistoryClient : IZkillHistoryClient
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
-            request.Headers.UserAgent.Add(new ProductInfoHeaderValue("KillRight", "19.00.00"));
+            request.Headers.UserAgent.Add(new ProductInfoHeaderValue("KillRight", "19.00.01"));
             request.Headers.AcceptEncoding.Add(new StringWithQualityHeaderValue("gzip"));
             request.Headers.AcceptEncoding.Add(new StringWithQualityHeaderValue("deflate"));
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
@@ -67,17 +72,21 @@ public sealed class ZkillHistoryClient : IZkillHistoryClient
                     url,
                     false,
                     0,
+                    0,
+                    0,
                     $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
             }
 
             using var document = JsonDocument.Parse(content);
-            var rowCount = CountRows(document.RootElement);
+            var metrics = CountDayMetrics(document.RootElement);
 
             return new ZkillHistoryDayResult(
                 date,
                 url,
                 true,
-                rowCount,
+                metrics.KillmailCount,
+                metrics.AttackerCount,
+                metrics.MaxAttackersOnKillmail,
                 null);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -87,24 +96,45 @@ public sealed class ZkillHistoryClient : IZkillHistoryClient
                 url,
                 false,
                 0,
+                0,
+                0,
                 ex.Message);
         }
     }
 
-    private static int CountRows(JsonElement root)
+    private static ZkillHistoryDayMetrics CountDayMetrics(JsonElement root)
     {
-        if (root.ValueKind == JsonValueKind.Array)
-            return root.GetArrayLength();
-
         if (root.ValueKind != JsonValueKind.Object)
-            return 0;
+            return new ZkillHistoryDayMetrics(0, 0, 0);
 
-        if (root.TryGetProperty("killmails", out var killmails) && killmails.ValueKind == JsonValueKind.Array)
-            return killmails.GetArrayLength();
+        var killmailCount = 0;
+        var attackerCount = 0;
+        var maxAttackersOnKillmail = 0;
 
-        if (root.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Array)
-            return data.GetArrayLength();
+        foreach (var killmailProperty in root.EnumerateObject())
+        {
+            killmailCount++;
+            var killmail = killmailProperty.Value;
 
-        return root.EnumerateObject().Count();
+            if (killmail.ValueKind != JsonValueKind.Object)
+                continue;
+
+            if (!killmail.TryGetProperty("attackers", out var attackers))
+                continue;
+
+            if (attackers.ValueKind != JsonValueKind.Array)
+                continue;
+
+            var attackersForKillmail = attackers.GetArrayLength();
+            attackerCount += attackersForKillmail;
+            maxAttackersOnKillmail = Math.Max(maxAttackersOnKillmail, attackersForKillmail);
+        }
+
+        return new ZkillHistoryDayMetrics(killmailCount, attackerCount, maxAttackersOnKillmail);
     }
+
+    private sealed record ZkillHistoryDayMetrics(
+        int KillmailCount,
+        int AttackerCount,
+        int MaxAttackersOnKillmail);
 }
