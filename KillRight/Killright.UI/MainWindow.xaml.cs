@@ -75,7 +75,6 @@ public partial class MainWindow : Window
             {
                 var fallbackActivity = await RefreshRecentKillmailsAsync(pilot.CharacterId.Value);
                 activity = await LoadDerivedActivityAsync(pilot.CharacterId.Value, fallbackActivity);
-
                 var analysisResult = await App.RecentStyleClient.AnalyzeAsync(pilot.CharacterId.Value);
                 recentStyle = analysisResult.RecentStyle;
                 threatBand = analysisResult.ThreatBand;
@@ -100,9 +99,7 @@ public partial class MainWindow : Window
         _viewModel.Pilots.Clear();
 
         foreach (var row in rows)
-        {
             _viewModel.Pilots.Add(row);
-        }
     }
 
     private static async Task<zKillActivity?> LoadDerivedActivityAsync(
@@ -159,7 +156,6 @@ public partial class MainWindow : Window
         try
         {
             var style = StyleDisplayFormatter.Format(GeneralStyleClassifier.Classify(statistics));
-
             await App.zKillStatisticsCache.UpsertAsync(
                 characterId.Value,
                 statistics,
@@ -178,7 +174,6 @@ public partial class MainWindow : Window
         try
         {
             await App.RecentKillmailCache.RemoveExpiredAsync();
-
             var latestKillmailUtc = await App.RecentKillmailCache.GetMostRecentKillmailAsync(characterId);
             var pastSeconds = CalculatePastSeconds(latestKillmailUtc);
             var recent = await App.zKillClient.GetRecentKillmailsAsync(characterId, pastSeconds);
@@ -198,7 +193,6 @@ public partial class MainWindow : Window
         }
     }
 
-    // zKill pastSeconds requests must be supplied as whole-hour multiples (3600 seconds).
     private static int CalculatePastSeconds(DateTimeOffset? latestKillmailUtc)
     {
         const int sevenDays = 7 * 24 * 60 * 60;
@@ -236,7 +230,7 @@ public partial class MainWindow : Window
     {
         ApplicationClock.Reset();
     }
-    
+
     private void GroupDetectionHistoryPilot_Click(object sender, RoutedEventArgs e)
     {
         var window = new GroupDetectionHistoryPilotWindow
@@ -245,5 +239,5 @@ public partial class MainWindow : Window
         };
 
         window.ShowDialog();
-    }    
+    }
 }

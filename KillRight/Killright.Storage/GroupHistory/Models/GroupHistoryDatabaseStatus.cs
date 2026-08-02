@@ -1,4 +1,6 @@
-﻿namespace Killright.Storage.GroupHistory.Models;
+﻿using Killright.Storage.GroupHistory;
+
+namespace Killright.Storage.GroupHistory.Models;
 
 public sealed record GroupHistoryDatabaseStatus(
     bool DatabaseExists,

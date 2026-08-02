@@ -20,13 +20,13 @@ public partial class GroupDetectionHistoryPilotWindow : Window
         StartButton.IsEnabled = false;
         CopyResultsButton.IsEnabled = false;
         _lastResults = null;
-        ResultTextBox.Text = "Running ...";
-        
-        var groupHistoryDatabase = new DuckDbGroupHistoryDatabase();
-        await groupHistoryDatabase.EnsureCreatedAsync();
-        
+        ResultTextBox.Text = "Running calendar year 2025 history pilot...";
+
         try
         {
+            var groupHistoryDatabase = new DuckDbGroupHistoryDatabase();
+            await groupHistoryDatabase.EnsureCreatedAsync();
+
             using var handler = new HttpClientHandler
             {
                 AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate

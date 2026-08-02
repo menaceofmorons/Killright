@@ -11,7 +11,7 @@ using Killright.Storage.Killmails;
 using Killright.Storage.zKill;
 using Killright.UI.Analysis;
 
-namespace Killright.UI.DeveloperTools.GroupHistory;
+namespace Killright.UI;
 
 public partial class App : Application
 {
@@ -117,8 +117,8 @@ public partial class App : Application
 
     private static async Task CheckGroupHistoryStartupAsync()
     {
-        var database = new DuckDbGroupHistoryDatabase();
-        var startupService = new GroupHistoryStartupService(database);
+        var groupHistoryDatabase = new DuckDbGroupHistoryDatabase();
+        var startupService = new GroupHistoryStartupService(groupHistoryDatabase);
         var requirement = await startupService.GetStartupRequirementAsync();
 
         if (!requirement.UpdateRequired)
@@ -131,7 +131,7 @@ public partial class App : Application
                 "This optional data allows KillRight to identify long-term pilot associations.\r\n\r\n" +
                 "Initial creation imports up to 10 years of completed daily history and may take approximately 30-40 minutes.\r\n\r\n" +
                 "You may skip this step and continue using KillRight without historic data.\r\n\r\n" +
-                "Create the historic database now?",
+                "Create the historic database schema now?",
                 "Historic Group Detection",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Information);
@@ -139,11 +139,11 @@ public partial class App : Application
             if (result != MessageBoxResult.Yes)
                 return;
 
-            await database.EnsureCreatedAsync();
+            await groupHistoryDatabase.EnsureCreatedAsync();
 
             MessageBox.Show(
                 "Historic Group Detection database schema has been created.\r\n\r\n" +
-                "Use the Developer history import window to run the initial import.",
+                "Use the Developer history import window to run the initial import in a later implementation step.",
                 "Historic Group Detection",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
@@ -167,7 +167,7 @@ public partial class App : Application
 
         MessageBox.Show(
             "Historic Group Detection data requires an update.\r\n\r\n" +
-            "Use the Developer history import window to run the update.",
+            "Use the Developer history import window to run the update in a later implementation step.",
             "Historic Group Detection Update",
             MessageBoxButton.OK,
             MessageBoxImage.Information);

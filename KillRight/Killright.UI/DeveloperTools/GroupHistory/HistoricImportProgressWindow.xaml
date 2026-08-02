@@ -1,5 +1,4 @@
-﻿<Window
-    x:Class="Killright.UI.DeveloperTools.GroupHistory.HistoricImportProgressWindow"
+﻿<Window x:Class="Killright.UI.DeveloperTools.GroupHistory.HistoricImportProgressWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Historic Group Detection Update"

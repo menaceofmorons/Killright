@@ -24,7 +24,6 @@
         <None Include="$(NuGetPackageRoot)duckdb.net.bindings.full\1.5.3\runtimes\win-x64\native\duckdb.dll"
               Link="duckdb.dll"
               CopyToOutputDirectory="PreserveNewest" />
-        <None Include="DeveloperTools\GroupHistory\HistoricImportProgressWindow.xaml" />
     </ItemGroup>
     
 

@@ -11,12 +11,12 @@
                 <MenuItem Header="Diagnostics"
                           Click="Diagnostics_Click" />
                 <Separator />
-                <MenuItem Header="Group Detection History Pilot" Click="GroupDetectionHistoryPilot_Click" />
+                <MenuItem Header="Group Detection History Pilot"
+                          Click="GroupDetectionHistoryPilot_Click" />
                 <MenuItem Header="Reset Developer Clock"
                           Click="ResetDeveloperClock_Click" />
             </MenuItem>
         </Menu>
-
         <Grid>
             <ScrollViewer HorizontalScrollBarVisibility="Auto"
                           VerticalScrollBarVisibility="Disabled">

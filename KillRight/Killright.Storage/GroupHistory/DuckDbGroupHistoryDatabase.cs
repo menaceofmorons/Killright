@@ -65,7 +65,16 @@ public sealed class DuckDbGroupHistoryDatabase : IGroupHistoryDatabase
 
         if (!await reader.ReadAsync(cancellationToken))
         {
-            return new GroupHistoryDatabaseStatus(true, true, null, null, null, null, null, null, null);
+            return new GroupHistoryDatabaseStatus(
+                true,
+                true,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
         }
 
         return new GroupHistoryDatabaseStatus(
@@ -121,32 +130,31 @@ public sealed class DuckDbGroupHistoryDatabase : IGroupHistoryDatabase
 
         if (!status.DatabaseExists || !status.SchemaExists)
         {
-            var estimatedInitialDuration = TimeSpan.FromMinutes(40);
+            var firstImportDay = latestImportableDay.AddYears(-GroupHistoryConstants.InitialHistoricImportHorizonYears);
             return new GroupHistoryUpdateRequirement(
                 status.DatabaseExists,
                 status.SchemaExists,
-                true,
-                latestImportableDay.AddYears(-GroupHistoryConstants.InitialHistoricImportHorizonYears),
-                latestImportableDay,
-                GroupHistoryConstants.InitialHistoricImportHorizonYears * 365,
-                estimatedInitialDuration,
-                true,
-                "Historic Group Detection database has not been created.");
-        }
-
-        if (status.LastCompletedDayUtc is null)
-        {
-            var firstImportDay = latestImportableDay.AddYears(-GroupHistoryConstants.InitialHistoricImportHorizonYears);
-            return new GroupHistoryUpdateRequirement(
-                true,
-                true,
                 true,
                 firstImportDay,
                 latestImportableDay,
                 CountDaysInclusive(firstImportDay, latestImportableDay),
                 TimeSpan.FromMinutes(40),
                 true,
-                "Historic Group Detection database is empty.");
+                "Historic Group Detection database has not been created.");
+        }
+
+        if (status.LastCompletedDayUtc is null)
+        {
+            return new GroupHistoryUpdateRequirement(
+                true,
+                true,
+                false,
+                null,
+                null,
+                0,
+                TimeSpan.Zero,
+                false,
+                "Historic Group Detection database schema exists, but no history has been imported yet.");
         }
 
         if (status.LastCompletedDayUtc.Value >= latestImportableDay)
