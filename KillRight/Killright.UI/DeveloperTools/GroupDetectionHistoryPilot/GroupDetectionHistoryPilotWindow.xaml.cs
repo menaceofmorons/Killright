@@ -2,6 +2,7 @@
 using System.Net.Http;
 using System.Windows;
 using Killright.Integration.zKill.History;
+using Killright.Storage.GroupHistory;
 
 namespace Killright.UI.DeveloperTools.GroupDetectionHistoryPilot;
 
@@ -19,8 +20,11 @@ public partial class GroupDetectionHistoryPilotWindow : Window
         StartButton.IsEnabled = false;
         CopyResultsButton.IsEnabled = false;
         _lastResults = null;
-        ResultTextBox.Text = "Running calendar year 2025 history pilot with parallel workers...";
-
+        ResultTextBox.Text = "Running ...";
+        
+        var groupHistoryDatabase = new DuckDbGroupHistoryDatabase();
+        await groupHistoryDatabase.EnsureCreatedAsync();
+        
         try
         {
             using var handler = new HttpClientHandler
