@@ -32,7 +32,23 @@ public sealed class ZkillHistoryClient : IZkillHistoryClient
 
     public async Task<ZkillHistoryEvidenceDayResult> ExtractDayEvidenceAsync(DateOnly date, CancellationToken cancellationToken = default)
     {
+        //var extractionTotalStopwatch = Stopwatch.StartNew();
         var processingResult = await CountDayCoreAsync(date, null, true, cancellationToken);
+        //extractionTotalStopwatch.Stop();
+
+        var measuredExtraction =
+            processingResult.Timing.DownloadElapsed +
+            processingResult.Timing.JsonParseElapsed +
+            processingResult.Timing.RowGenerationElapsed;
+
+        //var unaccountedExtraction =
+        //    extractionTotalStopwatch.Elapsed - measuredExtraction;
+
+        //if (unaccountedExtraction < TimeSpan.Zero)
+        //{
+        //    unaccountedExtraction = TimeSpan.Zero;
+        //}
+
         return new ZkillHistoryEvidenceDayResult(
             processingResult.DayResult,
             processingResult.EvidenceRows,
@@ -119,13 +135,17 @@ public sealed class ZkillHistoryClient : IZkillHistoryClient
             request.Headers.AcceptEncoding.Add(new StringWithQualityHeaderValue("deflate"));
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
+            var httpStopwatch = Stopwatch.StartNew();
+            
             using var response = await _httpClient.SendAsync(request, cancellationToken);
 
-            var downloadStopwatch = Stopwatch.StartNew();
+            //var downloadStopwatch = Stopwatch.StartNew();
             var content = await response.Content.ReadAsStringAsync(cancellationToken);
-            downloadStopwatch.Stop();
-            downloadElapsed = downloadStopwatch.Elapsed;
-
+            //downloadStopwatch.Stop();
+            //downloadElapsed = downloadStopwatch.Elapsed;
+            httpStopwatch.Stop();
+            downloadElapsed = httpStopwatch.Elapsed;
+            
             if (!response.IsSuccessStatusCode)
             {
                 totalStopwatch.Stop();
