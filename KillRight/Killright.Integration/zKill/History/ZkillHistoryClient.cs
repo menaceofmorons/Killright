@@ -24,6 +24,12 @@ public sealed class ZkillHistoryClient : IZkillHistoryClient
         _httpClient = httpClient;
     }
 
+    public async Task<ZkillHistoryDayResult> CountDayAsync(DateOnly date, CancellationToken cancellationToken = default)
+    {
+        var processingResult = await CountDayCoreAsync(date, null, cancellationToken);
+        return processingResult.DayResult;
+    }
+
     public async Task<ZkillHistoryPeriodResult> CountCalendarYear2025Async(CancellationToken cancellationToken = default)
     {
         var stopwatch = Stopwatch.StartNew();
@@ -37,7 +43,7 @@ public sealed class ZkillHistoryClient : IZkillHistoryClient
 
             try
             {
-                return await CountDayAsync(date, rateLimiter, cancellationToken);
+                return await CountDayCoreAsync(date, rateLimiter, cancellationToken);
             }
             finally
             {
@@ -78,9 +84,9 @@ public sealed class ZkillHistoryClient : IZkillHistoryClient
         };
     }
 
-    private async Task<ZkillHistoryDayProcessingResult> CountDayAsync(
+    private async Task<ZkillHistoryDayProcessingResult> CountDayCoreAsync(
         DateOnly date,
-        AsyncRequestRateLimiter rateLimiter,
+        AsyncRequestRateLimiter? rateLimiter,
         CancellationToken cancellationToken)
     {
         var dateText = date.ToString("yyyyMMdd", CultureInfo.InvariantCulture);
@@ -88,10 +94,11 @@ public sealed class ZkillHistoryClient : IZkillHistoryClient
 
         try
         {
-            await rateLimiter.WaitAsync(cancellationToken);
+            if (rateLimiter is not null)
+                await rateLimiter.WaitAsync(cancellationToken);
 
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
-            request.Headers.UserAgent.Add(new ProductInfoHeaderValue("KillRight", "19.00.04"));
+            request.Headers.UserAgent.Add(new ProductInfoHeaderValue("KillRight", "19.00.31"));
             request.Headers.AcceptEncoding.Add(new StringWithQualityHeaderValue("gzip"));
             request.Headers.AcceptEncoding.Add(new StringWithQualityHeaderValue("deflate"));
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));

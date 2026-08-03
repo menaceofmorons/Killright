@@ -5,7 +5,6 @@ using System.Windows;
 using Killright.Integration.Esi;
 using Killright.Integration.zKill;
 using Killright.Storage.Database;
-using Killright.Storage.GroupHistory;
 using Killright.Storage.Identity;
 using Killright.Storage.Killmails;
 using Killright.Storage.zKill;
@@ -93,10 +92,6 @@ public partial class App : Application
             new zKillClient(
                 zKillHttpClient);
 
-        CheckGroupHistoryStartupAsync()
-            .GetAwaiter()
-            .GetResult();
-
         var mainWindow = new MainWindow();
         MainWindow = mainWindow;
         mainWindow.Show();
@@ -113,63 +108,5 @@ public partial class App : Application
         {
             base.OnExit(e);
         }
-    }
-
-    private static async Task CheckGroupHistoryStartupAsync()
-    {
-        var groupHistoryDatabase = new DuckDbGroupHistoryDatabase();
-        var startupService = new GroupHistoryStartupService(groupHistoryDatabase);
-        var requirement = await startupService.GetStartupRequirementAsync();
-
-        if (!requirement.UpdateRequired)
-            return;
-
-        if (requirement.InitialCreationRequired)
-        {
-            var result = MessageBox.Show(
-                "Historic Group Detection data has not been created.\r\n\r\n" +
-                "This optional data allows KillRight to identify long-term pilot associations.\r\n\r\n" +
-                "Initial creation imports up to 10 years of completed daily history and may take approximately 30-40 minutes.\r\n\r\n" +
-                "You may skip this step and continue using KillRight without historic data.\r\n\r\n" +
-                "Create the historic database schema now?",
-                "Historic Group Detection",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Information);
-
-            if (result != MessageBoxResult.Yes)
-                return;
-
-            await groupHistoryDatabase.EnsureCreatedAsync();
-
-            MessageBox.Show(
-                "Historic Group Detection database schema has been created.\r\n\r\n" +
-                "Use the Developer history import window to run the initial import in a later implementation step.",
-                "Historic Group Detection",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-
-            return;
-        }
-
-        if (requirement.PromptRequired)
-        {
-            var result = MessageBox.Show(
-                requirement.Message + "\r\n\r\n" +
-                "The update is estimated to take more than one minute.\r\n\r\n" +
-                "Update now?",
-                "Historic Group Detection Update",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Information);
-
-            if (result != MessageBoxResult.Yes)
-                return;
-        }
-
-        MessageBox.Show(
-            "Historic Group Detection data requires an update.\r\n\r\n" +
-            "Use the Developer history import window to run the update in a later implementation step.",
-            "Historic Group Detection Update",
-            MessageBoxButton.OK,
-            MessageBoxImage.Information);
     }
 }
