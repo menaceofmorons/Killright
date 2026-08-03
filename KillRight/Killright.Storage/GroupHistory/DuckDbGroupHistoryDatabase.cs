@@ -1,5 +1,6 @@
 ﻿using DuckDB.NET.Data;
 using Killright.Storage.GroupHistory.Models;
+using System.Diagnostics;
 
 namespace Killright.Storage.GroupHistory;
 
@@ -187,23 +188,47 @@ public sealed class DuckDbGroupHistoryDatabase : IGroupHistoryDatabase
         long candidatePairOccurrenceRows,
         CancellationToken cancellationToken = default)
     {
+        var totalStopwatch = Stopwatch.StartNew();
+        var evidenceStopwatch = new Stopwatch();
+        var participantStopwatch = new Stopwatch();
+        var statusStopwatch = new Stopwatch();
+        var commitStopwatch = new Stopwatch();
+
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
+        evidenceStopwatch.Start();
         foreach (var row in evidenceRows)
             await InsertEvidenceRowAsync(connection, transaction, row, cancellationToken);
+        evidenceStopwatch.Stop();
 
+        participantStopwatch.Start();
         foreach (var row in participantRows)
             await InsertParticipantRowAsync(connection, transaction, row, cancellationToken);
+        participantStopwatch.Stop();
 
         var summaryResult = await UpsertRelationshipSummaryForDayAsync(connection, transaction, importDateUtc, cancellationToken);
 
+        statusStopwatch.Start();
         await MarkImportDayCompletedCoreAsync(connection, transaction, importDateUtc, rawKillmailCount, qualifyingKillmailCount,
             qualifyingAttackerCount, candidatePairOccurrenceRows, cancellationToken);
+        statusStopwatch.Stop();
 
+        commitStopwatch.Start();
         await transaction.CommitAsync(cancellationToken);
-        return summaryResult;
+        commitStopwatch.Stop();
+        totalStopwatch.Stop();
+
+        var timing = new GroupHistoryPersistenceTiming(
+            evidenceStopwatch.Elapsed,
+            participantStopwatch.Elapsed,
+            summaryResult.Timing.SummaryUpdateElapsed,
+            statusStopwatch.Elapsed,
+            commitStopwatch.Elapsed,
+            totalStopwatch.Elapsed);
+
+        return summaryResult with { Timing = timing };
     }
 
     private static async Task<GroupHistorySummaryBuildResult> UpsertRelationshipSummaryForDayAsync(
@@ -212,6 +237,7 @@ public sealed class DuckDbGroupHistoryDatabase : IGroupHistoryDatabase
         DateOnly importDateUtc,
         CancellationToken cancellationToken)
     {
+        var summaryStopwatch = Stopwatch.StartNew();
         var importDateText = importDateUtc.ToString("yyyy-MM-dd");
         var rebuiltUtc = DateTime.UtcNow.ToString("O");
 
@@ -283,6 +309,7 @@ public sealed class DuckDbGroupHistoryDatabase : IGroupHistoryDatabase
             command.Parameters.Add(new DuckDBParameter("last_rebuilt_utc", rebuiltUtc));
             command.Parameters.Add(new DuckDBParameter("import_date_utc", importDateText));
             await command.ExecuteNonQueryAsync(cancellationToken);
+            summaryStopwatch.Stop();
         }
 
         var pairOccurrenceRows = await ExecuteScalarLongAsync(
@@ -317,7 +344,14 @@ public sealed class DuckDbGroupHistoryDatabase : IGroupHistoryDatabase
             evidenceRows,
             participantRows,
             pairOccurrenceRows,
-            totalSummaryRows);
+            totalSummaryRows,
+            new GroupHistoryPersistenceTiming(
+                TimeSpan.Zero,
+                TimeSpan.Zero,
+                summaryStopwatch.Elapsed,
+                TimeSpan.Zero,
+                TimeSpan.Zero,
+                summaryStopwatch.Elapsed));
     }
 
     private static async Task InsertEvidenceRowAsync(DuckDBConnection connection, System.Data.Common.DbTransaction transaction,

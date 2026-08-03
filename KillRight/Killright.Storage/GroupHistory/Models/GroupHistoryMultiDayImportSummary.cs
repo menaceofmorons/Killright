@@ -14,4 +14,6 @@ public sealed record GroupHistoryMultiDayImportSummary(
     long CandidatePairOccurrenceRows,
     long SummaryPairOccurrenceRows,
     long TotalSummaryRows,
+    TimeSpan TotalRunElapsed,
+    TimeSpan AverageImportedDayElapsed,
     IReadOnlyList<string> LogLines);

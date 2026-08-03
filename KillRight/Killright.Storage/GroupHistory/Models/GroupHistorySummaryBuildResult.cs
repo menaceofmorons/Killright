@@ -5,4 +5,5 @@ public sealed record GroupHistorySummaryBuildResult(
     long EvidenceRows,
     long ParticipantRows,
     long PairOccurrenceRows,
-    long TotalSummaryRows);
+    long TotalSummaryRows,
+    GroupHistoryPersistenceTiming Timing);

@@ -36,7 +36,8 @@ public sealed class ZkillHistoryClient : IZkillHistoryClient
         return new ZkillHistoryEvidenceDayResult(
             processingResult.DayResult,
             processingResult.EvidenceRows,
-            processingResult.ParticipantRows);
+            processingResult.ParticipantRows,
+            processingResult.Timing);
     }
 
     public async Task<ZkillHistoryPeriodResult> CountCalendarYear2025Async(CancellationToken cancellationToken = default)
@@ -99,6 +100,11 @@ public sealed class ZkillHistoryClient : IZkillHistoryClient
         bool includeRows,
         CancellationToken cancellationToken)
     {
+        var startedUtc = DateTime.UtcNow;
+        var totalStopwatch = Stopwatch.StartNew();
+        var downloadElapsed = TimeSpan.Zero;
+        var parseElapsed = TimeSpan.Zero;
+        var rowGenerationElapsed = TimeSpan.Zero;
         var dateText = date.ToString("yyyyMMdd", CultureInfo.InvariantCulture);
         var url = string.Format(CultureInfo.InvariantCulture, HistoryEndpointFormat, dateText);
 
@@ -108,28 +114,67 @@ public sealed class ZkillHistoryClient : IZkillHistoryClient
                 await rateLimiter.WaitAsync(cancellationToken);
 
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
-            request.Headers.UserAgent.Add(new ProductInfoHeaderValue("KillRight", "19.00.33"));
+            request.Headers.UserAgent.Add(new ProductInfoHeaderValue("KillRight", "19.00.36"));
             request.Headers.AcceptEncoding.Add(new StringWithQualityHeaderValue("gzip"));
             request.Headers.AcceptEncoding.Add(new StringWithQualityHeaderValue("deflate"));
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
             using var response = await _httpClient.SendAsync(request, cancellationToken);
+
+            var downloadStopwatch = Stopwatch.StartNew();
             var content = await response.Content.ReadAsStringAsync(cancellationToken);
+            downloadStopwatch.Stop();
+            downloadElapsed = downloadStopwatch.Elapsed;
 
             if (!response.IsSuccessStatusCode)
             {
+                totalStopwatch.Stop();
                 var failedDay = CreateFailedDay(date, url, $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
-                return ZkillHistoryDayProcessingResult.Failed(failedDay);
+                return ZkillHistoryDayProcessingResult.Failed(failedDay, BuildTiming(startedUtc, totalStopwatch.Elapsed, downloadElapsed, parseElapsed, rowGenerationElapsed));
             }
 
-            using var document = JsonDocument.Parse(content);
-            return CountDayMetrics(date, url, document.RootElement, includeRows);
+            JsonDocument document;
+            var parseStopwatch = Stopwatch.StartNew();
+            document = JsonDocument.Parse(content);
+            parseStopwatch.Stop();
+            parseElapsed = parseStopwatch.Elapsed;
+
+            using (document)
+            {
+                var rowStopwatch = Stopwatch.StartNew();
+                var result = CountDayMetrics(date, url, document.RootElement, includeRows);
+                rowStopwatch.Stop();
+                rowGenerationElapsed = rowStopwatch.Elapsed;
+                totalStopwatch.Stop();
+
+                return result with
+                {
+                    Timing = BuildTiming(startedUtc, totalStopwatch.Elapsed, downloadElapsed, parseElapsed, rowGenerationElapsed)
+                };
+            }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
+            totalStopwatch.Stop();
             var failedDay = CreateFailedDay(date, url, ex.Message);
-            return ZkillHistoryDayProcessingResult.Failed(failedDay);
+            return ZkillHistoryDayProcessingResult.Failed(failedDay, BuildTiming(startedUtc, totalStopwatch.Elapsed, downloadElapsed, parseElapsed, rowGenerationElapsed));
         }
+    }
+
+    private static ZkillHistoryExtractionTiming BuildTiming(
+        DateTime startedUtc,
+        TimeSpan totalElapsed,
+        TimeSpan downloadElapsed,
+        TimeSpan parseElapsed,
+        TimeSpan rowGenerationElapsed)
+    {
+        return new ZkillHistoryExtractionTiming(
+            startedUtc,
+            DateTime.UtcNow,
+            totalElapsed,
+            downloadElapsed,
+            parseElapsed,
+            rowGenerationElapsed);
     }
 
     private static ZkillHistoryDayProcessingResult CountDayMetrics(DateOnly date, string url, JsonElement root, bool includeRows)
@@ -137,7 +182,7 @@ public sealed class ZkillHistoryClient : IZkillHistoryClient
         if (root.ValueKind != JsonValueKind.Object)
         {
             var invalidDay = CreateFailedDay(date, url, "Root JSON was not an object.");
-            return ZkillHistoryDayProcessingResult.Failed(invalidDay);
+            return ZkillHistoryDayProcessingResult.Failed(invalidDay, EmptyTiming());
         }
 
         var rawKillmailCount = 0;
@@ -203,22 +248,12 @@ public sealed class ZkillHistoryClient : IZkillHistoryClient
 
             if (includeRows)
             {
-                evidenceRows.Add(new ZkillHistoryEvidenceRecord(
-                    killmailId,
-                    killmailTimeUtc,
-                    date,
-                    GetLong(killmail, "solar_system_id"),
-                    attackerCharacterIds.Length));
+                evidenceRows.Add(new ZkillHistoryEvidenceRecord(killmailId, killmailTimeUtc, date, GetLong(killmail, "solar_system_id"), attackerCharacterIds.Length));
 
                 foreach (var characterId in attackerCharacterIds)
                 {
                     var attacker = attackersByCharacterId[characterId];
-                    participantRows.Add(new ZkillHistoryParticipantRecord(
-                        killmailId,
-                        characterId,
-                        attacker.CorporationId,
-                        attacker.AllianceId,
-                        attacker.ShipTypeId));
+                    participantRows.Add(new ZkillHistoryParticipantRecord(killmailId, characterId, attacker.CorporationId, attacker.AllianceId, attacker.ShipTypeId));
                 }
             }
         }
@@ -238,7 +273,7 @@ public sealed class ZkillHistoryClient : IZkillHistoryClient
             maxQualifyingAttackersOnKillmail,
             null);
 
-        return new ZkillHistoryDayProcessingResult(dayResult, uniqueQualifyingPilots, candidateRelationshipCounts, evidenceRows, participantRows);
+        return new ZkillHistoryDayProcessingResult(dayResult, uniqueQualifyingPilots, candidateRelationshipCounts, evidenceRows, participantRows, EmptyTiming());
     }
 
     private static ZkillHistoryDayResult CreateFailedDay(DateOnly date, string url, string errorMessage)
@@ -271,10 +306,7 @@ public sealed class ZkillHistoryClient : IZkillHistoryClient
             if (characterId is null || characterId.Value <= 0)
                 continue;
 
-            values[characterId.Value] = new AttackerSnapshot(
-                GetLong(attacker, "corporation_id"),
-                GetLong(attacker, "alliance_id"),
-                GetLong(attacker, "ship_type_id"));
+            values[characterId.Value] = new AttackerSnapshot(GetLong(attacker, "corporation_id"), GetLong(attacker, "alliance_id"), GetLong(attacker, "ship_type_id"));
         }
 
         return values;
@@ -321,13 +353,14 @@ public sealed class ZkillHistoryClient : IZkillHistoryClient
         if (!element.TryGetProperty(propertyName, out var value) || value.ValueKind != JsonValueKind.String)
             return null;
 
-        return DateTime.TryParse(
-            value.GetString(),
-            CultureInfo.InvariantCulture,
-            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
-            out var result)
-                ? result
-                : null;
+        return DateTime.TryParse(value.GetString(), CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var result)
+            ? result
+            : null;
+    }
+
+    private static ZkillHistoryExtractionTiming EmptyTiming()
+    {
+        return new ZkillHistoryExtractionTiming(DateTime.UtcNow, DateTime.UtcNow, TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero);
     }
 
     private sealed class AsyncRequestRateLimiter
@@ -373,16 +406,12 @@ public sealed class ZkillHistoryClient : IZkillHistoryClient
         HashSet<long> UniqueQualifyingPilots,
         Dictionary<PilotPair, int> CandidateRelationshipCounts,
         IReadOnlyList<ZkillHistoryEvidenceRecord> EvidenceRows,
-        IReadOnlyList<ZkillHistoryParticipantRecord> ParticipantRows)
+        IReadOnlyList<ZkillHistoryParticipantRecord> ParticipantRows,
+        ZkillHistoryExtractionTiming Timing)
     {
-        public static ZkillHistoryDayProcessingResult Failed(ZkillHistoryDayResult dayResult)
+        public static ZkillHistoryDayProcessingResult Failed(ZkillHistoryDayResult dayResult, ZkillHistoryExtractionTiming timing)
         {
-            return new ZkillHistoryDayProcessingResult(
-                dayResult,
-                new HashSet<long>(),
-                new Dictionary<PilotPair, int>(),
-                Array.Empty<ZkillHistoryEvidenceRecord>(),
-                Array.Empty<ZkillHistoryParticipantRecord>());
+            return new ZkillHistoryDayProcessingResult(dayResult, new HashSet<long>(), new Dictionary<PilotPair, int>(), Array.Empty<ZkillHistoryEvidenceRecord>(), Array.Empty<ZkillHistoryParticipantRecord>(), timing);
         }
     }
 
