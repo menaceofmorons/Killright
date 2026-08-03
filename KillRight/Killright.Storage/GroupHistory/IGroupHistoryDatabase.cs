@@ -35,4 +35,14 @@ public interface IGroupHistoryDatabase
         int qualifyingAttackerCount,
         long candidatePairOccurrenceRows,
         CancellationToken cancellationToken = default);
+
+    Task<GroupHistorySummaryBuildResult> ImportEvidenceAndParticipantRowsWithoutSummaryForDayAsync(
+        DateOnly importDateUtc,
+        IReadOnlyList<GroupHistoryEvidenceImportRow> evidenceRows,
+        IReadOnlyList<GroupHistoryParticipantImportRow> participantRows,
+        int rawKillmailCount,
+        int qualifyingKillmailCount,
+        int qualifyingAttackerCount,
+        long candidatePairOccurrenceRows,
+        CancellationToken cancellationToken = default);
 }

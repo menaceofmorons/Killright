@@ -254,6 +254,80 @@ public sealed class DuckDbGroupHistoryDatabase : IGroupHistoryDatabase
         return summaryResult with { Timing = timing };
     }
 
+    public async Task<GroupHistorySummaryBuildResult> ImportEvidenceAndParticipantRowsWithoutSummaryForDayAsync(
+        DateOnly importDateUtc,
+        IReadOnlyList<GroupHistoryEvidenceImportRow> evidenceRows,
+        IReadOnlyList<GroupHistoryParticipantImportRow> participantRows,
+        int rawKillmailCount,
+        int qualifyingKillmailCount,
+        int qualifyingAttackerCount,
+        long candidatePairOccurrenceRows,
+        CancellationToken cancellationToken = default)
+    {
+        var totalStopwatch = Stopwatch.StartNew();
+        var connectionStopwatch = Stopwatch.StartNew();
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken);
+        connectionStopwatch.Stop();
+
+        var transactionStopwatch = Stopwatch.StartNew();
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        transactionStopwatch.Stop();
+
+        var evidenceTiming = await InsertEvidenceRowsAsync(connection, transaction, evidenceRows, cancellationToken);
+        var participantTiming = await InsertParticipantRowsAsync(connection, transaction, participantRows, cancellationToken);
+
+        var statusStopwatch = Stopwatch.StartNew();
+        await MarkImportDayCompletedCoreAsync(connection, transaction, importDateUtc, rawKillmailCount, qualifyingKillmailCount,
+            qualifyingAttackerCount, candidatePairOccurrenceRows, cancellationToken);
+        statusStopwatch.Stop();
+
+        var commitStopwatch = Stopwatch.StartNew();
+        await transaction.CommitAsync(cancellationToken);
+        commitStopwatch.Stop();
+        totalStopwatch.Stop();
+
+        var measured =
+            connectionStopwatch.Elapsed +
+            transactionStopwatch.Elapsed +
+            evidenceTiming.PreparationElapsed +
+            evidenceTiming.ExecutionElapsed +
+            participantTiming.PreparationElapsed +
+            participantTiming.ExecutionElapsed +
+            statusStopwatch.Elapsed +
+            commitStopwatch.Elapsed;
+
+        var unaccounted = totalStopwatch.Elapsed - measured;
+
+        if (unaccounted < TimeSpan.Zero)
+            unaccounted = TimeSpan.Zero;
+
+        var timing = new GroupHistoryPersistenceTiming(
+            connectionStopwatch.Elapsed,
+            transactionStopwatch.Elapsed,
+            evidenceTiming.PreparationElapsed,
+            evidenceTiming.ExecutionElapsed,
+            evidenceTiming.TotalElapsed,
+            participantTiming.PreparationElapsed,
+            participantTiming.ExecutionElapsed,
+            participantTiming.TotalElapsed,
+            TimeSpan.Zero,
+            TimeSpan.Zero,
+            TimeSpan.Zero,
+            statusStopwatch.Elapsed,
+            commitStopwatch.Elapsed,
+            totalStopwatch.Elapsed,
+            unaccounted);
+
+        return new GroupHistorySummaryBuildResult(
+            importDateUtc,
+            evidenceRows.Count,
+            participantRows.Count,
+            0,
+            await GetTotalSummaryRowsAsync(connection, transaction, cancellationToken),
+            timing);
+    }
+    
     private static async Task<BatchInsertTiming> InsertEvidenceRowsAsync(
         DuckDBConnection connection,
         System.Data.Common.DbTransaction transaction,
@@ -506,6 +580,19 @@ public sealed class DuckDbGroupHistoryDatabase : IGroupHistoryDatabase
                 TimeSpan.Zero));
     }
 
+    private static async Task<long> GetTotalSummaryRowsAsync(
+        DuckDBConnection connection,
+        System.Data.Common.DbTransaction transaction,
+        CancellationToken cancellationToken)
+    {
+        return await ExecuteScalarLongAsync(
+            connection,
+            transaction,
+            "SELECT COUNT(*) FROM historic_relationship_summary;",
+            null,
+            cancellationToken);
+    }
+    
     private static async Task MarkImportDayCompletedCoreAsync(DuckDBConnection connection, System.Data.Common.DbTransaction transaction,
         DateOnly importDateUtc, int rawKillmailCount, int qualifyingKillmailCount, int participantIndexRowCount,
         long pairOccurrenceCount, CancellationToken cancellationToken)

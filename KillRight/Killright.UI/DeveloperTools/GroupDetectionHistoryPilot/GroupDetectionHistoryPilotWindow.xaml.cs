@@ -32,11 +32,15 @@ public partial class GroupDetectionHistoryPilotWindow : Window
         if (!TryReadDateRange(out var startDateUtc, out var endDateUtc))
             return;
 
+        var seedMode = SeedModeCheckBox.IsChecked == true;
+
         StartButton.IsEnabled = false;
         CopyResultsButton.IsEnabled = false;
         _lastResults = null;
         ResultTextBox.Text = "Starting multi-day import...";
-        StatusTextBlock.Text = "Running...";
+        StatusTextBlock.Text = seedMode
+            ? "Running Seed Mode import..."
+            : "Running Normal Mode import...";
 
         try
         {
@@ -50,9 +54,9 @@ public partial class GroupDetectionHistoryPilotWindow : Window
 
             using var httpClient = new HttpClient(handler);
             var client = new ZkillHistoryClient(httpClient);
-            var summary = await ImportDateRangeAsync(database, client, startDateUtc, endDateUtc);
+            var summary = await ImportDateRangeAsync(database, client, startDateUtc, endDateUtc, seedMode);
 
-            _lastResults = BuildSummaryReport(summary);
+            _lastResults = BuildSummaryReport(summary, seedMode);
             ResultTextBox.Text = _lastResults;
             StatusTextBlock.Text = "Completed.";
             CopyResultsButton.IsEnabled = true;
@@ -74,7 +78,8 @@ public partial class GroupDetectionHistoryPilotWindow : Window
         DuckDbGroupHistoryDatabase database,
         ZkillHistoryClient client,
         DateOnly startDateUtc,
-        DateOnly endDateUtc)
+        DateOnly endDateUtc,
+        bool seedMode)
     {
         var runStopwatch = Stopwatch.StartNew();
         var importedDayElapsed = TimeSpan.Zero;
@@ -102,10 +107,24 @@ public partial class GroupDetectionHistoryPilotWindow : Window
             {
                 skippedDays++;
                 logLines.Add($"SKIPPED {importDateUtc:yyyy-MM-dd} already completed at {DateTime.UtcNow:O}.");
-                ResultTextBox.Text = BuildLiveReport(startDateUtc, endDateUtc, dates.Count, importedDays, skippedDays, failedDays,
-                    rawKillmailCount, qualifyingKillmailCount, evidenceRowCount, participantRowCount,
-                    candidatePairOccurrenceRows, summaryPairOccurrenceRows, totalSummaryRows, runStopwatch.Elapsed,
-                    importedDays == 0 ? TimeSpan.Zero : TimeSpan.FromTicks(importedDayElapsed.Ticks / importedDays), logLines);
+                ResultTextBox.Text = BuildLiveReport(
+                    startDateUtc,
+                    endDateUtc,
+                    dates.Count,
+                    importedDays,
+                    skippedDays,
+                    failedDays,
+                    rawKillmailCount,
+                    qualifyingKillmailCount,
+                    evidenceRowCount,
+                    participantRowCount,
+                    candidatePairOccurrenceRows,
+                    summaryPairOccurrenceRows,
+                    totalSummaryRows,
+                    runStopwatch.Elapsed,
+                    importedDays == 0 ? TimeSpan.Zero : TimeSpan.FromTicks(importedDayElapsed.Ticks / importedDays),
+                    logLines,
+                    seedMode);
                 continue;
             }
 
@@ -126,23 +145,42 @@ public partial class GroupDetectionHistoryPilotWindow : Window
                 var conversionStopwatch = Stopwatch.StartNew();
 
                 var evidenceRows = result.EvidenceRows
-                    .Select(row => new GroupHistoryEvidenceImportRow(row.KillmailId, row.KillmailTimeUtc, row.EvidenceDateUtc, row.SolarSystemId, row.ParticipantCount))
+                    .Select(row => new GroupHistoryEvidenceImportRow(
+                        row.KillmailId,
+                        row.KillmailTimeUtc,
+                        row.EvidenceDateUtc,
+                        row.SolarSystemId,
+                        row.ParticipantCount))
                     .ToArray();
 
                 var participantRows = result.ParticipantRows
-                    .Select(row => new GroupHistoryParticipantImportRow(row.EvidenceId, row.CharacterId, row.CorporationId, row.AllianceId, row.ShipTypeId))
+                    .Select(row => new GroupHistoryParticipantImportRow(
+                        row.EvidenceId,
+                        row.CharacterId,
+                        row.CorporationId,
+                        row.AllianceId,
+                        row.ShipTypeId))
                     .ToArray();
 
                 conversionStopwatch.Stop();
 
-                var summaryResult = await database.ImportEvidenceAndParticipantRowsAndUpdateSummaryForDayAsync(
-                    importDateUtc,
-                    evidenceRows,
-                    participantRows,
-                    result.DayResult.RawKillmailCount,
-                    result.DayResult.QualifyingKillmailCount,
-                    result.DayResult.QualifyingAttackerCount,
-                    result.DayResult.CandidatePairOccurrenceRows);
+                var summaryResult = seedMode
+                    ? await database.ImportEvidenceAndParticipantRowsWithoutSummaryForDayAsync(
+                        importDateUtc,
+                        evidenceRows,
+                        participantRows,
+                        result.DayResult.RawKillmailCount,
+                        result.DayResult.QualifyingKillmailCount,
+                        result.DayResult.QualifyingAttackerCount,
+                        result.DayResult.CandidatePairOccurrenceRows)
+                    : await database.ImportEvidenceAndParticipantRowsAndUpdateSummaryForDayAsync(
+                        importDateUtc,
+                        evidenceRows,
+                        participantRows,
+                        result.DayResult.RawKillmailCount,
+                        result.DayResult.QualifyingKillmailCount,
+                        result.DayResult.QualifyingAttackerCount,
+                        result.DayResult.CandidatePairOccurrenceRows);
 
                 dayStopwatch.Stop();
                 importedDayElapsed += dayStopwatch.Elapsed;
@@ -152,10 +190,21 @@ public partial class GroupDetectionHistoryPilotWindow : Window
                 evidenceRowCount += evidenceRows.Length;
                 participantRowCount += participantRows.Length;
                 candidatePairOccurrenceRows += result.DayResult.CandidatePairOccurrenceRows;
-                summaryPairOccurrenceRows += summaryResult.PairOccurrenceRows;
+
+                if (!seedMode)
+                    summaryPairOccurrenceRows += summaryResult.PairOccurrenceRows;
+
                 totalSummaryRows = summaryResult.TotalSummaryRows;
 
-                logLines.Add(BuildTimingLine(importDateUtc, dayStartedUtc, DateTime.UtcNow, dayStopwatch.Elapsed, result, conversionStopwatch.Elapsed, summaryResult));
+                logLines.Add(BuildTimingLine(
+                    importDateUtc,
+                    dayStartedUtc,
+                    DateTime.UtcNow,
+                    dayStopwatch.Elapsed,
+                    result,
+                    conversionStopwatch.Elapsed,
+                    summaryResult,
+                    seedMode));
             }
             catch (Exception ex)
             {
@@ -165,10 +214,24 @@ public partial class GroupDetectionHistoryPilotWindow : Window
                 logLines.Add($"FAILED {importDateUtc:yyyy-MM-dd} started={dayStartedUtc:O} completed={DateTime.UtcNow:O} elapsed={FormatElapsed(dayStopwatch.Elapsed)} error={ex.Message}");
             }
 
-            ResultTextBox.Text = BuildLiveReport(startDateUtc, endDateUtc, dates.Count, importedDays, skippedDays, failedDays,
-                rawKillmailCount, qualifyingKillmailCount, evidenceRowCount, participantRowCount,
-                candidatePairOccurrenceRows, summaryPairOccurrenceRows, totalSummaryRows, runStopwatch.Elapsed,
-                importedDays == 0 ? TimeSpan.Zero : TimeSpan.FromTicks(importedDayElapsed.Ticks / importedDays), logLines);
+            ResultTextBox.Text = BuildLiveReport(
+                startDateUtc,
+                endDateUtc,
+                dates.Count,
+                importedDays,
+                skippedDays,
+                failedDays,
+                rawKillmailCount,
+                qualifyingKillmailCount,
+                evidenceRowCount,
+                participantRowCount,
+                candidatePairOccurrenceRows,
+                summaryPairOccurrenceRows,
+                totalSummaryRows,
+                runStopwatch.Elapsed,
+                importedDays == 0 ? TimeSpan.Zero : TimeSpan.FromTicks(importedDayElapsed.Ticks / importedDays),
+                logLines,
+                seedMode);
         }
 
         runStopwatch.Stop();
@@ -199,7 +262,8 @@ public partial class GroupDetectionHistoryPilotWindow : Window
         TimeSpan dayElapsed,
         ZkillHistoryEvidenceDayResult result,
         TimeSpan conversionElapsed,
-        GroupHistorySummaryBuildResult summaryResult)
+        GroupHistorySummaryBuildResult summaryResult,
+        bool seedMode)
     {
         var extraction = result.Timing;
         var persistence = summaryResult.Timing;
@@ -217,6 +281,7 @@ public partial class GroupDetectionHistoryPilotWindow : Window
 
         return
             $"IMPORTED {importDateUtc:yyyy-MM-dd} " +
+            $"mode={(seedMode ? "seed" : "normal")} " +
             $"started={startedUtc:O} completed={completedUtc:O} total={FormatElapsed(dayElapsed)} " +
             $"download={FormatElapsed(extraction.DownloadElapsed)} parse={FormatElapsed(extraction.JsonParseElapsed)} rowBuild={FormatElapsed(extraction.RowGenerationElapsed)} uiConvert={FormatElapsed(conversionElapsed)} " +
             $"connectionOpen={FormatElapsed(persistence.ConnectionOpenElapsed)} transactionBegin={FormatElapsed(persistence.TransactionBeginElapsed)} " +
@@ -272,23 +337,95 @@ public partial class GroupDetectionHistoryPilotWindow : Window
         return dates;
     }
 
-    private static string BuildLiveReport(DateOnly startDateUtc, DateOnly endDateUtc, int totalDays, int importedDays, int skippedDays, int failedDays, int rawKillmailCount, int qualifyingKillmailCount, int evidenceRowCount, int participantRowCount, long candidatePairOccurrenceRows, long summaryPairOccurrenceRows, long totalSummaryRows, TimeSpan totalRunElapsed, TimeSpan averageImportedDayElapsed, IReadOnlyList<string> logLines)
+    private static string BuildLiveReport(
+        DateOnly startDateUtc,
+        DateOnly endDateUtc,
+        int totalDays,
+        int importedDays,
+        int skippedDays,
+        int failedDays,
+        int rawKillmailCount,
+        int qualifyingKillmailCount,
+        int evidenceRowCount,
+        int participantRowCount,
+        long candidatePairOccurrenceRows,
+        long summaryPairOccurrenceRows,
+        long totalSummaryRows,
+        TimeSpan totalRunElapsed,
+        TimeSpan averageImportedDayElapsed,
+        IReadOnlyList<string> logLines,
+        bool seedMode)
     {
-        return BuildReportText("KillRight Group Detection Multi-Day Import Running", startDateUtc, endDateUtc, totalDays, importedDays, skippedDays, failedDays, rawKillmailCount, qualifyingKillmailCount, evidenceRowCount, participantRowCount, candidatePairOccurrenceRows, summaryPairOccurrenceRows, totalSummaryRows, totalRunElapsed, averageImportedDayElapsed, logLines);
+        return BuildReportText(
+            "KillRight Group Detection Multi-Day Import Running",
+            startDateUtc,
+            endDateUtc,
+            totalDays,
+            importedDays,
+            skippedDays,
+            failedDays,
+            rawKillmailCount,
+            qualifyingKillmailCount,
+            evidenceRowCount,
+            participantRowCount,
+            candidatePairOccurrenceRows,
+            summaryPairOccurrenceRows,
+            totalSummaryRows,
+            totalRunElapsed,
+            averageImportedDayElapsed,
+            logLines,
+            seedMode);
     }
 
-    private static string BuildSummaryReport(GroupHistoryMultiDayImportSummary summary)
+    private static string BuildSummaryReport(GroupHistoryMultiDayImportSummary summary, bool seedMode)
     {
-        return BuildReportText("KillRight Group Detection Multi-Day Import Completed", summary.StartDateUtc, summary.EndDateUtc, summary.TotalDays, summary.ImportedDays, summary.SkippedDays, summary.FailedDays, summary.RawKillmailCount, summary.QualifyingKillmailCount, summary.EvidenceRows, summary.ParticipantRows, summary.CandidatePairOccurrenceRows, summary.SummaryPairOccurrenceRows, summary.TotalSummaryRows, summary.TotalRunElapsed, summary.AverageImportedDayElapsed, summary.LogLines);
+        return BuildReportText(
+            "KillRight Group Detection Multi-Day Import Completed",
+            summary.StartDateUtc,
+            summary.EndDateUtc,
+            summary.TotalDays,
+            summary.ImportedDays,
+            summary.SkippedDays,
+            summary.FailedDays,
+            summary.RawKillmailCount,
+            summary.QualifyingKillmailCount,
+            summary.EvidenceRows,
+            summary.ParticipantRows,
+            summary.CandidatePairOccurrenceRows,
+            summary.SummaryPairOccurrenceRows,
+            summary.TotalSummaryRows,
+            summary.TotalRunElapsed,
+            summary.AverageImportedDayElapsed,
+            summary.LogLines,
+            seedMode);
     }
 
-    private static string BuildReportText(string title, DateOnly startDateUtc, DateOnly endDateUtc, int totalDays, int importedDays, int skippedDays, int failedDays, int rawKillmailCount, int qualifyingKillmailCount, int evidenceRowCount, int participantRowCount, long candidatePairOccurrenceRows, long summaryPairOccurrenceRows, long totalSummaryRows, TimeSpan totalRunElapsed, TimeSpan averageImportedDayElapsed, IReadOnlyList<string> logLines)
+    private static string BuildReportText(
+        string title,
+        DateOnly startDateUtc,
+        DateOnly endDateUtc,
+        int totalDays,
+        int importedDays,
+        int skippedDays,
+        int failedDays,
+        int rawKillmailCount,
+        int qualifyingKillmailCount,
+        int evidenceRowCount,
+        int participantRowCount,
+        long candidatePairOccurrenceRows,
+        long summaryPairOccurrenceRows,
+        long totalSummaryRows,
+        TimeSpan totalRunElapsed,
+        TimeSpan averageImportedDayElapsed,
+        IReadOnlyList<string> logLines,
+        bool seedMode)
     {
         var builder = new StringBuilder();
         builder.AppendLine("====================================================");
         builder.AppendLine(title);
         builder.AppendLine("====================================================");
         builder.AppendLine();
+        builder.AppendLine($"Mode: {(seedMode ? "Seed" : "Normal")}");
         builder.AppendLine($"Range: {startDateUtc:yyyy-MM-dd} to {endDateUtc:yyyy-MM-dd}");
         builder.AppendLine($"Total days: {totalDays:N0}");
         builder.AppendLine($"Imported days: {importedDays:N0}");
@@ -308,7 +445,8 @@ public partial class GroupDetectionHistoryPilotWindow : Window
         builder.AppendLine("Notes:");
         builder.AppendLine("- Days are imported sequentially.");
         builder.AppendLine("- Completed days are skipped on rerun.");
-        builder.AppendLine("- Relationship summaries are updated incrementally.");
+        builder.AppendLine("- Normal Mode updates relationship summaries incrementally.");
+        builder.AppendLine("- Seed Mode imports evidence and participants only; relationship summaries must be rebuilt later.");
         builder.AppendLine("- Deep timing lines report connection, transaction, batch preparation, batch execution, summary count and unaccounted phases.");
         builder.AppendLine();
         builder.AppendLine("Log:");
