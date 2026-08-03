@@ -1,11 +1,15 @@
-﻿using DuckDB.NET.Data;
+﻿using System.Diagnostics;
+using System.Text;
+using DuckDB.NET.Data;
 using Killright.Storage.GroupHistory.Models;
-using System.Diagnostics;
 
 namespace Killright.Storage.GroupHistory;
 
 public sealed class DuckDbGroupHistoryDatabase : IGroupHistoryDatabase
 {
+    private const int EvidenceInsertBatchSize = 500;
+    private const int ParticipantInsertBatchSize = 500;
+
     public DuckDbGroupHistoryDatabase(string? databasePath = null)
     {
         DatabasePath = databasePath ?? GroupHistoryDatabasePaths.GetDefaultDatabasePath();
@@ -199,13 +203,11 @@ public sealed class DuckDbGroupHistoryDatabase : IGroupHistoryDatabase
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
         evidenceStopwatch.Start();
-        foreach (var row in evidenceRows)
-            await InsertEvidenceRowAsync(connection, transaction, row, cancellationToken);
+        await InsertEvidenceRowsAsync(connection, transaction, evidenceRows, cancellationToken);
         evidenceStopwatch.Stop();
 
         participantStopwatch.Start();
-        foreach (var row in participantRows)
-            await InsertParticipantRowAsync(connection, transaction, row, cancellationToken);
+        await InsertParticipantRowsAsync(connection, transaction, participantRows, cancellationToken);
         participantStopwatch.Stop();
 
         var summaryResult = await UpsertRelationshipSummaryForDayAsync(connection, transaction, importDateUtc, cancellationToken);
@@ -229,6 +231,90 @@ public sealed class DuckDbGroupHistoryDatabase : IGroupHistoryDatabase
             totalStopwatch.Elapsed);
 
         return summaryResult with { Timing = timing };
+    }
+
+    private static async Task InsertEvidenceRowsAsync(
+        DuckDBConnection connection,
+        System.Data.Common.DbTransaction transaction,
+        IReadOnlyList<GroupHistoryEvidenceImportRow> rows,
+        CancellationToken cancellationToken)
+    {
+        for (var start = 0; start < rows.Count; start += EvidenceInsertBatchSize)
+        {
+            var batch = rows.Skip(start).Take(EvidenceInsertBatchSize).ToArray();
+
+            if (batch.Length == 0)
+                continue;
+
+            await using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            var sql = new StringBuilder();
+            sql.AppendLine("INSERT OR IGNORE INTO historic_relationship_evidence");
+            sql.AppendLine("(evidence_id, source_killmail_id, killmail_time_utc, evidence_date_utc, solar_system_id, participant_count, created_utc)");
+            sql.AppendLine("VALUES");
+
+            for (var index = 0; index < batch.Length; index++)
+            {
+                if (index > 0)
+                    sql.AppendLine(",");
+
+                sql.Append($"($evidence_id_{index}, $source_killmail_id_{index}, $killmail_time_utc_{index}, $evidence_date_utc_{index}, $solar_system_id_{index}, $participant_count_{index}, $created_utc_{index})");
+
+                var row = batch[index];
+                command.Parameters.Add(new DuckDBParameter($"evidence_id_{index}", row.KillmailId));
+                command.Parameters.Add(new DuckDBParameter($"source_killmail_id_{index}", row.KillmailId));
+                command.Parameters.Add(new DuckDBParameter($"killmail_time_utc_{index}", row.KillmailTimeUtc.ToString("O")));
+                command.Parameters.Add(new DuckDBParameter($"evidence_date_utc_{index}", row.EvidenceDateUtc.ToString("yyyy-MM-dd")));
+                command.Parameters.Add(new DuckDBParameter($"solar_system_id_{index}", ToDbValue(row.SolarSystemId)));
+                command.Parameters.Add(new DuckDBParameter($"participant_count_{index}", row.ParticipantCount));
+                command.Parameters.Add(new DuckDBParameter($"created_utc_{index}", DateTime.UtcNow.ToString("O")));
+            }
+
+            sql.AppendLine(";");
+            command.CommandText = sql.ToString();
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+    }
+
+    private static async Task InsertParticipantRowsAsync(
+        DuckDBConnection connection,
+        System.Data.Common.DbTransaction transaction,
+        IReadOnlyList<GroupHistoryParticipantImportRow> rows,
+        CancellationToken cancellationToken)
+    {
+        for (var start = 0; start < rows.Count; start += ParticipantInsertBatchSize)
+        {
+            var batch = rows.Skip(start).Take(ParticipantInsertBatchSize).ToArray();
+
+            if (batch.Length == 0)
+                continue;
+
+            await using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            var sql = new StringBuilder();
+            sql.AppendLine("INSERT OR IGNORE INTO historic_relationship_evidence_participants");
+            sql.AppendLine("(evidence_id, character_id, corporation_id, alliance_id, ship_type_id)");
+            sql.AppendLine("VALUES");
+
+            for (var index = 0; index < batch.Length; index++)
+            {
+                if (index > 0)
+                    sql.AppendLine(",");
+
+                sql.Append($"($evidence_id_{index}, $character_id_{index}, $corporation_id_{index}, $alliance_id_{index}, $ship_type_id_{index})");
+
+                var row = batch[index];
+                command.Parameters.Add(new DuckDBParameter($"evidence_id_{index}", row.EvidenceId));
+                command.Parameters.Add(new DuckDBParameter($"character_id_{index}", row.CharacterId));
+                command.Parameters.Add(new DuckDBParameter($"corporation_id_{index}", ToDbValue(row.CorporationId)));
+                command.Parameters.Add(new DuckDBParameter($"alliance_id_{index}", ToDbValue(row.AllianceId)));
+                command.Parameters.Add(new DuckDBParameter($"ship_type_id_{index}", ToDbValue(row.ShipTypeId)));
+            }
+
+            sql.AppendLine(";");
+            command.CommandText = sql.ToString();
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
     }
 
     private static async Task<GroupHistorySummaryBuildResult> UpsertRelationshipSummaryForDayAsync(
@@ -309,8 +395,9 @@ public sealed class DuckDbGroupHistoryDatabase : IGroupHistoryDatabase
             command.Parameters.Add(new DuckDBParameter("last_rebuilt_utc", rebuiltUtc));
             command.Parameters.Add(new DuckDBParameter("import_date_utc", importDateText));
             await command.ExecuteNonQueryAsync(cancellationToken);
-            summaryStopwatch.Stop();
         }
+
+        summaryStopwatch.Stop();
 
         var pairOccurrenceRows = await ExecuteScalarLongAsync(
             connection,
@@ -352,48 +439,6 @@ public sealed class DuckDbGroupHistoryDatabase : IGroupHistoryDatabase
                 TimeSpan.Zero,
                 TimeSpan.Zero,
                 summaryStopwatch.Elapsed));
-    }
-
-    private static async Task InsertEvidenceRowAsync(DuckDBConnection connection, System.Data.Common.DbTransaction transaction,
-        GroupHistoryEvidenceImportRow row, CancellationToken cancellationToken)
-    {
-        await using var command = connection.CreateCommand();
-        command.Transaction = transaction;
-        command.CommandText = """
-            INSERT OR IGNORE INTO historic_relationship_evidence
-            (evidence_id, source_killmail_id, killmail_time_utc, evidence_date_utc, solar_system_id,
-             participant_count, created_utc)
-            VALUES
-            ($evidence_id, $source_killmail_id, $killmail_time_utc, $evidence_date_utc, $solar_system_id,
-             $participant_count, $created_utc);
-            """;
-        command.Parameters.Add(new DuckDBParameter("evidence_id", row.KillmailId));
-        command.Parameters.Add(new DuckDBParameter("source_killmail_id", row.KillmailId));
-        command.Parameters.Add(new DuckDBParameter("killmail_time_utc", row.KillmailTimeUtc.ToString("O")));
-        command.Parameters.Add(new DuckDBParameter("evidence_date_utc", row.EvidenceDateUtc.ToString("yyyy-MM-dd")));
-        command.Parameters.Add(new DuckDBParameter("solar_system_id", ToDbValue(row.SolarSystemId)));
-        command.Parameters.Add(new DuckDBParameter("participant_count", row.ParticipantCount));
-        command.Parameters.Add(new DuckDBParameter("created_utc", DateTime.UtcNow.ToString("O")));
-        await command.ExecuteNonQueryAsync(cancellationToken);
-    }
-
-    private static async Task InsertParticipantRowAsync(DuckDBConnection connection, System.Data.Common.DbTransaction transaction,
-        GroupHistoryParticipantImportRow row, CancellationToken cancellationToken)
-    {
-        await using var command = connection.CreateCommand();
-        command.Transaction = transaction;
-        command.CommandText = """
-            INSERT OR IGNORE INTO historic_relationship_evidence_participants
-            (evidence_id, character_id, corporation_id, alliance_id, ship_type_id)
-            VALUES
-            ($evidence_id, $character_id, $corporation_id, $alliance_id, $ship_type_id);
-            """;
-        command.Parameters.Add(new DuckDBParameter("evidence_id", row.EvidenceId));
-        command.Parameters.Add(new DuckDBParameter("character_id", row.CharacterId));
-        command.Parameters.Add(new DuckDBParameter("corporation_id", ToDbValue(row.CorporationId)));
-        command.Parameters.Add(new DuckDBParameter("alliance_id", ToDbValue(row.AllianceId)));
-        command.Parameters.Add(new DuckDBParameter("ship_type_id", ToDbValue(row.ShipTypeId)));
-        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     private static async Task MarkImportDayCompletedCoreAsync(DuckDBConnection connection, System.Data.Common.DbTransaction transaction,
