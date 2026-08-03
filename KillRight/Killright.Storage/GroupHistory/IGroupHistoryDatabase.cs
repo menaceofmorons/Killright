@@ -12,6 +12,8 @@ public interface IGroupHistoryDatabase
 
     Task<GroupHistoryUpdateRequirement> GetUpdateRequirementAsync(DateTime utcNow, CancellationToken cancellationToken = default);
 
+    Task<bool> IsImportDayCompletedAsync(DateOnly importDateUtc, CancellationToken cancellationToken = default);
+
     Task MarkImportDayStartedAsync(DateOnly importDateUtc, CancellationToken cancellationToken = default);
 
     Task MarkImportDayCompletedAsync(
@@ -24,7 +26,7 @@ public interface IGroupHistoryDatabase
 
     Task MarkImportDayFailedAsync(DateOnly importDateUtc, string errorMessage, CancellationToken cancellationToken = default);
 
-    Task ImportEvidenceAndParticipantRowsForDayAsync(
+    Task<GroupHistorySummaryBuildResult> ImportEvidenceAndParticipantRowsAndUpdateSummaryForDayAsync(
         DateOnly importDateUtc,
         IReadOnlyList<GroupHistoryEvidenceImportRow> evidenceRows,
         IReadOnlyList<GroupHistoryParticipantImportRow> participantRows,
@@ -32,9 +34,5 @@ public interface IGroupHistoryDatabase
         int qualifyingKillmailCount,
         int qualifyingAttackerCount,
         long candidatePairOccurrenceRows,
-        CancellationToken cancellationToken = default);
-
-    Task<GroupHistorySummaryBuildResult> BuildRelationshipSummaryForDayAsync(
-        DateOnly importDateUtc,
         CancellationToken cancellationToken = default);
 }
