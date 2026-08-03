@@ -30,7 +30,7 @@ public partial class GroupDetectionHistoryPilotWindow : Window
         StartButton.IsEnabled = false;
         CopyResultsButton.IsEnabled = false;
         _lastResults = null;
-        ResultTextBox.Text = $"Importing one-day evidence and participant rows for {importDateUtc:yyyy-MM-dd}...";
+        ResultTextBox.Text = $"Importing one-day evidence, participant and summary rows for {importDateUtc:yyyy-MM-dd}...";
 
         var database = new DuckDbGroupHistoryDatabase();
 
@@ -52,7 +52,7 @@ public partial class GroupDetectionHistoryPilotWindow : Window
             {
                 await database.MarkImportDayFailedAsync(
                     importDateUtc,
-                    result.DayResult.ErrorMessage ?? "Unknown one-day participant import failure.");
+                    result.DayResult.ErrorMessage ?? "Unknown one-day summary build failure.");
 
                 _lastResults = BuildFailureReport(result.DayResult);
                 ResultTextBox.Text = _lastResults;
@@ -87,14 +87,22 @@ public partial class GroupDetectionHistoryPilotWindow : Window
                 result.DayResult.QualifyingAttackerCount,
                 result.DayResult.CandidatePairOccurrenceRows);
 
-            _lastResults = BuildSuccessReport(result.DayResult, evidenceRows.Length, participantRows.Length);
+            var summaryResult = await database.BuildRelationshipSummaryForDayAsync(importDateUtc);
+
+            _lastResults = BuildSuccessReport(
+                result.DayResult,
+                evidenceRows.Length,
+                participantRows.Length,
+                summaryResult.SummaryRows,
+                summaryResult.PairOccurrenceRows);
+
             ResultTextBox.Text = _lastResults;
             CopyResultsButton.IsEnabled = true;
         }
         catch (Exception ex)
         {
             await database.MarkImportDayFailedAsync(importDateUtc, ex.Message);
-            _lastResults = $"One-day participant import failed for {importDateUtc:yyyy-MM-dd}: {ex.Message}";
+            _lastResults = $"One-day summary import failed for {importDateUtc:yyyy-MM-dd}: {ex.Message}";
             ResultTextBox.Text = _lastResults;
             CopyResultsButton.IsEnabled = true;
         }
@@ -104,11 +112,16 @@ public partial class GroupDetectionHistoryPilotWindow : Window
         }
     }
 
-    private static string BuildSuccessReport(ZkillHistoryDayResult result, int persistedEvidenceRows, int persistedParticipantRows)
+    private static string BuildSuccessReport(
+        ZkillHistoryDayResult result,
+        int persistedEvidenceRows,
+        int persistedParticipantRows,
+        long summaryRows,
+        long summaryPairOccurrences)
     {
         return
             "====================================================\r\n" +
-            "KillRight Group Detection One-Day Participant Import\r\n" +
+            "KillRight Group Detection One-Day Relationship Summary\r\n" +
             "====================================================\r\n\r\n" +
             $"Date: {result.Date:yyyy-MM-dd}\r\n" +
             $"Source: {result.Url}\r\n" +
@@ -123,13 +136,15 @@ public partial class GroupDetectionHistoryPilotWindow : Window
             $"Qualifying attackers: {result.QualifyingAttackerCount:N0}\r\n" +
             $"Persisted participant rows: {persistedParticipantRows:N0}\r\n" +
             $"Candidate pair occurrence rows: {result.CandidatePairOccurrenceRows:N0}\r\n" +
+            $"Summary pair occurrence rows: {summaryPairOccurrences:N0}\r\n" +
+            $"Persisted unique summary rows: {summaryRows:N0}\r\n" +
             $"Highest qualifying attackers on a single killmail: {result.MaxQualifyingAttackersOnKillmail:N0}\r\n\r\n" +
             "Notes:\r\n" +
             "- This step writes historic_relationship_evidence rows.\r\n" +
             "- This step writes historic_relationship_evidence_participants rows.\r\n" +
-            "- This step does not write historic_relationship_summary rows.\r\n" +
-            "- Persisted evidence rows should equal qualifying killmails.\r\n" +
-            "- Persisted participant rows should equal qualifying attackers.\r\n" +
+            "- This step rebuilds historic_relationship_summary for the selected day from persisted data.\r\n" +
+            "- Summary pair occurrence rows should equal candidate pair occurrence rows.\r\n" +
+            "- Persisted unique summary rows may be lower than pair occurrence rows because repeated pairs are aggregated.\r\n" +
             "====================================================";
     }
 
@@ -137,7 +152,7 @@ public partial class GroupDetectionHistoryPilotWindow : Window
     {
         return
             "====================================================\r\n" +
-            "KillRight Group Detection One-Day Participant Import\r\n" +
+            "KillRight Group Detection One-Day Relationship Summary\r\n" +
             "====================================================\r\n\r\n" +
             $"Date: {result.Date:yyyy-MM-dd}\r\n" +
             $"Source: {result.Url}\r\n" +

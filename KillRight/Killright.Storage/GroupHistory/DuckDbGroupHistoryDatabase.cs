@@ -174,6 +174,101 @@ public sealed class DuckDbGroupHistoryDatabase : IGroupHistoryDatabase
         await transaction.CommitAsync(cancellationToken);
     }
 
+    public async Task<GroupHistorySummaryBuildResult> BuildRelationshipSummaryForDayAsync(
+        DateOnly importDateUtc,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        var importDateText = importDateUtc.ToString("yyyy-MM-dd");
+        var rebuiltUtc = DateTime.UtcNow.ToString("O");
+
+        var evidenceRows = await ExecuteScalarLongAsync(
+            connection,
+            transaction,
+            """
+            SELECT COUNT(*)
+            FROM historic_relationship_evidence
+            WHERE evidence_date_utc = $import_date_utc;
+            """,
+            importDateText,
+            cancellationToken);
+
+        var participantRows = await ExecuteScalarLongAsync(
+            connection,
+            transaction,
+            """
+            SELECT COUNT(*)
+            FROM historic_relationship_evidence_participants p
+            JOIN historic_relationship_evidence e
+              ON e.evidence_id = p.evidence_id
+            WHERE e.evidence_date_utc = $import_date_utc;
+            """,
+            importDateText,
+            cancellationToken);
+
+        await ExecuteNonQueryAsync(connection, transaction, "DELETE FROM historic_relationship_summary;", cancellationToken);
+
+        await using (var command = connection.CreateCommand())
+        {
+            command.Transaction = transaction;
+            command.CommandText = """
+                INSERT INTO historic_relationship_summary
+                (
+                    pilot_a_id,
+                    pilot_b_id,
+                    shared_event_count,
+                    first_seen_utc,
+                    last_seen_utc,
+                    last_rebuilt_utc
+                )
+                SELECT
+                    p1.character_id AS pilot_a_id,
+                    p2.character_id AS pilot_b_id,
+                    COUNT(*) AS shared_event_count,
+                    MIN(e.killmail_time_utc) AS first_seen_utc,
+                    MAX(e.killmail_time_utc) AS last_seen_utc,
+                    $last_rebuilt_utc AS last_rebuilt_utc
+                FROM historic_relationship_evidence e
+                JOIN historic_relationship_evidence_participants p1
+                  ON p1.evidence_id = e.evidence_id
+                JOIN historic_relationship_evidence_participants p2
+                  ON p2.evidence_id = e.evidence_id
+                 AND p1.character_id < p2.character_id
+                WHERE e.evidence_date_utc = $import_date_utc
+                GROUP BY p1.character_id, p2.character_id;
+                """;
+            command.Parameters.Add(new DuckDBParameter("last_rebuilt_utc", rebuiltUtc));
+            command.Parameters.Add(new DuckDBParameter("import_date_utc", importDateText));
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        var summaryRows = await ExecuteScalarLongAsync(
+            connection,
+            transaction,
+            "SELECT COUNT(*) FROM historic_relationship_summary;",
+            null,
+            cancellationToken);
+
+        var pairOccurrenceRows = await ExecuteScalarLongAsync(
+            connection,
+            transaction,
+            "SELECT COALESCE(SUM(shared_event_count), 0) FROM historic_relationship_summary;",
+            null,
+            cancellationToken);
+
+        await transaction.CommitAsync(cancellationToken);
+
+        return new GroupHistorySummaryBuildResult(
+            importDateUtc,
+            evidenceRows,
+            participantRows,
+            pairOccurrenceRows,
+            summaryRows);
+    }
+
     private static async Task InsertEvidenceRowAsync(DuckDBConnection connection, System.Data.Common.DbTransaction transaction,
         GroupHistoryEvidenceImportRow row, CancellationToken cancellationToken)
     {
@@ -283,9 +378,46 @@ public sealed class DuckDbGroupHistoryDatabase : IGroupHistoryDatabase
         return Convert.ToInt64(result) > 0;
     }
 
+    private static async Task<long> ExecuteScalarLongAsync(
+        DuckDBConnection connection,
+        System.Data.Common.DbTransaction transaction,
+        string sql,
+        string? importDateUtc,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = sql;
+
+        if (importDateUtc is not null)
+            command.Parameters.Add(new DuckDBParameter("import_date_utc", importDateUtc));
+
+        var result = await command.ExecuteScalarAsync(cancellationToken);
+
+        return result switch
+        {
+            long value => value,
+            int value => value,
+            System.Numerics.BigInteger value => (long)value,
+            _ => Convert.ToInt64(result)
+        };
+    }
+
     private static async Task ExecuteNonQueryAsync(DuckDBConnection connection, string sql, CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private static async Task ExecuteNonQueryAsync(
+        DuckDBConnection connection,
+        System.Data.Common.DbTransaction transaction,
+        string sql,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText = sql;
         await command.ExecuteNonQueryAsync(cancellationToken);
     }

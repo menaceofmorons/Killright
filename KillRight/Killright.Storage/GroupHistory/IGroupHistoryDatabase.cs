@@ -33,4 +33,8 @@ public interface IGroupHistoryDatabase
         int qualifyingAttackerCount,
         long candidatePairOccurrenceRows,
         CancellationToken cancellationToken = default);
+
+    Task<GroupHistorySummaryBuildResult> BuildRelationshipSummaryForDayAsync(
+        DateOnly importDateUtc,
+        CancellationToken cancellationToken = default);
 }
