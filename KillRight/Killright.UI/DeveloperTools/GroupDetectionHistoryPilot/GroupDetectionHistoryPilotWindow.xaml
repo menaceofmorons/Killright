@@ -16,7 +16,7 @@
         </Grid.RowDefinitions>
 
         <TextBlock Grid.Row="0"
-                   Text="Developer-only Historic Group Detection importer. Use the batch size selector to benchmark insert throughput with 500, 1000, 2000 and 5000 row batches."
+                   Text="Developer-only Historic Group Detection importer. Use the batch size selector to benchmark insert throughput with small row batches after larger batches proved slower than the 500-row baseline."
                    TextWrapping="Wrap"
                    Margin="0,0,0,12" />
 
@@ -28,11 +28,16 @@
             <TextBox x:Name="EndDateTextBox" Width="120" Margin="0,0,12,0" />
 
             <TextBlock Text="Batch size:" VerticalAlignment="Center" Margin="0,0,6,0" />
-            <ComboBox x:Name="BatchSizeComboBox" Width="100" SelectedIndex="0" Margin="0,0,12,0">
+            <ComboBox x:Name="BatchSizeComboBox" Width="100" SelectedIndex="6" Margin="0,0,12,0">
+                <ComboBoxItem Content="25" />
+                <ComboBoxItem Content="50" />
+                <ComboBoxItem Content="100" />
+                <ComboBoxItem Content="150" />
+                <ComboBoxItem Content="175" />
+                <ComboBoxItem Content="200" />
+                <ComboBoxItem Content="300" />
+                <ComboBoxItem Content="400" />
                 <ComboBoxItem Content="500" />
-                <ComboBoxItem Content="1000" />
-                <ComboBoxItem Content="2000" />
-                <ComboBoxItem Content="5000" />
             </ComboBox>
 
             <Button x:Name="StartButton" Content="Import Date Range" Width="150" Height="32" Margin="0,0,8,0" Click="StartButton_Click" />
@@ -45,7 +50,7 @@
                   Margin="0,0,0,12" />
 
         <TextBlock Grid.Row="3"
-                   Text="Pilot instruction: run the same date range against a clean database once per batch size and compare evidenceExec, participantExec, dbTotal and total."
+                   Text="Pilot instruction: run the same date range against a clean database once per small batch size and compare evidenceExec, participantExec, dbTotal and total."
                    TextWrapping="Wrap"
                    Margin="0,0,0,12" />
 
