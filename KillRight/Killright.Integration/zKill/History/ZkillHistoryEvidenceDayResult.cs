@@ -2,4 +2,5 @@
 
 public sealed record ZkillHistoryEvidenceDayResult(
     ZkillHistoryDayResult DayResult,
-    IReadOnlyList<ZkillHistoryEvidenceRecord> EvidenceRows);
+    IReadOnlyList<ZkillHistoryEvidenceRecord> EvidenceRows,
+    IReadOnlyList<ZkillHistoryParticipantRecord> ParticipantRows);

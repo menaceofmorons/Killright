@@ -5,8 +5,4 @@ public sealed record ZkillHistoryEvidenceRecord(
     DateTime KillmailTimeUtc,
     DateOnly EvidenceDateUtc,
     long? SolarSystemId,
-    long? VictimCharacterId,
-    long? VictimCorporationId,
-    long? VictimAllianceId,
-    long? VictimShipTypeId,
     int ParticipantCount);

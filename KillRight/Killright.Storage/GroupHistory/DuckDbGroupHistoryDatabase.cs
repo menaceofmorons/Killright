@@ -15,18 +15,13 @@ public sealed class DuckDbGroupHistoryDatabase : IGroupHistoryDatabase
     public async Task<GroupHistoryDatabaseStatus> GetStatusAsync(CancellationToken cancellationToken = default)
     {
         if (!File.Exists(DatabasePath))
-        {
             return new GroupHistoryDatabaseStatus(false, false, null, null, null, null, null, null, null);
-        }
 
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken);
-        var schemaExists = await TableExistsAsync(connection, "history_metadata", cancellationToken);
 
-        if (!schemaExists)
-        {
+        if (!await TableExistsAsync(connection, "history_metadata", cancellationToken))
             return new GroupHistoryDatabaseStatus(true, false, null, null, null, null, null, null, null);
-        }
 
         await using var command = connection.CreateCommand();
         command.CommandText = """
@@ -154,8 +149,13 @@ public sealed class DuckDbGroupHistoryDatabase : IGroupHistoryDatabase
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
-    public async Task ImportEvidenceRowsForDayAsync(DateOnly importDateUtc, IReadOnlyList<GroupHistoryEvidenceImportRow> evidenceRows,
-        int rawKillmailCount, int qualifyingKillmailCount, int qualifyingAttackerCount, long candidatePairOccurrenceRows,
+    public async Task ImportEvidenceAndParticipantRowsForDayAsync(DateOnly importDateUtc,
+        IReadOnlyList<GroupHistoryEvidenceImportRow> evidenceRows,
+        IReadOnlyList<GroupHistoryParticipantImportRow> participantRows,
+        int rawKillmailCount,
+        int qualifyingKillmailCount,
+        int qualifyingAttackerCount,
+        long candidatePairOccurrenceRows,
         CancellationToken cancellationToken = default)
     {
         await using var connection = CreateConnection();
@@ -164,6 +164,9 @@ public sealed class DuckDbGroupHistoryDatabase : IGroupHistoryDatabase
 
         foreach (var row in evidenceRows)
             await InsertEvidenceRowAsync(connection, transaction, row, cancellationToken);
+
+        foreach (var row in participantRows)
+            await InsertParticipantRowAsync(connection, transaction, row, cancellationToken);
 
         await MarkImportDayCompletedCoreAsync(connection, transaction, importDateUtc, rawKillmailCount, qualifyingKillmailCount,
             qualifyingAttackerCount, candidatePairOccurrenceRows, cancellationToken);
@@ -179,11 +182,9 @@ public sealed class DuckDbGroupHistoryDatabase : IGroupHistoryDatabase
         command.CommandText = """
             INSERT OR IGNORE INTO historic_relationship_evidence
             (evidence_id, source_killmail_id, killmail_time_utc, evidence_date_utc, solar_system_id,
-             victim_character_id, victim_corporation_id, victim_alliance_id, victim_ship_type_id,
              participant_count, created_utc)
             VALUES
             ($evidence_id, $source_killmail_id, $killmail_time_utc, $evidence_date_utc, $solar_system_id,
-             $victim_character_id, $victim_corporation_id, $victim_alliance_id, $victim_ship_type_id,
              $participant_count, $created_utc);
             """;
         command.Parameters.Add(new DuckDBParameter("evidence_id", row.KillmailId));
@@ -191,12 +192,27 @@ public sealed class DuckDbGroupHistoryDatabase : IGroupHistoryDatabase
         command.Parameters.Add(new DuckDBParameter("killmail_time_utc", row.KillmailTimeUtc.ToString("O")));
         command.Parameters.Add(new DuckDBParameter("evidence_date_utc", row.EvidenceDateUtc.ToString("yyyy-MM-dd")));
         command.Parameters.Add(new DuckDBParameter("solar_system_id", ToDbValue(row.SolarSystemId)));
-        command.Parameters.Add(new DuckDBParameter("victim_character_id", ToDbValue(row.VictimCharacterId)));
-        command.Parameters.Add(new DuckDBParameter("victim_corporation_id", ToDbValue(row.VictimCorporationId)));
-        command.Parameters.Add(new DuckDBParameter("victim_alliance_id", ToDbValue(row.VictimAllianceId)));
-        command.Parameters.Add(new DuckDBParameter("victim_ship_type_id", ToDbValue(row.VictimShipTypeId)));
         command.Parameters.Add(new DuckDBParameter("participant_count", row.ParticipantCount));
         command.Parameters.Add(new DuckDBParameter("created_utc", DateTime.UtcNow.ToString("O")));
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private static async Task InsertParticipantRowAsync(DuckDBConnection connection, System.Data.Common.DbTransaction transaction,
+        GroupHistoryParticipantImportRow row, CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            INSERT OR IGNORE INTO historic_relationship_evidence_participants
+            (evidence_id, character_id, corporation_id, alliance_id, ship_type_id)
+            VALUES
+            ($evidence_id, $character_id, $corporation_id, $alliance_id, $ship_type_id);
+            """;
+        command.Parameters.Add(new DuckDBParameter("evidence_id", row.EvidenceId));
+        command.Parameters.Add(new DuckDBParameter("character_id", row.CharacterId));
+        command.Parameters.Add(new DuckDBParameter("corporation_id", ToDbValue(row.CorporationId)));
+        command.Parameters.Add(new DuckDBParameter("alliance_id", ToDbValue(row.AllianceId)));
+        command.Parameters.Add(new DuckDBParameter("ship_type_id", ToDbValue(row.ShipTypeId)));
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
@@ -318,10 +334,6 @@ public sealed class DuckDbGroupHistoryDatabase : IGroupHistoryDatabase
                 killmail_time_utc VARCHAR NOT NULL,
                 evidence_date_utc VARCHAR NOT NULL,
                 solar_system_id BIGINT,
-                victim_character_id BIGINT,
-                victim_corporation_id BIGINT,
-                victim_alliance_id BIGINT,
-                victim_ship_type_id BIGINT,
                 participant_count INTEGER NOT NULL,
                 created_utc VARCHAR NOT NULL
             );
@@ -333,7 +345,6 @@ public sealed class DuckDbGroupHistoryDatabase : IGroupHistoryDatabase
                 corporation_id BIGINT,
                 alliance_id BIGINT,
                 ship_type_id BIGINT,
-                final_blow BOOLEAN,
                 PRIMARY KEY (evidence_id, character_id)
             );
 

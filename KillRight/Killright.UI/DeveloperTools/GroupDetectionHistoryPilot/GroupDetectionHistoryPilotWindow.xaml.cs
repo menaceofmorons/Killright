@@ -30,7 +30,7 @@ public partial class GroupDetectionHistoryPilotWindow : Window
         StartButton.IsEnabled = false;
         CopyResultsButton.IsEnabled = false;
         _lastResults = null;
-        ResultTextBox.Text = $"Importing one-day evidence rows for {importDateUtc:yyyy-MM-dd}...";
+        ResultTextBox.Text = $"Importing one-day evidence and participant rows for {importDateUtc:yyyy-MM-dd}...";
 
         var database = new DuckDbGroupHistoryDatabase();
 
@@ -52,7 +52,7 @@ public partial class GroupDetectionHistoryPilotWindow : Window
             {
                 await database.MarkImportDayFailedAsync(
                     importDateUtc,
-                    result.DayResult.ErrorMessage ?? "Unknown one-day history evidence import failure.");
+                    result.DayResult.ErrorMessage ?? "Unknown one-day participant import failure.");
 
                 _lastResults = BuildFailureReport(result.DayResult);
                 ResultTextBox.Text = _lastResults;
@@ -66,29 +66,35 @@ public partial class GroupDetectionHistoryPilotWindow : Window
                     row.KillmailTimeUtc,
                     row.EvidenceDateUtc,
                     row.SolarSystemId,
-                    row.VictimCharacterId,
-                    row.VictimCorporationId,
-                    row.VictimAllianceId,
-                    row.VictimShipTypeId,
                     row.ParticipantCount))
                 .ToArray();
 
-            await database.ImportEvidenceRowsForDayAsync(
+            var participantRows = result.ParticipantRows
+                .Select(row => new GroupHistoryParticipantImportRow(
+                    row.EvidenceId,
+                    row.CharacterId,
+                    row.CorporationId,
+                    row.AllianceId,
+                    row.ShipTypeId))
+                .ToArray();
+
+            await database.ImportEvidenceAndParticipantRowsForDayAsync(
                 importDateUtc,
                 evidenceRows,
+                participantRows,
                 result.DayResult.RawKillmailCount,
                 result.DayResult.QualifyingKillmailCount,
                 result.DayResult.QualifyingAttackerCount,
                 result.DayResult.CandidatePairOccurrenceRows);
 
-            _lastResults = BuildSuccessReport(result.DayResult, evidenceRows.Length);
+            _lastResults = BuildSuccessReport(result.DayResult, evidenceRows.Length, participantRows.Length);
             ResultTextBox.Text = _lastResults;
             CopyResultsButton.IsEnabled = true;
         }
         catch (Exception ex)
         {
             await database.MarkImportDayFailedAsync(importDateUtc, ex.Message);
-            _lastResults = $"One-day evidence import failed for {importDateUtc:yyyy-MM-dd}: {ex.Message}";
+            _lastResults = $"One-day participant import failed for {importDateUtc:yyyy-MM-dd}: {ex.Message}";
             ResultTextBox.Text = _lastResults;
             CopyResultsButton.IsEnabled = true;
         }
@@ -98,11 +104,11 @@ public partial class GroupDetectionHistoryPilotWindow : Window
         }
     }
 
-    private static string BuildSuccessReport(ZkillHistoryDayResult result, int persistedEvidenceRows)
+    private static string BuildSuccessReport(ZkillHistoryDayResult result, int persistedEvidenceRows, int persistedParticipantRows)
     {
         return
             "====================================================\r\n" +
-            "KillRight Group Detection One-Day Evidence Import\r\n" +
+            "KillRight Group Detection One-Day Participant Import\r\n" +
             "====================================================\r\n\r\n" +
             $"Date: {result.Date:yyyy-MM-dd}\r\n" +
             $"Source: {result.Url}\r\n" +
@@ -114,14 +120,16 @@ public partial class GroupDetectionHistoryPilotWindow : Window
             $"Fleet killmails excluded: {result.FleetKillmailCount:N0}\r\n" +
             $"Qualifying killmails: {result.QualifyingKillmailCount:N0}\r\n" +
             $"Persisted evidence rows: {persistedEvidenceRows:N0}\r\n" +
-            $"Qualifying attackers / future participant rows: {result.QualifyingAttackerCount:N0}\r\n" +
+            $"Qualifying attackers: {result.QualifyingAttackerCount:N0}\r\n" +
+            $"Persisted participant rows: {persistedParticipantRows:N0}\r\n" +
             $"Candidate pair occurrence rows: {result.CandidatePairOccurrenceRows:N0}\r\n" +
             $"Highest qualifying attackers on a single killmail: {result.MaxQualifyingAttackersOnKillmail:N0}\r\n\r\n" +
             "Notes:\r\n" +
-            "- This step writes historic_relationship_evidence rows only.\r\n" +
-            "- This step does not write historic_relationship_evidence_participants rows.\r\n" +
+            "- This step writes historic_relationship_evidence rows.\r\n" +
+            "- This step writes historic_relationship_evidence_participants rows.\r\n" +
             "- This step does not write historic_relationship_summary rows.\r\n" +
             "- Persisted evidence rows should equal qualifying killmails.\r\n" +
+            "- Persisted participant rows should equal qualifying attackers.\r\n" +
             "====================================================";
     }
 
@@ -129,7 +137,7 @@ public partial class GroupDetectionHistoryPilotWindow : Window
     {
         return
             "====================================================\r\n" +
-            "KillRight Group Detection One-Day Evidence Import\r\n" +
+            "KillRight Group Detection One-Day Participant Import\r\n" +
             "====================================================\r\n\r\n" +
             $"Date: {result.Date:yyyy-MM-dd}\r\n" +
             $"Source: {result.Url}\r\n" +

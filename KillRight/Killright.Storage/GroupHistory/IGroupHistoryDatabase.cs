@@ -24,9 +24,10 @@ public interface IGroupHistoryDatabase
 
     Task MarkImportDayFailedAsync(DateOnly importDateUtc, string errorMessage, CancellationToken cancellationToken = default);
 
-    Task ImportEvidenceRowsForDayAsync(
+    Task ImportEvidenceAndParticipantRowsForDayAsync(
         DateOnly importDateUtc,
         IReadOnlyList<GroupHistoryEvidenceImportRow> evidenceRows,
+        IReadOnlyList<GroupHistoryParticipantImportRow> participantRows,
         int rawKillmailCount,
         int qualifyingKillmailCount,
         int qualifyingAttackerCount,
