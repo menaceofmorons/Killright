@@ -201,15 +201,30 @@ public partial class GroupDetectionHistoryPilotWindow : Window
         TimeSpan conversionElapsed,
         GroupHistorySummaryBuildResult summaryResult)
     {
-        var timing = result.Timing;
+        var extraction = result.Timing;
         var persistence = summaryResult.Timing;
+        var measuredDay =
+            extraction.DownloadElapsed +
+            extraction.JsonParseElapsed +
+            extraction.RowGenerationElapsed +
+            conversionElapsed +
+            persistence.TotalPersistenceElapsed;
+
+        var unaccountedDay = dayElapsed - measuredDay;
+
+        if (unaccountedDay < TimeSpan.Zero)
+            unaccountedDay = TimeSpan.Zero;
 
         return
             $"IMPORTED {importDateUtc:yyyy-MM-dd} " +
             $"started={startedUtc:O} completed={completedUtc:O} total={FormatElapsed(dayElapsed)} " +
-            $"download={FormatElapsed(timing.DownloadElapsed)} parse={FormatElapsed(timing.JsonParseElapsed)} rowBuild={FormatElapsed(timing.RowGenerationElapsed)} " +
-            $"uiConvert={FormatElapsed(conversionElapsed)} evidenceInsert={FormatElapsed(persistence.EvidenceInsertElapsed)} participantInsert={FormatElapsed(persistence.ParticipantInsertElapsed)} " +
-            $"summaryUpdate={FormatElapsed(persistence.SummaryUpdateElapsed)} statusUpdate={FormatElapsed(persistence.StatusUpdateElapsed)} commit={FormatElapsed(persistence.TransactionCommitElapsed)} dbTotal={FormatElapsed(persistence.TotalPersistenceElapsed)} " +
+            $"download={FormatElapsed(extraction.DownloadElapsed)} parse={FormatElapsed(extraction.JsonParseElapsed)} rowBuild={FormatElapsed(extraction.RowGenerationElapsed)} uiConvert={FormatElapsed(conversionElapsed)} " +
+            $"connectionOpen={FormatElapsed(persistence.ConnectionOpenElapsed)} transactionBegin={FormatElapsed(persistence.TransactionBeginElapsed)} " +
+            $"evidencePrep={FormatElapsed(persistence.EvidenceBatchPreparationElapsed)} evidenceExec={FormatElapsed(persistence.EvidenceBatchExecutionElapsed)} evidenceInsert={FormatElapsed(persistence.EvidenceInsertElapsed)} " +
+            $"participantPrep={FormatElapsed(persistence.ParticipantBatchPreparationElapsed)} participantExec={FormatElapsed(persistence.ParticipantBatchExecutionElapsed)} participantInsert={FormatElapsed(persistence.ParticipantInsertElapsed)} " +
+            $"summaryPreCount={FormatElapsed(persistence.SummaryPreCountElapsed)} summaryUpdate={FormatElapsed(persistence.SummaryUpdateElapsed)} summaryPostCount={FormatElapsed(persistence.SummaryPostCountElapsed)} " +
+            $"statusUpdate={FormatElapsed(persistence.StatusUpdateElapsed)} commit={FormatElapsed(persistence.TransactionCommitElapsed)} dbTotal={FormatElapsed(persistence.TotalPersistenceElapsed)} " +
+            $"dbUnaccounted={FormatElapsed(persistence.UnaccountedPersistenceElapsed)} dayUnaccounted={FormatElapsed(unaccountedDay)} " +
             $"raw={result.DayResult.RawKillmailCount:N0} qualifying={result.DayResult.QualifyingKillmailCount:N0} evidence={result.EvidenceRows.Count:N0} participants={result.ParticipantRows.Count:N0} pairs={summaryResult.PairOccurrenceRows:N0} totalSummary={summaryResult.TotalSummaryRows:N0}";
     }
 
@@ -294,7 +309,7 @@ public partial class GroupDetectionHistoryPilotWindow : Window
         builder.AppendLine("- Days are imported sequentially.");
         builder.AppendLine("- Completed days are skipped on rerun.");
         builder.AppendLine("- Relationship summaries are updated incrementally.");
-        builder.AppendLine("- Timing lines report download, parse, row generation, conversion, persistence and summary phases.");
+        builder.AppendLine("- Deep timing lines report connection, transaction, batch preparation, batch execution, summary count and unaccounted phases.");
         builder.AppendLine();
         builder.AppendLine("Log:");
 

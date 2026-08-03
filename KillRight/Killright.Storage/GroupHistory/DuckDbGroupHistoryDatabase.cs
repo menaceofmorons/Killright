@@ -193,54 +193,80 @@ public sealed class DuckDbGroupHistoryDatabase : IGroupHistoryDatabase
         CancellationToken cancellationToken = default)
     {
         var totalStopwatch = Stopwatch.StartNew();
-        var evidenceStopwatch = new Stopwatch();
-        var participantStopwatch = new Stopwatch();
-        var statusStopwatch = new Stopwatch();
-        var commitStopwatch = new Stopwatch();
-
+        var connectionStopwatch = Stopwatch.StartNew();
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken);
+        connectionStopwatch.Stop();
+
+        var transactionStopwatch = Stopwatch.StartNew();
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        transactionStopwatch.Stop();
 
-        evidenceStopwatch.Start();
-        await InsertEvidenceRowsAsync(connection, transaction, evidenceRows, cancellationToken);
-        evidenceStopwatch.Stop();
-
-        participantStopwatch.Start();
-        await InsertParticipantRowsAsync(connection, transaction, participantRows, cancellationToken);
-        participantStopwatch.Stop();
-
+        var evidenceTiming = await InsertEvidenceRowsAsync(connection, transaction, evidenceRows, cancellationToken);
+        var participantTiming = await InsertParticipantRowsAsync(connection, transaction, participantRows, cancellationToken);
         var summaryResult = await UpsertRelationshipSummaryForDayAsync(connection, transaction, importDateUtc, cancellationToken);
 
-        statusStopwatch.Start();
+        var statusStopwatch = Stopwatch.StartNew();
         await MarkImportDayCompletedCoreAsync(connection, transaction, importDateUtc, rawKillmailCount, qualifyingKillmailCount,
             qualifyingAttackerCount, candidatePairOccurrenceRows, cancellationToken);
         statusStopwatch.Stop();
 
-        commitStopwatch.Start();
+        var commitStopwatch = Stopwatch.StartNew();
         await transaction.CommitAsync(cancellationToken);
         commitStopwatch.Stop();
         totalStopwatch.Stop();
 
+        var measured =
+            connectionStopwatch.Elapsed +
+            transactionStopwatch.Elapsed +
+            evidenceTiming.PreparationElapsed +
+            evidenceTiming.ExecutionElapsed +
+            participantTiming.PreparationElapsed +
+            participantTiming.ExecutionElapsed +
+            summaryResult.Timing.SummaryPreCountElapsed +
+            summaryResult.Timing.SummaryUpdateElapsed +
+            summaryResult.Timing.SummaryPostCountElapsed +
+            statusStopwatch.Elapsed +
+            commitStopwatch.Elapsed;
+
+        var unaccounted = totalStopwatch.Elapsed - measured;
+
+        if (unaccounted < TimeSpan.Zero)
+            unaccounted = TimeSpan.Zero;
+
         var timing = new GroupHistoryPersistenceTiming(
-            evidenceStopwatch.Elapsed,
-            participantStopwatch.Elapsed,
+            connectionStopwatch.Elapsed,
+            transactionStopwatch.Elapsed,
+            evidenceTiming.PreparationElapsed,
+            evidenceTiming.ExecutionElapsed,
+            evidenceTiming.TotalElapsed,
+            participantTiming.PreparationElapsed,
+            participantTiming.ExecutionElapsed,
+            participantTiming.TotalElapsed,
+            summaryResult.Timing.SummaryPreCountElapsed,
             summaryResult.Timing.SummaryUpdateElapsed,
+            summaryResult.Timing.SummaryPostCountElapsed,
             statusStopwatch.Elapsed,
             commitStopwatch.Elapsed,
-            totalStopwatch.Elapsed);
+            totalStopwatch.Elapsed,
+            unaccounted);
 
         return summaryResult with { Timing = timing };
     }
 
-    private static async Task InsertEvidenceRowsAsync(
+    private static async Task<BatchInsertTiming> InsertEvidenceRowsAsync(
         DuckDBConnection connection,
         System.Data.Common.DbTransaction transaction,
         IReadOnlyList<GroupHistoryEvidenceImportRow> rows,
         CancellationToken cancellationToken)
     {
+        var totalStopwatch = Stopwatch.StartNew();
+        var preparationElapsed = TimeSpan.Zero;
+        var executionElapsed = TimeSpan.Zero;
+
         for (var start = 0; start < rows.Count; start += EvidenceInsertBatchSize)
         {
+            var preparationStopwatch = Stopwatch.StartNew();
             var batch = rows.Skip(start).Take(EvidenceInsertBatchSize).ToArray();
 
             if (batch.Length == 0)
@@ -272,18 +298,32 @@ public sealed class DuckDbGroupHistoryDatabase : IGroupHistoryDatabase
 
             sql.AppendLine(";");
             command.CommandText = sql.ToString();
+            preparationStopwatch.Stop();
+            preparationElapsed += preparationStopwatch.Elapsed;
+
+            var executionStopwatch = Stopwatch.StartNew();
             await command.ExecuteNonQueryAsync(cancellationToken);
+            executionStopwatch.Stop();
+            executionElapsed += executionStopwatch.Elapsed;
         }
+
+        totalStopwatch.Stop();
+        return new BatchInsertTiming(preparationElapsed, executionElapsed, totalStopwatch.Elapsed);
     }
 
-    private static async Task InsertParticipantRowsAsync(
+    private static async Task<BatchInsertTiming> InsertParticipantRowsAsync(
         DuckDBConnection connection,
         System.Data.Common.DbTransaction transaction,
         IReadOnlyList<GroupHistoryParticipantImportRow> rows,
         CancellationToken cancellationToken)
     {
+        var totalStopwatch = Stopwatch.StartNew();
+        var preparationElapsed = TimeSpan.Zero;
+        var executionElapsed = TimeSpan.Zero;
+
         for (var start = 0; start < rows.Count; start += ParticipantInsertBatchSize)
         {
+            var preparationStopwatch = Stopwatch.StartNew();
             var batch = rows.Skip(start).Take(ParticipantInsertBatchSize).ToArray();
 
             if (batch.Length == 0)
@@ -313,8 +353,17 @@ public sealed class DuckDbGroupHistoryDatabase : IGroupHistoryDatabase
 
             sql.AppendLine(";");
             command.CommandText = sql.ToString();
+            preparationStopwatch.Stop();
+            preparationElapsed += preparationStopwatch.Elapsed;
+
+            var executionStopwatch = Stopwatch.StartNew();
             await command.ExecuteNonQueryAsync(cancellationToken);
+            executionStopwatch.Stop();
+            executionElapsed += executionStopwatch.Elapsed;
         }
+
+        totalStopwatch.Stop();
+        return new BatchInsertTiming(preparationElapsed, executionElapsed, totalStopwatch.Elapsed);
     }
 
     private static async Task<GroupHistorySummaryBuildResult> UpsertRelationshipSummaryForDayAsync(
@@ -323,10 +372,12 @@ public sealed class DuckDbGroupHistoryDatabase : IGroupHistoryDatabase
         DateOnly importDateUtc,
         CancellationToken cancellationToken)
     {
-        var summaryStopwatch = Stopwatch.StartNew();
         var importDateText = importDateUtc.ToString("yyyy-MM-dd");
         var rebuiltUtc = DateTime.UtcNow.ToString("O");
+        var preCountElapsed = TimeSpan.Zero;
+        var postCountElapsed = TimeSpan.Zero;
 
+        var preCountStopwatch = Stopwatch.StartNew();
         var evidenceRows = await ExecuteScalarLongAsync(
             connection,
             transaction,
@@ -350,7 +401,10 @@ public sealed class DuckDbGroupHistoryDatabase : IGroupHistoryDatabase
             """,
             importDateText,
             cancellationToken);
+        preCountStopwatch.Stop();
+        preCountElapsed = preCountStopwatch.Elapsed;
 
+        var summaryStopwatch = Stopwatch.StartNew();
         await using (var command = connection.CreateCommand())
         {
             command.Transaction = transaction;
@@ -396,9 +450,9 @@ public sealed class DuckDbGroupHistoryDatabase : IGroupHistoryDatabase
             command.Parameters.Add(new DuckDBParameter("import_date_utc", importDateText));
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
-
         summaryStopwatch.Stop();
 
+        var postCountStopwatch = Stopwatch.StartNew();
         var pairOccurrenceRows = await ExecuteScalarLongAsync(
             connection,
             transaction,
@@ -425,6 +479,8 @@ public sealed class DuckDbGroupHistoryDatabase : IGroupHistoryDatabase
             "SELECT COUNT(*) FROM historic_relationship_summary;",
             null,
             cancellationToken);
+        postCountStopwatch.Stop();
+        postCountElapsed = postCountStopwatch.Elapsed;
 
         return new GroupHistorySummaryBuildResult(
             importDateUtc,
@@ -435,10 +491,19 @@ public sealed class DuckDbGroupHistoryDatabase : IGroupHistoryDatabase
             new GroupHistoryPersistenceTiming(
                 TimeSpan.Zero,
                 TimeSpan.Zero,
+                TimeSpan.Zero,
+                TimeSpan.Zero,
+                TimeSpan.Zero,
+                TimeSpan.Zero,
+                TimeSpan.Zero,
+                TimeSpan.Zero,
+                preCountElapsed,
                 summaryStopwatch.Elapsed,
+                postCountElapsed,
                 TimeSpan.Zero,
                 TimeSpan.Zero,
-                summaryStopwatch.Elapsed));
+                preCountElapsed + summaryStopwatch.Elapsed + postCountElapsed,
+                TimeSpan.Zero));
     }
 
     private static async Task MarkImportDayCompletedCoreAsync(DuckDBConnection connection, System.Data.Common.DbTransaction transaction,
@@ -556,6 +621,11 @@ public sealed class DuckDbGroupHistoryDatabase : IGroupHistoryDatabase
             _ => Convert.ToInt64(result)
         };
     }
+
+    private sealed record BatchInsertTiming(
+        TimeSpan PreparationElapsed,
+        TimeSpan ExecutionElapsed,
+        TimeSpan TotalElapsed);
 
     private static string GetSchemaSql()
     {
