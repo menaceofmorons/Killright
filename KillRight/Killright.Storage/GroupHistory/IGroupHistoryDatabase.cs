@@ -23,4 +23,13 @@ public interface IGroupHistoryDatabase
         CancellationToken cancellationToken = default);
 
     Task MarkImportDayFailedAsync(DateOnly importDateUtc, string errorMessage, CancellationToken cancellationToken = default);
+
+    Task ImportEvidenceRowsForDayAsync(
+        DateOnly importDateUtc,
+        IReadOnlyList<GroupHistoryEvidenceImportRow> evidenceRows,
+        int rawKillmailCount,
+        int qualifyingKillmailCount,
+        int qualifyingAttackerCount,
+        long candidatePairOccurrenceRows,
+        CancellationToken cancellationToken = default);
 }

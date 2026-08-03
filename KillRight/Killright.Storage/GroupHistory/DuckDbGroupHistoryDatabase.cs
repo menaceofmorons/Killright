@@ -16,47 +16,22 @@ public sealed class DuckDbGroupHistoryDatabase : IGroupHistoryDatabase
     {
         if (!File.Exists(DatabasePath))
         {
-            return new GroupHistoryDatabaseStatus(
-                false,
-                false,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null);
+            return new GroupHistoryDatabaseStatus(false, false, null, null, null, null, null, null, null);
         }
 
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken);
-
         var schemaExists = await TableExistsAsync(connection, "history_metadata", cancellationToken);
 
         if (!schemaExists)
         {
-            return new GroupHistoryDatabaseStatus(
-                true,
-                false,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null);
+            return new GroupHistoryDatabaseStatus(true, false, null, null, null, null, null, null, null);
         }
 
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT
-                schema_version,
-                history_start_day_utc,
-                last_completed_day_utc,
-                created_utc,
-                last_update_utc,
-                average_import_milliseconds_per_day,
-                last_import_result
+            SELECT schema_version, history_start_day_utc, last_completed_day_utc, created_utc, last_update_utc,
+                   average_import_milliseconds_per_day, last_import_result
             FROM history_metadata
             LIMIT 1;
             """;
@@ -64,18 +39,7 @@ public sealed class DuckDbGroupHistoryDatabase : IGroupHistoryDatabase
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
         if (!await reader.ReadAsync(cancellationToken))
-        {
-            return new GroupHistoryDatabaseStatus(
-                true,
-                true,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null);
-        }
+            return new GroupHistoryDatabaseStatus(true, true, null, null, null, null, null, null, null);
 
         return new GroupHistoryDatabaseStatus(
             true,
@@ -93,29 +57,14 @@ public sealed class DuckDbGroupHistoryDatabase : IGroupHistoryDatabase
     {
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken);
-
         await ExecuteNonQueryAsync(connection, GetSchemaSql(), cancellationToken);
 
         await using var command = connection.CreateCommand();
         command.CommandText = """
             INSERT INTO history_metadata
-            (
-                schema_version,
-                history_start_day_utc,
-                last_completed_day_utc,
-                created_utc,
-                last_update_utc,
-                average_import_milliseconds_per_day,
-                last_import_result
-            )
-            SELECT
-                $schema_version,
-                NULL,
-                NULL,
-                $created_utc,
-                NULL,
-                NULL,
-                'Created'
+            (schema_version, history_start_day_utc, last_completed_day_utc, created_utc, last_update_utc,
+             average_import_milliseconds_per_day, last_import_result)
+            SELECT $schema_version, NULL, NULL, $created_utc, NULL, NULL, 'Created'
             WHERE NOT EXISTS (SELECT 1 FROM history_metadata);
             """;
         command.Parameters.Add(new DuckDBParameter("schema_version", GroupHistoryConstants.SchemaVersion));
@@ -131,43 +80,20 @@ public sealed class DuckDbGroupHistoryDatabase : IGroupHistoryDatabase
         if (!status.DatabaseExists || !status.SchemaExists)
         {
             var firstImportDay = latestImportableDay.AddYears(-GroupHistoryConstants.InitialHistoricImportHorizonYears);
-            return new GroupHistoryUpdateRequirement(
-                status.DatabaseExists,
-                status.SchemaExists,
-                true,
-                firstImportDay,
-                latestImportableDay,
-                CountDaysInclusive(firstImportDay, latestImportableDay),
-                TimeSpan.FromMinutes(40),
-                true,
+            return new GroupHistoryUpdateRequirement(status.DatabaseExists, status.SchemaExists, true, firstImportDay,
+                latestImportableDay, CountDaysInclusive(firstImportDay, latestImportableDay), TimeSpan.FromMinutes(40), true,
                 "Historic Group Detection database has not been created.");
         }
 
         if (status.LastCompletedDayUtc is null)
         {
-            return new GroupHistoryUpdateRequirement(
-                true,
-                true,
-                false,
-                null,
-                null,
-                0,
-                TimeSpan.Zero,
-                false,
+            return new GroupHistoryUpdateRequirement(true, true, false, null, null, 0, TimeSpan.Zero, false,
                 "Historic Group Detection database schema exists, but no history has been imported yet.");
         }
 
         if (status.LastCompletedDayUtc.Value >= latestImportableDay)
         {
-            return new GroupHistoryUpdateRequirement(
-                true,
-                true,
-                false,
-                null,
-                null,
-                0,
-                TimeSpan.Zero,
-                false,
+            return new GroupHistoryUpdateRequirement(true, true, false, null, null, 0, TimeSpan.Zero, false,
                 "Historic Group Detection database is current.");
         }
 
@@ -177,15 +103,8 @@ public sealed class DuckDbGroupHistoryDatabase : IGroupHistoryDatabase
         var estimatedDuration = TimeSpan.FromMilliseconds(millisecondsPerDay * missingDayCount);
         var promptRequired = estimatedDuration > TimeSpan.FromMinutes(GroupHistoryConstants.PromptThresholdMinutes);
 
-        return new GroupHistoryUpdateRequirement(
-            true,
-            true,
-            false,
-            firstMissingDay,
-            latestImportableDay,
-            missingDayCount,
-            estimatedDuration,
-            promptRequired,
+        return new GroupHistoryUpdateRequirement(true, true, false, firstMissingDay, latestImportableDay, missingDayCount,
+            estimatedDuration, promptRequired,
             $"Historic Group Detection database is missing {missingDayCount} completed UTC day(s).");
     }
 
@@ -197,55 +116,100 @@ public sealed class DuckDbGroupHistoryDatabase : IGroupHistoryDatabase
         await using var command = connection.CreateCommand();
         command.CommandText = """
             INSERT OR REPLACE INTO history_import_day_status
-            (
-                import_date_utc,
-                status,
-                started_utc,
-                completed_utc,
-                raw_killmail_count,
-                qualifying_killmail_count,
-                participant_index_row_count,
-                pair_occurrence_count,
-                error_message
-            )
-            VALUES
-            (
-                $import_date_utc,
-                'InProgress',
-                $started_utc,
-                NULL,
-                0,
-                0,
-                0,
-                0,
-                NULL
-            );
+            (import_date_utc, status, started_utc, completed_utc, raw_killmail_count,
+             qualifying_killmail_count, participant_index_row_count, pair_occurrence_count, error_message)
+            VALUES ($import_date_utc, 'InProgress', $started_utc, NULL, 0, 0, 0, 0, NULL);
             """;
         command.Parameters.Add(new DuckDBParameter("import_date_utc", importDateUtc.ToString("yyyy-MM-dd")));
         command.Parameters.Add(new DuckDBParameter("started_utc", DateTime.UtcNow.ToString("O")));
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
-    public async Task MarkImportDayCompletedAsync(
-        DateOnly importDateUtc,
-        int rawKillmailCount,
-        int qualifyingKillmailCount,
-        int participantIndexRowCount,
-        long pairOccurrenceCount,
-        CancellationToken cancellationToken = default)
+    public async Task MarkImportDayCompletedAsync(DateOnly importDateUtc, int rawKillmailCount, int qualifyingKillmailCount,
+        int participantIndexRowCount, long pairOccurrenceCount, CancellationToken cancellationToken = default)
+    {
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        await MarkImportDayCompletedCoreAsync(connection, transaction, importDateUtc, rawKillmailCount, qualifyingKillmailCount,
+            participantIndexRowCount, pairOccurrenceCount, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+    }
+
+    public async Task MarkImportDayFailedAsync(DateOnly importDateUtc, string errorMessage, CancellationToken cancellationToken = default)
     {
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken);
 
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            INSERT OR REPLACE INTO history_import_day_status
+            (import_date_utc, status, started_utc, completed_utc, raw_killmail_count,
+             qualifying_killmail_count, participant_index_row_count, pair_occurrence_count, error_message)
+            VALUES ($import_date_utc, 'Failed', NULL, $completed_utc, 0, 0, 0, 0, $error_message);
+            """;
+        command.Parameters.Add(new DuckDBParameter("import_date_utc", importDateUtc.ToString("yyyy-MM-dd")));
+        command.Parameters.Add(new DuckDBParameter("completed_utc", DateTime.UtcNow.ToString("O")));
+        command.Parameters.Add(new DuckDBParameter("error_message", errorMessage));
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    public async Task ImportEvidenceRowsForDayAsync(DateOnly importDateUtc, IReadOnlyList<GroupHistoryEvidenceImportRow> evidenceRows,
+        int rawKillmailCount, int qualifyingKillmailCount, int qualifyingAttackerCount, long candidatePairOccurrenceRows,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
+        foreach (var row in evidenceRows)
+            await InsertEvidenceRowAsync(connection, transaction, row, cancellationToken);
+
+        await MarkImportDayCompletedCoreAsync(connection, transaction, importDateUtc, rawKillmailCount, qualifyingKillmailCount,
+            qualifyingAttackerCount, candidatePairOccurrenceRows, cancellationToken);
+
+        await transaction.CommitAsync(cancellationToken);
+    }
+
+    private static async Task InsertEvidenceRowAsync(DuckDBConnection connection, System.Data.Common.DbTransaction transaction,
+        GroupHistoryEvidenceImportRow row, CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            INSERT OR IGNORE INTO historic_relationship_evidence
+            (evidence_id, source_killmail_id, killmail_time_utc, evidence_date_utc, solar_system_id,
+             victim_character_id, victim_corporation_id, victim_alliance_id, victim_ship_type_id,
+             participant_count, created_utc)
+            VALUES
+            ($evidence_id, $source_killmail_id, $killmail_time_utc, $evidence_date_utc, $solar_system_id,
+             $victim_character_id, $victim_corporation_id, $victim_alliance_id, $victim_ship_type_id,
+             $participant_count, $created_utc);
+            """;
+        command.Parameters.Add(new DuckDBParameter("evidence_id", row.KillmailId));
+        command.Parameters.Add(new DuckDBParameter("source_killmail_id", row.KillmailId));
+        command.Parameters.Add(new DuckDBParameter("killmail_time_utc", row.KillmailTimeUtc.ToString("O")));
+        command.Parameters.Add(new DuckDBParameter("evidence_date_utc", row.EvidenceDateUtc.ToString("yyyy-MM-dd")));
+        command.Parameters.Add(new DuckDBParameter("solar_system_id", ToDbValue(row.SolarSystemId)));
+        command.Parameters.Add(new DuckDBParameter("victim_character_id", ToDbValue(row.VictimCharacterId)));
+        command.Parameters.Add(new DuckDBParameter("victim_corporation_id", ToDbValue(row.VictimCorporationId)));
+        command.Parameters.Add(new DuckDBParameter("victim_alliance_id", ToDbValue(row.VictimAllianceId)));
+        command.Parameters.Add(new DuckDBParameter("victim_ship_type_id", ToDbValue(row.VictimShipTypeId)));
+        command.Parameters.Add(new DuckDBParameter("participant_count", row.ParticipantCount));
+        command.Parameters.Add(new DuckDBParameter("created_utc", DateTime.UtcNow.ToString("O")));
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private static async Task MarkImportDayCompletedCoreAsync(DuckDBConnection connection, System.Data.Common.DbTransaction transaction,
+        DateOnly importDateUtc, int rawKillmailCount, int qualifyingKillmailCount, int participantIndexRowCount,
+        long pairOccurrenceCount, CancellationToken cancellationToken)
+    {
         await using (var command = connection.CreateCommand())
         {
             command.Transaction = transaction;
             command.CommandText = """
                 UPDATE history_import_day_status
-                SET
-                    status = 'Completed',
+                SET status = 'Completed',
                     completed_utc = $completed_utc,
                     raw_killmail_count = $raw_killmail_count,
                     qualifying_killmail_count = $qualifying_killmail_count,
@@ -268,8 +232,7 @@ public sealed class DuckDbGroupHistoryDatabase : IGroupHistoryDatabase
             command.Transaction = transaction;
             command.CommandText = """
                 UPDATE history_metadata
-                SET
-                    last_completed_day_utc = CASE
+                SET last_completed_day_utc = CASE
                         WHEN last_completed_day_utc IS NULL THEN $import_date_utc
                         WHEN last_completed_day_utc < $import_date_utc THEN $import_date_utc
                         ELSE last_completed_day_utc
@@ -283,46 +246,6 @@ public sealed class DuckDbGroupHistoryDatabase : IGroupHistoryDatabase
             command.Parameters.Add(new DuckDBParameter("schema_version", GroupHistoryConstants.SchemaVersion));
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
-
-        await transaction.CommitAsync(cancellationToken);
-    }
-
-    public async Task MarkImportDayFailedAsync(DateOnly importDateUtc, string errorMessage, CancellationToken cancellationToken = default)
-    {
-        await using var connection = CreateConnection();
-        await connection.OpenAsync(cancellationToken);
-
-        await using var command = connection.CreateCommand();
-        command.CommandText = """
-            INSERT OR REPLACE INTO history_import_day_status
-            (
-                import_date_utc,
-                status,
-                started_utc,
-                completed_utc,
-                raw_killmail_count,
-                qualifying_killmail_count,
-                participant_index_row_count,
-                pair_occurrence_count,
-                error_message
-            )
-            VALUES
-            (
-                $import_date_utc,
-                'Failed',
-                NULL,
-                $completed_utc,
-                0,
-                0,
-                0,
-                0,
-                $error_message
-            );
-            """;
-        command.Parameters.Add(new DuckDBParameter("import_date_utc", importDateUtc.ToString("yyyy-MM-dd")));
-        command.Parameters.Add(new DuckDBParameter("completed_utc", DateTime.UtcNow.ToString("O")));
-        command.Parameters.Add(new DuckDBParameter("error_message", errorMessage));
-        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     private DuckDBConnection CreateConnection()
@@ -338,11 +261,7 @@ public sealed class DuckDbGroupHistoryDatabase : IGroupHistoryDatabase
     private static async Task<bool> TableExistsAsync(DuckDBConnection connection, string tableName, CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT COUNT(*)
-            FROM information_schema.tables
-            WHERE table_name = $table_name;
-            """;
+        command.CommandText = "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = $table_name;";
         command.Parameters.Add(new DuckDBParameter("table_name", tableName));
         var result = await command.ExecuteScalarAsync(cancellationToken);
         return Convert.ToInt64(result) > 0;
@@ -358,6 +277,11 @@ public sealed class DuckDbGroupHistoryDatabase : IGroupHistoryDatabase
     private static int CountDaysInclusive(DateOnly start, DateOnly end)
     {
         return end.DayNumber - start.DayNumber + 1;
+    }
+
+    private static object ToDbValue(long? value)
+    {
+        return value.HasValue ? value.Value : DBNull.Value;
     }
 
     private static string GetSchemaSql()

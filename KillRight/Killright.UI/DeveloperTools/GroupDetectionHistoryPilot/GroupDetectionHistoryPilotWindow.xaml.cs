@@ -4,6 +4,7 @@ using System.Net.Http;
 using System.Windows;
 using Killright.Integration.zKill.History;
 using Killright.Storage.GroupHistory;
+using Killright.Storage.GroupHistory.Models;
 
 namespace Killright.UI.DeveloperTools.GroupDetectionHistoryPilot;
 
@@ -19,25 +20,17 @@ public partial class GroupDetectionHistoryPilotWindow : Window
 
     private async void StartButton_Click(object sender, RoutedEventArgs e)
     {
-        if (!DateOnly.TryParseExact(
-                ImportDateTextBox.Text.Trim(),
-                "yyyy-MM-dd",
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.None,
-                out var importDateUtc))
+        if (!DateOnly.TryParseExact(ImportDateTextBox.Text.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture,
+                DateTimeStyles.None, out var importDateUtc))
         {
-            MessageBox.Show(
-                "Import date must use yyyy-MM-dd format.",
-                "Invalid Date",
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
+            MessageBox.Show("Import date must use yyyy-MM-dd format.", "Invalid Date", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
         StartButton.IsEnabled = false;
         CopyResultsButton.IsEnabled = false;
         _lastResults = null;
-        ResultTextBox.Text = $"Importing one-day history counts for {importDateUtc:yyyy-MM-dd}...";
+        ResultTextBox.Text = $"Importing one-day evidence rows for {importDateUtc:yyyy-MM-dd}...";
 
         var database = new DuckDbGroupHistoryDatabase();
 
@@ -53,35 +46,49 @@ public partial class GroupDetectionHistoryPilotWindow : Window
 
             using var httpClient = new HttpClient(handler);
             var client = new ZkillHistoryClient(httpClient);
-            var result = await client.CountDayAsync(importDateUtc);
+            var result = await client.ExtractDayEvidenceAsync(importDateUtc);
 
-            if (!result.Succeeded)
+            if (!result.DayResult.Succeeded)
             {
                 await database.MarkImportDayFailedAsync(
                     importDateUtc,
-                    result.ErrorMessage ?? "Unknown one-day history import failure.");
+                    result.DayResult.ErrorMessage ?? "Unknown one-day history evidence import failure.");
 
-                _lastResults = BuildFailureReport(result);
+                _lastResults = BuildFailureReport(result.DayResult);
                 ResultTextBox.Text = _lastResults;
                 CopyResultsButton.IsEnabled = true;
                 return;
             }
 
-            await database.MarkImportDayCompletedAsync(
-                importDateUtc,
-                result.RawKillmailCount,
-                result.QualifyingKillmailCount,
-                result.QualifyingAttackerCount,
-                result.CandidatePairOccurrenceRows);
+            var evidenceRows = result.EvidenceRows
+                .Select(row => new GroupHistoryEvidenceImportRow(
+                    row.KillmailId,
+                    row.KillmailTimeUtc,
+                    row.EvidenceDateUtc,
+                    row.SolarSystemId,
+                    row.VictimCharacterId,
+                    row.VictimCorporationId,
+                    row.VictimAllianceId,
+                    row.VictimShipTypeId,
+                    row.ParticipantCount))
+                .ToArray();
 
-            _lastResults = BuildSuccessReport(result);
+            await database.ImportEvidenceRowsForDayAsync(
+                importDateUtc,
+                evidenceRows,
+                result.DayResult.RawKillmailCount,
+                result.DayResult.QualifyingKillmailCount,
+                result.DayResult.QualifyingAttackerCount,
+                result.DayResult.CandidatePairOccurrenceRows);
+
+            _lastResults = BuildSuccessReport(result.DayResult, evidenceRows.Length);
             ResultTextBox.Text = _lastResults;
             CopyResultsButton.IsEnabled = true;
         }
         catch (Exception ex)
         {
             await database.MarkImportDayFailedAsync(importDateUtc, ex.Message);
-            _lastResults = $"One-day history import failed for {importDateUtc:yyyy-MM-dd}: {ex.Message}";
+            _lastResults = $"One-day evidence import failed for {importDateUtc:yyyy-MM-dd}: {ex.Message}";
             ResultTextBox.Text = _lastResults;
             CopyResultsButton.IsEnabled = true;
         }
@@ -91,30 +98,30 @@ public partial class GroupDetectionHistoryPilotWindow : Window
         }
     }
 
-    private static string BuildSuccessReport(ZkillHistoryDayResult result)
+    private static string BuildSuccessReport(ZkillHistoryDayResult result, int persistedEvidenceRows)
     {
         return
             "====================================================\r\n" +
-            "KillRight Group Detection One-Day History Import\r\n" +
+            "KillRight Group Detection One-Day Evidence Import\r\n" +
             "====================================================\r\n\r\n" +
             $"Date: {result.Date:yyyy-MM-dd}\r\n" +
             $"Source: {result.Url}\r\n" +
             "Status: Completed\r\n\r\n" +
-            "Persisted to history_import_day_status only\r\n" +
             $"Raw killmails: {result.RawKillmailCount:N0}\r\n" +
             $"Raw attackers: {result.RawAttackerCount:N0}\r\n" +
             $"Pod killmails excluded: {result.PodKillmailCount:N0}\r\n" +
             $"Solo or insufficient attacker killmails excluded: {result.InsufficientAttackerKillmailCount:N0}\r\n" +
             $"Fleet killmails excluded: {result.FleetKillmailCount:N0}\r\n" +
             $"Qualifying killmails: {result.QualifyingKillmailCount:N0}\r\n" +
-            $"Qualifying attackers / participant rows candidate count: {result.QualifyingAttackerCount:N0}\r\n" +
+            $"Persisted evidence rows: {persistedEvidenceRows:N0}\r\n" +
+            $"Qualifying attackers / future participant rows: {result.QualifyingAttackerCount:N0}\r\n" +
             $"Candidate pair occurrence rows: {result.CandidatePairOccurrenceRows:N0}\r\n" +
             $"Highest qualifying attackers on a single killmail: {result.MaxQualifyingAttackersOnKillmail:N0}\r\n\r\n" +
             "Notes:\r\n" +
-            "- This step reuses the existing working zKill history count path.\r\n" +
-            "- This step does not write historic_relationship_evidence rows.\r\n" +
+            "- This step writes historic_relationship_evidence rows only.\r\n" +
             "- This step does not write historic_relationship_evidence_participants rows.\r\n" +
             "- This step does not write historic_relationship_summary rows.\r\n" +
+            "- Persisted evidence rows should equal qualifying killmails.\r\n" +
             "====================================================";
     }
 
@@ -122,7 +129,7 @@ public partial class GroupDetectionHistoryPilotWindow : Window
     {
         return
             "====================================================\r\n" +
-            "KillRight Group Detection One-Day History Import\r\n" +
+            "KillRight Group Detection One-Day Evidence Import\r\n" +
             "====================================================\r\n\r\n" +
             $"Date: {result.Date:yyyy-MM-dd}\r\n" +
             $"Source: {result.Url}\r\n" +

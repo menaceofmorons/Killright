@@ -26,8 +26,14 @@ public sealed class ZkillHistoryClient : IZkillHistoryClient
 
     public async Task<ZkillHistoryDayResult> CountDayAsync(DateOnly date, CancellationToken cancellationToken = default)
     {
-        var processingResult = await CountDayCoreAsync(date, null, cancellationToken);
+        var processingResult = await CountDayCoreAsync(date, null, false, cancellationToken);
         return processingResult.DayResult;
+    }
+
+    public async Task<ZkillHistoryEvidenceDayResult> ExtractDayEvidenceAsync(DateOnly date, CancellationToken cancellationToken = default)
+    {
+        var processingResult = await CountDayCoreAsync(date, null, true, cancellationToken);
+        return new ZkillHistoryEvidenceDayResult(processingResult.DayResult, processingResult.EvidenceRows);
     }
 
     public async Task<ZkillHistoryPeriodResult> CountCalendarYear2025Async(CancellationToken cancellationToken = default)
@@ -43,7 +49,7 @@ public sealed class ZkillHistoryClient : IZkillHistoryClient
 
             try
             {
-                return await CountDayCoreAsync(date, rateLimiter, cancellationToken);
+                return await CountDayCoreAsync(date, rateLimiter, false, cancellationToken);
             }
             finally
             {
@@ -87,6 +93,7 @@ public sealed class ZkillHistoryClient : IZkillHistoryClient
     private async Task<ZkillHistoryDayProcessingResult> CountDayCoreAsync(
         DateOnly date,
         AsyncRequestRateLimiter? rateLimiter,
+        bool includeEvidenceRows,
         CancellationToken cancellationToken)
     {
         var dateText = date.ToString("yyyyMMdd", CultureInfo.InvariantCulture);
@@ -98,7 +105,7 @@ public sealed class ZkillHistoryClient : IZkillHistoryClient
                 await rateLimiter.WaitAsync(cancellationToken);
 
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
-            request.Headers.UserAgent.Add(new ProductInfoHeaderValue("KillRight", "19.00.31"));
+            request.Headers.UserAgent.Add(new ProductInfoHeaderValue("KillRight", "19.00.32"));
             request.Headers.AcceptEncoding.Add(new StringWithQualityHeaderValue("gzip"));
             request.Headers.AcceptEncoding.Add(new StringWithQualityHeaderValue("deflate"));
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
@@ -109,25 +116,29 @@ public sealed class ZkillHistoryClient : IZkillHistoryClient
             if (!response.IsSuccessStatusCode)
             {
                 var failedDay = CreateFailedDay(date, url, $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
-                return new ZkillHistoryDayProcessingResult(failedDay, new HashSet<long>(), new Dictionary<PilotPair, int>());
+                return ZkillHistoryDayProcessingResult.Failed(failedDay);
             }
 
             using var document = JsonDocument.Parse(content);
-            return CountDayMetrics(date, url, document.RootElement);
+            return CountDayMetrics(date, url, document.RootElement, includeEvidenceRows);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             var failedDay = CreateFailedDay(date, url, ex.Message);
-            return new ZkillHistoryDayProcessingResult(failedDay, new HashSet<long>(), new Dictionary<PilotPair, int>());
+            return ZkillHistoryDayProcessingResult.Failed(failedDay);
         }
     }
 
-    private static ZkillHistoryDayProcessingResult CountDayMetrics(DateOnly date, string url, JsonElement root)
+    private static ZkillHistoryDayProcessingResult CountDayMetrics(
+        DateOnly date,
+        string url,
+        JsonElement root,
+        bool includeEvidenceRows)
     {
         if (root.ValueKind != JsonValueKind.Object)
         {
             var invalidDay = CreateFailedDay(date, url, "Root JSON was not an object.");
-            return new ZkillHistoryDayProcessingResult(invalidDay, new HashSet<long>(), new Dictionary<PilotPair, int>());
+            return ZkillHistoryDayProcessingResult.Failed(invalidDay);
         }
 
         var rawKillmailCount = 0;
@@ -141,6 +152,7 @@ public sealed class ZkillHistoryClient : IZkillHistoryClient
         var maxQualifyingAttackersOnKillmail = 0;
         var uniqueQualifyingPilots = new HashSet<long>();
         var candidateRelationshipCounts = new Dictionary<PilotPair, int>();
+        var evidenceRows = includeEvidenceRows ? new List<ZkillHistoryEvidenceRecord>() : new List<ZkillHistoryEvidenceRecord>(0);
 
         foreach (var killmailProperty in root.EnumerateObject())
         {
@@ -184,6 +196,9 @@ public sealed class ZkillHistoryClient : IZkillHistoryClient
                 uniqueQualifyingPilots.Add(characterId);
 
             AddCandidatePairs(attackerCharacterIds, candidateRelationshipCounts);
+
+            if (includeEvidenceRows)
+                evidenceRows.Add(CreateEvidenceRecord(date, killmailProperty.Name, killmail, attackerCharacterIds.Count));
         }
 
         var dayResult = new ZkillHistoryDayResult(
@@ -201,25 +216,34 @@ public sealed class ZkillHistoryClient : IZkillHistoryClient
             maxQualifyingAttackersOnKillmail,
             null);
 
-        return new ZkillHistoryDayProcessingResult(dayResult, uniqueQualifyingPilots, candidateRelationshipCounts);
+        return new ZkillHistoryDayProcessingResult(dayResult, uniqueQualifyingPilots, candidateRelationshipCounts, evidenceRows);
+    }
+
+    private static ZkillHistoryEvidenceRecord CreateEvidenceRecord(
+        DateOnly date,
+        string killmailKey,
+        JsonElement killmail,
+        int participantCount)
+    {
+        var killmailId = GetLong(killmail, "killmail_id") ?? long.Parse(killmailKey, CultureInfo.InvariantCulture);
+        var killmailTimeUtc = GetDateTime(killmail, "killmail_time") ?? date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+        var victim = killmail.TryGetProperty("victim", out var victimElement) && victimElement.ValueKind == JsonValueKind.Object ? victimElement : default;
+
+        return new ZkillHistoryEvidenceRecord(
+            killmailId,
+            killmailTimeUtc,
+            date,
+            GetLong(killmail, "solar_system_id"),
+            victim.ValueKind == JsonValueKind.Object ? GetLong(victim, "character_id") : null,
+            victim.ValueKind == JsonValueKind.Object ? GetLong(victim, "corporation_id") : null,
+            victim.ValueKind == JsonValueKind.Object ? GetLong(victim, "alliance_id") : null,
+            victim.ValueKind == JsonValueKind.Object ? GetLong(victim, "ship_type_id") : null,
+            participantCount);
     }
 
     private static ZkillHistoryDayResult CreateFailedDay(DateOnly date, string url, string errorMessage)
     {
-        return new ZkillHistoryDayResult(
-            date,
-            url,
-            false,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            errorMessage);
+        return new ZkillHistoryDayResult(date, url, false, 0, 0, 0, 0, 0, 0, 0, 0, 0, errorMessage);
     }
 
     private static bool IsPodKillmail(JsonElement killmail)
@@ -287,6 +311,28 @@ public sealed class ZkillHistoryClient : IZkillHistoryClient
         }
     }
 
+    private static long? GetLong(JsonElement element, string propertyName)
+    {
+        if (!element.TryGetProperty(propertyName, out var value))
+            return null;
+
+        return value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out var result) ? result : null;
+    }
+
+    private static DateTime? GetDateTime(JsonElement element, string propertyName)
+    {
+        if (!element.TryGetProperty(propertyName, out var value) || value.ValueKind != JsonValueKind.String)
+            return null;
+
+        return DateTime.TryParse(
+            value.GetString(),
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+            out var result)
+                ? result
+                : null;
+    }
+
     private sealed class AsyncRequestRateLimiter
     {
         private readonly SemaphoreSlim _gate = new(1, 1);
@@ -328,7 +374,18 @@ public sealed class ZkillHistoryClient : IZkillHistoryClient
     private sealed record ZkillHistoryDayProcessingResult(
         ZkillHistoryDayResult DayResult,
         HashSet<long> UniqueQualifyingPilots,
-        Dictionary<PilotPair, int> CandidateRelationshipCounts);
+        Dictionary<PilotPair, int> CandidateRelationshipCounts,
+        IReadOnlyList<ZkillHistoryEvidenceRecord> EvidenceRows)
+    {
+        public static ZkillHistoryDayProcessingResult Failed(ZkillHistoryDayResult dayResult)
+        {
+            return new ZkillHistoryDayProcessingResult(
+                dayResult,
+                new HashSet<long>(),
+                new Dictionary<PilotPair, int>(),
+                Array.Empty<ZkillHistoryEvidenceRecord>());
+        }
+    }
 
     private readonly record struct PilotPair(long PilotA, long PilotB);
 }
