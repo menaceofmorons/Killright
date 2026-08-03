@@ -4,28 +4,15 @@ using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Windows;
-using System.Windows.Controls;
 using Killright.Integration.zKill.History;
 using Killright.Storage.GroupHistory;
 using Killright.Storage.GroupHistory.Models;
+using Killright.UI.Configuration;
 
 namespace Killright.UI.DeveloperTools.GroupDetectionHistoryPilot;
 
 public partial class GroupDetectionHistoryPilotWindow : Window
 {
-    private static readonly HashSet<int> AllowedBatchSizes = new()
-    {
-        25,
-        50,
-        100,
-        150,
-        175,
-        200,
-        300,
-        400,
-        500
-    };
-
     private string? _lastResults;
 
     public GroupDetectionHistoryPilotWindow()
@@ -46,11 +33,8 @@ public partial class GroupDetectionHistoryPilotWindow : Window
         if (!TryReadDateRange(out var startDateUtc, out var endDateUtc))
             return;
 
-        if (!TryReadBatchSize(out var batchSize))
-            return;
-
         var seedMode = SeedModeCheckBox.IsChecked == true;
-        var batchOptions = GroupHistoryImportBatchOptions.FromSingleBatchSize(batchSize);
+        var batchOptions = App.Settings.GroupHistory.ToBatchOptions();
 
         StartButton.IsEnabled = false;
         CopyResultsButton.IsEnabled = false;
@@ -70,9 +54,9 @@ public partial class GroupDetectionHistoryPilotWindow : Window
 
             using var httpClient = new HttpClient(handler);
             var client = new ZkillHistoryClient(httpClient);
-            var summary = await ImportDateRangeAsync(database, client, startDateUtc, endDateUtc, seedMode, batchSize);
+            var summary = await ImportDateRangeAsync(database, client, startDateUtc, endDateUtc, seedMode, batchOptions);
 
-            _lastResults = BuildSummaryReport(summary, seedMode, batchSize);
+            _lastResults = BuildSummaryReport(summary, seedMode, batchOptions);
             ResultTextBox.Text = _lastResults;
             StatusTextBlock.Text = "Completed.";
             CopyResultsButton.IsEnabled = true;
@@ -96,7 +80,7 @@ public partial class GroupDetectionHistoryPilotWindow : Window
         DateOnly startDateUtc,
         DateOnly endDateUtc,
         bool seedMode,
-        int batchSize)
+        GroupHistoryImportBatchOptions batchOptions)
     {
         var runStopwatch = Stopwatch.StartNew();
         var importedDayElapsed = TimeSpan.Zero;
@@ -142,7 +126,7 @@ public partial class GroupDetectionHistoryPilotWindow : Window
                     importedDays == 0 ? TimeSpan.Zero : TimeSpan.FromTicks(importedDayElapsed.Ticks / importedDays),
                     logLines,
                     seedMode,
-                    batchSize);
+                    batchOptions);
                 continue;
             }
 
@@ -223,7 +207,7 @@ public partial class GroupDetectionHistoryPilotWindow : Window
                     conversionStopwatch.Elapsed,
                     summaryResult,
                     seedMode,
-                    batchSize));
+                    batchOptions));
             }
             catch (Exception ex)
             {
@@ -251,7 +235,7 @@ public partial class GroupDetectionHistoryPilotWindow : Window
                 importedDays == 0 ? TimeSpan.Zero : TimeSpan.FromTicks(importedDayElapsed.Ticks / importedDays),
                 logLines,
                 seedMode,
-                batchSize);
+                batchOptions);
         }
 
         runStopwatch.Stop();
@@ -284,7 +268,7 @@ public partial class GroupDetectionHistoryPilotWindow : Window
         TimeSpan conversionElapsed,
         GroupHistorySummaryBuildResult summaryResult,
         bool seedMode,
-        int batchSize)
+        GroupHistoryImportBatchOptions batchOptions)
     {
         var extraction = result.Timing;
         var persistence = summaryResult.Timing;
@@ -296,7 +280,7 @@ public partial class GroupDetectionHistoryPilotWindow : Window
 
         return
             $"IMPORTED {importDateUtc:yyyy-MM-dd} " +
-            $"mode={(seedMode ? "seed" : "normal")} batch={batchSize} " +
+            $"mode={(seedMode ? "seed" : "normal")} evidenceBatch={batchOptions.EvidenceInsertBatchSize} participantBatch={batchOptions.ParticipantInsertBatchSize} " +
             $"started={startedUtc:O} completed={completedUtc:O} total={FormatElapsed(dayElapsed)} " +
             $"download={FormatElapsed(extraction.DownloadElapsed)} parse={FormatElapsed(extraction.JsonParseElapsed)} rowBuild={FormatElapsed(extraction.RowGenerationElapsed)} uiConvert={FormatElapsed(conversionElapsed)} " +
             $"connectionOpen={FormatElapsed(persistence.ConnectionOpenElapsed)} transactionBegin={FormatElapsed(persistence.TransactionBeginElapsed)} " +
@@ -342,23 +326,6 @@ public partial class GroupDetectionHistoryPilotWindow : Window
         return true;
     }
 
-    private bool TryReadBatchSize(out int batchSize)
-    {
-        batchSize = 500;
-
-        if (BatchSizeComboBox.SelectedItem is ComboBoxItem selectedItem &&
-            selectedItem.Content is string text &&
-            int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedBatchSize) &&
-            AllowedBatchSizes.Contains(parsedBatchSize))
-        {
-            batchSize = parsedBatchSize;
-            return true;
-        }
-
-        MessageBox.Show("Batch size must be one of 25, 50, 100, 150, 175, 200, 400 or 500.", "Invalid Batch Size", MessageBoxButton.OK, MessageBoxImage.Warning);
-        return false;
-    }
-
     private static List<DateOnly> GetDateRange(DateOnly startDateUtc, DateOnly endDateUtc)
     {
         var dates = new List<DateOnly>();
@@ -387,7 +354,7 @@ public partial class GroupDetectionHistoryPilotWindow : Window
         TimeSpan averageImportedDayElapsed,
         IReadOnlyList<string> logLines,
         bool seedMode,
-        int batchSize)
+        GroupHistoryImportBatchOptions batchOptions)
     {
         return BuildReportText(
             "KillRight Group Detection Multi-Day Import Running",
@@ -408,10 +375,10 @@ public partial class GroupDetectionHistoryPilotWindow : Window
             averageImportedDayElapsed,
             logLines,
             seedMode,
-            batchSize);
+            batchOptions);
     }
 
-    private static string BuildSummaryReport(GroupHistoryMultiDayImportSummary summary, bool seedMode, int batchSize)
+    private static string BuildSummaryReport(GroupHistoryMultiDayImportSummary summary, bool seedMode, GroupHistoryImportBatchOptions batchOptions)
     {
         return BuildReportText(
             "KillRight Group Detection Multi-Day Import Completed",
@@ -432,7 +399,7 @@ public partial class GroupDetectionHistoryPilotWindow : Window
             summary.AverageImportedDayElapsed,
             summary.LogLines,
             seedMode,
-            batchSize);
+            batchOptions);
     }
 
     private static string BuildReportText(
@@ -454,7 +421,7 @@ public partial class GroupDetectionHistoryPilotWindow : Window
         TimeSpan averageImportedDayElapsed,
         IReadOnlyList<string> logLines,
         bool seedMode,
-        int batchSize)
+        GroupHistoryImportBatchOptions batchOptions)
     {
         var builder = new StringBuilder();
         builder.AppendLine("====================================================");
@@ -462,7 +429,9 @@ public partial class GroupDetectionHistoryPilotWindow : Window
         builder.AppendLine("====================================================");
         builder.AppendLine();
         builder.AppendLine($"Mode: {(seedMode ? "Seed" : "Normal")}");
-        builder.AppendLine($"Batch size: {batchSize:N0}");
+        builder.AppendLine($"Evidence batch size: {batchOptions.EvidenceInsertBatchSize:N0}");
+        builder.AppendLine($"Participant batch size: {batchOptions.ParticipantInsertBatchSize:N0}");
+        builder.AppendLine($"Configuration file: {ApplicationSettingsLoader.GetDefaultSettingsPath()}");
         builder.AppendLine($"Range: {startDateUtc:yyyy-MM-dd} to {endDateUtc:yyyy-MM-dd}");
         builder.AppendLine($"Total days: {totalDays:N0}");
         builder.AppendLine($"Imported days: {importedDays:N0}");
@@ -480,9 +449,9 @@ public partial class GroupDetectionHistoryPilotWindow : Window
         builder.AppendLine($"Total unique summary rows: {totalSummaryRows:N0}");
         builder.AppendLine();
         builder.AppendLine("Notes:");
-        builder.AppendLine("- Batch size applies to both evidence and participant multi-row inserts.");
-        builder.AppendLine("- This pilot tests smaller batch sizes after larger batches proved slower than 500.");
-        builder.AppendLine("- Run the same clean database test once per batch size for comparison.");
+        builder.AppendLine("- Application settings are loaded once when KillRight starts.");
+        builder.AppendLine("- Restart KillRight after editing config/settings.json.");
+        builder.AppendLine("- Group History import batch size defaults to 150 and is clamped to 25-500.");
         builder.AppendLine("- Normal Mode updates relationship summaries incrementally.");
         builder.AppendLine("- Seed Mode imports evidence and participants only; relationship summaries must be rebuilt later.");
         builder.AppendLine();

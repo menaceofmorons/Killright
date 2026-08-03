@@ -9,11 +9,13 @@ using Killright.Storage.Identity;
 using Killright.Storage.Killmails;
 using Killright.Storage.zKill;
 using Killright.UI.Analysis;
+using Killright.UI.Configuration;
 
 namespace Killright.UI;
 
 public partial class App : Application
 {
+    public static ApplicationSettings Settings { get; private set; } = null!;
     public static IEsiClient EsiClient { get; private set; } = null!;
     public static IzKillClient zKillClient { get; private set; } = null!;
     public static IPilotIdentityCache PilotIdentityCache { get; private set; } = null!;
@@ -28,6 +30,8 @@ public partial class App : Application
         StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        Settings = ApplicationSettingsLoader.LoadOrDefault();
 
         var databasePath = Path.Combine(
             Environment.GetFolderPath(
@@ -47,13 +51,10 @@ public partial class App : Application
 
         PilotIdentityCache =
             new DuckDbPilotIdentityCache(database);
-
         zKillActivityCache =
             new DuckDbzKillActivityCache(database);
-
         RecentKillmailCache =
             new DuckDbRecentKillmailCache(database);
-
         zKillStatisticsCache =
             new DuckDbzKillStatisticsCache(database);
 
@@ -71,7 +72,6 @@ public partial class App : Application
                 EngineRuntime);
 
         var esiHttpClient = new HttpClient();
-
         EsiClient =
             new EsiClient(
                 esiHttpClient);
