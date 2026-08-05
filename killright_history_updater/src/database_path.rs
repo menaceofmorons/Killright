@@ -13,7 +13,7 @@ pub fn get_default_lock_path() -> PathBuf {
     get_history_updater_directory().join(HISTORY_UPDATER_LOCK_FILE_NAME)
 }
 
-fn get_history_updater_directory() -> PathBuf {
+pub fn get_history_updater_directory() -> PathBuf {
     let local_app_data =
         env::var("LOCALAPPDATA").expect("LOCALAPPDATA environment variable is not set");
     let directory = PathBuf::from(local_app_data)

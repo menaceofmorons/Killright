@@ -7,15 +7,17 @@ mod persistence;
 mod r2_client;
 mod rate_limiter;
 mod schema;
+mod staging;
 mod status;
 mod summary_rebuild;
 
 use chrono::NaiveDate;
-use database_path::{get_default_database_path, get_default_lock_path};
+use database_path::{get_default_database_path, get_default_lock_path, get_history_updater_directory};
 use duckdb::Connection;
 use lock::SingleInstanceLock;
 use persistence::{import_day, ImportDayOutcome};
 use r2_client::{EvidenceDayResult, ParallelDownloadOptions, ZkillHistoryClient};
+use staging::{build_staging, StagingBuildOutcome};
 use summary_rebuild::{rebuild_summary_and_org_context, RebuildStats};
 
 fn main() {
@@ -36,6 +38,8 @@ fn main() {
         "extract-range-evidence" => run_extract_range_evidence(&arguments),
         "import-day" => run_import_day(&arguments),
         "rebuild-summary" => run_rebuild_summary(),
+        "build-staging" => run_build_staging(&arguments),
+        "__verify-open" => run_verify_open(&arguments),
         _ => {
             eprintln!("Unrecognised command: {command}");
             print_usage();
@@ -284,6 +288,106 @@ fn run_rebuild_summary() {
     }
 }
 
+fn run_build_staging(arguments: &[String]) {
+    let horizon_days_override = match parse_horizon_days_override(arguments) {
+        Ok(value) => value,
+        Err(message) => {
+            eprintln!("{message}");
+            process::exit(1);
+        }
+    };
+
+    let lock_path = get_default_lock_path();
+
+    let lock = match SingleInstanceLock::acquire(&lock_path) {
+        Ok(Some(lock)) => lock,
+        Ok(None) => return,
+        Err(error) => {
+            eprintln!("Failed to acquire history update lock: {error}");
+            process::exit(1);
+        }
+    };
+
+    let directory = get_history_updater_directory();
+
+    let client = match ZkillHistoryClient::new(ParallelDownloadOptions::default()) {
+        Ok(client) => client,
+        Err(error) => {
+            eprintln!("Failed to create HTTP client: {error}");
+            drop(lock);
+            process::exit(1);
+        }
+    };
+
+    match build_staging(&directory, &client, horizon_days_override) {
+        Ok(outcome) => {
+            let succeeded = outcome.succeeded;
+            print_staging_build_report(&outcome);
+            drop(lock);
+
+            if !succeeded {
+                process::exit(1);
+            }
+        }
+        Err(message) => {
+            eprintln!("Staging build failed: {message}");
+            drop(lock);
+            process::exit(1);
+        }
+    }
+}
+
+fn parse_horizon_days_override(arguments: &[String]) -> Result<Option<i64>, String> {
+    let mut index = 2;
+
+    while index < arguments.len() {
+        if arguments[index] == "--horizon-days" {
+            let value = arguments
+                .get(index + 1)
+                .ok_or_else(|| "Usage: killright_history_updater build-staging [--horizon-days <n>]".to_string())?;
+
+            let parsed: i64 = value
+                .parse()
+                .map_err(|_| "Usage: killright_history_updater build-staging [--horizon-days <n>]".to_string())?;
+
+            if parsed < 1 {
+                return Err("--horizon-days must be at least 1.".to_string());
+            }
+
+            return Ok(Some(parsed));
+        }
+
+        index += 1;
+    }
+
+    Ok(None)
+}
+
+/// Internal-only command used by `staging::reopen_cleanly` to prove a staging
+/// file opens cleanly from a genuinely separate OS process, rather than from
+/// within the process that just wrote and dropped its own connection to it.
+/// Not part of the public CLI surface: intentionally omitted from `print_usage`.
+fn run_verify_open(arguments: &[String]) {
+    let path = match arguments.get(2) {
+        Some(value) => value,
+        None => {
+            eprintln!("__verify-open requires a database file path argument.");
+            process::exit(2);
+        }
+    };
+
+    match Connection::open(path) {
+        Ok(connection) => {
+            drop(connection);
+            process::exit(0);
+        }
+        Err(error) => {
+            eprintln!("{error}");
+            process::exit(1);
+        }
+    }
+}
+
 fn print_evidence_day_report(result: &EvidenceDayResult) {
     let day_result = &result.day_result;
 
@@ -388,8 +492,55 @@ fn print_rebuild_summary_report(stats: &RebuildStats) {
     println!("====================================================");
 }
 
+fn print_staging_build_report(outcome: &StagingBuildOutcome) {
+    println!("====================================================");
+    println!("KillRight Historic Updater - Staging Build");
+    println!("====================================================");
+    println!("Staging file: {}", outcome.staging_file_name);
+    println!(
+        "Copied from: {}",
+        outcome.copied_from.as_deref().unwrap_or("(first-ever build, no copy source)")
+    );
+    println!("Requested days: {}", outcome.requested_days.len());
+
+    let already_completed_days = outcome.imported_days.iter().filter(|day| day.already_completed).count();
+    let newly_completed_days = outcome
+        .imported_days
+        .iter()
+        .filter(|day| day.succeeded && !day.already_completed)
+        .count();
+    let failed_days = outcome
+        .imported_days
+        .iter()
+        .filter(|day| !day.succeeded && !day.already_completed)
+        .count();
+
+    println!("Already completed (skipped): {already_completed_days}");
+    println!("Newly imported: {newly_completed_days}");
+    println!("Failed: {failed_days}");
+    println!("historic_relationship_summary rows: {}", outcome.rebuild_stats.summary_rows);
+    println!("historic_relationship_org_context rows: {}", outcome.rebuild_stats.org_context_rows);
+
+    if outcome.validation_failures.is_empty() {
+        println!("Validation: Passed");
+        println!("Status: Completed");
+    } else {
+        println!("Validation: Failed");
+
+        for failure in &outcome.validation_failures {
+            println!("- [{}] {}", failure.check_name, failure.detail);
+        }
+
+        println!("Status: Failed");
+        println!("The previous validated build (if any) remains the latest validated build.");
+        println!("This staging file has been retained for diagnosis.");
+    }
+
+    println!("====================================================");
+}
+
 fn print_usage() {
     eprintln!(
-        "Usage: killright_history_updater <create-schema|print-status|extract-day-evidence|extract-range-evidence|import-day|rebuild-summary>"
+        "Usage: killright_history_updater <create-schema|print-status|extract-day-evidence|extract-range-evidence|import-day|rebuild-summary|build-staging>"
     );
 }
