@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Globalization;
+using System.IO;
 using System.Text;
 using System.Windows;
 using System.Windows.Threading;
@@ -9,9 +11,16 @@ namespace Killright.UI.DeveloperTools.GroupDetectionHistoryPilot;
 
 public partial class GroupDetectionHistoryPilotWindow : Window
 {
+    private static readonly DateOnly TestModeAnchorStartDate = new(2016, 8, 1);
+    private static readonly List<string> _runHistoryLines = new();
+
     private readonly DispatcherTimer _statusTimer;
     private Stopwatch? _localRunStopwatch;
+    private Process? _launchedProcess;
     private bool _lastObservedUpdateInProgress;
+    private string? _pendingRunDescription;
+    private string? _baselineLastUpdatedUtc;
+    private string? _baselineLastCompletedDayUtc;
 
     public GroupDetectionHistoryPilotWindow()
     {
@@ -52,15 +61,115 @@ public partial class GroupDetectionHistoryPilotWindow : Window
             return;
         }
 
+        var arguments = "build-staging";
+        var description = "Default (10 years back from today)";
+        var amountText = TestAmountTextBox.Text.Trim();
+
+        if (amountText.Length > 0)
+        {
+            if (!int.TryParse(amountText, out var amount) || amount < 1)
+            {
+                MessageTextBlock.Text = "Test Amount must be a whole number of at least 1, or left blank for the full default (10 years back from today).";
+                return;
+            }
+
+            var unit = DaysRadioButton.IsChecked == true ? "days"
+                : MonthsRadioButton.IsChecked == true ? "months"
+                : "years";
+
+            arguments = $"build-staging --test-amount {amount} --test-amount-unit {unit}";
+            description = $"{amount} {CapitalizeFirst(unit)} from 01 Aug 2016";
+        }
+
         try
         {
-            HistoryUpdaterProcessLauncher.LaunchDetached(executablePath, "build-staging");
+            var preLaunchStatus = GroupHistoryLiveStatusLoader.LoadOrDefault();
+            _baselineLastUpdatedUtc = preLaunchStatus.LastUpdatedUtc;
+            _baselineLastCompletedDayUtc = preLaunchStatus.LastCompletedDayUtc;
+            _launchedProcess = HistoryUpdaterProcessLauncher.LaunchDetached(executablePath, arguments);
             _localRunStopwatch = Stopwatch.StartNew();
-            MessageTextBlock.Text = $"Launched {executablePath} build-staging.";
+            _pendingRunDescription = description;
+            MessageTextBlock.Text = $"Launched {executablePath} {arguments}.";
         }
         catch (Exception ex)
         {
+            _launchedProcess = null;
+            _pendingRunDescription = null;
+            _baselineLastUpdatedUtc = null;
+            _baselineLastCompletedDayUtc = null;
             MessageTextBlock.Text = $"Failed to launch the historic updater: {ex.Message}";
+        }
+
+        RefreshStatus();
+    }
+
+    private void StopButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_launchedProcess is null || _launchedProcess.HasExited)
+            return;
+
+        try
+        {
+            _launchedProcess.Kill();
+            _launchedProcess.WaitForExit(5000);
+
+            GroupHistoryLiveStatusResetter.ResetUpdateInProgress();
+            var deletedOrphan = HistoryUpdaterOrphanedStagingFileCleaner.TryCleanUpOrphan();
+
+            var status = GroupHistoryLiveStatusLoader.LoadOrDefault();
+            RecordRunHistoryEntry("Stopped by user", status.LastCompletedDayUtc);
+
+            MessageTextBlock.Text = deletedOrphan is null
+                ? "Stopped the historic updater."
+                : $"Stopped the historic updater and removed the abandoned staging file {Path.GetFileName(deletedOrphan)}.";
+        }
+        catch (Exception ex)
+        {
+            MessageTextBlock.Text = $"Failed to stop the historic updater: {ex.Message}";
+        }
+        finally
+        {
+            _localRunStopwatch = null;
+            _launchedProcess = null;
+            _pendingRunDescription = null;
+            _baselineLastUpdatedUtc = null;
+            _baselineLastCompletedDayUtc = null;
+        }
+
+        RefreshStatus();
+    }
+
+    private void WipeButton_Click(object sender, RoutedEventArgs e)
+    {
+        var currentStatus = GroupHistoryLiveStatusLoader.LoadOrDefault();
+
+        if (currentStatus.UpdateInProgress)
+        {
+            MessageBox.Show(
+                "A historic update is currently in progress. Stop it (if this window launched it) or wait for it to finish before wiping.",
+                "Historic Updater Running",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
+
+        var confirmed = MessageBox.Show(
+            "This permanently deletes the active historic database, every staging file, and the live status file, so the next launch starts completely from zero. This cannot be undone. Continue?",
+            "Wipe and Start Anew",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+
+        if (confirmed != MessageBoxResult.Yes)
+            return;
+
+        try
+        {
+            var deletedCount = HistoryUpdaterWiper.WipeAll();
+            MessageTextBlock.Text = $"Wiped {deletedCount} file(s). Ready to start anew.";
+        }
+        catch (Exception ex)
+        {
+            MessageTextBlock.Text = $"Failed to wipe: {ex.Message}";
         }
 
         RefreshStatus();
@@ -69,6 +178,14 @@ public partial class GroupDetectionHistoryPilotWindow : Window
     private void RefreshButton_Click(object sender, RoutedEventArgs e)
     {
         RefreshStatus();
+    }
+
+    private void CopyResultsButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(StatusTextBox.Text))
+            return;
+
+        Clipboard.SetText(StatusTextBox.Text);
     }
 
     private void StatusTimer_Tick(object? sender, EventArgs e)
@@ -81,13 +198,65 @@ public partial class GroupDetectionHistoryPilotWindow : Window
         var status = GroupHistoryLiveStatusLoader.LoadOrDefault();
 
         if (_lastObservedUpdateInProgress && !status.UpdateInProgress)
+        {
+            var outcome = status.LastUpdatedUtc != _baselineLastUpdatedUtc
+                ? "Completed"
+                : "Validation failed (no new data persisted)";
+            RecordRunHistoryEntry(outcome, status.LastCompletedDayUtc);
             _localRunStopwatch = null;
+        }
 
         _lastObservedUpdateInProgress = status.UpdateInProgress;
 
         LaunchButton.IsEnabled = !status.UpdateInProgress;
+        StopButton.IsEnabled = _launchedProcess is not null && !_launchedProcess.HasExited;
         StatusTextBox.Text = BuildStatusReport(status);
     }
+
+    private void RecordRunHistoryEntry(string outcome, string? currentLastCompletedDayUtc)
+    {
+        if (_pendingRunDescription is null)
+            return;
+
+        var elapsed = _localRunStopwatch?.Elapsed ?? TimeSpan.Zero;
+        var timestamp = DateTime.Now.ToString("HH:mm:ss");
+        var elapsedText = $"{(int)elapsed.TotalHours:D2}:{elapsed.Minutes:D2}:{elapsed.Seconds:D2}";
+        var rangeText = DescribeImportedRange(_baselineLastCompletedDayUtc, currentLastCompletedDayUtc);
+
+        _runHistoryLines.Add($"[{timestamp}] {_pendingRunDescription} ({rangeText}) - {outcome} - Elapsed {elapsedText}");
+
+        _pendingRunDescription = null;
+        _baselineLastUpdatedUtc = null;
+        _baselineLastCompletedDayUtc = null;
+    }
+
+    /// <summary>
+    /// Describes the actual date range a run added, based on what was already Completed
+    /// (LastCompletedDayUtc) immediately before it launched versus after it finished or was
+    /// stopped -- not the requested amount, which under the additive design (Section 1.0)
+    /// rarely starts at the fixed anchor except for the very first run.
+    /// </summary>
+    private static string DescribeImportedRange(string? baselineLastCompletedDayUtc, string? currentLastCompletedDayUtc)
+    {
+        if (string.IsNullOrEmpty(currentLastCompletedDayUtc))
+            return "no days completed yet";
+
+        if (string.Equals(currentLastCompletedDayUtc, baselineLastCompletedDayUtc, StringComparison.Ordinal))
+            return "no new days completed this run";
+
+        var rangeStart = string.IsNullOrEmpty(baselineLastCompletedDayUtc)
+            ? TestModeAnchorStartDate
+            : DateOnly.ParseExact(baselineLastCompletedDayUtc, "yyyy-MM-dd", CultureInfo.InvariantCulture).AddDays(1);
+
+        var rangeStartText = rangeStart.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+        return rangeStartText == currentLastCompletedDayUtc
+            ? rangeStartText
+            : $"{rangeStartText} to {currentLastCompletedDayUtc}";
+    }
+
+    private static string CapitalizeFirst(string value) =>
+        value.Length == 0 ? value : char.ToUpperInvariant(value[0]) + value[1..];
 
     private string BuildStatusReport(GroupHistoryLiveStatus status)
     {
@@ -105,7 +274,22 @@ public partial class GroupDetectionHistoryPilotWindow : Window
         builder.AppendLine();
         builder.AppendLine("Notes:");
         builder.AppendLine("- This window only reads groupHistory.status.json; it performs no import or persistence itself.");
-        builder.AppendLine("- The elapsed clock only tracks a run launched from this window during this session; it shows as unknown if a run was already in progress when this window opened.");
+        builder.AppendLine("- The elapsed clock and Stop only track a run launched from this window during this session.");
+        builder.AppendLine("- Test Amount is anchored at a fixed 01 Aug 2016 start date; it does not depend on today's date.");
+        builder.AppendLine("====================================================");
+        builder.AppendLine();
+        builder.AppendLine("Run History (this window session):");
+
+        if (_runHistoryLines.Count == 0)
+        {
+            builder.AppendLine("(no runs completed or stopped yet)");
+        }
+        else
+        {
+            foreach (var line in _runHistoryLines)
+                builder.AppendLine(line);
+        }
+
         builder.AppendLine("====================================================");
         return builder.ToString();
     }

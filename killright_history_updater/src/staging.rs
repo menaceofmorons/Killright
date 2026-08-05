@@ -15,6 +15,92 @@ use crate::summary_rebuild::{self, RebuildStats};
 pub const LATEST_VALIDATED_BUILD_MARKER_FILE_NAME: &str = "latest_validated_build.txt";
 pub const DEFAULT_INITIAL_HISTORIC_IMPORT_HORIZON_YEARS: u32 = 10;
 
+pub const TEST_MODE_ANCHOR_YEAR: i32 = 2016;
+pub const TEST_MODE_ANCHOR_MONTH: u32 = 8;
+pub const TEST_MODE_ANCHOR_DAY: u32 = 1;
+
+/// The fixed starting point used only by the Test Amount control (Step 19.00.51).
+/// Never used for a default (blank) build-staging launch, and never derived from
+/// the current date -- the same amount requested on different days therefore
+/// always resolves to the same [start, end] range.
+pub fn test_mode_anchor_start_date() -> NaiveDate {
+    NaiveDate::from_ymd_opt(TEST_MODE_ANCHOR_YEAR, TEST_MODE_ANCHOR_MONTH, TEST_MODE_ANCHOR_DAY)
+        .expect("test-mode anchor start date must be a valid calendar date")
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TestAmountUnit {
+    Days,
+    Months,
+    Years,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ImportRangeMode {
+    DefaultTenYearLookback,
+    HorizonDaysBackFromToday(i64),
+    AnchoredTestAmount(i64, TestAmountUnit),
+}
+
+/// Finds the latest day already `Completed` at or after the anchor, or the day
+/// before the anchor if nothing in the test range has been imported yet. This is
+/// the basis Test Amount extends from, so successive runs are additive (a Month
+/// run after a completed Week run extends from day 7, not from the anchor again).
+///
+/// Only considers days at or after `anchor_start`: a database that has also been
+/// used for a default/production run (whose ~10-year lookback can itself reach
+/// back close to the fixed 01 Aug 2016 anchor, depending on when it ran) could
+/// otherwise report a frontier far beyond any test-amount run actually made.
+/// Wipe (Section 3.10) exists to give a clean baseline before a test cycle for
+/// exactly this reason.
+fn find_test_range_frontier(connection: &Connection, anchor_start: NaiveDate) -> DuckResult<NaiveDate> {
+    let anchor_start_text = anchor_start.format("%Y-%m-%d").to_string();
+
+    let max_completed: Option<String> = connection.query_row(
+        "SELECT MAX(import_date_utc) FROM history_import_day_status \
+         WHERE status = 'Completed' AND import_date_utc >= ?;",
+        params![anchor_start_text],
+        |row| row.get(0),
+    )?;
+
+    let anchor_predecessor = anchor_start.pred_opt().expect("date underflow computing anchor predecessor");
+
+    Ok(match max_completed {
+        Some(text) => NaiveDate::parse_from_str(&text, "%Y-%m-%d").unwrap_or(anchor_predecessor),
+        None => anchor_predecessor,
+    })
+}
+
+/// Computes the inclusive [start, end] range for a Test Amount request: start is
+/// always the fixed anchor date; end is the current frontier (see
+/// `find_test_range_frontier`) plus the requested amount, clamped so it can never
+/// exceed `latest_importable_day` (a defensive guard for an implausibly large
+/// amount -- not expected to trigger for any realistic timing-test value, since
+/// the anchor is a decade in the past).
+fn compute_anchored_test_range(
+    connection: &Connection,
+    amount: i64,
+    unit: TestAmountUnit,
+    latest_importable_day: NaiveDate,
+) -> DuckResult<(NaiveDate, NaiveDate)> {
+    let start = test_mode_anchor_start_date();
+    let frontier = find_test_range_frontier(connection, start)?;
+
+    let unclamped_end = match unit {
+        TestAmountUnit::Days => frontier + Duration::days(amount.max(0)),
+        TestAmountUnit::Months => frontier
+            .checked_add_months(Months::new(amount.max(0) as u32))
+            .expect("date overflow computing test-mode amount end date"),
+        TestAmountUnit::Years => frontier
+            .checked_add_months(Months::new((amount.max(0) as u32).saturating_mul(12)))
+            .expect("date overflow computing test-mode amount end date"),
+    };
+
+    let end = unclamped_end.min(latest_importable_day);
+
+    Ok((start, end))
+}
+
 pub struct ValidationFailure {
     pub check_name: &'static str,
     pub detail: String,
@@ -34,7 +120,7 @@ pub struct StagingBuildOutcome {
 pub fn build_staging(
     directory: &Path,
     client: &ZkillHistoryClient,
-    horizon_days_override: Option<i64>,
+    range_mode: ImportRangeMode,
 ) -> Result<StagingBuildOutcome, String> {
     fs::create_dir_all(directory).map_err(|error| format!("Failed to create staging directory: {error}"))?;
 
@@ -68,7 +154,7 @@ pub fn build_staging(
         .map_err(|error| format!("Failed to ensure initial metadata row: {error}"))?;
 
     let utc_today = Utc::now().date_naive();
-    let requested_days = determine_missing_days(&connection, horizon_days_override, utc_today)
+    let requested_days = determine_missing_days(&connection, range_mode, utc_today)
         .map_err(|error| format!("Failed to determine missing days: {error}"))?;
 
     let mut imported_days = Vec::with_capacity(requested_days.len());
@@ -166,20 +252,29 @@ fn write_latest_validated_build_marker(directory: &Path, filename: &str) -> io::
 
 fn determine_missing_days(
     connection: &Connection,
-    horizon_days_override: Option<i64>,
+    range_mode: ImportRangeMode,
     utc_today: NaiveDate,
 ) -> DuckResult<Vec<NaiveDate>> {
     let latest_importable_day = utc_today.pred_opt().expect("date underflow computing latest importable day");
 
-    let horizon_start = match horizon_days_override {
-        Some(days) => latest_importable_day - Duration::days((days - 1).max(0)),
-        None => latest_importable_day
-            .checked_sub_months(Months::new(12 * DEFAULT_INITIAL_HISTORIC_IMPORT_HORIZON_YEARS))
-            .expect("date underflow computing default historic horizon"),
+    let (horizon_start, horizon_end) = match range_mode {
+        ImportRangeMode::DefaultTenYearLookback => (
+            latest_importable_day
+                .checked_sub_months(Months::new(12 * DEFAULT_INITIAL_HISTORIC_IMPORT_HORIZON_YEARS))
+                .expect("date underflow computing default historic horizon"),
+            latest_importable_day,
+        ),
+        ImportRangeMode::HorizonDaysBackFromToday(days) => (
+            latest_importable_day - Duration::days((days - 1).max(0)),
+            latest_importable_day,
+        ),
+        ImportRangeMode::AnchoredTestAmount(amount, unit) => {
+            compute_anchored_test_range(connection, amount, unit, latest_importable_day)?
+        }
     };
 
     let horizon_start_text = horizon_start.format("%Y-%m-%d").to_string();
-    let latest_importable_day_text = latest_importable_day.format("%Y-%m-%d").to_string();
+    let horizon_end_text = horizon_end.format("%Y-%m-%d").to_string();
 
     let mut statement = connection.prepare(
         "SELECT import_date_utc FROM history_import_day_status \
@@ -187,7 +282,7 @@ fn determine_missing_days(
     )?;
 
     let mut completed_days: HashSet<NaiveDate> = HashSet::new();
-    let mut rows = statement.query(params![horizon_start_text, latest_importable_day_text])?;
+    let mut rows = statement.query(params![horizon_start_text, horizon_end_text])?;
 
     while let Some(row) = rows.next()? {
         let text: String = row.get(0)?;
@@ -200,7 +295,7 @@ fn determine_missing_days(
     let mut missing_days = Vec::new();
     let mut current = horizon_start;
 
-    while current <= latest_importable_day {
+    while current <= horizon_end {
         if !completed_days.contains(&current) {
             missing_days.push(current);
         }
@@ -360,5 +455,215 @@ fn reopen_cleanly(database_path: &Path) -> Result<(), String> {
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
         Err(format!("Verification process exited with {}: {}", output.status, stderr.trim()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn insert_completed_day(connection: &Connection, date_text: &str) {
+        connection
+            .execute(
+                "INSERT INTO history_import_day_status \
+                 (import_date_utc, status, raw_killmail_count, qualifying_killmail_count, \
+                  participant_index_row_count, pair_occurrence_count) \
+                 VALUES (?, 'Completed', 0, 0, 0, 0);",
+                params![date_text],
+            )
+            .unwrap();
+    }
+
+    #[test]
+    fn find_test_range_frontier_no_completed_days_returns_anchor_predecessor() {
+        let connection = Connection::open_in_memory().unwrap();
+        crate::schema::create_schema(&connection).unwrap();
+        crate::schema::insert_initial_metadata_row(&connection, "2026-08-05T00:00:00Z").unwrap();
+
+        let anchor = test_mode_anchor_start_date();
+        let frontier = find_test_range_frontier(&connection, anchor).unwrap();
+
+        assert_eq!(frontier, NaiveDate::from_ymd_opt(2016, 7, 31).unwrap());
+    }
+
+    #[test]
+    fn find_test_range_frontier_returns_max_completed_day_at_or_after_anchor() {
+        let connection = Connection::open_in_memory().unwrap();
+        crate::schema::create_schema(&connection).unwrap();
+        crate::schema::insert_initial_metadata_row(&connection, "2026-08-05T00:00:00Z").unwrap();
+
+        insert_completed_day(&connection, "2016-08-03");
+        insert_completed_day(&connection, "2016-08-07");
+        insert_completed_day(&connection, "2016-08-05");
+
+        let anchor = test_mode_anchor_start_date();
+        let frontier = find_test_range_frontier(&connection, anchor).unwrap();
+
+        assert_eq!(frontier, NaiveDate::from_ymd_opt(2016, 8, 7).unwrap());
+    }
+
+    #[test]
+    fn find_test_range_frontier_ignores_completed_days_before_anchor() {
+        let connection = Connection::open_in_memory().unwrap();
+        crate::schema::create_schema(&connection).unwrap();
+        crate::schema::insert_initial_metadata_row(&connection, "2026-08-05T00:00:00Z").unwrap();
+
+        insert_completed_day(&connection, "2016-07-15");
+
+        let anchor = test_mode_anchor_start_date();
+        let frontier = find_test_range_frontier(&connection, anchor).unwrap();
+
+        assert_eq!(frontier, NaiveDate::from_ymd_opt(2016, 7, 31).unwrap());
+    }
+
+    #[test]
+    fn compute_anchored_test_range_days_first_run_returns_inclusive_range_from_anchor() {
+        let connection = Connection::open_in_memory().unwrap();
+        crate::schema::create_schema(&connection).unwrap();
+        crate::schema::insert_initial_metadata_row(&connection, "2026-08-05T00:00:00Z").unwrap();
+
+        let latest_importable_day = NaiveDate::from_ymd_opt(2026, 8, 4).unwrap();
+        let (start, end) =
+            compute_anchored_test_range(&connection, 7, TestAmountUnit::Days, latest_importable_day).unwrap();
+
+        assert_eq!(start, NaiveDate::from_ymd_opt(2016, 8, 1).unwrap());
+        assert_eq!(end, NaiveDate::from_ymd_opt(2016, 8, 7).unwrap());
+    }
+
+    #[test]
+    fn compute_anchored_test_range_months_first_run_returns_calendar_month_span() {
+        let connection = Connection::open_in_memory().unwrap();
+        crate::schema::create_schema(&connection).unwrap();
+        crate::schema::insert_initial_metadata_row(&connection, "2026-08-05T00:00:00Z").unwrap();
+
+        let latest_importable_day = NaiveDate::from_ymd_opt(2026, 8, 4).unwrap();
+        let (start, end) =
+            compute_anchored_test_range(&connection, 1, TestAmountUnit::Months, latest_importable_day).unwrap();
+
+        assert_eq!(start, NaiveDate::from_ymd_opt(2016, 8, 1).unwrap());
+        assert_eq!(end, NaiveDate::from_ymd_opt(2016, 8, 31).unwrap());
+    }
+
+    #[test]
+    fn compute_anchored_test_range_years_first_run_returns_calendar_year_span() {
+        let connection = Connection::open_in_memory().unwrap();
+        crate::schema::create_schema(&connection).unwrap();
+        crate::schema::insert_initial_metadata_row(&connection, "2026-08-05T00:00:00Z").unwrap();
+
+        let latest_importable_day = NaiveDate::from_ymd_opt(2026, 8, 4).unwrap();
+        let (start, end) =
+            compute_anchored_test_range(&connection, 1, TestAmountUnit::Years, latest_importable_day).unwrap();
+
+        assert_eq!(start, NaiveDate::from_ymd_opt(2016, 8, 1).unwrap());
+        assert_eq!(end, NaiveDate::from_ymd_opt(2017, 7, 31).unwrap());
+    }
+
+    #[test]
+    fn compute_anchored_test_range_is_additive_across_successive_runs() {
+        let connection = Connection::open_in_memory().unwrap();
+        crate::schema::create_schema(&connection).unwrap();
+        crate::schema::insert_initial_metadata_row(&connection, "2026-08-05T00:00:00Z").unwrap();
+
+        // Simulates a completed "1 Week" run (01-07 Aug 2016) before this call.
+        for day in 1..=7 {
+            insert_completed_day(&connection, &format!("2016-08-{day:02}"));
+        }
+
+        let latest_importable_day = NaiveDate::from_ymd_opt(2026, 8, 4).unwrap();
+        let (start, end) =
+            compute_anchored_test_range(&connection, 1, TestAmountUnit::Months, latest_importable_day).unwrap();
+
+        // Anchor stays fixed; end extends from the Week run's frontier (07 Aug), not from
+        // the anchor again -- the resulting range covers the Week plus the new Month.
+        assert_eq!(start, NaiveDate::from_ymd_opt(2016, 8, 1).unwrap());
+        assert_eq!(end, NaiveDate::from_ymd_opt(2016, 9, 7).unwrap());
+    }
+
+    #[test]
+    fn compute_anchored_test_range_months_clamps_frontier_day_to_end_of_shorter_month() {
+        let connection = Connection::open_in_memory().unwrap();
+        crate::schema::create_schema(&connection).unwrap();
+        crate::schema::insert_initial_metadata_row(&connection, "2026-08-05T00:00:00Z").unwrap();
+
+        insert_completed_day(&connection, "2016-08-31");
+
+        let latest_importable_day = NaiveDate::from_ymd_opt(2026, 8, 4).unwrap();
+        let (_, end) =
+            compute_anchored_test_range(&connection, 1, TestAmountUnit::Months, latest_importable_day).unwrap();
+
+        // 31 Aug + 1 month: September only has 30 days, so chrono's checked_add_months
+        // clamps to the last valid day rather than erroring.
+        assert_eq!(end, NaiveDate::from_ymd_opt(2016, 9, 30).unwrap());
+    }
+
+    #[test]
+    fn compute_anchored_test_range_clamps_to_latest_importable_day() {
+        let connection = Connection::open_in_memory().unwrap();
+        crate::schema::create_schema(&connection).unwrap();
+        crate::schema::insert_initial_metadata_row(&connection, "2026-08-05T00:00:00Z").unwrap();
+
+        let latest_importable_day = NaiveDate::from_ymd_opt(2016, 8, 5).unwrap();
+        let (start, end) =
+            compute_anchored_test_range(&connection, 30, TestAmountUnit::Days, latest_importable_day).unwrap();
+
+        assert_eq!(start, NaiveDate::from_ymd_opt(2016, 8, 1).unwrap());
+        assert_eq!(end, NaiveDate::from_ymd_opt(2016, 8, 5).unwrap());
+    }
+
+    #[test]
+    fn determine_missing_days_default_lookback_matches_prior_behaviour() {
+        let connection = Connection::open_in_memory().unwrap();
+        crate::schema::create_schema(&connection).unwrap();
+        crate::schema::insert_initial_metadata_row(&connection, "2026-08-05T00:00:00Z").unwrap();
+
+        let utc_today = NaiveDate::from_ymd_opt(2026, 8, 5).unwrap();
+        let missing = determine_missing_days(&connection, ImportRangeMode::DefaultTenYearLookback, utc_today).unwrap();
+
+        assert_eq!(missing.first().unwrap(), &NaiveDate::from_ymd_opt(2016, 8, 4).unwrap());
+        assert_eq!(missing.last().unwrap(), &NaiveDate::from_ymd_opt(2026, 8, 4).unwrap());
+    }
+
+    #[test]
+    fn determine_missing_days_horizon_days_back_from_today_matches_prior_behaviour() {
+        let connection = Connection::open_in_memory().unwrap();
+        crate::schema::create_schema(&connection).unwrap();
+        crate::schema::insert_initial_metadata_row(&connection, "2026-08-05T00:00:00Z").unwrap();
+
+        let utc_today = NaiveDate::from_ymd_opt(2026, 8, 5).unwrap();
+        let missing =
+            determine_missing_days(&connection, ImportRangeMode::HorizonDaysBackFromToday(1), utc_today).unwrap();
+
+        assert_eq!(missing, vec![NaiveDate::from_ymd_opt(2026, 8, 4).unwrap()]);
+    }
+
+    #[test]
+    fn determine_missing_days_anchored_test_amount_is_additive_and_skips_completed_week() {
+        let connection = Connection::open_in_memory().unwrap();
+        crate::schema::create_schema(&connection).unwrap();
+        crate::schema::insert_initial_metadata_row(&connection, "2026-08-05T00:00:00Z").unwrap();
+
+        // Simulates a completed "1 Week" run (01-07 Aug 2016) before this call.
+        for day in 1..=7 {
+            insert_completed_day(&connection, &format!("2016-08-{day:02}"));
+        }
+
+        let utc_today = NaiveDate::from_ymd_opt(2026, 8, 5).unwrap();
+        let missing = determine_missing_days(
+            &connection,
+            ImportRangeMode::AnchoredTestAmount(1, TestAmountUnit::Months),
+            utc_today,
+        )
+        .unwrap();
+
+        // The already-completed week is skipped; only the newly-added days (08 Aug
+        // through 07 Sep, extending the Week run's frontier by a further month) are
+        // requested -- 31 days, none of them from the first week.
+        assert_eq!(missing.len(), 31);
+        assert_eq!(missing[0], NaiveDate::from_ymd_opt(2016, 8, 8).unwrap());
+        assert_eq!(*missing.last().unwrap(), NaiveDate::from_ymd_opt(2016, 9, 7).unwrap());
+
+        for day in 1..=7 {
+            assert!(!missing.contains(&NaiveDate::from_ymd_opt(2016, 8, day).unwrap()));
+        }
     }
 }

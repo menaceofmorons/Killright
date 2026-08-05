@@ -2,11 +2,12 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Group Detection Historic Updater"
-        Height="420"
-        Width="720"
+        Height="500"
+        Width="760"
         WindowStartupLocation="CenterOwner">
     <Grid Margin="16">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -19,17 +20,29 @@
                    Margin="0,0,0,12" />
 
         <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,12">
-            <Button x:Name="LaunchButton" Content="Launch Historic Updater" Width="180" Height="32" Margin="0,0,8,0" Click="LaunchButton_Click" />
-            <Button x:Name="RefreshButton" Content="Refresh Status" Width="120" Height="32" Click="RefreshButton_Click" />
+            <TextBlock Text="Test Amount (blank = full default):" VerticalAlignment="Center" Margin="0,0,8,0" />
+            <TextBox x:Name="TestAmountTextBox" Width="60" Height="24" VerticalContentAlignment="Center" Margin="0,0,12,0" />
+            <RadioButton x:Name="DaysRadioButton" Content="Days" GroupName="TestAmountUnit" IsChecked="True" VerticalAlignment="Center" Margin="0,0,8,0" />
+            <RadioButton x:Name="MonthsRadioButton" Content="Months" GroupName="TestAmountUnit" VerticalAlignment="Center" Margin="0,0,8,0" />
+            <RadioButton x:Name="YearsRadioButton" Content="Years" GroupName="TestAmountUnit" VerticalAlignment="Center" Margin="0,0,12,0" />
+            <TextBlock Text="from 01 Aug 2016" VerticalAlignment="Center" FontStyle="Italic" />
         </StackPanel>
 
-        <TextBlock Grid.Row="2"
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,12">
+            <Button x:Name="LaunchButton" Content="Launch Historic Updater" Width="170" Height="32" Margin="0,0,8,0" Click="LaunchButton_Click" />
+            <Button x:Name="StopButton" Content="Stop" Width="80" Height="32" Margin="0,0,8,0" IsEnabled="False" Click="StopButton_Click" />
+            <Button x:Name="WipeButton" Content="Wipe / Reset" Width="110" Height="32" Margin="0,0,8,0" Click="WipeButton_Click" />
+            <Button x:Name="RefreshButton" Content="Refresh Status" Width="110" Height="32" Margin="0,0,8,0" Click="RefreshButton_Click" />
+            <Button x:Name="CopyResultsButton" Content="Copy Results" Width="110" Height="32" Click="CopyResultsButton_Click" />
+        </StackPanel>
+
+        <TextBlock Grid.Row="3"
                    x:Name="MessageTextBlock"
                    Text="Ready."
                    TextWrapping="Wrap"
                    Margin="0,0,0,12" />
 
-        <TextBox Grid.Row="3"
+        <TextBox Grid.Row="4"
                  x:Name="StatusTextBox"
                  Text="Status unavailable."
                  IsReadOnly="True"

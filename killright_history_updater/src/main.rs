@@ -18,7 +18,7 @@ use duckdb::Connection;
 use lock::SingleInstanceLock;
 use persistence::{import_day, ImportDayOutcome};
 use r2_client::{EvidenceDayResult, ParallelDownloadOptions, ZkillHistoryClient};
-use staging::{build_staging, StagingBuildOutcome};
+use staging::{build_staging, ImportRangeMode, StagingBuildOutcome, TestAmountUnit};
 use summary_rebuild::{rebuild_summary_and_org_context, RebuildStats};
 
 fn main() {
@@ -290,7 +290,7 @@ fn run_rebuild_summary() {
 }
 
 fn run_build_staging(arguments: &[String]) {
-    let horizon_days_override = match parse_horizon_days_override(arguments) {
+    let range_mode = match parse_import_range_mode(arguments) {
         Ok(value) => value,
         Err(message) => {
             eprintln!("{message}");
@@ -320,7 +320,7 @@ fn run_build_staging(arguments: &[String]) {
         }
     };
 
-    match build_staging(&directory, &client, horizon_days_override) {
+    match build_staging(&directory, &client, range_mode) {
         Ok(outcome) => {
             let succeeded = outcome.succeeded;
             print_staging_build_report(&outcome);
@@ -338,30 +338,65 @@ fn run_build_staging(arguments: &[String]) {
     }
 }
 
-fn parse_horizon_days_override(arguments: &[String]) -> Result<Option<i64>, String> {
+fn parse_import_range_mode(arguments: &[String]) -> Result<ImportRangeMode, String> {
+    const USAGE: &str = "Usage: killright_history_updater build-staging [--horizon-days <n>] [--test-amount <n> --test-amount-unit days|months|years]";
+
+    let mut horizon_days: Option<i64> = None;
+    let mut test_amount: Option<i64> = None;
+    let mut test_amount_unit: Option<TestAmountUnit> = None;
+
     let mut index = 2;
 
     while index < arguments.len() {
-        if arguments[index] == "--horizon-days" {
-            let value = arguments
-                .get(index + 1)
-                .ok_or_else(|| "Usage: killright_history_updater build-staging [--horizon-days <n>]".to_string())?;
+        match arguments[index].as_str() {
+            "--horizon-days" => {
+                let value = arguments.get(index + 1).ok_or_else(|| USAGE.to_string())?;
+                let parsed: i64 = value.parse().map_err(|_| USAGE.to_string())?;
 
-            let parsed: i64 = value
-                .parse()
-                .map_err(|_| "Usage: killright_history_updater build-staging [--horizon-days <n>]".to_string())?;
+                if parsed < 1 {
+                    return Err("--horizon-days must be at least 1.".to_string());
+                }
 
-            if parsed < 1 {
-                return Err("--horizon-days must be at least 1.".to_string());
+                horizon_days = Some(parsed);
+                index += 2;
             }
+            "--test-amount" => {
+                let value = arguments.get(index + 1).ok_or_else(|| USAGE.to_string())?;
+                let parsed: i64 = value.parse().map_err(|_| USAGE.to_string())?;
 
-            return Ok(Some(parsed));
+                if parsed < 1 {
+                    return Err("--test-amount must be at least 1.".to_string());
+                }
+
+                test_amount = Some(parsed);
+                index += 2;
+            }
+            "--test-amount-unit" => {
+                let value = arguments.get(index + 1).ok_or_else(|| USAGE.to_string())?;
+
+                test_amount_unit = Some(match value.as_str() {
+                    "days" => TestAmountUnit::Days,
+                    "months" => TestAmountUnit::Months,
+                    "years" => TestAmountUnit::Years,
+                    _ => return Err("--test-amount-unit must be one of: days, months, years.".to_string()),
+                });
+
+                index += 2;
+            }
+            _ => {
+                index += 1;
+            }
         }
-
-        index += 1;
     }
 
-    Ok(None)
+    match (horizon_days, test_amount, test_amount_unit) {
+        (Some(_), Some(_), _) => Err("--horizon-days and --test-amount are mutually exclusive.".to_string()),
+        (Some(days), None, _) => Ok(ImportRangeMode::HorizonDaysBackFromToday(days)),
+        (None, Some(amount), Some(unit)) => Ok(ImportRangeMode::AnchoredTestAmount(amount, unit)),
+        (None, Some(_), None) => Err("--test-amount requires --test-amount-unit days|months|years.".to_string()),
+        (None, None, Some(_)) => Err("--test-amount-unit requires --test-amount <n>.".to_string()),
+        (None, None, None) => Ok(ImportRangeMode::DefaultTenYearLookback),
+    }
 }
 
 /// Internal-only command used by `staging::reopen_cleanly` to prove a staging
