@@ -1,485 +1,121 @@
-﻿using System.Diagnostics;
-using System.Globalization;
-using System.Net;
-using System.Net.Http;
+using System.Diagnostics;
 using System.Text;
 using System.Windows;
-using Killright.Integration.zKill.History;
+using System.Windows.Threading;
 using Killright.Storage.GroupHistory;
 using Killright.Storage.GroupHistory.Models;
-using Killright.UI.Configuration;
 
 namespace Killright.UI.DeveloperTools.GroupDetectionHistoryPilot;
 
 public partial class GroupDetectionHistoryPilotWindow : Window
 {
-    private string? _lastResults;
+    private readonly DispatcherTimer _statusTimer;
+    private Stopwatch? _localRunStopwatch;
+    private bool _lastObservedUpdateInProgress;
 
     public GroupDetectionHistoryPilotWindow()
     {
         InitializeComponent();
-        SetDefaultDateRange();
+
+        _statusTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(1)
+        };
+        _statusTimer.Tick += StatusTimer_Tick;
+
+        Loaded += GroupDetectionHistoryPilotWindow_Loaded;
+        Closed += GroupDetectionHistoryPilotWindow_Closed;
     }
 
-    private void SetDefaultDateRange()
+    private void GroupDetectionHistoryPilotWindow_Loaded(object sender, RoutedEventArgs e)
     {
-        var yesterday = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(-1));
-        StartDateTextBox.Text = yesterday.AddDays(-6).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-        EndDateTextBox.Text = yesterday.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        RefreshStatus();
+        _statusTimer.Start();
     }
 
-    private async void StartButton_Click(object sender, RoutedEventArgs e)
+    private void GroupDetectionHistoryPilotWindow_Closed(object? sender, EventArgs e)
     {
-        if (!TryReadDateRange(out var startDateUtc, out var endDateUtc))
+        _statusTimer.Stop();
+    }
+
+    private void LaunchButton_Click(object sender, RoutedEventArgs e)
+    {
+        var executablePath = HistoryUpdaterExecutableLocator.Locate();
+
+        if (executablePath is null)
+        {
+            MessageBox.Show(
+                $"Could not locate {HistoryUpdaterExecutableLocator.ExecutableFileName}. Build the killright_history_updater crate (cargo build or cargo build --release) and try again.",
+                "Historic Updater Not Found",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
             return;
-
-        var seedMode = SeedModeCheckBox.IsChecked == true;
-        var batchOptions = App.Settings.GroupHistory.ToBatchOptions();
-        var parallelOptions = App.Settings.GroupHistory.ToParallelDownloadOptions();
-
-        StartButton.IsEnabled = false;
-        CopyResultsButton.IsEnabled = false;
-        _lastResults = null;
-        ResultTextBox.Text = "Starting multi-day import...";
-        StatusTextBlock.Text = seedMode ? "Running Seed Mode import..." : "Running Normal Mode import...";
+        }
 
         try
         {
-            var database = new DuckDbGroupHistoryDatabase(batchOptions: batchOptions);
-            await database.EnsureCreatedAsync();
-
-            using var handler = new HttpClientHandler
-            {
-                AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
-            };
-
-            using var httpClient = new HttpClient(handler);
-            var client = new ZkillHistoryClient(httpClient, parallelOptions);
-            var summary = await ImportDateRangeAsync(database, client, startDateUtc, endDateUtc, seedMode, batchOptions, parallelOptions);
-
-            _lastResults = BuildSummaryReport(summary, seedMode, batchOptions, parallelOptions);
-            ResultTextBox.Text = _lastResults;
-            StatusTextBlock.Text = "Completed.";
-            CopyResultsButton.IsEnabled = true;
+            HistoryUpdaterProcessLauncher.LaunchDetached(executablePath, "build-staging");
+            _localRunStopwatch = Stopwatch.StartNew();
+            MessageTextBlock.Text = $"Launched {executablePath} build-staging.";
         }
         catch (Exception ex)
         {
-            _lastResults = $"Multi-day import failed: {ex.Message}";
-            ResultTextBox.Text = _lastResults;
-            StatusTextBlock.Text = "Failed.";
-            CopyResultsButton.IsEnabled = true;
+            MessageTextBlock.Text = $"Failed to launch the historic updater: {ex.Message}";
         }
-        finally
-        {
-            StartButton.IsEnabled = true;
-        }
+
+        RefreshStatus();
     }
 
-    private async Task<GroupHistoryMultiDayImportSummary> ImportDateRangeAsync(
-        DuckDbGroupHistoryDatabase database,
-        ZkillHistoryClient client,
-        DateOnly startDateUtc,
-        DateOnly endDateUtc,
-        bool seedMode,
-        GroupHistoryImportBatchOptions batchOptions,
-        ZkillHistoryParallelDownloadOptions parallelOptions)
+    private void RefreshButton_Click(object sender, RoutedEventArgs e)
     {
-        var runStopwatch = Stopwatch.StartNew();
-        var importedDayElapsed = TimeSpan.Zero;
-        var dates = GetDateRange(startDateUtc, endDateUtc);
-        var logLines = new List<string>();
-        var importedDays = 0;
-        var skippedDays = 0;
-        var failedDays = 0;
-        var rawKillmailCount = 0;
-        var qualifyingKillmailCount = 0;
-        var evidenceRowCount = 0;
-        var participantRowCount = 0;
-        var candidatePairOccurrenceRows = 0L;
-        var summaryPairOccurrenceRows = 0L;
-        var totalSummaryRows = 0L;
-        var datesToImport = new List<DateOnly>();
-
-        for (var index = 0; index < dates.Count; index++)
-        {
-            var importDateUtc = dates[index];
-            StatusTextBlock.Text = $"Checking {importDateUtc:yyyy-MM-dd} ({index + 1}/{dates.Count})...";
-
-            if (await database.IsImportDayCompletedAsync(importDateUtc))
-            {
-                skippedDays++;
-                logLines.Add($"SKIPPED {importDateUtc:yyyy-MM-dd} already completed at {DateTime.UtcNow:O}.");
-                continue;
-            }
-
-            await database.MarkImportDayStartedAsync(importDateUtc);
-            datesToImport.Add(importDateUtc);
-        }
-
-        logLines.Add($"PARALLEL_DOWNLOAD_START days={datesToImport.Count:N0} workers={parallelOptions.ParallelDownloadWorkers:N0} maxRequestsPerSecond={parallelOptions.MaxRequestsPerSecond:N0} started={DateTime.UtcNow:O}");
-        var downloadStopwatch = Stopwatch.StartNew();
-        var downloadedResults = await client.ExtractDaysEvidenceAsync(datesToImport);
-        downloadStopwatch.Stop();
-        logLines.Add($"PARALLEL_DOWNLOAD_COMPLETE days={downloadedResults.Count:N0} elapsed={FormatElapsed(downloadStopwatch.Elapsed)} completed={DateTime.UtcNow:O}");
-
-        foreach (var result in downloadedResults)
-        {
-            var importDateUtc = result.DayResult.Date;
-            var dayStopwatch = Stopwatch.StartNew();
-            var dayStartedUtc = DateTime.UtcNow;
-            StatusTextBlock.Text = $"Persisting {importDateUtc:yyyy-MM-dd}...";
-
-            if (!result.DayResult.Succeeded)
-            {
-                dayStopwatch.Stop();
-                failedDays++;
-                await database.MarkImportDayFailedAsync(importDateUtc, result.DayResult.ErrorMessage ?? "Unknown parallel download failure.");
-                logLines.Add($"FAILED {importDateUtc:yyyy-MM-dd} started={dayStartedUtc:O} completed={DateTime.UtcNow:O} elapsed={FormatElapsed(dayStopwatch.Elapsed)} error={result.DayResult.ErrorMessage}");
-                continue;
-            }
-
-            try
-            {
-                var conversionStopwatch = Stopwatch.StartNew();
-
-                var evidenceRows = result.EvidenceRows
-                    .Select(row => new GroupHistoryEvidenceImportRow(
-                        row.KillmailId,
-                        row.KillmailTimeUtc,
-                        row.EvidenceDateUtc,
-                        row.SolarSystemId,
-                        row.ParticipantCount))
-                    .ToArray();
-
-                var participantRows = result.ParticipantRows
-                    .Select(row => new GroupHistoryParticipantImportRow(
-                        row.EvidenceId,
-                        row.CharacterId,
-                        row.CorporationId,
-                        row.AllianceId,
-                        row.ShipTypeId))
-                    .ToArray();
-
-                conversionStopwatch.Stop();
-
-// TEMPORARY PERFORMANCE TEST
-// Force all imports to bypass relationship summary maintenance.
-
-                var summaryResult =
-                    await database.ImportEvidenceAndParticipantRowsWithoutSummaryForDayAsync(
-                        importDateUtc,
-                        evidenceRows,
-                        participantRows,
-                        result.DayResult.RawKillmailCount,
-                        result.DayResult.QualifyingKillmailCount,
-                        result.DayResult.QualifyingAttackerCount,
-                        result.DayResult.CandidatePairOccurrenceRows);
-
-                dayStopwatch.Stop();
-                importedDayElapsed += dayStopwatch.Elapsed;
-                importedDays++;
-                rawKillmailCount += result.DayResult.RawKillmailCount;
-                qualifyingKillmailCount += result.DayResult.QualifyingKillmailCount;
-                evidenceRowCount += evidenceRows.Length;
-                participantRowCount += participantRows.Length;
-                candidatePairOccurrenceRows += result.DayResult.CandidatePairOccurrenceRows;
-
-                if (!seedMode)
-                    summaryPairOccurrenceRows += summaryResult.PairOccurrenceRows;
-
-                totalSummaryRows = summaryResult.TotalSummaryRows;
-
-                logLines.Add(BuildTimingLine(
-                    importDateUtc,
-                    dayStartedUtc,
-                    DateTime.UtcNow,
-                    dayStopwatch.Elapsed,
-                    result,
-                    conversionStopwatch.Elapsed,
-                    summaryResult,
-                    seedMode,
-                    batchOptions,
-                    parallelOptions));
-            }
-            catch (Exception ex)
-            {
-                dayStopwatch.Stop();
-                failedDays++;
-                await database.MarkImportDayFailedAsync(importDateUtc, ex.Message);
-                logLines.Add($"FAILED {importDateUtc:yyyy-MM-dd} started={dayStartedUtc:O} completed={DateTime.UtcNow:O} elapsed={FormatElapsed(dayStopwatch.Elapsed)} error={ex.Message}");
-            }
-
-            ResultTextBox.Text = BuildLiveReport(
-                startDateUtc,
-                endDateUtc,
-                dates.Count,
-                importedDays,
-                skippedDays,
-                failedDays,
-                rawKillmailCount,
-                qualifyingKillmailCount,
-                evidenceRowCount,
-                participantRowCount,
-                candidatePairOccurrenceRows,
-                summaryPairOccurrenceRows,
-                totalSummaryRows,
-                runStopwatch.Elapsed,
-                importedDays == 0 ? TimeSpan.Zero : TimeSpan.FromTicks(importedDayElapsed.Ticks / importedDays),
-                logLines,
-                seedMode,
-                batchOptions,
-                parallelOptions);
-        }
-
-        runStopwatch.Stop();
-
-        return new GroupHistoryMultiDayImportSummary(
-            startDateUtc,
-            endDateUtc,
-            dates.Count,
-            importedDays,
-            skippedDays,
-            failedDays,
-            rawKillmailCount,
-            qualifyingKillmailCount,
-            evidenceRowCount,
-            participantRowCount,
-            candidatePairOccurrenceRows,
-            summaryPairOccurrenceRows,
-            totalSummaryRows,
-            runStopwatch.Elapsed,
-            importedDays == 0 ? TimeSpan.Zero : TimeSpan.FromTicks(importedDayElapsed.Ticks / importedDays),
-            logLines);
+        RefreshStatus();
     }
 
-    private static string BuildTimingLine(
-        DateOnly importDateUtc,
-        DateTime startedUtc,
-        DateTime completedUtc,
-        TimeSpan dayElapsed,
-        ZkillHistoryEvidenceDayResult result,
-        TimeSpan conversionElapsed,
-        GroupHistorySummaryBuildResult summaryResult,
-        bool seedMode,
-        GroupHistoryImportBatchOptions batchOptions,
-        ZkillHistoryParallelDownloadOptions parallelOptions)
+    private void StatusTimer_Tick(object? sender, EventArgs e)
     {
-        var extraction = result.Timing;
-        var persistence = summaryResult.Timing;
-        var measuredDay = extraction.DownloadElapsed + extraction.JsonParseElapsed + extraction.RowGenerationElapsed + conversionElapsed + persistence.TotalPersistenceElapsed;
-        var unaccountedDay = dayElapsed - measuredDay;
-
-        if (unaccountedDay < TimeSpan.Zero)
-            unaccountedDay = TimeSpan.Zero;
-
-        return
-            $"IMPORTED {importDateUtc:yyyy-MM-dd} " +
-            $"mode={(seedMode ? "seed" : "normal")} evidenceBatch={batchOptions.EvidenceInsertBatchSize} participantBatch={batchOptions.ParticipantInsertBatchSize} " +
-            $"downloadWorkers={parallelOptions.ParallelDownloadWorkers} maxRequestsPerSecond={parallelOptions.MaxRequestsPerSecond} " +
-            $"started={startedUtc:O} completed={completedUtc:O} total={FormatElapsed(dayElapsed)} " +
-            $"download={FormatElapsed(extraction.DownloadElapsed)} parse={FormatElapsed(extraction.JsonParseElapsed)} rowBuild={FormatElapsed(extraction.RowGenerationElapsed)} uiConvert={FormatElapsed(conversionElapsed)} " +
-            $"connectionOpen={FormatElapsed(persistence.ConnectionOpenElapsed)} transactionBegin={FormatElapsed(persistence.TransactionBeginElapsed)} " +
-            $"evidencePrep={FormatElapsed(persistence.EvidenceBatchPreparationElapsed)} evidenceExec={FormatElapsed(persistence.EvidenceBatchExecutionElapsed)} evidenceInsert={FormatElapsed(persistence.EvidenceInsertElapsed)} " +
-            $"participantPrep={FormatElapsed(persistence.ParticipantBatchPreparationElapsed)} participantExec={FormatElapsed(persistence.ParticipantBatchExecutionElapsed)} participantInsert={FormatElapsed(persistence.ParticipantInsertElapsed)} " +
-            $"summaryPreCount={FormatElapsed(persistence.SummaryPreCountElapsed)} summaryUpdate={FormatElapsed(persistence.SummaryUpdateElapsed)} summaryPostCount={FormatElapsed(persistence.SummaryPostCountElapsed)} " +
-            $"statusUpdate={FormatElapsed(persistence.StatusUpdateElapsed)} commit={FormatElapsed(persistence.TransactionCommitElapsed)} dbTotal={FormatElapsed(persistence.TotalPersistenceElapsed)} " +
-            $"dbUnaccounted={FormatElapsed(persistence.UnaccountedPersistenceElapsed)} dayUnaccounted={FormatElapsed(unaccountedDay)} " +
-            $"raw={result.DayResult.RawKillmailCount:N0} qualifying={result.DayResult.QualifyingKillmailCount:N0} evidence={result.EvidenceRows.Count:N0} participants={result.ParticipantRows.Count:N0} pairs={summaryResult.PairOccurrenceRows:N0} totalSummary={summaryResult.TotalSummaryRows:N0}";
+        RefreshStatus();
     }
 
-    private bool TryReadDateRange(out DateOnly startDateUtc, out DateOnly endDateUtc)
+    private void RefreshStatus()
     {
-        startDateUtc = default;
-        endDateUtc = default;
+        var status = GroupHistoryLiveStatusLoader.LoadOrDefault();
 
-        if (!DateOnly.TryParseExact(StartDateTextBox.Text.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out startDateUtc))
-        {
-            MessageBox.Show("Start date must use yyyy-MM-dd format.", "Invalid Date", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return false;
-        }
+        if (_lastObservedUpdateInProgress && !status.UpdateInProgress)
+            _localRunStopwatch = null;
 
-        if (!DateOnly.TryParseExact(EndDateTextBox.Text.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out endDateUtc))
-        {
-            MessageBox.Show("End date must use yyyy-MM-dd format.", "Invalid Date", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return false;
-        }
+        _lastObservedUpdateInProgress = status.UpdateInProgress;
 
-        if (endDateUtc < startDateUtc)
-        {
-            MessageBox.Show("End date must be on or after start date.", "Invalid Date Range", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return false;
-        }
-
-        var latestImportableDay = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(-1));
-
-        if (endDateUtc > latestImportableDay)
-        {
-            MessageBox.Show("End date must not be later than yesterday UTC.", "Invalid Date Range", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return false;
-        }
-
-        return true;
+        LaunchButton.IsEnabled = !status.UpdateInProgress;
+        StatusTextBox.Text = BuildStatusReport(status);
     }
 
-    private static List<DateOnly> GetDateRange(DateOnly startDateUtc, DateOnly endDateUtc)
-    {
-        var dates = new List<DateOnly>();
-
-        for (var date = startDateUtc; date <= endDateUtc; date = date.AddDays(1))
-            dates.Add(date);
-
-        return dates;
-    }
-
-    private static string BuildLiveReport(
-        DateOnly startDateUtc,
-        DateOnly endDateUtc,
-        int totalDays,
-        int importedDays,
-        int skippedDays,
-        int failedDays,
-        int rawKillmailCount,
-        int qualifyingKillmailCount,
-        int evidenceRowCount,
-        int participantRowCount,
-        long candidatePairOccurrenceRows,
-        long summaryPairOccurrenceRows,
-        long totalSummaryRows,
-        TimeSpan totalRunElapsed,
-        TimeSpan averageImportedDayElapsed,
-        IReadOnlyList<string> logLines,
-        bool seedMode,
-        GroupHistoryImportBatchOptions batchOptions,
-        ZkillHistoryParallelDownloadOptions parallelOptions)
-    {
-        return BuildReportText(
-            "KillRight Group Detection Multi-Day Import Running",
-            startDateUtc,
-            endDateUtc,
-            totalDays,
-            importedDays,
-            skippedDays,
-            failedDays,
-            rawKillmailCount,
-            qualifyingKillmailCount,
-            evidenceRowCount,
-            participantRowCount,
-            candidatePairOccurrenceRows,
-            summaryPairOccurrenceRows,
-            totalSummaryRows,
-            totalRunElapsed,
-            averageImportedDayElapsed,
-            logLines,
-            seedMode,
-            batchOptions,
-            parallelOptions);
-    }
-
-    private static string BuildSummaryReport(
-        GroupHistoryMultiDayImportSummary summary,
-        bool seedMode,
-        GroupHistoryImportBatchOptions batchOptions,
-        ZkillHistoryParallelDownloadOptions parallelOptions)
-    {
-        return BuildReportText(
-            "KillRight Group Detection Multi-Day Import Completed",
-            summary.StartDateUtc,
-            summary.EndDateUtc,
-            summary.TotalDays,
-            summary.ImportedDays,
-            summary.SkippedDays,
-            summary.FailedDays,
-            summary.RawKillmailCount,
-            summary.QualifyingKillmailCount,
-            summary.EvidenceRows,
-            summary.ParticipantRows,
-            summary.CandidatePairOccurrenceRows,
-            summary.SummaryPairOccurrenceRows,
-            summary.TotalSummaryRows,
-            summary.TotalRunElapsed,
-            summary.AverageImportedDayElapsed,
-            summary.LogLines,
-            seedMode,
-            batchOptions,
-            parallelOptions);
-    }
-
-    private static string BuildReportText(
-        string title,
-        DateOnly startDateUtc,
-        DateOnly endDateUtc,
-        int totalDays,
-        int importedDays,
-        int skippedDays,
-        int failedDays,
-        int rawKillmailCount,
-        int qualifyingKillmailCount,
-        int evidenceRowCount,
-        int participantRowCount,
-        long candidatePairOccurrenceRows,
-        long summaryPairOccurrenceRows,
-        long totalSummaryRows,
-        TimeSpan totalRunElapsed,
-        TimeSpan averageImportedDayElapsed,
-        IReadOnlyList<string> logLines,
-        bool seedMode,
-        GroupHistoryImportBatchOptions batchOptions,
-        ZkillHistoryParallelDownloadOptions parallelOptions)
+    private string BuildStatusReport(GroupHistoryLiveStatus status)
     {
         var builder = new StringBuilder();
         builder.AppendLine("====================================================");
-        builder.AppendLine(title);
+        builder.AppendLine("KillRight Historic Updater - Live Status");
         builder.AppendLine("====================================================");
         builder.AppendLine();
-        builder.AppendLine($"Mode: {(seedMode ? "Seed" : "Normal")}");
-        builder.AppendLine($"Evidence batch size: {batchOptions.EvidenceInsertBatchSize:N0}");
-        builder.AppendLine($"Participant batch size: {batchOptions.ParticipantInsertBatchSize:N0}");
-        builder.AppendLine($"Parallel download workers: {parallelOptions.ParallelDownloadWorkers:N0}");
-        builder.AppendLine($"Max requests per second: {parallelOptions.MaxRequestsPerSecond:N0}");
-        builder.AppendLine($"Configuration file: {ApplicationSettingsLoader.GetDefaultSettingsPath()}");
-        builder.AppendLine($"Range: {startDateUtc:yyyy-MM-dd} to {endDateUtc:yyyy-MM-dd}");
-        builder.AppendLine($"Total days: {totalDays:N0}");
-        builder.AppendLine($"Imported days: {importedDays:N0}");
-        builder.AppendLine($"Skipped days: {skippedDays:N0}");
-        builder.AppendLine($"Failed days: {failedDays:N0}");
-        builder.AppendLine($"Total run elapsed: {FormatElapsed(totalRunElapsed)}");
-        builder.AppendLine($"Average imported day elapsed: {FormatElapsed(averageImportedDayElapsed)}");
-        builder.AppendLine();
-        builder.AppendLine($"Raw killmails: {rawKillmailCount:N0}");
-        builder.AppendLine($"Qualifying killmails: {qualifyingKillmailCount:N0}");
-        builder.AppendLine($"Persisted evidence rows: {evidenceRowCount:N0}");
-        builder.AppendLine($"Persisted participant rows: {participantRowCount:N0}");
-        builder.AppendLine($"Candidate pair occurrence rows: {candidatePairOccurrenceRows:N0}");
-        builder.AppendLine($"Summary pair occurrence rows added: {summaryPairOccurrenceRows:N0}");
-        builder.AppendLine($"Total unique summary rows: {totalSummaryRows:N0}");
+        builder.AppendLine($"Update in progress: {(status.UpdateInProgress ? "Yes" : "No")}");
+        builder.AppendLine($"Elapsed (this window): {FormatElapsed()}");
+        builder.AppendLine($"Active database file: {(string.IsNullOrEmpty(status.ActiveDatabaseFile) ? "(none yet)" : status.ActiveDatabaseFile)}");
+        builder.AppendLine($"Schema version: {status.SchemaVersion}");
+        builder.AppendLine($"Last completed day (UTC): {status.LastCompletedDayUtc ?? "(none yet)"}");
+        builder.AppendLine($"Last updated (UTC): {status.LastUpdatedUtc ?? "(none yet)"}");
         builder.AppendLine();
         builder.AppendLine("Notes:");
-        builder.AppendLine("- Application settings are loaded once when KillRight starts.");
-        builder.AppendLine("- Restart KillRight after editing config/settings.json.");
-        builder.AppendLine("- Downloads are parallelised with a bounded worker pool and global request limiter.");
-        builder.AppendLine("- Database persistence remains sequential in this pilot.");
-        builder.AppendLine("- Normal Mode updates relationship summaries incrementally.");
-        builder.AppendLine("- Seed Mode imports evidence and participants only; relationship summaries must be rebuilt later.");
-        builder.AppendLine();
-        builder.AppendLine("Log:");
-
-        foreach (var line in logLines)
-            builder.AppendLine(line);
-
+        builder.AppendLine("- This window only reads groupHistory.status.json; it performs no import or persistence itself.");
+        builder.AppendLine("- The elapsed clock only tracks a run launched from this window during this session; it shows as unknown if a run was already in progress when this window opened.");
         builder.AppendLine("====================================================");
         return builder.ToString();
     }
 
-    private static string FormatElapsed(TimeSpan value)
+    private string FormatElapsed()
     {
-        return $"{value.TotalSeconds:N3}s";
-    }
+        if (_localRunStopwatch is null)
+            return _lastObservedUpdateInProgress ? "(unknown - started outside this window session)" : "(not running)";
 
-    private void CopyResultsButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (string.IsNullOrWhiteSpace(_lastResults))
-            return;
-
-        Clipboard.SetText(_lastResults);
+        var elapsed = _localRunStopwatch.Elapsed;
+        return $"{(int)elapsed.TotalHours:D2}:{elapsed.Minutes:D2}:{elapsed.Seconds:D2}";
     }
 }
