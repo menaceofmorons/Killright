@@ -3,6 +3,7 @@ use std::process;
 
 mod database_path;
 mod lock;
+mod persistence;
 mod r2_client;
 mod rate_limiter;
 mod schema;
@@ -12,6 +13,7 @@ use chrono::NaiveDate;
 use database_path::{get_default_database_path, get_default_lock_path};
 use duckdb::Connection;
 use lock::SingleInstanceLock;
+use persistence::{import_day, ImportDayOutcome};
 use r2_client::{EvidenceDayResult, ParallelDownloadOptions, ZkillHistoryClient};
 
 fn main() {
@@ -30,6 +32,7 @@ fn main() {
         "print-status" => status::print_status(&get_default_database_path()),
         "extract-day-evidence" => run_extract_day_evidence(&arguments),
         "extract-range-evidence" => run_extract_range_evidence(&arguments),
+        "import-day" => run_import_day(&arguments),
         _ => {
             eprintln!("Unrecognised command: {command}");
             print_usage();
@@ -165,6 +168,69 @@ fn run_extract_range_evidence(arguments: &[String]) {
     }
 }
 
+fn run_import_day(arguments: &[String]) {
+    let date = match arguments.get(2).and_then(|text| NaiveDate::parse_from_str(text, "%Y-%m-%d").ok()) {
+        Some(value) => value,
+        None => {
+            eprintln!("Usage: killright_history_updater import-day <yyyy-mm-dd>");
+            process::exit(1);
+        }
+    };
+
+    let lock_path = get_default_lock_path();
+
+    let lock = match SingleInstanceLock::acquire(&lock_path) {
+        Ok(Some(lock)) => lock,
+        Ok(None) => return,
+        Err(error) => {
+            eprintln!("Failed to acquire history update lock: {error}");
+            process::exit(1);
+        }
+    };
+
+    let database_path = get_default_database_path();
+
+    let connection = match Connection::open(&database_path) {
+        Ok(connection) => connection,
+        Err(error) => {
+            eprintln!("Failed to open database: {error}");
+            drop(lock);
+            process::exit(1);
+        }
+    };
+
+    if let Err(error) = schema::create_schema(&connection) {
+        eprintln!("Failed to ensure schema: {error}");
+        drop(lock);
+        process::exit(1);
+    }
+
+    let created_utc = chrono::Utc::now().to_rfc3339();
+
+    if let Err(error) = schema::insert_initial_metadata_row(&connection, &created_utc) {
+        eprintln!("Failed to ensure initial metadata row: {error}");
+        drop(lock);
+        process::exit(1);
+    }
+
+    let client = match ZkillHistoryClient::new(ParallelDownloadOptions::default()) {
+        Ok(client) => client,
+        Err(error) => {
+            eprintln!("Failed to create HTTP client: {error}");
+            drop(lock);
+            process::exit(1);
+        }
+    };
+
+    let outcome = import_day(&connection, &client, date);
+    print_import_day_report(&outcome);
+    drop(lock);
+
+    if !outcome.succeeded {
+        process::exit(1);
+    }
+}
+
 fn print_evidence_day_report(result: &EvidenceDayResult) {
     let day_result = &result.day_result;
 
@@ -206,6 +272,41 @@ fn print_evidence_day_report(result: &EvidenceDayResult) {
     println!("====================================================");
 }
 
+fn print_import_day_report(outcome: &ImportDayOutcome) {
+    println!("====================================================");
+    println!("KillRight Historic Updater - Day Import");
+    println!("====================================================");
+    println!("Date: {}", outcome.date);
+
+    if outcome.already_completed {
+        println!("Status: Already Completed");
+        println!("No download or persistence was performed.");
+        println!("====================================================");
+        return;
+    }
+
+    if !outcome.succeeded {
+        println!("Status: Failed");
+        println!("Error: {}", outcome.error_message.as_deref().unwrap_or("(unknown)"));
+        println!("====================================================");
+        return;
+    }
+
+    println!("Status: Completed");
+    println!("Raw killmails: {}", outcome.raw_killmail_count);
+    println!("Qualifying killmails: {}", outcome.qualifying_killmail_count);
+    println!("Persisted evidence rows: {}", outcome.persisted_evidence_rows);
+    println!("Persisted participant rows: {}", outcome.persisted_participant_rows);
+    println!("Candidate pair occurrence rows: {}", outcome.candidate_pair_occurrence_rows);
+    println!("Notes:");
+    println!("- Persisted evidence rows should equal qualifying killmails.");
+    println!("- Persisted participant rows should equal the qualifying attacker count.");
+    println!("- No historic_relationship_summary rows are written by this step.");
+    println!("====================================================");
+}
+
 fn print_usage() {
-    eprintln!("Usage: killright_history_updater <create-schema|print-status|extract-day-evidence|extract-range-evidence>");
+    eprintln!(
+        "Usage: killright_history_updater <create-schema|print-status|extract-day-evidence|extract-range-evidence|import-day>"
+    );
 }
