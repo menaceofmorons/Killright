@@ -1,0 +1,55 @@
+# KillRight — Project Instructions
+
+## zKillboard API
+
+Whenever zKillboard (zKill) API calls are required — killmails, statistics, prices, posting killmails, history dumps, or the R2Z2 real-time feed — the definitive source is the official zKillboard GitHub wiki: https://github.com/zKillboard/zKillboard/wiki
+
+Consult it (and its sub-pages: API (Killmails), API (History), API (Posting Killmails), API (Prices), API (R2Z2), API (Statistics)) before implementing or modifying any zKill integration, rather than relying on assumptions or outdated knowledge.
+
+## Implementation Guide generation
+
+When the user requests:
+
+```
+Create IG <step number>
+```
+
+before generating the guide:
+
+- Review the current standards: `Documentation/KR-Standards-Implementation-Guide-v#.#.docx` (use the highest version number present).
+- Review the current design: `Documentation/KillRight-Design-Specification-v#.#.docx` (use the highest version number present).
+- Enforce all standards and design requirements found in those documents.
+
+### Save location
+
+Every Implementation Guide `.md` file — standard or CC — is saved directly in `Documentation/Implementation Guides/`, not in any subfolder (`Executed/`, `Check/`, `Archive/`). Those subfolders are for the developer's own manual triage after the fact; the assistant never files a newly generated guide into one of them.
+
+### CC IG naming
+
+When the user requests:
+
+```
+Create CC IG
+```
+
+follow the same Implementation Guide generation process above, but name the guide `CC-DD.MM.YY.##` instead of the standard sequential number, where:
+
+- `DD` is the current day of month (leading zero if single digit)
+- `MM` is the current month (leading zero if single digit)
+- `YY` is the last two digits of the current year
+- `##` is the sequential count of CC IGs requested that same day (starting at `01`)
+
+## Implementation Guide execution
+
+When the user requests:
+
+```
+Execute IG <name or step number>
+```
+
+locate the matching file in `Documentation/Implementation Guides/` (exact filename if given, otherwise the closest match by step number or description) and follow it exactly per the current `KR-Standards-Implementation-Guide-v#.#.docx` (use the highest version number present):
+
+- Perform Git Preparation, the Changes section, Build Verification, and every test step marked "Executable By: Agent" directly, without asking for confirmation between them.
+- Stop before any step marked "Executable By: Developer". Report that it is ready for the developer to run manually, along with what remains, and do not attempt it.
+- Follow the standards' Failure Handling section if any step does not produce its stated Expected Result: stop, do not self-remediate or silently retry, and report exactly what ran and what was expected instead.
+- Do not run Git Closeout until the developer has confirmed all Developer-only tests have passed.

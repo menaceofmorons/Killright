@@ -1,7 +1,6 @@
 ﻿using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Killright.Storage.GroupHistory.Models;
 
 namespace Killright.UI.Configuration;
 
@@ -39,13 +38,16 @@ public static class ApplicationSettingsLoader
 
     private static ApplicationSettings Normalize(ApplicationSettings settings)
     {
-        var batchOptions = GroupHistoryImportBatchOptions.FromSingleBatchSize(settings.GroupHistory.ImportBatchSize);
+        var batchOptions = settings.GroupHistory.ToBatchOptions();
+        var parallelOptions = settings.GroupHistory.ToParallelDownloadOptions();
 
         return new ApplicationSettings
         {
             GroupHistory = new GroupHistoryApplicationSettings
             {
-                ImportBatchSize = batchOptions.EvidenceInsertBatchSize
+                ImportBatchSize = batchOptions.EvidenceInsertBatchSize,
+                ParallelDownloadWorkers = parallelOptions.ParallelDownloadWorkers,
+                MaxRequestsPerSecond = parallelOptions.MaxRequestsPerSecond
             }
         };
     }

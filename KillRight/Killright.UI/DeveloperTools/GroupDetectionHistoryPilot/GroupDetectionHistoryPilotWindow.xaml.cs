@@ -35,6 +35,7 @@ public partial class GroupDetectionHistoryPilotWindow : Window
 
         var seedMode = SeedModeCheckBox.IsChecked == true;
         var batchOptions = App.Settings.GroupHistory.ToBatchOptions();
+        var parallelOptions = App.Settings.GroupHistory.ToParallelDownloadOptions();
 
         StartButton.IsEnabled = false;
         CopyResultsButton.IsEnabled = false;
@@ -53,10 +54,10 @@ public partial class GroupDetectionHistoryPilotWindow : Window
             };
 
             using var httpClient = new HttpClient(handler);
-            var client = new ZkillHistoryClient(httpClient);
-            var summary = await ImportDateRangeAsync(database, client, startDateUtc, endDateUtc, seedMode, batchOptions);
+            var client = new ZkillHistoryClient(httpClient, parallelOptions);
+            var summary = await ImportDateRangeAsync(database, client, startDateUtc, endDateUtc, seedMode, batchOptions, parallelOptions);
 
-            _lastResults = BuildSummaryReport(summary, seedMode, batchOptions);
+            _lastResults = BuildSummaryReport(summary, seedMode, batchOptions, parallelOptions);
             ResultTextBox.Text = _lastResults;
             StatusTextBlock.Text = "Completed.";
             CopyResultsButton.IsEnabled = true;
@@ -80,7 +81,8 @@ public partial class GroupDetectionHistoryPilotWindow : Window
         DateOnly startDateUtc,
         DateOnly endDateUtc,
         bool seedMode,
-        GroupHistoryImportBatchOptions batchOptions)
+        GroupHistoryImportBatchOptions batchOptions,
+        ZkillHistoryParallelDownloadOptions parallelOptions)
     {
         var runStopwatch = Stopwatch.StartNew();
         var importedDayElapsed = TimeSpan.Zero;
@@ -96,54 +98,48 @@ public partial class GroupDetectionHistoryPilotWindow : Window
         var candidatePairOccurrenceRows = 0L;
         var summaryPairOccurrenceRows = 0L;
         var totalSummaryRows = 0L;
+        var datesToImport = new List<DateOnly>();
 
         for (var index = 0; index < dates.Count; index++)
         {
             var importDateUtc = dates[index];
-            var dayStopwatch = Stopwatch.StartNew();
-            var dayStartedUtc = DateTime.UtcNow;
-            StatusTextBlock.Text = $"Processing {importDateUtc:yyyy-MM-dd} ({index + 1}/{dates.Count})...";
+            StatusTextBlock.Text = $"Checking {importDateUtc:yyyy-MM-dd} ({index + 1}/{dates.Count})...";
 
             if (await database.IsImportDayCompletedAsync(importDateUtc))
             {
                 skippedDays++;
                 logLines.Add($"SKIPPED {importDateUtc:yyyy-MM-dd} already completed at {DateTime.UtcNow:O}.");
-                ResultTextBox.Text = BuildLiveReport(
-                    startDateUtc,
-                    endDateUtc,
-                    dates.Count,
-                    importedDays,
-                    skippedDays,
-                    failedDays,
-                    rawKillmailCount,
-                    qualifyingKillmailCount,
-                    evidenceRowCount,
-                    participantRowCount,
-                    candidatePairOccurrenceRows,
-                    summaryPairOccurrenceRows,
-                    totalSummaryRows,
-                    runStopwatch.Elapsed,
-                    importedDays == 0 ? TimeSpan.Zero : TimeSpan.FromTicks(importedDayElapsed.Ticks / importedDays),
-                    logLines,
-                    seedMode,
-                    batchOptions);
                 continue;
             }
 
             await database.MarkImportDayStartedAsync(importDateUtc);
+            datesToImport.Add(importDateUtc);
+        }
+
+        logLines.Add($"PARALLEL_DOWNLOAD_START days={datesToImport.Count:N0} workers={parallelOptions.ParallelDownloadWorkers:N0} maxRequestsPerSecond={parallelOptions.MaxRequestsPerSecond:N0} started={DateTime.UtcNow:O}");
+        var downloadStopwatch = Stopwatch.StartNew();
+        var downloadedResults = await client.ExtractDaysEvidenceAsync(datesToImport);
+        downloadStopwatch.Stop();
+        logLines.Add($"PARALLEL_DOWNLOAD_COMPLETE days={downloadedResults.Count:N0} elapsed={FormatElapsed(downloadStopwatch.Elapsed)} completed={DateTime.UtcNow:O}");
+
+        foreach (var result in downloadedResults)
+        {
+            var importDateUtc = result.DayResult.Date;
+            var dayStopwatch = Stopwatch.StartNew();
+            var dayStartedUtc = DateTime.UtcNow;
+            StatusTextBlock.Text = $"Persisting {importDateUtc:yyyy-MM-dd}...";
+
+            if (!result.DayResult.Succeeded)
+            {
+                dayStopwatch.Stop();
+                failedDays++;
+                await database.MarkImportDayFailedAsync(importDateUtc, result.DayResult.ErrorMessage ?? "Unknown parallel download failure.");
+                logLines.Add($"FAILED {importDateUtc:yyyy-MM-dd} started={dayStartedUtc:O} completed={DateTime.UtcNow:O} elapsed={FormatElapsed(dayStopwatch.Elapsed)} error={result.DayResult.ErrorMessage}");
+                continue;
+            }
 
             try
             {
-                var result = await client.ExtractDayEvidenceAsync(importDateUtc);
-
-                if (!result.DayResult.Succeeded)
-                {
-                    failedDays++;
-                    await database.MarkImportDayFailedAsync(importDateUtc, result.DayResult.ErrorMessage ?? "Unknown multi-day import failure.");
-                    logLines.Add($"FAILED {importDateUtc:yyyy-MM-dd} started={dayStartedUtc:O} completed={DateTime.UtcNow:O} error={result.DayResult.ErrorMessage}");
-                    continue;
-                }
-
                 var conversionStopwatch = Stopwatch.StartNew();
 
                 var evidenceRows = result.EvidenceRows
@@ -166,16 +162,11 @@ public partial class GroupDetectionHistoryPilotWindow : Window
 
                 conversionStopwatch.Stop();
 
-                var summaryResult = seedMode
-                    ? await database.ImportEvidenceAndParticipantRowsWithoutSummaryForDayAsync(
-                        importDateUtc,
-                        evidenceRows,
-                        participantRows,
-                        result.DayResult.RawKillmailCount,
-                        result.DayResult.QualifyingKillmailCount,
-                        result.DayResult.QualifyingAttackerCount,
-                        result.DayResult.CandidatePairOccurrenceRows)
-                    : await database.ImportEvidenceAndParticipantRowsAndUpdateSummaryForDayAsync(
+// TEMPORARY PERFORMANCE TEST
+// Force all imports to bypass relationship summary maintenance.
+
+                var summaryResult =
+                    await database.ImportEvidenceAndParticipantRowsWithoutSummaryForDayAsync(
                         importDateUtc,
                         evidenceRows,
                         participantRows,
@@ -207,7 +198,8 @@ public partial class GroupDetectionHistoryPilotWindow : Window
                     conversionStopwatch.Elapsed,
                     summaryResult,
                     seedMode,
-                    batchOptions));
+                    batchOptions,
+                    parallelOptions));
             }
             catch (Exception ex)
             {
@@ -235,7 +227,8 @@ public partial class GroupDetectionHistoryPilotWindow : Window
                 importedDays == 0 ? TimeSpan.Zero : TimeSpan.FromTicks(importedDayElapsed.Ticks / importedDays),
                 logLines,
                 seedMode,
-                batchOptions);
+                batchOptions,
+                parallelOptions);
         }
 
         runStopwatch.Stop();
@@ -268,7 +261,8 @@ public partial class GroupDetectionHistoryPilotWindow : Window
         TimeSpan conversionElapsed,
         GroupHistorySummaryBuildResult summaryResult,
         bool seedMode,
-        GroupHistoryImportBatchOptions batchOptions)
+        GroupHistoryImportBatchOptions batchOptions,
+        ZkillHistoryParallelDownloadOptions parallelOptions)
     {
         var extraction = result.Timing;
         var persistence = summaryResult.Timing;
@@ -281,6 +275,7 @@ public partial class GroupDetectionHistoryPilotWindow : Window
         return
             $"IMPORTED {importDateUtc:yyyy-MM-dd} " +
             $"mode={(seedMode ? "seed" : "normal")} evidenceBatch={batchOptions.EvidenceInsertBatchSize} participantBatch={batchOptions.ParticipantInsertBatchSize} " +
+            $"downloadWorkers={parallelOptions.ParallelDownloadWorkers} maxRequestsPerSecond={parallelOptions.MaxRequestsPerSecond} " +
             $"started={startedUtc:O} completed={completedUtc:O} total={FormatElapsed(dayElapsed)} " +
             $"download={FormatElapsed(extraction.DownloadElapsed)} parse={FormatElapsed(extraction.JsonParseElapsed)} rowBuild={FormatElapsed(extraction.RowGenerationElapsed)} uiConvert={FormatElapsed(conversionElapsed)} " +
             $"connectionOpen={FormatElapsed(persistence.ConnectionOpenElapsed)} transactionBegin={FormatElapsed(persistence.TransactionBeginElapsed)} " +
@@ -354,7 +349,8 @@ public partial class GroupDetectionHistoryPilotWindow : Window
         TimeSpan averageImportedDayElapsed,
         IReadOnlyList<string> logLines,
         bool seedMode,
-        GroupHistoryImportBatchOptions batchOptions)
+        GroupHistoryImportBatchOptions batchOptions,
+        ZkillHistoryParallelDownloadOptions parallelOptions)
     {
         return BuildReportText(
             "KillRight Group Detection Multi-Day Import Running",
@@ -375,10 +371,15 @@ public partial class GroupDetectionHistoryPilotWindow : Window
             averageImportedDayElapsed,
             logLines,
             seedMode,
-            batchOptions);
+            batchOptions,
+            parallelOptions);
     }
 
-    private static string BuildSummaryReport(GroupHistoryMultiDayImportSummary summary, bool seedMode, GroupHistoryImportBatchOptions batchOptions)
+    private static string BuildSummaryReport(
+        GroupHistoryMultiDayImportSummary summary,
+        bool seedMode,
+        GroupHistoryImportBatchOptions batchOptions,
+        ZkillHistoryParallelDownloadOptions parallelOptions)
     {
         return BuildReportText(
             "KillRight Group Detection Multi-Day Import Completed",
@@ -399,7 +400,8 @@ public partial class GroupDetectionHistoryPilotWindow : Window
             summary.AverageImportedDayElapsed,
             summary.LogLines,
             seedMode,
-            batchOptions);
+            batchOptions,
+            parallelOptions);
     }
 
     private static string BuildReportText(
@@ -421,7 +423,8 @@ public partial class GroupDetectionHistoryPilotWindow : Window
         TimeSpan averageImportedDayElapsed,
         IReadOnlyList<string> logLines,
         bool seedMode,
-        GroupHistoryImportBatchOptions batchOptions)
+        GroupHistoryImportBatchOptions batchOptions,
+        ZkillHistoryParallelDownloadOptions parallelOptions)
     {
         var builder = new StringBuilder();
         builder.AppendLine("====================================================");
@@ -431,6 +434,8 @@ public partial class GroupDetectionHistoryPilotWindow : Window
         builder.AppendLine($"Mode: {(seedMode ? "Seed" : "Normal")}");
         builder.AppendLine($"Evidence batch size: {batchOptions.EvidenceInsertBatchSize:N0}");
         builder.AppendLine($"Participant batch size: {batchOptions.ParticipantInsertBatchSize:N0}");
+        builder.AppendLine($"Parallel download workers: {parallelOptions.ParallelDownloadWorkers:N0}");
+        builder.AppendLine($"Max requests per second: {parallelOptions.MaxRequestsPerSecond:N0}");
         builder.AppendLine($"Configuration file: {ApplicationSettingsLoader.GetDefaultSettingsPath()}");
         builder.AppendLine($"Range: {startDateUtc:yyyy-MM-dd} to {endDateUtc:yyyy-MM-dd}");
         builder.AppendLine($"Total days: {totalDays:N0}");
@@ -451,7 +456,8 @@ public partial class GroupDetectionHistoryPilotWindow : Window
         builder.AppendLine("Notes:");
         builder.AppendLine("- Application settings are loaded once when KillRight starts.");
         builder.AppendLine("- Restart KillRight after editing config/settings.json.");
-        builder.AppendLine("- Group History import batch size defaults to 150 and is clamped to 25-500.");
+        builder.AppendLine("- Downloads are parallelised with a bounded worker pool and global request limiter.");
+        builder.AppendLine("- Database persistence remains sequential in this pilot.");
         builder.AppendLine("- Normal Mode updates relationship summaries incrementally.");
         builder.AppendLine("- Seed Mode imports evidence and participants only; relationship summaries must be rebuilt later.");
         builder.AppendLine();

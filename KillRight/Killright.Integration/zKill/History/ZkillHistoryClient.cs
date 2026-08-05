@@ -10,18 +10,18 @@ public sealed class ZkillHistoryClient : IZkillHistoryClient
     private const string HistoryEndpointFormat = "https://r2z2.zkillboard.com/history/raw/{0}.json";
     private const int MinimumQualifyingAttackers = 2;
     private const int FleetMinimumAttackers = 11;
-    private const int MaxParallelWorkers = 8;
-    private const int MaxRequestsPerSecond = 10;
 
     private static readonly DateOnly CalendarYearStartDate = new(2025, 1, 1);
     private static readonly DateOnly CalendarYearEndDate = new(2025, 12, 31);
     private static readonly HashSet<long> PodShipTypeIds = new() { 670 };
 
     private readonly HttpClient _httpClient;
+    private readonly ZkillHistoryParallelDownloadOptions _parallelOptions;
 
-    public ZkillHistoryClient(HttpClient httpClient)
+    public ZkillHistoryClient(HttpClient httpClient, ZkillHistoryParallelDownloadOptions? parallelOptions = null)
     {
         _httpClient = httpClient;
+        _parallelOptions = parallelOptions ?? ZkillHistoryParallelDownloadOptions.Default;
     }
 
     public async Task<ZkillHistoryDayResult> CountDayAsync(DateOnly date, CancellationToken cancellationToken = default)
@@ -32,22 +32,7 @@ public sealed class ZkillHistoryClient : IZkillHistoryClient
 
     public async Task<ZkillHistoryEvidenceDayResult> ExtractDayEvidenceAsync(DateOnly date, CancellationToken cancellationToken = default)
     {
-        //var extractionTotalStopwatch = Stopwatch.StartNew();
         var processingResult = await CountDayCoreAsync(date, null, true, cancellationToken);
-        //extractionTotalStopwatch.Stop();
-
-        var measuredExtraction =
-            processingResult.Timing.DownloadElapsed +
-            processingResult.Timing.JsonParseElapsed +
-            processingResult.Timing.RowGenerationElapsed;
-
-        //var unaccountedExtraction =
-        //    extractionTotalStopwatch.Elapsed - measuredExtraction;
-
-        //if (unaccountedExtraction < TimeSpan.Zero)
-        //{
-        //    unaccountedExtraction = TimeSpan.Zero;
-        //}
 
         return new ZkillHistoryEvidenceDayResult(
             processingResult.DayResult,
@@ -56,12 +41,53 @@ public sealed class ZkillHistoryClient : IZkillHistoryClient
             processingResult.Timing);
     }
 
+    public async Task<IReadOnlyList<ZkillHistoryEvidenceDayResult>> ExtractDaysEvidenceAsync(
+        IReadOnlyList<DateOnly> dates,
+        CancellationToken cancellationToken = default)
+    {
+        if (dates.Count == 0)
+            return Array.Empty<ZkillHistoryEvidenceDayResult>();
+
+        var orderedDates = dates.OrderBy(x => x).ToArray();
+        var rateLimiter = new AsyncRequestRateLimiter(_parallelOptions.MaxRequestsPerSecond);
+
+        using var workerLimiter = new SemaphoreSlim(
+            _parallelOptions.ParallelDownloadWorkers,
+            _parallelOptions.ParallelDownloadWorkers);
+
+        var tasks = orderedDates.Select(async date =>
+        {
+            await workerLimiter.WaitAsync(cancellationToken);
+
+            try
+            {
+                var processingResult = await CountDayCoreAsync(date, rateLimiter, true, cancellationToken);
+
+                return new ZkillHistoryEvidenceDayResult(
+                    processingResult.DayResult,
+                    processingResult.EvidenceRows,
+                    processingResult.ParticipantRows,
+                    processingResult.Timing);
+            }
+            finally
+            {
+                workerLimiter.Release();
+            }
+        });
+
+        var results = await Task.WhenAll(tasks);
+        return results.OrderBy(x => x.DayResult.Date).ToArray();
+    }
+
     public async Task<ZkillHistoryPeriodResult> CountCalendarYear2025Async(CancellationToken cancellationToken = default)
     {
         var stopwatch = Stopwatch.StartNew();
         var dates = GetDateRange(CalendarYearStartDate, CalendarYearEndDate);
-        var rateLimiter = new AsyncRequestRateLimiter(MaxRequestsPerSecond);
-        using var workerLimiter = new SemaphoreSlim(MaxParallelWorkers, MaxParallelWorkers);
+        var rateLimiter = new AsyncRequestRateLimiter(_parallelOptions.MaxRequestsPerSecond);
+
+        using var workerLimiter = new SemaphoreSlim(
+            _parallelOptions.ParallelDownloadWorkers,
+            _parallelOptions.ParallelDownloadWorkers);
 
         var tasks = dates.Select(async date =>
         {
@@ -130,22 +156,17 @@ public sealed class ZkillHistoryClient : IZkillHistoryClient
                 await rateLimiter.WaitAsync(cancellationToken);
 
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
-            request.Headers.UserAgent.Add(new ProductInfoHeaderValue("KillRight", "19.00.36"));
+            request.Headers.UserAgent.Add(new ProductInfoHeaderValue("KillRight", "19.00.42"));
             request.Headers.AcceptEncoding.Add(new StringWithQualityHeaderValue("gzip"));
             request.Headers.AcceptEncoding.Add(new StringWithQualityHeaderValue("deflate"));
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
             var httpStopwatch = Stopwatch.StartNew();
-            
             using var response = await _httpClient.SendAsync(request, cancellationToken);
-
-            //var downloadStopwatch = Stopwatch.StartNew();
             var content = await response.Content.ReadAsStringAsync(cancellationToken);
-            //downloadStopwatch.Stop();
-            //downloadElapsed = downloadStopwatch.Elapsed;
             httpStopwatch.Stop();
             downloadElapsed = httpStopwatch.Elapsed;
-            
+
             if (!response.IsSuccessStatusCode)
             {
                 totalStopwatch.Stop();
