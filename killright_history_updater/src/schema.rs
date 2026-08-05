@@ -19,6 +19,33 @@ pub fn insert_initial_metadata_row(connection: &Connection, created_utc: &str) -
     Ok(())
 }
 
+/// Drops the secondary indexes on the two tables that `import-day` bulk-loads via
+/// the Appender, so the bulk load isn't paying per-row index-maintenance cost.
+/// Primary key constraints on both tables are deliberately left in place.
+pub fn drop_bulk_load_indexes(connection: &Connection) -> Result<()> {
+    connection.execute_batch(
+        "DROP INDEX IF EXISTS idx_hre_evidence_date;
+         DROP INDEX IF EXISTS idx_hre_time;
+         DROP INDEX IF EXISTS idx_hrep_character_id;
+         DROP INDEX IF EXISTS idx_hrep_evidence_id;",
+    )
+}
+
+/// Recreates the indexes dropped by `drop_bulk_load_indexes`, once the bulk load
+/// has finished.
+pub fn rebuild_bulk_load_indexes(connection: &Connection) -> Result<()> {
+    connection.execute_batch(
+        "CREATE INDEX IF NOT EXISTS idx_hre_evidence_date
+             ON historic_relationship_evidence(evidence_date_utc);
+         CREATE INDEX IF NOT EXISTS idx_hre_time
+             ON historic_relationship_evidence(killmail_time_utc);
+         CREATE INDEX IF NOT EXISTS idx_hrep_character_id
+             ON historic_relationship_evidence_participants(character_id);
+         CREATE INDEX IF NOT EXISTS idx_hrep_evidence_id
+             ON historic_relationship_evidence_participants(evidence_id);",
+    )
+}
+
 const SCHEMA_SQL: &str = r#"
 CREATE TABLE IF NOT EXISTS history_metadata
 (
@@ -77,6 +104,20 @@ CREATE TABLE IF NOT EXISTS historic_relationship_summary
     PRIMARY KEY (pilot_a_id, pilot_b_id)
 );
 
+CREATE TABLE IF NOT EXISTS historic_relationship_org_context
+(
+    pilot_a_id BIGINT NOT NULL,
+    pilot_b_id BIGINT NOT NULL,
+    shared_event_count_linked INTEGER NOT NULL,
+    first_seen_linked_utc VARCHAR,
+    last_seen_linked_utc VARCHAR,
+    shared_event_count_unlinked INTEGER NOT NULL,
+    first_seen_unlinked_utc VARCHAR,
+    last_seen_unlinked_utc VARCHAR,
+    last_rebuilt_utc VARCHAR NOT NULL,
+    PRIMARY KEY (pilot_a_id, pilot_b_id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_history_import_day_status_status
     ON history_import_day_status(status);
 
@@ -100,4 +141,10 @@ CREATE INDEX IF NOT EXISTS idx_hrs_pilot_a
 
 CREATE INDEX IF NOT EXISTS idx_hrs_pilot_b
     ON historic_relationship_summary(pilot_b_id);
+
+CREATE INDEX IF NOT EXISTS idx_hroc_pilot_a
+    ON historic_relationship_org_context(pilot_a_id);
+
+CREATE INDEX IF NOT EXISTS idx_hroc_pilot_b
+    ON historic_relationship_org_context(pilot_b_id);
 "#;

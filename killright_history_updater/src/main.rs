@@ -8,6 +8,7 @@ mod r2_client;
 mod rate_limiter;
 mod schema;
 mod status;
+mod summary_rebuild;
 
 use chrono::NaiveDate;
 use database_path::{get_default_database_path, get_default_lock_path};
@@ -15,6 +16,7 @@ use duckdb::Connection;
 use lock::SingleInstanceLock;
 use persistence::{import_day, ImportDayOutcome};
 use r2_client::{EvidenceDayResult, ParallelDownloadOptions, ZkillHistoryClient};
+use summary_rebuild::{rebuild_summary_and_org_context, RebuildStats};
 
 fn main() {
     let arguments: Vec<String> = env::args().collect();
@@ -33,6 +35,7 @@ fn main() {
         "extract-day-evidence" => run_extract_day_evidence(&arguments),
         "extract-range-evidence" => run_extract_range_evidence(&arguments),
         "import-day" => run_import_day(&arguments),
+        "rebuild-summary" => run_rebuild_summary(),
         _ => {
             eprintln!("Unrecognised command: {command}");
             print_usage();
@@ -231,6 +234,56 @@ fn run_import_day(arguments: &[String]) {
     }
 }
 
+fn run_rebuild_summary() {
+    let lock_path = get_default_lock_path();
+
+    let lock = match SingleInstanceLock::acquire(&lock_path) {
+        Ok(Some(lock)) => lock,
+        Ok(None) => return,
+        Err(error) => {
+            eprintln!("Failed to acquire history update lock: {error}");
+            process::exit(1);
+        }
+    };
+
+    let database_path = get_default_database_path();
+
+    let connection = match Connection::open(&database_path) {
+        Ok(connection) => connection,
+        Err(error) => {
+            eprintln!("Failed to open database: {error}");
+            drop(lock);
+            process::exit(1);
+        }
+    };
+
+    if let Err(error) = schema::create_schema(&connection) {
+        eprintln!("Failed to ensure schema: {error}");
+        drop(lock);
+        process::exit(1);
+    }
+
+    let created_utc = chrono::Utc::now().to_rfc3339();
+
+    if let Err(error) = schema::insert_initial_metadata_row(&connection, &created_utc) {
+        eprintln!("Failed to ensure initial metadata row: {error}");
+        drop(lock);
+        process::exit(1);
+    }
+
+    match rebuild_summary_and_org_context(&connection) {
+        Ok(stats) => {
+            print_rebuild_summary_report(&stats);
+            drop(lock);
+        }
+        Err(error) => {
+            eprintln!("Failed to rebuild summary and org context: {error}");
+            drop(lock);
+            process::exit(1);
+        }
+    }
+}
+
 fn print_evidence_day_report(result: &EvidenceDayResult) {
     let day_result = &result.day_result;
 
@@ -298,6 +351,20 @@ fn print_import_day_report(outcome: &ImportDayOutcome) {
     println!("Persisted evidence rows: {}", outcome.persisted_evidence_rows);
     println!("Persisted participant rows: {}", outcome.persisted_participant_rows);
     println!("Candidate pair occurrence rows: {}", outcome.candidate_pair_occurrence_rows);
+
+    if let Some(timing) = &outcome.timing {
+        println!(
+            "Timing (ms): clear={} drop_indexes={} evidence_append={} participant_append={} rebuild_indexes={} status_update={} total={}",
+            timing.clear_existing_rows_elapsed_ms,
+            timing.drop_indexes_elapsed_ms,
+            timing.evidence_append_elapsed_ms,
+            timing.participant_append_elapsed_ms,
+            timing.rebuild_indexes_elapsed_ms,
+            timing.status_update_elapsed_ms,
+            timing.total_elapsed_ms
+        );
+    }
+
     println!("Notes:");
     println!("- Persisted evidence rows should equal qualifying killmails.");
     println!("- Persisted participant rows should equal the qualifying attacker count.");
@@ -305,8 +372,24 @@ fn print_import_day_report(outcome: &ImportDayOutcome) {
     println!("====================================================");
 }
 
+fn print_rebuild_summary_report(stats: &RebuildStats) {
+    println!("====================================================");
+    println!("KillRight Historic Updater - Summary and Org-Context Rebuild");
+    println!("====================================================");
+    println!("historic_relationship_summary rows: {}", stats.summary_rows);
+    println!("historic_relationship_org_context rows: {}", stats.org_context_rows);
+    println!(
+        "Timing (ms): pair_event_scan={} summary_insert={} org_context_insert={} total={}",
+        stats.pair_event_scan_elapsed_ms, stats.summary_insert_elapsed_ms, stats.org_context_insert_elapsed_ms, stats.total_elapsed_ms
+    );
+    println!("Notes:");
+    println!("- This is a full rebuild; existing summary and org-context rows are replaced, not incrementally updated.");
+    println!("- shared_event_count_linked + shared_event_count_unlinked should equal shared_event_count for the same pair.");
+    println!("====================================================");
+}
+
 fn print_usage() {
     eprintln!(
-        "Usage: killright_history_updater <create-schema|print-status|extract-day-evidence|extract-range-evidence|import-day>"
+        "Usage: killright_history_updater <create-schema|print-status|extract-day-evidence|extract-range-evidence|import-day|rebuild-summary>"
     );
 }

@@ -1,8 +1,20 @@
+use std::time::Instant;
+
 use chrono::{NaiveDate, Utc};
 use duckdb::{params, Connection, Result};
 
-use crate::r2_client::{EvidenceRecord, ParticipantRecord, ZkillHistoryClient};
-use crate::schema::SCHEMA_VERSION;
+use crate::r2_client::{EvidenceDayResult, EvidenceRecord, ParticipantRecord, ZkillHistoryClient};
+use crate::schema::{self, SCHEMA_VERSION};
+
+pub struct PersistenceTiming {
+    pub clear_existing_rows_elapsed_ms: u128,
+    pub drop_indexes_elapsed_ms: u128,
+    pub evidence_append_elapsed_ms: u128,
+    pub participant_append_elapsed_ms: u128,
+    pub rebuild_indexes_elapsed_ms: u128,
+    pub status_update_elapsed_ms: u128,
+    pub total_elapsed_ms: u128,
+}
 
 pub struct ImportDayOutcome {
     pub date: NaiveDate,
@@ -13,6 +25,7 @@ pub struct ImportDayOutcome {
     pub persisted_evidence_rows: usize,
     pub persisted_participant_rows: usize,
     pub candidate_pair_occurrence_rows: i64,
+    pub timing: Option<PersistenceTiming>,
     pub error_message: Option<String>,
 }
 
@@ -36,35 +49,57 @@ pub fn import_day(connection: &Connection, client: &ZkillHistoryClient, date: Na
             .clone()
             .unwrap_or_else(|| "Unknown extraction failure.".to_string());
         let _ = mark_import_day_failed(connection, date, &error_message);
-
-        return ImportDayOutcome {
-            date,
-            already_completed: false,
-            succeeded: false,
-            raw_killmail_count: extraction.day_result.raw_killmail_count,
-            qualifying_killmail_count: extraction.day_result.qualifying_killmail_count,
-            persisted_evidence_rows: 0,
-            persisted_participant_rows: 0,
-            candidate_pair_occurrence_rows: 0,
-            error_message: Some(error_message),
-        };
+        return partial_failure_outcome(date, &extraction, error_message);
     }
 
+    let total_start = Instant::now();
+
+    let clear_start = Instant::now();
     if let Err(error) = clear_day_rows(connection, date) {
         let error_message = format!("Failed to clear existing rows before re-import: {error}");
         let _ = mark_import_day_failed(connection, date, &error_message);
         return partial_failure_outcome(date, &extraction, error_message);
     }
+    let clear_existing_rows_elapsed_ms = clear_start.elapsed().as_millis();
 
-    if let Err(error) = persist_day_rows(connection, &extraction.evidence_rows, &extraction.participant_rows) {
-        let error_message = format!("Failed to persist evidence/participant rows: {error}");
+    let drop_start = Instant::now();
+    if let Err(error) = schema::drop_bulk_load_indexes(connection) {
+        let error_message = format!("Failed to drop bulk-load indexes: {error}");
         let _ = mark_import_day_failed(connection, date, &error_message);
         return partial_failure_outcome(date, &extraction, error_message);
     }
+    let drop_indexes_elapsed_ms = drop_start.elapsed().as_millis();
+
+    let evidence_start = Instant::now();
+    if let Err(error) = append_evidence_rows(connection, &extraction.evidence_rows) {
+        let error_message = format!("Failed to append evidence rows: {error}");
+        let _ = schema::rebuild_bulk_load_indexes(connection);
+        let _ = mark_import_day_failed(connection, date, &error_message);
+        return partial_failure_outcome(date, &extraction, error_message);
+    }
+    let evidence_append_elapsed_ms = evidence_start.elapsed().as_millis();
+
+    let participant_start = Instant::now();
+    if let Err(error) = append_participant_rows(connection, &extraction.participant_rows) {
+        let error_message = format!("Failed to append participant rows: {error}");
+        let _ = schema::rebuild_bulk_load_indexes(connection);
+        let _ = mark_import_day_failed(connection, date, &error_message);
+        return partial_failure_outcome(date, &extraction, error_message);
+    }
+    let participant_append_elapsed_ms = participant_start.elapsed().as_millis();
+
+    let rebuild_start = Instant::now();
+    if let Err(error) = schema::rebuild_bulk_load_indexes(connection) {
+        let error_message = format!("Failed to rebuild bulk-load indexes: {error}");
+        let _ = mark_import_day_failed(connection, date, &error_message);
+        return partial_failure_outcome(date, &extraction, error_message);
+    }
+    let rebuild_indexes_elapsed_ms = rebuild_start.elapsed().as_millis();
 
     let persisted_evidence_rows = extraction.evidence_rows.len();
     let persisted_participant_rows = extraction.participant_rows.len();
 
+    let status_start = Instant::now();
     if let Err(error) = mark_import_day_completed(
         connection,
         date,
@@ -85,9 +120,11 @@ pub fn import_day(connection: &Connection, client: &ZkillHistoryClient, date: Na
             persisted_evidence_rows,
             persisted_participant_rows,
             candidate_pair_occurrence_rows: extraction.day_result.candidate_pair_occurrence_rows,
+            timing: None,
             error_message: Some(error_message),
         };
     }
+    let status_update_elapsed_ms = status_start.elapsed().as_millis();
 
     ImportDayOutcome {
         date,
@@ -98,6 +135,15 @@ pub fn import_day(connection: &Connection, client: &ZkillHistoryClient, date: Na
         persisted_evidence_rows,
         persisted_participant_rows,
         candidate_pair_occurrence_rows: extraction.day_result.candidate_pair_occurrence_rows,
+        timing: Some(PersistenceTiming {
+            clear_existing_rows_elapsed_ms,
+            drop_indexes_elapsed_ms,
+            evidence_append_elapsed_ms,
+            participant_append_elapsed_ms,
+            rebuild_indexes_elapsed_ms,
+            status_update_elapsed_ms,
+            total_elapsed_ms: total_start.elapsed().as_millis(),
+        }),
         error_message: None,
     }
 }
@@ -112,6 +158,7 @@ fn already_completed_outcome(date: NaiveDate) -> ImportDayOutcome {
         persisted_evidence_rows: 0,
         persisted_participant_rows: 0,
         candidate_pair_occurrence_rows: 0,
+        timing: None,
         error_message: None,
     }
 }
@@ -126,15 +173,12 @@ fn failed_outcome(date: NaiveDate, error_message: String) -> ImportDayOutcome {
         persisted_evidence_rows: 0,
         persisted_participant_rows: 0,
         candidate_pair_occurrence_rows: 0,
+        timing: None,
         error_message: Some(error_message),
     }
 }
 
-fn partial_failure_outcome(
-    date: NaiveDate,
-    extraction: &crate::r2_client::EvidenceDayResult,
-    error_message: String,
-) -> ImportDayOutcome {
+fn partial_failure_outcome(date: NaiveDate, extraction: &EvidenceDayResult, error_message: String) -> ImportDayOutcome {
     ImportDayOutcome {
         date,
         already_completed: false,
@@ -144,6 +188,7 @@ fn partial_failure_outcome(
         persisted_evidence_rows: 0,
         persisted_participant_rows: 0,
         candidate_pair_occurrence_rows: 0,
+        timing: None,
         error_message: Some(error_message),
     }
 }
@@ -259,47 +304,40 @@ fn clear_day_rows(connection: &Connection, date: NaiveDate) -> Result<()> {
     Ok(())
 }
 
-fn persist_day_rows(
-    connection: &Connection,
-    evidence_rows: &[EvidenceRecord],
-    participant_rows: &[ParticipantRecord],
-) -> Result<()> {
+fn append_evidence_rows(connection: &Connection, evidence_rows: &[EvidenceRecord]) -> Result<()> {
     let created_utc = Utc::now().to_rfc3339();
+    let mut appender = connection.appender("historic_relationship_evidence")?;
 
-    {
-        let mut appender = connection.appender("historic_relationship_evidence")?;
-
-        for row in evidence_rows {
-            appender.append_row(params![
-                row.killmail_id,
-                row.killmail_id,
-                row.killmail_time_utc.to_rfc3339(),
-                row.evidence_date_utc.format("%Y-%m-%d").to_string(),
-                row.solar_system_id,
-                row.victim_ship_type_id,
-                row.participant_count,
-                created_utc.clone(),
-            ])?;
-        }
-
-        appender.flush()?;
+    for row in evidence_rows {
+        appender.append_row(params![
+            row.killmail_id,
+            row.killmail_id,
+            row.killmail_time_utc.to_rfc3339(),
+            row.evidence_date_utc.format("%Y-%m-%d").to_string(),
+            row.solar_system_id,
+            row.victim_ship_type_id,
+            row.participant_count,
+            created_utc.clone(),
+        ])?;
     }
 
-    {
-        let mut appender = connection.appender("historic_relationship_evidence_participants")?;
+    appender.flush()?;
+    Ok(())
+}
 
-        for row in participant_rows {
-            appender.append_row(params![
-                row.killmail_id,
-                row.character_id,
-                row.corporation_id,
-                row.alliance_id,
-                row.ship_type_id,
-            ])?;
-        }
+fn append_participant_rows(connection: &Connection, participant_rows: &[ParticipantRecord]) -> Result<()> {
+    let mut appender = connection.appender("historic_relationship_evidence_participants")?;
 
-        appender.flush()?;
+    for row in participant_rows {
+        appender.append_row(params![
+            row.killmail_id,
+            row.character_id,
+            row.corporation_id,
+            row.alliance_id,
+            row.ship_type_id,
+        ])?;
     }
 
+    appender.flush()?;
     Ok(())
 }
