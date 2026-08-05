@@ -1,4 +1,4 @@
-﻿using Killright.Integration.zKill.History;
+using Killright.Integration.zKill.History;
 using Killright.Storage.GroupHistory.Models;
 
 namespace Killright.UI.Configuration;
@@ -14,7 +14,7 @@ public sealed class GroupHistoryApplicationSettings
 
     public int ParallelDownloadWorkers { get; init; } = ZkillHistoryParallelDownloadOptions.DefaultParallelDownloadWorkers;
 
-    public int MaxRequestsPerSecond { get; init; } = ZkillHistoryParallelDownloadOptions.DefaultMaxRequestsPerSecond;
+    public int ZkillDocumentedMaxRequestsPerSecond { get; init; } = ZkillHistoryParallelDownloadOptions.DefaultDocumentedMaxRequestsPerSecond;
 
     public GroupHistoryImportBatchOptions ToBatchOptions()
     {
@@ -25,6 +25,6 @@ public sealed class GroupHistoryApplicationSettings
     {
         return ZkillHistoryParallelDownloadOptions.FromConfiguredValues(
             ParallelDownloadWorkers,
-            MaxRequestsPerSecond);
+            ZkillDocumentedMaxRequestsPerSecond);
     }
 }

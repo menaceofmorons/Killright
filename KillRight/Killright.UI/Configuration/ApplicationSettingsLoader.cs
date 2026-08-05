@@ -47,7 +47,7 @@ public static class ApplicationSettingsLoader
             {
                 ImportBatchSize = batchOptions.EvidenceInsertBatchSize,
                 ParallelDownloadWorkers = parallelOptions.ParallelDownloadWorkers,
-                MaxRequestsPerSecond = parallelOptions.MaxRequestsPerSecond
+                ZkillDocumentedMaxRequestsPerSecond = parallelOptions.ZkillDocumentedMaxRequestsPerSecond
             }
         };
     }

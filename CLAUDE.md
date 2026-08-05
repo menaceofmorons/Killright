@@ -22,7 +22,7 @@ before generating the guide:
 
 ### Save location
 
-Every Implementation Guide `.md` file — standard or CC — is saved directly in `Documentation/Implementation Guides/`, not in any subfolder (`Executed/`, `Check/`, `Archive/`). Those subfolders are for the developer's own manual triage after the fact; the assistant never files a newly generated guide into one of them.
+Every Implementation Guide `.md` file — standard, CC, or any other category — is saved directly in `Documentation/Implementation Guides/` when first generated, not in any subfolder (`Executed/`, `Check/`, `Archive/`). Guides only move into those subfolders later, per the Tracker and Lifecycle process below.
 
 ### CC IG naming
 
@@ -53,3 +53,7 @@ locate the matching file in `Documentation/Implementation Guides/` (exact filena
 - Stop before any step marked "Executable By: Developer". Report that it is ready for the developer to run manually, along with what remains, and do not attempt it.
 - Follow the standards' Failure Handling section if any step does not produce its stated Expected Result: stop, do not self-remediate or silently retry, and report exactly what ran and what was expected instead.
 - Do not run Git Closeout until the developer has confirmed all Developer-only tests have passed.
+
+## Implementation Guide Tracker and Lifecycle
+
+When the developer indicates that a guide is ready to execute, has succeeded, has failed, or needs a REV, follow `KR-Standards-Implementation-Guide-v#.#.docx` Section 9 (Implementation Guide Tracker and Lifecycle) — use the highest version number present. That section is the authoritative definition of the tracker's columns and Status values, and of exactly when `Implementation-Guides-Tracker.xlsx` is updated and a guide file is moved between `Documentation/Implementation Guides/`, `Executed/` and `Archive/`. Do not duplicate that process here or improvise a different one.

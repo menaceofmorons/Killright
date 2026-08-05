@@ -2,6 +2,6 @@
   "groupHistory": {
     "importBatchSize": 150,
     "parallelDownloadWorkers": 20,
-    "maxRequestsPerSecond": 13
+    "zkillDocumentedMaxRequestsPerSecond": 15
   }
 }
