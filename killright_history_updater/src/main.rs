@@ -3,12 +3,16 @@ use std::process;
 
 mod database_path;
 mod lock;
+mod r2_client;
+mod rate_limiter;
 mod schema;
 mod status;
 
+use chrono::NaiveDate;
 use database_path::{get_default_database_path, get_default_lock_path};
 use duckdb::Connection;
 use lock::SingleInstanceLock;
+use r2_client::{EvidenceDayResult, ParallelDownloadOptions, ZkillHistoryClient};
 
 fn main() {
     let arguments: Vec<String> = env::args().collect();
@@ -24,6 +28,8 @@ fn main() {
     match command {
         "create-schema" => run_create_schema(),
         "print-status" => status::print_status(&get_default_database_path()),
+        "extract-day-evidence" => run_extract_day_evidence(&arguments),
+        "extract-range-evidence" => run_extract_range_evidence(&arguments),
         _ => {
             eprintln!("Unrecognised command: {command}");
             print_usage();
@@ -74,6 +80,132 @@ fn run_create_schema() {
     drop(lock);
 }
 
+fn run_extract_day_evidence(arguments: &[String]) {
+    let date = match arguments.get(2).and_then(|text| NaiveDate::parse_from_str(text, "%Y-%m-%d").ok()) {
+        Some(value) => value,
+        None => {
+            eprintln!("Usage: killright_history_updater extract-day-evidence <yyyy-mm-dd>");
+            process::exit(1);
+        }
+    };
+
+    let client = match ZkillHistoryClient::new(ParallelDownloadOptions::default()) {
+        Ok(client) => client,
+        Err(error) => {
+            eprintln!("Failed to create HTTP client: {error}");
+            process::exit(1);
+        }
+    };
+
+    let result = client.extract_day_evidence(date, None);
+    print_evidence_day_report(&result);
+
+    if !result.day_result.succeeded {
+        process::exit(1);
+    }
+}
+
+fn run_extract_range_evidence(arguments: &[String]) {
+    let start_date = arguments.get(2).and_then(|text| NaiveDate::parse_from_str(text, "%Y-%m-%d").ok());
+    let end_date = arguments.get(3).and_then(|text| NaiveDate::parse_from_str(text, "%Y-%m-%d").ok());
+
+    let (start_date, end_date) = match (start_date, end_date) {
+        (Some(start), Some(end)) if start <= end => (start, end),
+        _ => {
+            eprintln!("Usage: killright_history_updater extract-range-evidence <start yyyy-mm-dd> <end yyyy-mm-dd>");
+            process::exit(1);
+        }
+    };
+
+    let mut dates = Vec::new();
+    let mut current = start_date;
+
+    while current <= end_date {
+        dates.push(current);
+        current = current.succ_opt().expect("date overflow while building date range");
+    }
+
+    let client = match ZkillHistoryClient::new(ParallelDownloadOptions::default()) {
+        Ok(client) => client,
+        Err(error) => {
+            eprintln!("Failed to create HTTP client: {error}");
+            process::exit(1);
+        }
+    };
+
+    let results = client.extract_days_evidence(&dates);
+
+    let mut total_raw = 0i64;
+    let mut total_qualifying = 0i64;
+    let mut total_participants = 0i64;
+    let mut failed_days = 0i64;
+
+    for result in &results {
+        print_evidence_day_report(result);
+        total_raw += result.day_result.raw_killmail_count as i64;
+        total_qualifying += result.day_result.qualifying_killmail_count as i64;
+        total_participants += result.participant_rows.len() as i64;
+
+        if !result.day_result.succeeded {
+            failed_days += 1;
+        }
+    }
+
+    println!("====================================================");
+    println!("Range summary: {start_date} through {end_date}");
+    println!("Days processed: {}", results.len());
+    println!("Failed days: {failed_days}");
+    println!("Total raw killmails: {total_raw}");
+    println!("Total qualifying killmails: {total_qualifying}");
+    println!("Total participant rows: {total_participants}");
+    println!("====================================================");
+
+    if failed_days > 0 {
+        process::exit(1);
+    }
+}
+
+fn print_evidence_day_report(result: &EvidenceDayResult) {
+    let day_result = &result.day_result;
+
+    println!("====================================================");
+    println!("KillRight Historic Updater - Day Evidence Extraction");
+    println!("====================================================");
+    println!("Date: {}", day_result.date);
+    println!("Source: {}", day_result.url);
+
+    if !day_result.succeeded {
+        println!("Status: Failed");
+        println!("Error: {}", day_result.error_message.as_deref().unwrap_or("(unknown)"));
+        println!("====================================================");
+        return;
+    }
+
+    println!("Status: Completed");
+    println!("Raw killmails: {}", day_result.raw_killmail_count);
+    println!("Raw attackers: {}", day_result.raw_attacker_count);
+    println!("Pod killmails excluded: {}", day_result.pod_killmail_count);
+    println!(
+        "Solo or insufficient attacker killmails excluded: {}",
+        day_result.insufficient_attacker_killmail_count
+    );
+    println!("Fleet killmails excluded: {}", day_result.fleet_killmail_count);
+    println!("Qualifying killmails: {}", day_result.qualifying_killmail_count);
+    println!("Evidence rows in memory: {}", result.evidence_rows.len());
+    println!("Qualifying attackers: {}", day_result.qualifying_attacker_count);
+    println!("Participant rows in memory: {}", result.participant_rows.len());
+    println!("Candidate pair occurrence rows: {}", day_result.candidate_pair_occurrence_rows);
+    println!(
+        "Highest qualifying attackers on a single killmail: {}",
+        day_result.max_qualifying_attackers_on_killmail
+    );
+    println!("Notes:");
+    println!("- No rows are written to any database in this step.");
+    println!("- Evidence rows in memory should equal qualifying killmails.");
+    println!("- Participant rows in memory should equal qualifying attackers.");
+    println!("====================================================");
+}
+
 fn print_usage() {
-    eprintln!("Usage: killright_history_updater <create-schema|print-status>");
+    eprintln!("Usage: killright_history_updater <create-schema|print-status|extract-day-evidence|extract-range-evidence>");
 }
