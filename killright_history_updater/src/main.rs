@@ -2,6 +2,7 @@ use std::env;
 use std::process;
 
 mod database_path;
+mod live_config;
 mod lock;
 mod persistence;
 mod r2_client;

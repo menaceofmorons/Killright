@@ -10,6 +10,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Killright.Storage", "Killri
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Killright.UI", "Killright.UI\Killright.UI.csproj", "{EECD1B3B-F4B5-4DC1-94D2-253B8E041C9E}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Killright.Storage.Tests", "Killright.Storage.Tests\Killright.Storage.Tests.csproj", "{9E1F1D2A-8B4C-4A6E-9F3D-2C7A5E8B1D40}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -36,5 +38,9 @@ Global
 		{EECD1B3B-F4B5-4DC1-94D2-253B8E041C9E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{EECD1B3B-F4B5-4DC1-94D2-253B8E041C9E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{EECD1B3B-F4B5-4DC1-94D2-253B8E041C9E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9E1F1D2A-8B4C-4A6E-9F3D-2C7A5E8B1D40}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9E1F1D2A-8B4C-4A6E-9F3D-2C7A5E8B1D40}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9E1F1D2A-8B4C-4A6E-9F3D-2C7A5E8B1D40}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9E1F1D2A-8B4C-4A6E-9F3D-2C7A5E8B1D40}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

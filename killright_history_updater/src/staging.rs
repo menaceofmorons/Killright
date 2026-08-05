@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use chrono::{Duration, Months, NaiveDate, Utc};
 use duckdb::{params, Connection, Result as DuckResult};
 
+use crate::live_config::{self, GroupHistoryLiveConfig};
 use crate::persistence::{self, ImportDayOutcome};
 use crate::r2_client::ZkillHistoryClient;
 use crate::schema::{self, SCHEMA_VERSION};
@@ -36,6 +37,15 @@ pub fn build_staging(
     horizon_days_override: Option<i64>,
 ) -> Result<StagingBuildOutcome, String> {
     fs::create_dir_all(directory).map_err(|error| format!("Failed to create staging directory: {error}"))?;
+
+    let live_config_directory = live_config::get_live_config_directory();
+    let pre_build_live_config = live_config::read_live_config(&live_config_directory);
+
+    live_config::write_live_config(
+        &live_config_directory,
+        &GroupHistoryLiveConfig { update_in_progress: true, ..pre_build_live_config.clone() },
+    )
+    .map_err(|error| format!("Failed to write groupHistory live config: {error}"))?;
 
     let copy_basis = find_copy_basis(directory);
     let (staging_path, staging_file_name) = allocate_new_staging_filename(directory)
@@ -70,6 +80,9 @@ pub fn build_staging(
     let rebuild_stats = summary_rebuild::rebuild_summary_and_org_context(&connection)
         .map_err(|error| format!("Failed to rebuild summary and org context: {error}"))?;
 
+    let (metadata_last_completed_day_utc, metadata_last_updated_utc) = read_history_metadata_summary(&connection)
+        .map_err(|error| format!("Failed to read history_metadata for the live config: {error}"))?;
+
     let validation_failures = validate_staging_build(connection, &staging_path, &requested_days)
         .map_err(|error| format!("Failed to run validation checks: {error}"))?;
 
@@ -78,6 +91,25 @@ pub fn build_staging(
     if succeeded {
         write_latest_validated_build_marker(directory, &staging_file_name)
             .map_err(|error| format!("Failed to update the latest-validated-build marker: {error}"))?;
+
+        let updated_live_config = GroupHistoryLiveConfig {
+            active_database_file: staging_path.to_string_lossy().to_string(),
+            schema_version: SCHEMA_VERSION,
+            last_completed_day_utc: metadata_last_completed_day_utc,
+            last_updated_utc: metadata_last_updated_utc,
+            update_in_progress: false,
+        };
+
+        live_config::write_live_config(&live_config_directory, &updated_live_config)
+            .map_err(|error| format!("Failed to write groupHistory live config: {error}"))?;
+
+        live_config::write_swap_signal(&live_config_directory)
+            .map_err(|error| format!("Failed to write database.new swap signal: {error}"))?;
+    } else {
+        let reverted_live_config = GroupHistoryLiveConfig { update_in_progress: false, ..pre_build_live_config };
+
+        live_config::write_live_config(&live_config_directory, &reverted_live_config)
+            .map_err(|error| format!("Failed to write groupHistory live config: {error}"))?;
     }
 
     Ok(StagingBuildOutcome {
@@ -179,6 +211,23 @@ fn determine_missing_days(
     Ok(missing_days)
 }
 
+/// Reads the staging build's own `history_metadata.last_completed_day_utc` and
+/// `last_update_utc` columns, already maintained per-day by `persistence::import_day`
+/// since 19.00.45, for use as the live config's `lastCompletedDayUtc`/`lastUpdatedUtc`
+/// fields. Must be called while `connection` is still open, before
+/// `validate_staging_build` takes ownership of it and closes it.
+fn read_history_metadata_summary(connection: &Connection) -> DuckResult<(Option<String>, Option<String>)> {
+    connection.query_row(
+        "SELECT last_completed_day_utc, last_update_utc FROM history_metadata LIMIT 1;",
+        [],
+        |row| {
+            let last_completed_day_utc: Option<String> = row.get(0)?;
+            let last_updated_utc: Option<String> = row.get(1)?;
+            Ok((last_completed_day_utc, last_updated_utc))
+        },
+    )
+}
+
 fn validate_staging_build(
     connection: Connection,
     database_path: &Path,
@@ -222,7 +271,7 @@ fn validate_staging_build(
     // only finalize at this function's end -- after the connection is already
     // closed and the clean-reopen check has already run -- which keeps
     // DuckDB's underlying file handle open on this process for its entire
-    // remaining lifetime. See Revision note (REV-D).
+    // remaining lifetime. See Revision note (REV-D) in 19.00.47.
     {
         let mut statement = connection
             .prepare("SELECT pilot_a_id, pilot_b_id, shared_event_count FROM historic_relationship_summary LIMIT 5;")?;
