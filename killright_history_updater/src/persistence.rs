@@ -8,10 +8,10 @@ use crate::schema::{self, SCHEMA_VERSION};
 
 pub struct PersistenceTiming {
     pub clear_existing_rows_elapsed_ms: u128,
-    pub drop_indexes_elapsed_ms: u128,
+    pub drop_indexes_elapsed_ms: Option<u128>,
     pub evidence_append_elapsed_ms: u128,
     pub participant_append_elapsed_ms: u128,
-    pub rebuild_indexes_elapsed_ms: u128,
+    pub rebuild_indexes_elapsed_ms: Option<u128>,
     pub status_update_elapsed_ms: u128,
     pub total_elapsed_ms: u128,
 }
@@ -29,7 +29,28 @@ pub struct ImportDayOutcome {
     pub error_message: Option<String>,
 }
 
-pub fn import_day(connection: &Connection, client: &ZkillHistoryClient, date: NaiveDate) -> ImportDayOutcome {
+/// Imports a single day's evidence and participant rows.
+///
+/// `manage_bulk_load_indexes` controls whether this call drops the four
+/// secondary bulk-load indexes (see `schema::drop_bulk_load_indexes`) before
+/// its own Appender inserts and rebuilds them immediately afterwards:
+///
+/// - `true`: this call manages its own indexes end-to-end, exactly as every
+///   `import_day` call did before Step 19.00.52. Use this for a single,
+///   standalone import (the `import-day` CLI command), where each call is
+///   already its own unit of work and skipping index management for an
+///   already-completed day or a failed extraction is still desirable.
+/// - `false`: this call performs no index management at all; the caller is
+///   responsible for dropping the indexes once before calling `import_day`
+///   for a range of days and rebuilding them once after the whole range
+///   completes. Use this from a multi-day loop (`staging::build_staging`),
+///   so the secondary indexes are not dropped and rebuilt once per day.
+pub fn import_day(
+    connection: &Connection,
+    client: &ZkillHistoryClient,
+    date: NaiveDate,
+    manage_bulk_load_indexes: bool,
+) -> ImportDayOutcome {
     match is_import_day_completed(connection, date) {
         Ok(true) => return already_completed_outcome(date),
         Ok(false) => {}
@@ -62,18 +83,26 @@ pub fn import_day(connection: &Connection, client: &ZkillHistoryClient, date: Na
     }
     let clear_existing_rows_elapsed_ms = clear_start.elapsed().as_millis();
 
-    let drop_start = Instant::now();
-    if let Err(error) = schema::drop_bulk_load_indexes(connection) {
-        let error_message = format!("Failed to drop bulk-load indexes: {error}");
-        let _ = mark_import_day_failed(connection, date, &error_message);
-        return partial_failure_outcome(date, &extraction, error_message);
-    }
-    let drop_indexes_elapsed_ms = drop_start.elapsed().as_millis();
+    let drop_indexes_elapsed_ms = if manage_bulk_load_indexes {
+        let drop_start = Instant::now();
+
+        if let Err(error) = schema::drop_bulk_load_indexes(connection) {
+            let error_message = format!("Failed to drop bulk-load indexes: {error}");
+            let _ = mark_import_day_failed(connection, date, &error_message);
+            return partial_failure_outcome(date, &extraction, error_message);
+        }
+
+        Some(drop_start.elapsed().as_millis())
+    } else {
+        None
+    };
 
     let evidence_start = Instant::now();
     if let Err(error) = append_evidence_rows(connection, &extraction.evidence_rows) {
         let error_message = format!("Failed to append evidence rows: {error}");
-        let _ = schema::rebuild_bulk_load_indexes(connection);
+        if manage_bulk_load_indexes {
+            let _ = schema::rebuild_bulk_load_indexes(connection);
+        }
         let _ = mark_import_day_failed(connection, date, &error_message);
         return partial_failure_outcome(date, &extraction, error_message);
     }
@@ -82,19 +111,27 @@ pub fn import_day(connection: &Connection, client: &ZkillHistoryClient, date: Na
     let participant_start = Instant::now();
     if let Err(error) = append_participant_rows(connection, &extraction.participant_rows) {
         let error_message = format!("Failed to append participant rows: {error}");
-        let _ = schema::rebuild_bulk_load_indexes(connection);
+        if manage_bulk_load_indexes {
+            let _ = schema::rebuild_bulk_load_indexes(connection);
+        }
         let _ = mark_import_day_failed(connection, date, &error_message);
         return partial_failure_outcome(date, &extraction, error_message);
     }
     let participant_append_elapsed_ms = participant_start.elapsed().as_millis();
 
-    let rebuild_start = Instant::now();
-    if let Err(error) = schema::rebuild_bulk_load_indexes(connection) {
-        let error_message = format!("Failed to rebuild bulk-load indexes: {error}");
-        let _ = mark_import_day_failed(connection, date, &error_message);
-        return partial_failure_outcome(date, &extraction, error_message);
-    }
-    let rebuild_indexes_elapsed_ms = rebuild_start.elapsed().as_millis();
+    let rebuild_indexes_elapsed_ms = if manage_bulk_load_indexes {
+        let rebuild_start = Instant::now();
+
+        if let Err(error) = schema::rebuild_bulk_load_indexes(connection) {
+            let error_message = format!("Failed to rebuild bulk-load indexes: {error}");
+            let _ = mark_import_day_failed(connection, date, &error_message);
+            return partial_failure_outcome(date, &extraction, error_message);
+        }
+
+        Some(rebuild_start.elapsed().as_millis())
+    } else {
+        None
+    };
 
     let persisted_evidence_rows = extraction.evidence_rows.len();
     let persisted_participant_rows = extraction.participant_rows.len();

@@ -148,3 +148,69 @@ CREATE INDEX IF NOT EXISTS idx_hroc_pilot_a
 CREATE INDEX IF NOT EXISTS idx_hroc_pilot_b
     ON historic_relationship_org_context(pilot_b_id);
 "#;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn count_bulk_load_indexes(connection: &Connection) -> i64 {
+        connection
+            .query_row(
+                "SELECT COUNT(*) FROM duckdb_indexes() \
+                 WHERE index_name IN ( \
+                     'idx_hre_evidence_date', 'idx_hre_time', \
+                     'idx_hrep_character_id', 'idx_hrep_evidence_id' \
+                 );",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap()
+    }
+
+    #[test]
+    fn drop_bulk_load_indexes_removes_all_four_secondary_indexes() {
+        let connection = Connection::open_in_memory().unwrap();
+        create_schema(&connection).unwrap();
+
+        assert_eq!(count_bulk_load_indexes(&connection), 4);
+
+        drop_bulk_load_indexes(&connection).unwrap();
+
+        assert_eq!(count_bulk_load_indexes(&connection), 0);
+    }
+
+    #[test]
+    fn drop_bulk_load_indexes_is_idempotent_when_already_dropped() {
+        let connection = Connection::open_in_memory().unwrap();
+        create_schema(&connection).unwrap();
+
+        drop_bulk_load_indexes(&connection).unwrap();
+        drop_bulk_load_indexes(&connection).unwrap();
+
+        assert_eq!(count_bulk_load_indexes(&connection), 0);
+    }
+
+    #[test]
+    fn rebuild_bulk_load_indexes_restores_all_four_secondary_indexes() {
+        let connection = Connection::open_in_memory().unwrap();
+        create_schema(&connection).unwrap();
+        drop_bulk_load_indexes(&connection).unwrap();
+
+        assert_eq!(count_bulk_load_indexes(&connection), 0);
+
+        rebuild_bulk_load_indexes(&connection).unwrap();
+
+        assert_eq!(count_bulk_load_indexes(&connection), 4);
+    }
+
+    #[test]
+    fn rebuild_bulk_load_indexes_is_idempotent_when_already_present() {
+        let connection = Connection::open_in_memory().unwrap();
+        create_schema(&connection).unwrap();
+
+        rebuild_bulk_load_indexes(&connection).unwrap();
+        rebuild_bulk_load_indexes(&connection).unwrap();
+
+        assert_eq!(count_bulk_load_indexes(&connection), 4);
+    }
+}

@@ -2,6 +2,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 
 use chrono::{Duration, Months, NaiveDate, Utc};
 use duckdb::{params, Connection, Result as DuckResult};
@@ -112,9 +113,20 @@ pub struct StagingBuildOutcome {
     pub copied_from: Option<String>,
     pub requested_days: Vec<NaiveDate>,
     pub imported_days: Vec<ImportDayOutcome>,
+    pub drop_indexes_elapsed_ms: u128,
+    pub rebuild_indexes_elapsed_ms: u128,
     pub rebuild_stats: RebuildStats,
     pub validation_failures: Vec<ValidationFailure>,
     pub succeeded: bool,
+}
+
+/// `build_staging`'s day-import loop drops the four bulk-load secondary
+/// indexes once before it runs and rebuilds them once after, rather than
+/// once per imported day (Step 19.00.52). This is skipped entirely when
+/// there is nothing to import, so a build that is already fully up to date
+/// pays no index-maintenance cost at all.
+fn should_manage_bulk_load_indexes(requested_days: &[NaiveDate]) -> bool {
+    !requested_days.is_empty()
 }
 
 pub fn build_staging(
@@ -158,9 +170,31 @@ pub fn build_staging(
         .map_err(|error| format!("Failed to determine missing days: {error}"))?;
 
     let mut imported_days = Vec::with_capacity(requested_days.len());
+    let mut drop_indexes_elapsed_ms: u128 = 0;
+    let mut rebuild_indexes_elapsed_ms: u128 = 0;
+
+    let manage_bulk_load_indexes = should_manage_bulk_load_indexes(&requested_days);
+
+    if manage_bulk_load_indexes {
+        let drop_start = Instant::now();
+
+        schema::drop_bulk_load_indexes(&connection)
+            .map_err(|error| format!("Failed to drop bulk-load indexes: {error}"))?;
+
+        drop_indexes_elapsed_ms = drop_start.elapsed().as_millis();
+    }
 
     for date in &requested_days {
-        imported_days.push(persistence::import_day(&connection, client, *date));
+        imported_days.push(persistence::import_day(&connection, client, *date, false));
+    }
+
+    if manage_bulk_load_indexes {
+        let rebuild_start = Instant::now();
+
+        schema::rebuild_bulk_load_indexes(&connection)
+            .map_err(|error| format!("Failed to rebuild bulk-load indexes: {error}"))?;
+
+        rebuild_indexes_elapsed_ms = rebuild_start.elapsed().as_millis();
     }
 
     let rebuild_stats = summary_rebuild::rebuild_summary_and_org_context(&connection)
@@ -204,6 +238,8 @@ pub fn build_staging(
         copied_from,
         requested_days,
         imported_days,
+        drop_indexes_elapsed_ms,
+        rebuild_indexes_elapsed_ms,
         rebuild_stats,
         validation_failures,
         succeeded,
@@ -472,6 +508,16 @@ mod tests {
                 params![date_text],
             )
             .unwrap();
+    }
+
+    #[test]
+    fn should_manage_bulk_load_indexes_false_when_no_days_requested() {
+        assert!(!should_manage_bulk_load_indexes(&[]));
+    }
+
+    #[test]
+    fn should_manage_bulk_load_indexes_true_when_at_least_one_day_requested() {
+        assert!(should_manage_bulk_load_indexes(&[NaiveDate::from_ymd_opt(2016, 8, 1).unwrap()]));
     }
 
     #[test]

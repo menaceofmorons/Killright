@@ -230,7 +230,7 @@ fn run_import_day(arguments: &[String]) {
         }
     };
 
-    let outcome = import_day(&connection, &client, date);
+    let outcome = import_day(&connection, &client, date, true);
     print_import_day_report(&outcome);
     drop(lock);
 
@@ -493,13 +493,15 @@ fn print_import_day_report(outcome: &ImportDayOutcome) {
     println!("Candidate pair occurrence rows: {}", outcome.candidate_pair_occurrence_rows);
 
     if let Some(timing) = &outcome.timing {
+        // drop_indexes_elapsed_ms/rebuild_indexes_elapsed_ms are always Some here:
+        // run_import_day always calls import_day with manage_bulk_load_indexes: true.
         println!(
             "Timing (ms): clear={} drop_indexes={} evidence_append={} participant_append={} rebuild_indexes={} status_update={} total={}",
             timing.clear_existing_rows_elapsed_ms,
-            timing.drop_indexes_elapsed_ms,
+            timing.drop_indexes_elapsed_ms.unwrap_or(0),
             timing.evidence_append_elapsed_ms,
             timing.participant_append_elapsed_ms,
-            timing.rebuild_indexes_elapsed_ms,
+            timing.rebuild_indexes_elapsed_ms.unwrap_or(0),
             timing.status_update_elapsed_ms,
             timing.total_elapsed_ms
         );
@@ -554,6 +556,10 @@ fn print_staging_build_report(outcome: &StagingBuildOutcome) {
     println!("Already completed (skipped): {already_completed_days}");
     println!("Newly imported: {newly_completed_days}");
     println!("Failed: {failed_days}");
+    println!(
+        "Timing (ms): drop_indexes={} rebuild_indexes={}",
+        outcome.drop_indexes_elapsed_ms, outcome.rebuild_indexes_elapsed_ms
+    );
     println!("historic_relationship_summary rows: {}", outcome.rebuild_stats.summary_rows);
     println!("historic_relationship_org_context rows: {}", outcome.rebuild_stats.org_context_rows);
 
