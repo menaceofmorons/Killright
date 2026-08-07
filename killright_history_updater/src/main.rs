@@ -3,6 +3,7 @@ use std::process;
 
 mod database_path;
 mod live_config;
+mod local_app_data;
 mod lock;
 mod persistence;
 mod r2_client;
