@@ -1,9 +1,10 @@
-use std::env;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
 use serde_json::{json, Value};
+
+use crate::local_app_data::resolve_local_app_data_root;
 
 pub const LIVE_STATUS_FILE_NAME: &str = "groupHistory.status.json";
 pub const SWAP_SIGNAL_FILE_NAME: &str = "database.new";
@@ -30,7 +31,7 @@ impl GroupHistoryLiveConfig {
 }
 
 pub fn get_live_config_directory() -> PathBuf {
-    let local_app_data = env::var("LOCALAPPDATA").expect("LOCALAPPDATA environment variable is not set");
+    let local_app_data = resolve_local_app_data_root();
     let directory = PathBuf::from(local_app_data).join("KillRight").join("config");
     fs::create_dir_all(&directory).expect("failed to create KillRight config directory");
     directory

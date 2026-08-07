@@ -39,6 +39,23 @@ public sealed class HistoryUpdaterProcessLauncherIntegrationTests
             executablePath is not null && File.Exists(executablePath),
             "killright_history_updater.exe was not found. Run 'cargo build' in Code/killright_history_updater first (Build Verification 4.1).");
 
+        // Isolates this launch from a developer's real, live interactive
+        // staging state (Step CC-07.08.26.02). Without this, the launched
+        // process reads and writes the same shared %LOCALAPPDATA%\KillRight
+        // tree the Developer window's Pilot testing uses: build-staging
+        // --horizon-days 1 copies forward from whatever staging file is
+        // already there, so its runtime scales with however much history a
+        // developer has accumulated interactively, and a timeout here leaves
+        // the shared groupHistory.status.json's updateInProgress flag stuck
+        // true (this test's own finally block only kills the process; unlike
+        // StopButton_Click, it never calls
+        // GroupHistoryLiveStatusResetter.ResetUpdateInProgress()).
+        var isolatedRoot = Path.Combine(Path.GetTempPath(), $"killright-history-updater-test.{Guid.NewGuid():N}");
+        Directory.CreateDirectory(isolatedRoot);
+        var isolatedLiveStatusPath = Path.Combine(isolatedRoot, "KillRight", "config", "groupHistory.status.json");
+
+        Environment.SetEnvironmentVariable("KILLRIGHT_LOCALAPPDATA_OVERRIDE", isolatedRoot);
+
         var process = HistoryUpdaterProcessLauncher.LaunchDetached(executablePath!, "build-staging --horizon-days 1");
 
         try
@@ -48,7 +65,7 @@ public sealed class HistoryUpdaterProcessLauncherIntegrationTests
             Assert.True(exited, "Expected build-staging --horizon-days 1 to complete within 2 minutes.");
             Assert.Equal(0, process.ExitCode);
 
-            var afterStatus = GroupHistoryLiveStatusLoader.LoadOrDefault();
+            var afterStatus = GroupHistoryLiveStatusLoader.LoadOrDefault(isolatedLiveStatusPath);
 
             Assert.False(afterStatus.UpdateInProgress);
             Assert.NotNull(afterStatus.LastUpdatedUtc);
@@ -61,6 +78,18 @@ public sealed class HistoryUpdaterProcessLauncherIntegrationTests
         {
             if (!process.HasExited)
                 process.Kill();
+
+            Environment.SetEnvironmentVariable("KILLRIGHT_LOCALAPPDATA_OVERRIDE", null);
+
+            try
+            {
+                Directory.Delete(isolatedRoot, recursive: true);
+            }
+            catch (IOException)
+            {
+                // Best-effort cleanup only -- a lingering handle from the
+                // just-killed process must never fail this test's result.
+            }
         }
     }
 }
