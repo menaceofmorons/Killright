@@ -71,7 +71,11 @@ public partial class App : Application
             new RustRecentStyleClient(
                 EngineRuntime);
 
-        var esiHttpClient = new HttpClient();
+        var esiHttpClient =
+            new HttpClient
+            {
+                Timeout = TimeSpan.FromSeconds(EsiClientOptions.RequestTimeoutSeconds)
+            };
         EsiClient =
             new EsiClient(
                 esiHttpClient);
@@ -86,7 +90,10 @@ public partial class App : Application
 
         var zKillHttpClient =
             new HttpClient(
-                zKillHandler);
+                zKillHandler)
+            {
+                Timeout = TimeSpan.FromSeconds(zKillClientOptions.RequestTimeoutSeconds)
+            };
 
         zKillClient =
             new zKillClient(

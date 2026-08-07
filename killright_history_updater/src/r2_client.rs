@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::thread;
+use std::time::Duration;
 
 use chrono::{DateTime, NaiveDate, Utc};
 use serde_json::Value;
@@ -112,9 +113,33 @@ pub struct ZkillHistoryClient {
 }
 
 impl ZkillHistoryClient {
+    /// How long a single request may spend establishing the TCP/TLS
+    /// connection before failing, rather than blocking indefinitely.
+    /// `reqwest::blocking::Client` has no default connect timeout at all.
+    /// Sized well above any observed connection time to
+    /// r2z2.zkillboard.com; exists purely as a hard ceiling against a
+    /// network-level stall (Session finding, 07 Aug 2026).
+    pub const CONNECT_TIMEOUT_SECONDS: u64 = 10;
+
+    /// How long a single request may run end-to-end (connect + send +
+    /// receive full response body) before failing. `reqwest::blocking::Client`
+    /// has no default request timeout at all, unlike .NET's `HttpClient`
+    /// (100 second default) -- a single stalled request here blocked the
+    /// whole sequential `build_staging` day-import loop indefinitely (Session
+    /// finding, 07 Aug 2026: a Test Amount run showed zero new days completed
+    /// after 1.5 hours). Sized to roughly 15x the ~4 second per-day time
+    /// observed during a healthy run, comfortably covering a single unusually
+    /// large day's response without letting a stalled request block the run
+    /// for more than a bounded amount of time; a day that still fails at this
+    /// timeout is recorded as a normal `Failed` day and the loop continues,
+    /// exactly as it already does for any other extraction failure.
+    pub const REQUEST_TIMEOUT_SECONDS: u64 = 60;
+
     pub fn new(options: ParallelDownloadOptions) -> reqwest::Result<Self> {
         let http_client = reqwest::blocking::Client::builder()
             .user_agent("KillRight-HistoryUpdater/19.00.44")
+            .connect_timeout(Duration::from_secs(Self::CONNECT_TIMEOUT_SECONDS))
+            .timeout(Duration::from_secs(Self::REQUEST_TIMEOUT_SECONDS))
             .build()?;
 
         Ok(ZkillHistoryClient { http_client, options })
@@ -375,6 +400,33 @@ fn count_pairs(participant_count: usize) -> i64 {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn client_with_configured_timeouts_does_not_hang_against_an_unreachable_address() {
+        let client = reqwest::blocking::Client::builder()
+            .connect_timeout(Duration::from_secs(ZkillHistoryClient::CONNECT_TIMEOUT_SECONDS))
+            .timeout(Duration::from_secs(ZkillHistoryClient::REQUEST_TIMEOUT_SECONDS))
+            .build()
+            .unwrap();
+
+        let start = std::time::Instant::now();
+
+        // 10.255.255.1 is a non-routable RFC 1918 address with nothing
+        // listening on it. Depending on the network environment this either
+        // fails immediately (no route) or hangs at the TCP SYN stage until
+        // connect_timeout cuts it off -- either way, it must never hang
+        // indefinitely the way an unconfigured reqwest::blocking::Client did
+        // (Session finding, 07 Aug 2026).
+        let result = client.get("http://10.255.255.1/").send();
+        let elapsed = start.elapsed();
+
+        assert!(result.is_err());
+        assert!(
+            elapsed < Duration::from_secs(20),
+            "request against an unreachable address took {elapsed:?}; expected it to fail well within the {}-second connect timeout, not hang",
+            ZkillHistoryClient::CONNECT_TIMEOUT_SECONDS
+        );
+    }
 
     #[test]
     fn qualification_rules_match_design_spec_section_4_7() {

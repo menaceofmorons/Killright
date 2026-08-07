@@ -37,6 +37,26 @@ public sealed class HistoryUpdaterWiperTests
     }
 
     [Fact]
+    public void WipeAll_DeletesOrphanedProgressLogFileWithoutItsPairedStagingFile_ReturnsCorrectCount()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"staging.{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+
+        var orphanedProgressLog = Path.Combine(directory, "KillRight.History.260807.02.progress.log");
+        File.WriteAllText(orphanedProgressLog, "2026-08-07T20:14:00+00:00 START 2017-08-01\n");
+
+        var statusPath = Path.Combine(Path.GetTempPath(), $"groupHistory.status.{Guid.NewGuid():N}.json");
+        var signalPath = Path.Combine(Path.GetTempPath(), $"database.new.{Guid.NewGuid():N}");
+
+        var deletedCount = HistoryUpdaterWiper.WipeAll(directory, statusPath, signalPath);
+
+        Assert.Equal(1, deletedCount);
+        Assert.False(File.Exists(orphanedProgressLog));
+
+        Directory.Delete(directory, recursive: true);
+    }
+
+    [Fact]
     public void WipeAll_NothingToDelete_ReturnsZero()
     {
         var directory = Path.Combine(Path.GetTempPath(), $"staging.{Guid.NewGuid():N}");

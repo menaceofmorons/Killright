@@ -65,6 +65,10 @@ This is a distinct request from "Execute IG X" — never trigger it automaticall
 
 When that happens, follow `KR-Standards-Implementation-Guide-v#.#.docx` Section 9 (Implementation Guide Tracker and Lifecycle) — use the highest version number present. That section is the authoritative definition of the tracker's columns and Status values, and of exactly when `Implementation-Guides-Tracker.xlsx` is updated and a guide file is moved between `Documentation/Implementation Guides/`, `Executed/` and `Archive/`. Do not duplicate that process here or improvise a different one.
 
+## Documentation/Archive folder
+
+`Documentation/Archive/` holds superseded versions of standards, design specs, and other docs (old `PI-Implmentation-Guide-Standards`, old `PilotIntel-Design-Specification`/`KillRight-Design-Specification` versions, etc.). Ignore everything in this folder — do not read, cite, or apply anything from it as current guidance — unless the user explicitly names a file in it and asks you to use it. Always work from the highest version number present outside `Archive/`.
+
 ## Known issues and gotchas
 
 ### DuckDB (duckdb-rs): a dropped `Connection` does not release its file handle if any `Statement`/`Rows`/`Appender` from it is still alive

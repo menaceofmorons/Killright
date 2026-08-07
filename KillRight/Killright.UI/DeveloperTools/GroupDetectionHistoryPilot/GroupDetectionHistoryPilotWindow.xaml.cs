@@ -115,9 +115,13 @@ public partial class GroupDetectionHistoryPilotWindow : Window
 
             GroupHistoryLiveStatusResetter.ResetUpdateInProgress();
             var deletedOrphan = HistoryUpdaterOrphanedStagingFileCleaner.TryCleanUpOrphan();
+            var progressLogPath = deletedOrphan is null ? null : Path.ChangeExtension(deletedOrphan, ".progress.log");
+            var progressLogFileName = progressLogPath is not null && File.Exists(progressLogPath)
+                ? Path.GetFileName(progressLogPath)
+                : null;
 
             var status = GroupHistoryLiveStatusLoader.LoadOrDefault();
-            RecordRunHistoryEntry("Stopped by user", status.LastCompletedDayUtc);
+            RecordRunHistoryEntry("Stopped by user", status.LastCompletedDayUtc, progressLogFileName);
 
             MessageTextBlock.Text = deletedOrphan is null
                 ? "Stopped the historic updater."
@@ -213,7 +217,7 @@ public partial class GroupDetectionHistoryPilotWindow : Window
         StatusTextBox.Text = BuildStatusReport(status);
     }
 
-    private void RecordRunHistoryEntry(string outcome, string? currentLastCompletedDayUtc)
+    private void RecordRunHistoryEntry(string outcome, string? currentLastCompletedDayUtc, string? progressLogFileName = null)
     {
         if (_pendingRunDescription is null)
             return;
@@ -223,7 +227,12 @@ public partial class GroupDetectionHistoryPilotWindow : Window
         var elapsedText = $"{(int)elapsed.TotalHours:D2}:{elapsed.Minutes:D2}:{elapsed.Seconds:D2}";
         var rangeText = DescribeImportedRange(_baselineLastCompletedDayUtc, currentLastCompletedDayUtc);
 
-        _runHistoryLines.Add($"[{timestamp}] {_pendingRunDescription} ({rangeText}) - {outcome} - Elapsed {elapsedText}");
+        // Only a Halted run (StopButton_Click) ever passes progressLogFileName --
+        // the automatic completion/validation-failed detection in RefreshStatus
+        // never does, so a normal run's line never carries this suffix.
+        var progressLogText = progressLogFileName is null ? string.Empty : $" - Progress log: {progressLogFileName}";
+
+        _runHistoryLines.Add($"[{timestamp}] {_pendingRunDescription} ({rangeText}) - {outcome} - Elapsed {elapsedText}{progressLogText}");
 
         _pendingRunDescription = null;
         _baselineLastUpdatedUtc = null;

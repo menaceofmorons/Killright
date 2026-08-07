@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 use std::fs;
-use std::io;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 use chrono::{Duration, Months, NaiveDate, Utc};
@@ -14,6 +14,16 @@ use crate::summary_rebuild::{self, RebuildStats};
 
 pub const LATEST_VALIDATED_BUILD_MARKER_FILE_NAME: &str = "latest_validated_build.txt";
 pub const DEFAULT_INITIAL_HISTORIC_IMPORT_HORIZON_YEARS: u32 = 10;
+
+/// Suffix used for the per-day progress log written alongside a staging file
+/// while its day-import loop runs (Step CC-07.08.26.01). Paired 1:1 with the
+/// staging file by replacing its `.duckdb` extension with this suffix, so it
+/// shares the same base name -- e.g. `KillRight.History.260807.02.duckdb`'s
+/// progress log is `KillRight.History.260807.02.progress.log`. Deliberately
+/// distinct from the C# project's `HistoryUpdaterStagingPaths.StagingFileSearchPattern`
+/// (`KillRight.History.*.duckdb`) so the existing orphaned-staging-file
+/// cleanup never matches or deletes it.
+pub const PROGRESS_LOG_FILE_SUFFIX: &str = ".progress.log";
 
 pub const TEST_MODE_ANCHOR_YEAR: i32 = 2016;
 pub const TEST_MODE_ANCHOR_MONTH: u32 = 8;
@@ -159,13 +169,59 @@ pub fn build_staging(
 
     let mut imported_days = Vec::with_capacity(requested_days.len());
 
+    // Step CC-07.08.26.01: a plain-text progress log, one line before and one
+    // line after each day's import, opened before the loop and written via a
+    // raw, unbuffered File so every line is durable the instant it's written.
+    // Only created when there is at least one day to import, mirroring the
+    // same requested_days.is_empty() guard 19.00.52/19.00.53 used for index
+    // management. This is the only record of exactly which day a run was on
+    // if the process is killed outright (a Halt from the Developer window's
+    // Stop button) -- nothing about a killed process's in-memory state
+    // survives, and stdout from a detached launch
+    // (HistoryUpdaterProcessLauncher.LaunchDetached) is never captured or
+    // shown anywhere. Deleted below once a build succeeds; kept when a build
+    // fails validation, alongside the staging file itself, for diagnosis.
+    let progress_log_path = if requested_days.is_empty() {
+        None
+    } else {
+        Some(progress_log_path_for(directory, &staging_file_name))
+    };
+
+    let mut progress_log_file = match &progress_log_path {
+        Some(path) => Some(
+            fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(path)
+                .map_err(|error| format!("Failed to open per-day progress log: {error}"))?,
+        ),
+        None => None,
+    };
+
     // Step 19.00.53: no unconsumed secondary indexes to drop/rebuild around
     // this loop any more -- schema::create_schema (called above) already
     // ensures none exist. See schema.rs's drop_unconsumed_secondary_indexes
     // doc comment.
     for date in &requested_days {
-        imported_days.push(persistence::import_day(&connection, client, *date));
+        if let Some(file) = progress_log_file.as_mut() {
+            let _ = writeln!(file, "{} START {date}", Utc::now().to_rfc3339());
+        }
+
+        let outcome = persistence::import_day(&connection, client, *date);
+
+        if let Some(file) = progress_log_file.as_mut() {
+            let _ = writeln!(file, "{} DONE {date} {}", Utc::now().to_rfc3339(), describe_outcome(&outcome));
+        }
+
+        imported_days.push(outcome);
     }
+
+    // Close the log file explicitly before any attempt to delete it below --
+    // Windows will not allow deleting a file that is still open (the same
+    // class of issue as this project's documented DuckDB handle-release
+    // gotcha in CLAUDE.md; the rule applies to any file handle, not just
+    // DuckDB's).
+    drop(progress_log_file);
 
     let rebuild_stats = summary_rebuild::rebuild_summary_and_org_context(&connection)
         .map_err(|error| format!("Failed to rebuild summary and org context: {error}"))?;
@@ -179,6 +235,10 @@ pub fn build_staging(
     let succeeded = validation_failures.is_empty();
 
     if succeeded {
+        if let Some(path) = &progress_log_path {
+            let _ = fs::remove_file(path);
+        }
+
         write_latest_validated_build_marker(directory, &staging_file_name)
             .map_err(|error| format!("Failed to update the latest-validated-build marker: {error}"))?;
 
@@ -252,6 +312,36 @@ fn find_copy_basis(directory: &Path) -> Option<PathBuf> {
 fn write_latest_validated_build_marker(directory: &Path, filename: &str) -> io::Result<()> {
     let marker_path = directory.join(LATEST_VALIDATED_BUILD_MARKER_FILE_NAME);
     fs::write(marker_path, filename)
+}
+
+/// Computes the per-day progress log path for a staging file: the same
+/// directory, same base name, with `.duckdb` replaced by
+/// `PROGRESS_LOG_FILE_SUFFIX`. `staging_file_name` is always produced by
+/// `allocate_new_staging_filename`, which always ends in `.duckdb`.
+fn progress_log_path_for(directory: &Path, staging_file_name: &str) -> PathBuf {
+    let base_name = staging_file_name
+        .strip_suffix(".duckdb")
+        .expect("staging file name always ends with .duckdb");
+
+    directory.join(format!("{base_name}{PROGRESS_LOG_FILE_SUFFIX}"))
+}
+
+/// Formats a single `ImportDayOutcome` as one line for the per-day progress
+/// log. Deliberately terse (day-level status only, not full timing) -- this
+/// log exists to answer "which day was in progress when the process died,"
+/// not to duplicate the detailed report `main.rs` already prints for a
+/// normal foreground run.
+fn describe_outcome(outcome: &ImportDayOutcome) -> String {
+    if outcome.already_completed {
+        "status=AlreadyCompleted".to_string()
+    } else if outcome.succeeded {
+        format!(
+            "status=Completed raw={} qualifying={}",
+            outcome.raw_killmail_count, outcome.qualifying_killmail_count
+        )
+    } else {
+        format!("status=Failed error={}", outcome.error_message.as_deref().unwrap_or("(unknown)"))
+    }
 }
 
 fn determine_missing_days(
@@ -465,6 +555,68 @@ fn reopen_cleanly(database_path: &Path) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn progress_log_path_for_replaces_duckdb_extension_with_progress_log_suffix() {
+        let directory = Path::new("staging-directory");
+        let path = progress_log_path_for(directory, "KillRight.History.260807.02.duckdb");
+
+        assert_eq!(path, directory.join("KillRight.History.260807.02.progress.log"));
+    }
+
+    #[test]
+    fn describe_outcome_formats_completed_day() {
+        let outcome = ImportDayOutcome {
+            date: NaiveDate::from_ymd_opt(2016, 8, 1).unwrap(),
+            already_completed: false,
+            succeeded: true,
+            raw_killmail_count: 12,
+            qualifying_killmail_count: 5,
+            persisted_evidence_rows: 5,
+            persisted_participant_rows: 11,
+            candidate_pair_occurrence_rows: 20,
+            timing: None,
+            error_message: None,
+        };
+
+        assert_eq!(describe_outcome(&outcome), "status=Completed raw=12 qualifying=5");
+    }
+
+    #[test]
+    fn describe_outcome_formats_failed_day() {
+        let outcome = ImportDayOutcome {
+            date: NaiveDate::from_ymd_opt(2016, 8, 1).unwrap(),
+            already_completed: false,
+            succeeded: false,
+            raw_killmail_count: 0,
+            qualifying_killmail_count: 0,
+            persisted_evidence_rows: 0,
+            persisted_participant_rows: 0,
+            candidate_pair_occurrence_rows: 0,
+            timing: None,
+            error_message: Some("HTTP 503 Service Unavailable".to_string()),
+        };
+
+        assert_eq!(describe_outcome(&outcome), "status=Failed error=HTTP 503 Service Unavailable");
+    }
+
+    #[test]
+    fn describe_outcome_formats_already_completed_day() {
+        let outcome = ImportDayOutcome {
+            date: NaiveDate::from_ymd_opt(2016, 8, 1).unwrap(),
+            already_completed: true,
+            succeeded: true,
+            raw_killmail_count: 0,
+            qualifying_killmail_count: 0,
+            persisted_evidence_rows: 0,
+            persisted_participant_rows: 0,
+            candidate_pair_occurrence_rows: 0,
+            timing: None,
+            error_message: None,
+        };
+
+        assert_eq!(describe_outcome(&outcome), "status=AlreadyCompleted");
+    }
 
     fn insert_completed_day(connection: &Connection, date_text: &str) {
         connection

@@ -23,6 +23,12 @@ public static class HistoryUpdaterWiper
                 deletedCount++;
             }
 
+            foreach (var path in Directory.GetFiles(directory, HistoryUpdaterStagingPaths.ProgressLogSearchPattern))
+            {
+                File.Delete(path);
+                deletedCount++;
+            }
+
             var markerPath = Path.Combine(directory, LatestValidatedBuildMarkerFileName);
 
             if (File.Exists(markerPath))
