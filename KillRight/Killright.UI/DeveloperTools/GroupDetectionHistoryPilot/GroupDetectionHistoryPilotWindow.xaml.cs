@@ -199,6 +199,13 @@ public partial class GroupDetectionHistoryPilotWindow : Window
 
     private void RefreshStatus()
     {
+        // Step CC-08.08.26.01: self-heals a stuck updateInProgress flag left
+        // by a process that is no longer running (crash, window closed
+        // mid-run, or a killed background/test process) -- a no-op
+        // otherwise. This is the only path that can recover Launch when the
+        // current window instance never launched the run that set the flag.
+        GroupHistoryLiveStatusResetter.ResetIfStale();
+
         var status = GroupHistoryLiveStatusLoader.LoadOrDefault();
 
         if (_lastObservedUpdateInProgress && !status.UpdateInProgress)

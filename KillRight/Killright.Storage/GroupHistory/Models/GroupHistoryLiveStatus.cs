@@ -16,4 +16,6 @@ public sealed class GroupHistoryLiveStatus
     public string? LastUpdatedUtc { get; init; }
 
     public bool UpdateInProgress { get; init; }
+
+    public int? UpdateInProgressPid { get; init; }
 }

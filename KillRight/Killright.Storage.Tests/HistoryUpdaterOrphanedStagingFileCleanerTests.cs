@@ -89,13 +89,15 @@ public sealed class HistoryUpdaterOrphanedStagingFileCleanerTests
     }
 
     [Fact]
-    public void TryCleanUpOrphan_MultipleCandidateFiles_DeletesNothingAndReturnsNull()
+    public void TryCleanUpOrphan_MultipleCandidateFiles_DeletesAllAndReturnsTheMostRecentlyWrittenOne()
     {
         var directory = CreateTempStagingDirectory();
-        var firstOrphanPath = Path.Combine(directory, "KillRight.History.260804.01.duckdb");
-        var secondOrphanPath = Path.Combine(directory, "KillRight.History.260805.01.duckdb");
-        File.WriteAllText(firstOrphanPath, "fixture one");
-        File.WriteAllText(secondOrphanPath, "fixture two");
+        var olderOrphanPath = Path.Combine(directory, "KillRight.History.260804.01.duckdb");
+        var newerOrphanPath = Path.Combine(directory, "KillRight.History.260805.01.duckdb");
+        File.WriteAllText(olderOrphanPath, "fixture one");
+        File.WriteAllText(newerOrphanPath, "fixture two");
+        File.SetLastWriteTimeUtc(olderOrphanPath, DateTime.UtcNow.AddHours(-1));
+        File.SetLastWriteTimeUtc(newerOrphanPath, DateTime.UtcNow);
 
         var statusPath = WriteLiveStatus(string.Empty);
 
@@ -103,13 +105,46 @@ public sealed class HistoryUpdaterOrphanedStagingFileCleanerTests
         {
             var result = HistoryUpdaterOrphanedStagingFileCleaner.TryCleanUpOrphan(directory, statusPath);
 
-            Assert.Null(result);
-            Assert.True(File.Exists(firstOrphanPath));
-            Assert.True(File.Exists(secondOrphanPath));
+            Assert.Equal(newerOrphanPath, result);
+            Assert.False(File.Exists(olderOrphanPath));
+            Assert.False(File.Exists(newerOrphanPath));
         }
         finally
         {
             File.Delete(statusPath);
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void TryCleanUpOrphan_MultipleCandidates_DeletesStaleProgressLogsButPreservesTheMostRecentOnes()
+    {
+        var directory = CreateTempStagingDirectory();
+        var olderOrphanPath = Path.Combine(directory, "KillRight.History.260804.01.duckdb");
+        var newerOrphanPath = Path.Combine(directory, "KillRight.History.260805.01.duckdb");
+        var olderProgressLogPath = Path.Combine(directory, "KillRight.History.260804.01.progress.log");
+        var newerProgressLogPath = Path.Combine(directory, "KillRight.History.260805.01.progress.log");
+        File.WriteAllText(olderOrphanPath, "fixture one");
+        File.WriteAllText(newerOrphanPath, "fixture two");
+        File.WriteAllText(olderProgressLogPath, "stale, from an unrelated earlier killed run");
+        File.WriteAllText(newerProgressLogPath, "relevant to the run this Stop just interrupted");
+        File.SetLastWriteTimeUtc(olderOrphanPath, DateTime.UtcNow.AddHours(-1));
+        File.SetLastWriteTimeUtc(newerOrphanPath, DateTime.UtcNow);
+
+        var statusPath = WriteLiveStatus(string.Empty);
+
+        try
+        {
+            var result = HistoryUpdaterOrphanedStagingFileCleaner.TryCleanUpOrphan(directory, statusPath);
+
+            Assert.Equal(newerOrphanPath, result);
+            Assert.False(File.Exists(olderProgressLogPath));
+            Assert.True(File.Exists(newerProgressLogPath));
+        }
+        finally
+        {
+            File.Delete(statusPath);
+            File.Delete(newerProgressLogPath);
             Directory.Delete(directory, recursive: true);
         }
     }

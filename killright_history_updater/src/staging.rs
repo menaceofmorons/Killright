@@ -139,7 +139,11 @@ pub fn build_staging(
 
     live_config::write_live_config(
         &live_config_directory,
-        &GroupHistoryLiveConfig { update_in_progress: true, ..pre_build_live_config.clone() },
+        &GroupHistoryLiveConfig {
+            update_in_progress: true,
+            update_in_progress_pid: Some(std::process::id()),
+            ..pre_build_live_config.clone()
+        },
     )
     .map_err(|error| format!("Failed to write groupHistory live config: {error}"))?;
 
@@ -248,6 +252,7 @@ pub fn build_staging(
             last_completed_day_utc: metadata_last_completed_day_utc,
             last_updated_utc: metadata_last_updated_utc,
             update_in_progress: false,
+            update_in_progress_pid: None,
         };
 
         live_config::write_live_config(&live_config_directory, &updated_live_config)
@@ -256,7 +261,8 @@ pub fn build_staging(
         live_config::write_swap_signal(&live_config_directory)
             .map_err(|error| format!("Failed to write database.new swap signal: {error}"))?;
     } else {
-        let reverted_live_config = GroupHistoryLiveConfig { update_in_progress: false, ..pre_build_live_config };
+        let reverted_live_config =
+            GroupHistoryLiveConfig { update_in_progress: false, update_in_progress_pid: None, ..pre_build_live_config };
 
         live_config::write_live_config(&live_config_directory, &reverted_live_config)
             .map_err(|error| format!("Failed to write groupHistory live config: {error}"))?;
