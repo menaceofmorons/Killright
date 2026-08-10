@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Windows;
 using System.Windows.Threading;
@@ -158,7 +159,7 @@ public partial class GroupDetectionHistoryPilotWindow : Window
         }
 
         var confirmed = MessageBox.Show(
-            "This permanently deletes the active historic database, every staging file, and the live status file, so the next launch starts completely from zero. This cannot be undone. Continue?",
+            "This permanently deletes every historic database file (including the legacy KillRight.HistoryUpdater.duckdb file and any leftover write-ahead log), every staging file, and the live status file, so the next launch starts completely from zero. This cannot be undone. Continue?",
             "Wipe and Start Anew",
             MessageBoxButton.YesNo,
             MessageBoxImage.Warning);
@@ -169,7 +170,11 @@ public partial class GroupDetectionHistoryPilotWindow : Window
         try
         {
             var deletedCount = HistoryUpdaterWiper.WipeAll();
-            MessageTextBlock.Text = $"Wiped {deletedCount} file(s). Ready to start anew.";
+            var remaining = HistoryUpdaterWiper.FindRemainingArtifacts();
+
+            MessageTextBlock.Text = remaining.Count == 0
+                ? $"Wiped {deletedCount} file(s). Clean slate confirmed: no working database, staging file, marker, progress log, or live config remain."
+                : $"Wiped {deletedCount} file(s), but {remaining.Count} artifact(s) could not be confirmed removed: {string.Join(", ", remaining.Select(Path.GetFileName))}.";
         }
         catch (Exception ex)
         {
