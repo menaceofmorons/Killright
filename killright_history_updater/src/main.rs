@@ -7,6 +7,7 @@ mod live_config;
 mod local_app_data;
 mod lock;
 mod persistence;
+mod promotion;
 mod r2_client;
 mod rate_limiter;
 mod schema;
@@ -557,10 +558,18 @@ fn print_staging_build_report(outcome: &StagingBuildOutcome) {
     println!("historic_relationship_summary rows: {}", outcome.rebuild_stats.summary_rows);
     println!("historic_relationship_org_context rows: {}", outcome.rebuild_stats.org_context_rows);
 
+    let promoted_file_name = outcome
+        .promoted_file_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("?");
+
     if outcome.validation_failures.is_empty() {
+        println!("Promoted file: {promoted_file_name} (Live)");
         println!("Validation: Passed");
         println!("Status: Completed");
     } else {
+        println!("Promoted file: {promoted_file_name} (Failed)");
         println!("Validation: Failed");
 
         for failure in &outcome.validation_failures {
@@ -568,8 +577,8 @@ fn print_staging_build_report(outcome: &StagingBuildOutcome) {
         }
 
         println!("Status: Failed");
-        println!("The previous validated build (if any) remains the latest validated build.");
-        println!("This staging file has been retained for diagnosis.");
+        println!("The previous validated Live-folder database (if any) remains untouched.");
+        println!("This build's Working file and its promoted Failed-folder copy have both been retained for diagnosis.");
     }
 
     println!("====================================================");

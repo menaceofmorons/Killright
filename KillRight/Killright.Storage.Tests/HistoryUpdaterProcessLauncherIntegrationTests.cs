@@ -68,11 +68,27 @@ public sealed class HistoryUpdaterProcessLauncherIntegrationTests
             var afterStatus = GroupHistoryLiveStatusLoader.LoadOrDefault(isolatedLiveStatusPath);
 
             Assert.False(afterStatus.UpdateInProgress);
-            Assert.NotNull(afterStatus.LastUpdatedUtc);
-            Assert.NotNull(afterStatus.LastCompletedDayUtc);
+
+            // Step 19.00.56: build-staging no longer sets activeDatabaseFile,
+            // lastUpdatedUtc, or lastCompletedDayUtc itself -- that moves to
+            // 19.00.57 (Live Flag & Sentinel Update), which will point them at
+            // the Live-folder copy this step produces instead. Asserted
+            // explicitly, rather than omitted, so 19.00.57 is forced to update
+            // this test when it adds that behaviour back.
+            Assert.Null(afterStatus.LastUpdatedUtc);
+            Assert.Null(afterStatus.LastCompletedDayUtc);
+            Assert.True(string.IsNullOrEmpty(afterStatus.ActiveDatabaseFile));
+
+            // Step 19.00.56's own output: a promoted copy (no CORE. prefix)
+            // must exist in Live after a successful run.
+            var liveDirectory = Path.Combine(isolatedRoot, "KillRight", "HistoryUpdater", "Live");
+            var promotedFiles = Directory.Exists(liveDirectory)
+                ? Directory.GetFiles(liveDirectory, HistoryUpdaterStagingPaths.PromotedFileSearchPattern)
+                : Array.Empty<string>();
+
             Assert.True(
-                File.Exists(afterStatus.ActiveDatabaseFile),
-                $"Expected activeDatabaseFile '{afterStatus.ActiveDatabaseFile}' to exist after a successful build-staging run.");
+                promotedFiles.Length == 1,
+                $"Expected exactly one promoted file in '{liveDirectory}' after a successful build-staging run, found {promotedFiles.Length}.");
         }
         finally
         {

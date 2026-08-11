@@ -6,9 +6,10 @@ use std::path::{Path, PathBuf};
 use chrono::{Duration, Months, NaiveDate, Utc};
 use duckdb::{params, Connection, Result as DuckResult};
 
-use crate::live_config::{self, GroupHistoryLiveConfig};
 use crate::folder_layout;
+use crate::live_config::{self, GroupHistoryLiveConfig};
 use crate::persistence::{self, ImportDayOutcome};
+use crate::promotion;
 use crate::r2_client::ZkillHistoryClient;
 use crate::schema::{self, SCHEMA_VERSION};
 use crate::summary_rebuild::{self, RebuildStats};
@@ -19,11 +20,11 @@ pub const DEFAULT_INITIAL_HISTORIC_IMPORT_HORIZON_YEARS: u32 = 10;
 /// Suffix used for the per-day progress log written alongside a staging file
 /// while its day-import loop runs (Step CC-07.08.26.01). Paired 1:1 with the
 /// staging file by replacing its `.duckdb` extension with this suffix, so it
-/// shares the same base name -- e.g. `KillRight.History.260807.02.duckdb`'s
-/// progress log is `KillRight.History.260807.02.progress.log`. Deliberately
-/// distinct from the C# project's `HistoryUpdaterStagingPaths.StagingFileSearchPattern`
-/// (`KillRight.History.*.duckdb`) so the existing orphaned-staging-file
-/// cleanup never matches or deletes it.
+/// shares the same base name -- e.g. `CORE.KillRight.History.260807.02.duckdb`'s
+/// progress log is `CORE.KillRight.History.260807.02.progress.log`. Deliberately
+/// distinct from the C# project's `HistoryUpdaterStagingPaths.WorkingFileSearchPattern`
+/// pairing so the existing orphaned-staging-file cleanup never matches or
+/// deletes it directly.
 pub const PROGRESS_LOG_FILE_SUFFIX: &str = ".progress.log";
 
 pub const TEST_MODE_ANCHOR_YEAR: i32 = 2016;
@@ -124,6 +125,22 @@ pub struct StagingBuildOutcome {
     pub requested_days: Vec<NaiveDate>,
     pub imported_days: Vec<ImportDayOutcome>,
     pub rebuild_stats: RebuildStats,
+    /// Step 19.00.56: `history_metadata`'s own `last_completed_day_utc`/
+    /// `last_update_utc`, read from the Working database before it was
+    /// checkpointed and promoted. No longer consumed by `build_staging`
+    /// itself to update the `groupHistory` live config (see
+    /// `promoted_file_path`'s doc comment) -- threaded through here so
+    /// 19.00.57 (Live Flag & Sentinel Update) can use these already-computed
+    /// values when it writes the live config pointing at the Live copy,
+    /// rather than re-deriving them.
+    pub metadata_last_completed_day_utc: Option<String>,
+    pub metadata_last_updated_utc: Option<String>,
+    /// Step 19.00.56: where the promoted copy of this build ended up --
+    /// `Live/KillRight.History.yymmdd.##.duckdb` when `succeeded` is `true`,
+    /// or `Failed/KillRight.History.yymmdd.##.duckdb` when it is `false`.
+    /// Always populated when this function returns `Ok`: the OS-level copy
+    /// into Live happens unconditionally, before validation runs.
+    pub promoted_file_path: PathBuf,
     pub validation_failures: Vec<ValidationFailure>,
     pub succeeded: bool,
 }
@@ -135,10 +152,9 @@ pub fn build_staging(
 ) -> Result<StagingBuildOutcome, String> {
     // Step 19.00.55: `directory` is the historic-database root (e.g.
     // %LOCALAPPDATA%\KillRight\HistoryUpdater); the working database this
-    // function builds now lives in its `Working` subfolder, alongside the
-    // sibling `Live`/`Archive`/`Failed` subfolders later steps write to
-    // (Design Specification v5.4 Section 6.9.2/4.7; the plan's 19.00.55
-    // section).
+    // function builds lives in its `Working` subfolder, alongside the
+    // sibling `Live`/`Archive`/`Failed` subfolders this and later steps
+    // write to (Design Specification v5.4 Section 6.9.2/4.7).
     folder_layout::ensure_folder_layout(directory)
         .map_err(|error| format!("Failed to create historic database folder layout: {error}"))?;
     let working_directory = folder_layout::working_dir(directory);
@@ -240,42 +256,84 @@ pub fn build_staging(
         .map_err(|error| format!("Failed to rebuild summary and org context: {error}"))?;
 
     let (metadata_last_completed_day_utc, metadata_last_updated_utc) = read_history_metadata_summary(&connection)
-        .map_err(|error| format!("Failed to read history_metadata for the live config: {error}"))?;
+        .map_err(|error| format!("Failed to read history_metadata: {error}"))?;
 
-    let validation_failures = validate_staging_build(connection, &staging_path, &requested_days)
+    // Step 19.00.56: checkpoint and close the Working connection before the
+    // OS-level copy into Live below -- CHECKPOINT merges the write-ahead log
+    // into the main database file so a plain file copy captures every
+    // committed change, and the connection must be fully closed first so
+    // nothing else has the file open while it's being read (see
+    // validate_promoted_copy's own CHECKPOINT-then-drop for the same
+    // requirement in the opposite direction). A checkpoint failure here
+    // aborts the whole run via `?`, unlike the validation-gate checks below:
+    // there is nothing valid yet to copy or report as a validated-or-failed
+    // file if the Working database itself cannot even be checkpointed.
+    connection
+        .execute_batch("CHECKPOINT;")
+        .map_err(|error| format!("Failed to checkpoint the working database before promotion: {error}"))?;
+    drop(connection);
+
+    // Step 19.00.56: an unconditional OS-level copy of the finished Working
+    // file into Live, under its promoted (un-prefixed) name -- before
+    // validation, per Design Specification v5.4 Section 6.9.4 ("it is copied
+    // under its own versioned name ... into the live folder; primary keys
+    // are added to this copy"). Promoting first and validating the promoted
+    // copy, rather than validating Working and copying afterward, means the
+    // promotion-time uniqueness constraints below run against exactly the
+    // file that ends up in Live or Failed, with nothing able to change in
+    // between.
+    let promoted_path = promotion::copy_to_live(directory, &staging_file_name)
+        .map_err(|error| format!("Failed to copy the working database to Live: {error}"))?;
+
+    // A brand-new connection to a path this process has never opened before
+    // -- not a same-process reopen of the just-closed Working connection, so
+    // none of reopen_cleanly's documented same-process-reopen caveats
+    // (REV-A/REV-B) apply here; those were specific to reopening a path this
+    // process itself had already held open.
+    let promoted_connection = Connection::open(&promoted_path)
+        .map_err(|error| format!("Failed to open the promoted Live-folder copy: {error}"))?;
+
+    let validation_failures = validate_promoted_copy(promoted_connection, &promoted_path, &requested_days)
         .map_err(|error| format!("Failed to run validation checks: {error}"))?;
 
     let succeeded = validation_failures.is_empty();
+
+    // Step 19.00.56: this step's own output -- a validated-or-failed file
+    // sitting in Live or Failed, nothing more (Section 1.0). Setting the
+    // live flag to point at it is 19.00.57's job.
+    let final_copy_path = if succeeded {
+        promoted_path
+    } else {
+        promotion::move_to_failed(directory, &promoted_path)
+            .map_err(|error| format!("Failed to move the failed promotion copy to Failed: {error}"))?
+    };
 
     if succeeded {
         if let Some(path) = &progress_log_path {
             let _ = fs::remove_file(path);
         }
 
+        // The promoted copy's validation is equally valid proof about the
+        // Working database's own data (the copy is byte-identical at the
+        // moment CHECKPOINT completed, before any constraint is added) --
+        // so the "latest validated build" marker for the next incremental
+        // build's copy basis still fires from this same succeeded flag.
         write_latest_validated_build_marker(&working_directory, &staging_file_name)
             .map_err(|error| format!("Failed to update the latest-validated-build marker: {error}"))?;
-
-        let updated_live_config = GroupHistoryLiveConfig {
-            active_database_file: staging_path.to_string_lossy().to_string(),
-            schema_version: SCHEMA_VERSION,
-            last_completed_day_utc: metadata_last_completed_day_utc,
-            last_updated_utc: metadata_last_updated_utc,
-            update_in_progress: false,
-            update_in_progress_pid: None,
-        };
-
-        live_config::write_live_config(&live_config_directory, &updated_live_config)
-            .map_err(|error| format!("Failed to write groupHistory live config: {error}"))?;
-
-        live_config::write_swap_signal(&live_config_directory)
-            .map_err(|error| format!("Failed to write database.new swap signal: {error}"))?;
-    } else {
-        let reverted_live_config =
-            GroupHistoryLiveConfig { update_in_progress: false, update_in_progress_pid: None, ..pre_build_live_config };
-
-        live_config::write_live_config(&live_config_directory, &reverted_live_config)
-            .map_err(|error| format!("Failed to write groupHistory live config: {error}"))?;
     }
+
+    // Step 19.00.56: no longer sets active_database_file/schema_version/
+    // last_completed_day_utc/last_updated_utc on the success path, and no
+    // longer writes the database.new swap signal, on either path -- those
+    // now describe the Live-folder copy, and wiring them up is 19.00.57's
+    // job (Section 1.0). update_in_progress/PID still clear unconditionally
+    // on both paths, exactly as before this guide, since that flag is about
+    // run status, not which database is active.
+    let cleared_live_config =
+        GroupHistoryLiveConfig { update_in_progress: false, update_in_progress_pid: None, ..pre_build_live_config };
+
+    live_config::write_live_config(&live_config_directory, &cleared_live_config)
+        .map_err(|error| format!("Failed to write groupHistory live config: {error}"))?;
 
     Ok(StagingBuildOutcome {
         staging_file_name,
@@ -284,6 +342,9 @@ pub fn build_staging(
         requested_days,
         imported_days,
         rebuild_stats,
+        metadata_last_completed_day_utc,
+        metadata_last_updated_utc,
+        promoted_file_path: final_copy_path,
         validation_failures,
         succeeded,
     })
@@ -339,7 +400,7 @@ fn write_latest_validated_build_marker(directory: &Path, filename: &str) -> io::
 /// Computes the per-day progress log path for a staging file: the same
 /// directory, same base name, with `.duckdb` replaced by
 /// `PROGRESS_LOG_FILE_SUFFIX`. `staging_file_name` is always produced by
-/// `allocate_new_staging_filename`, which always ends in `.duckdb`.
+/// `allocate_new_working_filename`, which always ends in `.duckdb`.
 fn progress_log_path_for(directory: &Path, staging_file_name: &str) -> PathBuf {
     let base_name = staging_file_name
         .strip_suffix(".duckdb")
@@ -424,9 +485,11 @@ fn determine_missing_days(
 
 /// Reads the staging build's own `history_metadata.last_completed_day_utc` and
 /// `last_update_utc` columns, already maintained per-day by `persistence::import_day`
-/// since 19.00.45, for use as the live config's `lastCompletedDayUtc`/`lastUpdatedUtc`
-/// fields. Must be called while `connection` is still open, before
-/// `validate_staging_build` takes ownership of it and closes it.
+/// since 19.00.45. Step 19.00.56: no longer used to update the live config
+/// directly here (see `StagingBuildOutcome::metadata_last_completed_day_utc`'s
+/// doc comment) -- still read at the same point, while `connection` (the
+/// Working database) is open, before it is checkpointed and closed ahead of
+/// promotion.
 fn read_history_metadata_summary(connection: &Connection) -> DuckResult<(Option<String>, Option<String>)> {
     connection.query_row(
         "SELECT last_completed_day_utc, last_update_utc FROM history_metadata LIMIT 1;",
@@ -439,12 +502,31 @@ fn read_history_metadata_summary(connection: &Connection) -> DuckResult<(Option<
     )
 }
 
-fn validate_staging_build(
+/// Renamed from `validate_staging_build` at Step 19.00.56: this now always
+/// runs against the promoted Live-folder copy's connection, never the
+/// Working database's -- see `build_staging` and Design Specification v5.4
+/// Section 6.9.4 ("The copy then runs the validation gate").
+fn validate_promoted_copy(
     connection: Connection,
-    database_path: &Path,
+    promoted_path: &Path,
     requested_days: &[NaiveDate],
 ) -> DuckResult<Vec<ValidationFailure>> {
     let mut failures = Vec::new();
+
+    // Step 19.00.56: the promotion-time uniqueness constraints Section 4.7
+    // documents per table, added to this Live/Failed-bound copy only. See
+    // promotion::add_promotion_constraints's doc comment for why
+    // CREATE UNIQUE INDEX is used rather than ALTER TABLE ... ADD PRIMARY
+    // KEY. A constraint violation here means the working import produced
+    // duplicate evidence -- the full-table duplicate-evidence check Section
+    // 6.9.2/6.9.4 call for -- reported as a validation failure like any
+    // other, not a hard error that aborts the whole run.
+    if let Err(error) = promotion::add_promotion_constraints(&connection) {
+        failures.push(ValidationFailure {
+            check_name: "promotion_constraints",
+            detail: format!("Adding promotion-time uniqueness constraints failed (duplicate evidence found): {error}"),
+        });
+    }
 
     if !requested_days.is_empty() {
         let start_text = requested_days.first().unwrap().format("%Y-%m-%d").to_string();
@@ -528,11 +610,11 @@ fn validate_staging_build(
             });
         }
         Ok(()) => {
-            if let Err(error) = reopen_cleanly(database_path) {
+            if let Err(error) = reopen_cleanly(promoted_path) {
                 failures.push(ValidationFailure {
                     check_name: "clean_reopen",
                     detail: format!(
-                        "Re-opening the staging file from a separate process after CHECKPOINT failed: {error}"
+                        "Re-opening the promoted copy from a separate process after CHECKPOINT failed: {error}"
                     ),
                 });
             }
