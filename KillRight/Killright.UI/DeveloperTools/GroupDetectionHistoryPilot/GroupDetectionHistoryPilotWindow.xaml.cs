@@ -221,6 +221,22 @@ public partial class GroupDetectionHistoryPilotWindow : Window
             var outcome = status.LastUpdatedUtc != _baselineLastUpdatedUtc
                 ? "Completed"
                 : "Validation failed - see Failed folder";
+
+            // Step 19.00.61: check for and apply the application-side swap
+            // (19.00.59 REV-A) and archive (19.00.60 REV-B) the instant this
+            // window observes a run finish, rather than only at the next
+            // application launch (App.OnStartup's own call, unchanged by
+            // this guide) -- wiring the full CORE import -> promotion ->
+            // validation -> live flag -> swap -> archive chain into one
+            // observable run from this window. Safe to call unconditionally:
+            // ApplySwapIfSignalled returns null (outcome left unchanged)
+            // whenever there is nothing to apply, which is always true for a
+            // run that failed validation -- killright_history_updater only
+            // ever writes the swap sentinel from build_staging's succeeded
+            // branch (live_config::write_swap_signal).
+            var swapOutcome = ApplySwapIfSignalled();
+            outcome = swapOutcome is null ? outcome : $"{outcome} - {swapOutcome}";
+
             RecordRunHistoryEntry(outcome, status.LastCompletedDayUtc);
             _localRunStopwatch = null;
         }
@@ -230,6 +246,45 @@ public partial class GroupDetectionHistoryPilotWindow : Window
         LaunchButton.IsEnabled = !status.UpdateInProgress;
         StopButton.IsEnabled = _launchedProcess is not null && !_launchedProcess.HasExited;
         StatusTextBox.Text = BuildStatusReport(status);
+    }
+
+    /// <summary>
+    /// Step 19.00.61: runs the same GroupHistorySwapWatcher.CheckAndApply
+    /// App.OnStartup runs once per launch (19.00.59 REV-A), against the same
+    /// shared App.GroupHistoryActiveDatabasePathResolver instance -- never a
+    /// new local resolver, which would silently defeat the purpose exactly
+    /// as the resolver's own in-memory-state defect did before the 19.00.60
+    /// REV-B fix (a fresh resolver has no memory of what this application
+    /// process actually has open). Using the shared instance means a real
+    /// swap during this session is immediately reflected for the rest of the
+    /// running application too, not just reported here. Wrapped exactly like
+    /// OnStartup's own call: nothing about this check may disrupt the status
+    /// panel refresh already in progress when it runs.
+    ///
+    /// Returns a short phrase describing the outcome for the Run History
+    /// line, or null when GroupHistorySwapResult.NoSentinel was returned --
+    /// the common case for a run that failed validation, or one already
+    /// picked up by a prior refresh tick or the last application startup.
+    /// </summary>
+    private static string? ApplySwapIfSignalled()
+    {
+        try
+        {
+            var result = new GroupHistorySwapWatcher(App.GroupHistoryActiveDatabasePathResolver).CheckAndApply();
+
+            return result switch
+            {
+                GroupHistorySwapResult.Applied => "Swap applied - now running against the new database",
+                GroupHistorySwapResult.FailedToOpenFallenBackToPrevious => "Swap failed to open - fell back to previous database, see Failed folder",
+                GroupHistorySwapResult.CandidateFileMissing => "Swap signalled but the candidate file was missing - previous database left active",
+                GroupHistorySwapResult.NoSentinel => null,
+                _ => null
+            };
+        }
+        catch (Exception ex)
+        {
+            return $"Swap check failed: {ex.Message}";
+        }
     }
 
     private void RecordRunHistoryEntry(string outcome, string? currentLastCompletedDayUtc, string? progressLogFileName = null)
@@ -289,7 +344,7 @@ public partial class GroupDetectionHistoryPilotWindow : Window
         builder.AppendLine("KillRight Historic Updater - Live Status");
         builder.AppendLine("====================================================");
         builder.AppendLine();
-        builder.AppendLine($"Update in progress: {(status.UpdateInProgress ? "Yes" : "No")}");
+        builder.AppendLine($"Update in progress: {(status.UpdateInProgress ? "Yes (importing / promoting / validating)" : "No")}");
         builder.AppendLine($"Elapsed (this window): {FormatElapsed()}");
         builder.AppendLine($"Active database file: {(string.IsNullOrEmpty(status.ActiveDatabaseFile) ? "(none yet)" : status.ActiveDatabaseFile)}");
         builder.AppendLine($"Schema version: {status.SchemaVersion}");
@@ -318,6 +373,8 @@ public partial class GroupDetectionHistoryPilotWindow : Window
         builder.AppendLine("- This window only reads groupHistory.status.json; it performs no import or persistence itself.");
         builder.AppendLine("- The elapsed clock and Stop only track a run launched from this window during this session.");
         builder.AppendLine("- Test Amount is anchored at a fixed 01 Aug 2016 start date; it does not depend on today's date.");
+        builder.AppendLine("- Importing, promoting, and validating run as a single blocking step with no intermediate phase signal; this window observes only in-progress vs. finished for those three.");
+        builder.AppendLine("- Step 19.00.61: swapping and archiving are now checked the instant a run this window is watching finishes, not only at the next application launch -- see the Run History line for the outcome.");
         builder.AppendLine("====================================================");
         builder.AppendLine();
         builder.AppendLine("Run History (this window session):");
