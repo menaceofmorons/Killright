@@ -215,9 +215,12 @@ public partial class GroupDetectionHistoryPilotWindow : Window
 
         if (_lastObservedUpdateInProgress && !status.UpdateInProgress)
         {
+            // Step 19.00.58: wording aligned with the persistent status-panel
+            // notification below (BuildStatusReport) so both point the user
+            // to the same place.
             var outcome = status.LastUpdatedUtc != _baselineLastUpdatedUtc
                 ? "Completed"
-                : "Validation failed (no new data persisted)";
+                : "Validation failed - see Failed folder";
             RecordRunHistoryEntry(outcome, status.LastCompletedDayUtc);
             _localRunStopwatch = null;
         }
@@ -292,6 +295,24 @@ public partial class GroupDetectionHistoryPilotWindow : Window
         builder.AppendLine($"Schema version: {status.SchemaVersion}");
         builder.AppendLine($"Last completed day (UTC): {status.LastCompletedDayUtc ?? "(none yet)"}");
         builder.AppendLine($"Last updated (UTC): {status.LastUpdatedUtc ?? "(none yet)"}");
+
+        // Step 19.00.58: derived from the Failed folder's actual contents on
+        // every refresh, not from run-history alone, so the notification
+        // persists across window reopens for as long as the failed file
+        // remains there (Design Specification v5.4 Section 6.9.4/6.9.7: "a
+        // copy that fails validation is moved to a separate failed-build
+        // folder and the user is notified" / "nothing removes them
+        // automatically"). No cleanup or analysis tooling here by design --
+        // deferred to the 21.**.* User Interface Improvements family.
+        var failedBuildFileNames = HistoryUpdaterFailedBuildStatus.FindFailedBuildFileNames();
+
+        if (failedBuildFileNames.Count > 0)
+        {
+            builder.AppendLine();
+            builder.AppendLine($"Last build failed - see Failed folder ({failedBuildFileNames.Count} file(s)): {HistoryUpdaterStagingPaths.GetFailedDirectory()}");
+            builder.AppendLine($"Most recent failed file: {failedBuildFileNames[0]}");
+        }
+
         builder.AppendLine();
         builder.AppendLine("Notes:");
         builder.AppendLine("- This window only reads groupHistory.status.json; it performs no import or persistence itself.");
