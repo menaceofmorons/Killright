@@ -5,6 +5,7 @@ using System.Windows;
 using Killright.Integration.Esi;
 using Killright.Integration.zKill;
 using Killright.Storage.Database;
+using Killright.Storage.GroupHistory;
 using Killright.Storage.Identity;
 using Killright.Storage.Killmails;
 using Killright.Storage.zKill;
@@ -26,12 +27,43 @@ public partial class App : Application
     public static IKillrightEngineRuntime EngineRuntime { get; private set; } = null!;
     public static KillRightDatabase Database { get; private set; } = null!;
 
+    // Step 19.00.59: exposed for the not-yet-designed Historic Analysis
+    // consumer (Section 6.9.5) to resolve the active historic database path
+    // from later. GroupHistorySwapWatcher.CheckAndApply below is the only
+    // thing that ever repoints it during this application's lifetime.
+    public static GroupHistoryActiveDatabasePathResolver GroupHistoryActiveDatabasePathResolver { get; private set; } = null!;
+
     protected override void OnStartup(
         StartupEventArgs e)
     {
         base.OnStartup(e);
 
         Settings = ApplicationSettingsLoader.LoadOrDefault();
+
+        // Step 19.00.59: the application half of promotion (Design
+        // Specification v5.4 Section 6.9.4) -- react once, at launch, to a
+        // live flag left by a completed killright_history_updater build.
+        // GroupHistorySwapWatcher.CheckAndApply is a no-op (NoSentinel) on
+        // every launch where no build has completed since the last check,
+        // which is the common case. A single startup check, not a recurring
+        // timer or FileSystemWatcher, is deliberate: builds are already
+        // infrequent, manually-triggered developer-menu actions (Section
+        // 6.9.1), so the next launch after one completes is sufficient.
+        // Wrapped so nothing about this new step can ever prevent KillRight
+        // from starting -- GroupHistoryActiveDatabasePathResolver already
+        // defaults to the previous active path (or the legacy default, on a
+        // machine with no successful build yet) whether or not the check
+        // below runs to completion.
+        GroupHistoryActiveDatabasePathResolver = new GroupHistoryActiveDatabasePathResolver();
+
+        try
+        {
+            new GroupHistorySwapWatcher(GroupHistoryActiveDatabasePathResolver).CheckAndApply();
+        }
+        catch
+        {
+            // Intentionally swallowed -- see comment above.
+        }
 
         var databasePath = Path.Combine(
             Environment.GetFolderPath(
