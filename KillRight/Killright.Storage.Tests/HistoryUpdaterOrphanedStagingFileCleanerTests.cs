@@ -4,11 +4,15 @@ using Xunit;
 
 namespace Killright.Storage.Tests;
 
+// Section 6.4 Agent Test Independence: every test below builds its own
+// uniquely named Working directory (Path.GetTempPath() + a fresh Guid) and
+// its own status file path, and cleans up everything it created before
+// returning. No test depends on another having run first.
 public sealed class HistoryUpdaterOrphanedStagingFileCleanerTests
 {
-    private static string CreateTempStagingDirectory()
+    private static string CreateTempWorkingDirectory()
     {
-        var directory = Path.Combine(Path.GetTempPath(), $"staging.{Guid.NewGuid():N}");
+        var directory = Path.Combine(Path.GetTempPath(), $"working.{Guid.NewGuid():N}");
         Directory.CreateDirectory(directory);
         return directory;
     }
@@ -29,7 +33,7 @@ public sealed class HistoryUpdaterOrphanedStagingFileCleanerTests
     }
 
     [Fact]
-    public void TryCleanUpOrphan_StagingDirectoryDoesNotExist_ReturnsNull()
+    public void TryCleanUpOrphan_WorkingDirectoryDoesNotExist_ReturnsNull()
     {
         var directory = Path.Combine(Path.GetTempPath(), $"does-not-exist-{Guid.NewGuid():N}");
         var statusPath = WriteLiveStatus(string.Empty);
@@ -49,7 +53,7 @@ public sealed class HistoryUpdaterOrphanedStagingFileCleanerTests
     [Fact]
     public void TryCleanUpOrphan_NoCandidateFiles_ReturnsNull()
     {
-        var directory = CreateTempStagingDirectory();
+        var directory = CreateTempWorkingDirectory();
         var statusPath = WriteLiveStatus(string.Empty);
 
         try
@@ -68,11 +72,11 @@ public sealed class HistoryUpdaterOrphanedStagingFileCleanerTests
     [Fact]
     public void TryCleanUpOrphan_OneOrphanFile_DeletesItAndReturnsPath()
     {
-        var directory = CreateTempStagingDirectory();
-        var orphanPath = Path.Combine(directory, "KillRight.History.260805.02.duckdb");
+        var directory = CreateTempWorkingDirectory();
+        var orphanPath = Path.Combine(directory, "CORE.KillRight.History.260805.02.duckdb");
         File.WriteAllText(orphanPath, "not a real database, just a fixture");
 
-        var statusPath = WriteLiveStatus(Path.Combine(directory, "KillRight.History.260805.01.duckdb"));
+        var statusPath = WriteLiveStatus(Path.Combine(directory, "CORE.KillRight.History.260805.01.duckdb"));
 
         try
         {
@@ -91,9 +95,9 @@ public sealed class HistoryUpdaterOrphanedStagingFileCleanerTests
     [Fact]
     public void TryCleanUpOrphan_MultipleCandidateFiles_DeletesAllAndReturnsTheMostRecentlyWrittenOne()
     {
-        var directory = CreateTempStagingDirectory();
-        var olderOrphanPath = Path.Combine(directory, "KillRight.History.260804.01.duckdb");
-        var newerOrphanPath = Path.Combine(directory, "KillRight.History.260805.01.duckdb");
+        var directory = CreateTempWorkingDirectory();
+        var olderOrphanPath = Path.Combine(directory, "CORE.KillRight.History.260804.01.duckdb");
+        var newerOrphanPath = Path.Combine(directory, "CORE.KillRight.History.260805.01.duckdb");
         File.WriteAllText(olderOrphanPath, "fixture one");
         File.WriteAllText(newerOrphanPath, "fixture two");
         File.SetLastWriteTimeUtc(olderOrphanPath, DateTime.UtcNow.AddHours(-1));
@@ -119,11 +123,11 @@ public sealed class HistoryUpdaterOrphanedStagingFileCleanerTests
     [Fact]
     public void TryCleanUpOrphan_MultipleCandidates_DeletesStaleProgressLogsButPreservesTheMostRecentOnes()
     {
-        var directory = CreateTempStagingDirectory();
-        var olderOrphanPath = Path.Combine(directory, "KillRight.History.260804.01.duckdb");
-        var newerOrphanPath = Path.Combine(directory, "KillRight.History.260805.01.duckdb");
-        var olderProgressLogPath = Path.Combine(directory, "KillRight.History.260804.01.progress.log");
-        var newerProgressLogPath = Path.Combine(directory, "KillRight.History.260805.01.progress.log");
+        var directory = CreateTempWorkingDirectory();
+        var olderOrphanPath = Path.Combine(directory, "CORE.KillRight.History.260804.01.duckdb");
+        var newerOrphanPath = Path.Combine(directory, "CORE.KillRight.History.260805.01.duckdb");
+        var olderProgressLogPath = Path.Combine(directory, "CORE.KillRight.History.260804.01.progress.log");
+        var newerProgressLogPath = Path.Combine(directory, "CORE.KillRight.History.260805.01.progress.log");
         File.WriteAllText(olderOrphanPath, "fixture one");
         File.WriteAllText(newerOrphanPath, "fixture two");
         File.WriteAllText(olderProgressLogPath, "stale, from an unrelated earlier killed run");
@@ -152,8 +156,8 @@ public sealed class HistoryUpdaterOrphanedStagingFileCleanerTests
     [Fact]
     public void TryCleanUpOrphan_OnlyCandidateIsTheActiveDatabaseFile_ReturnsNullAndLeavesItInPlace()
     {
-        var directory = CreateTempStagingDirectory();
-        var activePath = Path.Combine(directory, "KillRight.History.260805.01.duckdb");
+        var directory = CreateTempWorkingDirectory();
+        var activePath = Path.Combine(directory, "CORE.KillRight.History.260805.01.duckdb");
         File.WriteAllText(activePath, "the just-succeeded, now-active database");
 
         var statusPath = WriteLiveStatus(activePath);

@@ -2,6 +2,7 @@ use std::env;
 use std::process;
 
 mod database_path;
+mod folder_layout;
 mod live_config;
 mod local_app_data;
 mod lock;

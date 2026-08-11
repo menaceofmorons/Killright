@@ -7,6 +7,7 @@ use chrono::{Duration, Months, NaiveDate, Utc};
 use duckdb::{params, Connection, Result as DuckResult};
 
 use crate::live_config::{self, GroupHistoryLiveConfig};
+use crate::folder_layout;
 use crate::persistence::{self, ImportDayOutcome};
 use crate::r2_client::ZkillHistoryClient;
 use crate::schema::{self, SCHEMA_VERSION};
@@ -132,7 +133,15 @@ pub fn build_staging(
     client: &ZkillHistoryClient,
     range_mode: ImportRangeMode,
 ) -> Result<StagingBuildOutcome, String> {
-    fs::create_dir_all(directory).map_err(|error| format!("Failed to create staging directory: {error}"))?;
+    // Step 19.00.55: `directory` is the historic-database root (e.g.
+    // %LOCALAPPDATA%\KillRight\HistoryUpdater); the working database this
+    // function builds now lives in its `Working` subfolder, alongside the
+    // sibling `Live`/`Archive`/`Failed` subfolders later steps write to
+    // (Design Specification v5.4 Section 6.9.2/4.7; the plan's 19.00.55
+    // section).
+    folder_layout::ensure_folder_layout(directory)
+        .map_err(|error| format!("Failed to create historic database folder layout: {error}"))?;
+    let working_directory = folder_layout::working_dir(directory);
 
     let live_config_directory = live_config::get_live_config_directory();
     let pre_build_live_config = live_config::read_live_config(&live_config_directory);
@@ -147,9 +156,9 @@ pub fn build_staging(
     )
     .map_err(|error| format!("Failed to write groupHistory live config: {error}"))?;
 
-    let copy_basis = find_copy_basis(directory);
-    let (staging_path, staging_file_name) = allocate_new_staging_filename(directory)
-        .map_err(|error| format!("Failed to allocate staging filename: {error}"))?;
+    let copy_basis = find_copy_basis(&working_directory);
+    let (staging_path, staging_file_name) = allocate_new_working_filename(&working_directory)
+        .map_err(|error| format!("Failed to allocate working filename: {error}"))?;
 
     let copied_from = match &copy_basis {
         Some(source_path) => {
@@ -188,7 +197,7 @@ pub fn build_staging(
     let progress_log_path = if requested_days.is_empty() {
         None
     } else {
-        Some(progress_log_path_for(directory, &staging_file_name))
+        Some(progress_log_path_for(&working_directory, &staging_file_name))
     };
 
     let mut progress_log_file = match &progress_log_path {
@@ -243,7 +252,7 @@ pub fn build_staging(
             let _ = fs::remove_file(path);
         }
 
-        write_latest_validated_build_marker(directory, &staging_file_name)
+        write_latest_validated_build_marker(&working_directory, &staging_file_name)
             .map_err(|error| format!("Failed to update the latest-validated-build marker: {error}"))?;
 
         let updated_live_config = GroupHistoryLiveConfig {
@@ -280,13 +289,20 @@ pub fn build_staging(
     })
 }
 
-fn allocate_new_staging_filename(directory: &Path) -> io::Result<(PathBuf, String)> {
+/// Renamed from `allocate_new_staging_filename` at Step 19.00.55: produces
+/// the `CORE.`-prefixed working-database name Section 6.9.2 introduces to
+/// distinguish the unconstrained Working-folder file from its later
+/// promoted, primary-keyed Live-folder copy (19.00.56), which keeps the
+/// unprefixed `KillRight.History.yymmdd.##` name. `directory` is always the
+/// `Working` subfolder (see `build_staging`), not the historic database
+/// root.
+fn allocate_new_working_filename(directory: &Path) -> io::Result<(PathBuf, String)> {
     let today = Utc::now().date_naive();
     let date_prefix = today.format("%y%m%d").to_string();
     let mut sequence: u32 = 1;
 
     loop {
-        let filename = format!("KillRight.History.{date_prefix}.{sequence:02}.duckdb");
+        let filename = format!("CORE.KillRight.History.{date_prefix}.{sequence:02}.duckdb");
         let candidate = directory.join(&filename);
 
         if !candidate.exists() {
@@ -565,9 +581,9 @@ mod tests {
     #[test]
     fn progress_log_path_for_replaces_duckdb_extension_with_progress_log_suffix() {
         let directory = Path::new("staging-directory");
-        let path = progress_log_path_for(directory, "KillRight.History.260807.02.duckdb");
+        let path = progress_log_path_for(directory, "CORE.KillRight.History.260807.02.duckdb");
 
-        assert_eq!(path, directory.join("KillRight.History.260807.02.progress.log"));
+        assert_eq!(path, directory.join("CORE.KillRight.History.260807.02.progress.log"));
     }
 
     #[test]

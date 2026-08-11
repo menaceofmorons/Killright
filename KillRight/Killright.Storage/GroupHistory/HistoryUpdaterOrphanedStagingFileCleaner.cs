@@ -3,13 +3,13 @@ namespace Killright.Storage.GroupHistory;
 public static class HistoryUpdaterOrphanedStagingFileCleaner
 {
     /// <summary>
-    /// Deletes every staging file in the given directory that is not the
-    /// current ActiveDatabaseFile -- not just when there is exactly one, as
-    /// before (Step CC-08.08.26.01). A killed run can leave more than one
-    /// behind over time (for example, an earlier killed run's file that was
-    /// never cleaned up, sitting alongside the one a later Stop just
-    /// interrupted), and the previous "exactly one" check silently left all
-    /// of them in place whenever that happened, with nothing reported.
+    /// Deletes every working-database file in the given directory that is
+    /// not the current ActiveDatabaseFile -- not just when there is exactly
+    /// one, as before (Step CC-08.08.26.01). A killed run can leave more
+    /// than one behind over time (for example, an earlier killed run's file
+    /// that was never cleaned up, sitting alongside the one a later Stop
+    /// just interrupted), and the previous "exactly one" check silently left
+    /// all of them in place whenever that happened, with nothing reported.
     /// Returns the path of the most recently written one deleted -- the one
     /// the current Stop actually just interrupted -- or null if there was
     /// nothing to delete. Any other deleted candidate's paired progress log
@@ -17,10 +17,21 @@ public static class HistoryUpdaterOrphanedStagingFileCleaner
     /// unrelated, already-reported incident; the most recent one's progress
     /// log is deliberately left in place, exactly as before, for the caller
     /// to report.
+    ///
+    /// Step 19.00.55: <paramref name="workingDirectory"/> is now the Working
+    /// subfolder specifically (defaulting to
+    /// HistoryUpdaterStagingPaths.GetWorkingDirectory(), not the historic
+    /// database root) -- the only place killright_history_updater's
+    /// staging.rs writes an in-progress CORE-prefixed working database.
+    /// Matching pattern updated to WorkingFileSearchPattern
+    /// ("CORE.KillRight.History.*.duckdb") accordingly; the "exactly one
+    /// candidate" reasoning above remains specific to this versioned working
+    /// naming scheme, not the legacy fixed-name file HistoryUpdaterWiper also
+    /// sweeps.
     /// </summary>
-    public static string? TryCleanUpOrphan(string? stagingDirectory = null, string? liveStatusPath = null)
+    public static string? TryCleanUpOrphan(string? workingDirectory = null, string? liveStatusPath = null)
     {
-        var directory = stagingDirectory ?? HistoryUpdaterStagingPaths.GetStagingDirectory();
+        var directory = workingDirectory ?? HistoryUpdaterStagingPaths.GetWorkingDirectory();
 
         if (!Directory.Exists(directory))
             return null;
@@ -30,7 +41,7 @@ public static class HistoryUpdaterOrphanedStagingFileCleaner
         var activeFullPath = string.IsNullOrEmpty(activeDatabaseFile) ? null : Path.GetFullPath(activeDatabaseFile);
 
         var candidates = Directory
-            .GetFiles(directory, HistoryUpdaterStagingPaths.StagingFileSearchPattern)
+            .GetFiles(directory, HistoryUpdaterStagingPaths.WorkingFileSearchPattern)
             .Where(path => activeFullPath is null
                 || !string.Equals(Path.GetFullPath(path), activeFullPath, StringComparison.OrdinalIgnoreCase))
             .ToArray();

@@ -6,46 +6,106 @@ public static class HistoryUpdaterWiper
     public const string LatestValidatedBuildMarkerFileName = "latest_validated_build.txt";
 
     /// <summary>
-    /// Deletes every database file (Step 19.00.54: every *.duckdb file in the
-    /// staging directory, not only ones matching the versioned
-    /// KillRight.History.*.duckdb staging naming -- see
-    /// HistoryUpdaterStagingPaths.AllDatabaseFileSearchPattern) and every
-    /// leftover write-ahead-log file, the latest-validated-build marker, and
-    /// the live status/swap-signal files. Returns the number of files deleted.
-    /// Callers are responsible for confirming no build is in progress first.
+    /// Step 19.00.55: every directory WipeAll/FindRemainingArtifacts sweeps --
+    /// the historic database root itself (catches the legacy fixed-name
+    /// KillRight.HistoryUpdater.duckdb, which lives directly in the root, not
+    /// a subfolder) plus its four Working/Live/Archive/Failed subfolders.
+    /// Recomputed on every call rather than cached, since each directory is
+    /// only ever a plain path join -- none of these need to exist for this
+    /// list to be built; existence is checked per-directory by
+    /// WipeDatabaseAndLogFiles/FindDatabaseAndLogFiles below.
     /// </summary>
-    public static int WipeAll(string? stagingDirectory = null, string? liveStatusPath = null, string? swapSignalPath = null)
+    private static IReadOnlyList<string> AllSweptDirectories(string? rootDirectoryOverride)
     {
-        var directory = stagingDirectory ?? HistoryUpdaterStagingPaths.GetStagingDirectory();
+        var root = rootDirectoryOverride ?? HistoryUpdaterStagingPaths.GetHistoryUpdaterRootDirectory();
+
+        return new[]
+        {
+            root,
+            Path.Combine(root, HistoryUpdaterStagingPaths.WorkingDirectoryName),
+            Path.Combine(root, HistoryUpdaterStagingPaths.LiveDirectoryName),
+            Path.Combine(root, HistoryUpdaterStagingPaths.ArchiveDirectoryName),
+            Path.Combine(root, HistoryUpdaterStagingPaths.FailedDirectoryName),
+        };
+    }
+
+    /// <summary>
+    /// Deletes every database file, write-ahead-log file, and progress log in
+    /// a single directory that exists, without creating it if it doesn't.
+    /// Shared by WipeAll and FindRemainingArtifacts (via
+    /// FindDatabaseAndLogFiles) so the two stay in lockstep on exactly what
+    /// "an artifact" means.
+    /// </summary>
+    private static int WipeDatabaseAndLogFiles(string directory)
+    {
         var deletedCount = 0;
 
-        if (Directory.Exists(directory))
+        if (!Directory.Exists(directory))
+            return deletedCount;
+
+        foreach (var path in Directory.GetFiles(directory, HistoryUpdaterStagingPaths.AllDatabaseFileSearchPattern))
         {
-            foreach (var path in Directory.GetFiles(directory, HistoryUpdaterStagingPaths.AllDatabaseFileSearchPattern))
-            {
-                File.Delete(path);
-                deletedCount++;
-            }
+            File.Delete(path);
+            deletedCount++;
+        }
 
-            foreach (var path in Directory.GetFiles(directory, HistoryUpdaterStagingPaths.AllWriteAheadLogSearchPattern))
-            {
-                File.Delete(path);
-                deletedCount++;
-            }
+        foreach (var path in Directory.GetFiles(directory, HistoryUpdaterStagingPaths.AllWriteAheadLogSearchPattern))
+        {
+            File.Delete(path);
+            deletedCount++;
+        }
 
-            foreach (var path in Directory.GetFiles(directory, HistoryUpdaterStagingPaths.ProgressLogSearchPattern))
-            {
-                File.Delete(path);
-                deletedCount++;
-            }
+        foreach (var path in Directory.GetFiles(directory, HistoryUpdaterStagingPaths.AllProgressLogSearchPattern))
+        {
+            File.Delete(path);
+            deletedCount++;
+        }
 
-            var markerPath = Path.Combine(directory, LatestValidatedBuildMarkerFileName);
+        return deletedCount;
+    }
 
-            if (File.Exists(markerPath))
-            {
-                File.Delete(markerPath);
-                deletedCount++;
-            }
+    private static IEnumerable<string> FindDatabaseAndLogFiles(string directory)
+    {
+        if (!Directory.Exists(directory))
+            yield break;
+
+        foreach (var path in Directory.GetFiles(directory, HistoryUpdaterStagingPaths.AllDatabaseFileSearchPattern))
+            yield return path;
+
+        foreach (var path in Directory.GetFiles(directory, HistoryUpdaterStagingPaths.AllWriteAheadLogSearchPattern))
+            yield return path;
+
+        foreach (var path in Directory.GetFiles(directory, HistoryUpdaterStagingPaths.AllProgressLogSearchPattern))
+            yield return path;
+    }
+
+    /// <summary>
+    /// Deletes every database file, write-ahead-log file, and progress log
+    /// across the historic database root and all four Working/Live/Archive/
+    /// Failed subfolders (Step 19.00.55 -- previously only the single flat
+    /// staging directory), the latest-validated-build marker (Step 19.00.55:
+    /// now read from the Working subfolder, matching
+    /// killright_history_updater's staging.rs, which writes it alongside the
+    /// working database), and the live status/swap-signal files. Returns the
+    /// number of files deleted. Callers are responsible for confirming no
+    /// build is in progress first.
+    /// </summary>
+    public static int WipeAll(string? rootDirectoryOverride = null, string? liveStatusPath = null, string? swapSignalPath = null)
+    {
+        var deletedCount = 0;
+
+        foreach (var directory in AllSweptDirectories(rootDirectoryOverride))
+        {
+            deletedCount += WipeDatabaseAndLogFiles(directory);
+        }
+
+        var root = rootDirectoryOverride ?? HistoryUpdaterStagingPaths.GetHistoryUpdaterRootDirectory();
+        var markerPath = Path.Combine(root, HistoryUpdaterStagingPaths.WorkingDirectoryName, LatestValidatedBuildMarkerFileName);
+
+        if (File.Exists(markerPath))
+        {
+            File.Delete(markerPath);
+            deletedCount++;
         }
 
         var statusPath = liveStatusPath ?? GroupHistoryLiveConfigPaths.GetLiveStatusPath();
@@ -68,31 +128,27 @@ public static class HistoryUpdaterWiper
     }
 
     /// <summary>
-    /// Step 19.00.54: the "confirmation check before proceeding to 19.00.55" the
-    /// plan calls for -- lists every artifact WipeAll is responsible for removing
-    /// that is still present. An empty result confirms a genuine clean slate: no
-    /// working database (any *.duckdb file), no leftover write-ahead-log file, no
-    /// orphaned progress log, no latest-validated-build marker, and no live config
-    /// (groupHistory.status.json / database.new). Safe to call at any time, not
-    /// just immediately after WipeAll -- for example to confirm state before a
-    /// scale-gate run.
+    /// Step 19.00.54/19.00.55: lists every artifact WipeAll is responsible
+    /// for removing that is still present, across the historic database root
+    /// and all four subfolders, plus the Working-subfolder marker and the
+    /// live status/swap-signal files. An empty result confirms a genuine
+    /// clean slate. Safe to call at any time, not just immediately after
+    /// WipeAll.
     /// </summary>
-    public static IReadOnlyList<string> FindRemainingArtifacts(string? stagingDirectory = null, string? liveStatusPath = null, string? swapSignalPath = null)
+    public static IReadOnlyList<string> FindRemainingArtifacts(string? rootDirectoryOverride = null, string? liveStatusPath = null, string? swapSignalPath = null)
     {
-        var directory = stagingDirectory ?? HistoryUpdaterStagingPaths.GetStagingDirectory();
         var remaining = new List<string>();
 
-        if (Directory.Exists(directory))
+        foreach (var directory in AllSweptDirectories(rootDirectoryOverride))
         {
-            remaining.AddRange(Directory.GetFiles(directory, HistoryUpdaterStagingPaths.AllDatabaseFileSearchPattern));
-            remaining.AddRange(Directory.GetFiles(directory, HistoryUpdaterStagingPaths.AllWriteAheadLogSearchPattern));
-            remaining.AddRange(Directory.GetFiles(directory, HistoryUpdaterStagingPaths.ProgressLogSearchPattern));
-
-            var markerPath = Path.Combine(directory, LatestValidatedBuildMarkerFileName);
-
-            if (File.Exists(markerPath))
-                remaining.Add(markerPath);
+            remaining.AddRange(FindDatabaseAndLogFiles(directory));
         }
+
+        var root = rootDirectoryOverride ?? HistoryUpdaterStagingPaths.GetHistoryUpdaterRootDirectory();
+        var markerPath = Path.Combine(root, HistoryUpdaterStagingPaths.WorkingDirectoryName, LatestValidatedBuildMarkerFileName);
+
+        if (File.Exists(markerPath))
+            remaining.Add(markerPath);
 
         var statusPath = liveStatusPath ?? GroupHistoryLiveConfigPaths.GetLiveStatusPath();
 
