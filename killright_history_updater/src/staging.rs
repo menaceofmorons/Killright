@@ -125,14 +125,12 @@ pub struct StagingBuildOutcome {
     pub requested_days: Vec<NaiveDate>,
     pub imported_days: Vec<ImportDayOutcome>,
     pub rebuild_stats: RebuildStats,
-    /// Step 19.00.56: `history_metadata`'s own `last_completed_day_utc`/
-    /// `last_update_utc`, read from the Working database before it was
-    /// checkpointed and promoted. No longer consumed by `build_staging`
-    /// itself to update the `groupHistory` live config (see
-    /// `promoted_file_path`'s doc comment) -- threaded through here so
-    /// 19.00.57 (Live Flag & Sentinel Update) can use these already-computed
-    /// values when it writes the live config pointing at the Live copy,
-    /// rather than re-deriving them.
+    /// `history_metadata`'s own `last_completed_day_utc`/`last_update_utc`,
+    /// read from the Working database before it was checkpointed and
+    /// promoted (Step 19.00.56). Step 19.00.57: consumed directly by
+    /// `build_staging` on a successful run to populate the `groupHistory`
+    /// live config's `lastCompletedDayUtc`/`lastUpdatedUtc` fields, so no
+    /// caller needs to re-derive them.
     pub metadata_last_completed_day_utc: Option<String>,
     pub metadata_last_updated_utc: Option<String>,
     /// Step 19.00.56: where the promoted copy of this build ended up --
@@ -322,18 +320,42 @@ pub fn build_staging(
             .map_err(|error| format!("Failed to update the latest-validated-build marker: {error}"))?;
     }
 
-    // Step 19.00.56: no longer sets active_database_file/schema_version/
-    // last_completed_day_utc/last_updated_utc on the success path, and no
-    // longer writes the database.new swap signal, on either path -- those
-    // now describe the Live-folder copy, and wiring them up is 19.00.57's
-    // job (Section 1.0). update_in_progress/PID still clear unconditionally
-    // on both paths, exactly as before this guide, since that flag is about
-    // run status, not which database is active.
-    let cleared_live_config =
-        GroupHistoryLiveConfig { update_in_progress: false, update_in_progress_pid: None, ..pre_build_live_config };
+    // Step 19.00.57: the updater's final action for a successful build --
+    // point activeDatabaseFile at the newly validated Live-folder copy,
+    // advance schemaVersion/lastCompletedDayUtc/lastUpdatedUtc, and drop the
+    // database.new sentinel as the cheap "go re-check" signal (Design
+    // Specification v5.4 Section 6.9.4: "Only a copy that passes has its
+    // live flag set, signalling the application to swap to it"). On
+    // failure, the live config is only cleared of update_in_progress/PID --
+    // whatever activeDatabaseFile pointed at before this run started is left
+    // untouched, exactly as it was before 19.00.56 removed this branching
+    // entirely. Everything that reacts to this flag
+    // (GroupHistorySwapWatcher/GroupHistoryActiveDatabasePathResolver, both
+    // already implemented but not yet called from anywhere the running
+    // application reaches) is application-side and out of scope here --
+    // that starts at 19.00.59.
+    if succeeded {
+        let updated_live_config = GroupHistoryLiveConfig {
+            active_database_file: final_copy_path.to_string_lossy().to_string(),
+            schema_version: SCHEMA_VERSION,
+            last_completed_day_utc: metadata_last_completed_day_utc.clone(),
+            last_updated_utc: metadata_last_updated_utc.clone(),
+            update_in_progress: false,
+            update_in_progress_pid: None,
+        };
 
-    live_config::write_live_config(&live_config_directory, &cleared_live_config)
-        .map_err(|error| format!("Failed to write groupHistory live config: {error}"))?;
+        live_config::write_live_config(&live_config_directory, &updated_live_config)
+            .map_err(|error| format!("Failed to write groupHistory live config: {error}"))?;
+
+        live_config::write_swap_signal(&live_config_directory)
+            .map_err(|error| format!("Failed to write database.new swap signal: {error}"))?;
+    } else {
+        let reverted_live_config =
+            GroupHistoryLiveConfig { update_in_progress: false, update_in_progress_pid: None, ..pre_build_live_config };
+
+        live_config::write_live_config(&live_config_directory, &reverted_live_config)
+            .map_err(|error| format!("Failed to write groupHistory live config: {error}"))?;
+    }
 
     Ok(StagingBuildOutcome {
         staging_file_name,

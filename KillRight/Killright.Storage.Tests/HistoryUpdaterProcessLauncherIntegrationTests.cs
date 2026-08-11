@@ -69,19 +69,24 @@ public sealed class HistoryUpdaterProcessLauncherIntegrationTests
 
             Assert.False(afterStatus.UpdateInProgress);
 
-            // Step 19.00.56: build-staging no longer sets activeDatabaseFile,
-            // lastUpdatedUtc, or lastCompletedDayUtc itself -- that moves to
-            // 19.00.57 (Live Flag & Sentinel Update), which will point them at
-            // the Live-folder copy this step produces instead. Asserted
-            // explicitly, rather than omitted, so 19.00.57 is forced to update
-            // this test when it adds that behaviour back.
-            Assert.Null(afterStatus.LastUpdatedUtc);
-            Assert.Null(afterStatus.LastCompletedDayUtc);
-            Assert.True(string.IsNullOrEmpty(afterStatus.ActiveDatabaseFile));
+            // Step 19.00.57: the updater's final action for a successful build
+            // -- activeDatabaseFile now points at the Live-folder promoted copy
+            // (19.00.56 produces the copy; this step advances the live config
+            // to it), and lastUpdatedUtc/lastCompletedDayUtc are populated from
+            // the Working database's own history_metadata.
+            Assert.NotNull(afterStatus.LastUpdatedUtc);
+            Assert.NotNull(afterStatus.LastCompletedDayUtc);
+            Assert.True(
+                File.Exists(afterStatus.ActiveDatabaseFile),
+                $"Expected activeDatabaseFile '{afterStatus.ActiveDatabaseFile}' to exist after a successful build-staging run.");
 
-            // Step 19.00.56's own output: a promoted copy (no CORE. prefix)
-            // must exist in Live after a successful run.
             var liveDirectory = Path.Combine(isolatedRoot, "KillRight", "HistoryUpdater", "Live");
+
+            Assert.Equal(
+                Path.GetFullPath(liveDirectory),
+                Path.GetFullPath(Path.GetDirectoryName(afterStatus.ActiveDatabaseFile) ?? string.Empty));
+            Assert.Matches("^KillRight\\.History\\.", Path.GetFileName(afterStatus.ActiveDatabaseFile));
+
             var promotedFiles = Directory.Exists(liveDirectory)
                 ? Directory.GetFiles(liveDirectory, HistoryUpdaterStagingPaths.PromotedFileSearchPattern)
                 : Array.Empty<string>();
