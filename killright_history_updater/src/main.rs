@@ -557,6 +557,20 @@ fn print_staging_build_report(outcome: &StagingBuildOutcome) {
     println!("Failed: {failed_days}");
     println!("historic_relationship_summary rows: {}", outcome.rebuild_stats.summary_rows);
     println!("historic_relationship_org_context rows: {}", outcome.rebuild_stats.org_context_rows);
+    println!(
+        "Summary/org-context rebuild timing (ms): pair_event_scan={} summary_insert={} org_context_insert={} total={}",
+        outcome.rebuild_stats.pair_event_scan_elapsed_ms,
+        outcome.rebuild_stats.summary_insert_elapsed_ms,
+        outcome.rebuild_stats.org_context_insert_elapsed_ms,
+        outcome.rebuild_stats.total_elapsed_ms
+    );
+    println!(
+        "Promotion/validation timing (ms): copy_to_live={} primary_key_add={} validation_checks={} total={}",
+        outcome.promotion_timing.copy_to_live_elapsed_ms,
+        outcome.promotion_timing.primary_key_add_elapsed_ms,
+        outcome.promotion_timing.validation_checks_elapsed_ms,
+        outcome.promotion_timing.total_elapsed_ms
+    );
 
     let promoted_file_name = outcome
         .promoted_file_path

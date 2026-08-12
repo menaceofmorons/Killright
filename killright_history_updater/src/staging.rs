@@ -2,6 +2,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 
 use chrono::{Duration, Months, NaiveDate, Utc};
 use duckdb::{params, Connection, Result as DuckResult};
@@ -118,6 +119,20 @@ pub struct ValidationFailure {
     pub detail: String,
 }
 
+/// Step 19.00.62: timing capture for the promotion and validation-gate
+/// steps, added at the Scale Gate to make the primary-key-add step's real
+/// cost visible at multi-year scale for the first time -- previously only
+/// assumed from DuckDB's published benchmarks. Follows the same
+/// Instant::now()/elapsed().as_millis() pattern already established by
+/// PersistenceTiming (persistence.rs, Step 19.00.38) and RebuildStats
+/// (summary_rebuild.rs, Step 19.00.46).
+pub struct PromotionTiming {
+    pub copy_to_live_elapsed_ms: u128,
+    pub primary_key_add_elapsed_ms: u128,
+    pub validation_checks_elapsed_ms: u128,
+    pub total_elapsed_ms: u128,
+}
+
 pub struct StagingBuildOutcome {
     pub staging_file_name: String,
     pub staging_file_path: PathBuf,
@@ -140,6 +155,10 @@ pub struct StagingBuildOutcome {
     /// into Live happens unconditionally, before validation runs.
     pub promoted_file_path: PathBuf,
     pub validation_failures: Vec<ValidationFailure>,
+    /// Step 19.00.62: timing for the copy-to-Live, primary-key-add, and
+    /// remaining validation-gate checks -- see PromotionTiming's own doc
+    /// comment.
+    pub promotion_timing: PromotionTiming,
     pub succeeded: bool,
 }
 
@@ -280,8 +299,16 @@ pub fn build_staging(
     // promotion-time uniqueness constraints below run against exactly the
     // file that ends up in Live or Failed, with nothing able to change in
     // between.
+    // Step 19.00.62: timed as a whole (copy_to_live + primary-key-add +
+    // remaining validation checks) so PromotionTiming.total_elapsed_ms is a
+    // genuine wall-clock total of this promotion/validation phase, not a sum
+    // of its parts measured separately.
+    let promotion_total_start = Instant::now();
+
+    let copy_to_live_start = Instant::now();
     let promoted_path = promotion::copy_to_live(directory, &staging_file_name)
         .map_err(|error| format!("Failed to copy the working database to Live: {error}"))?;
+    let copy_to_live_elapsed_ms = copy_to_live_start.elapsed().as_millis();
 
     // A brand-new connection to a path this process has never opened before
     // -- not a same-process reopen of the just-closed Working connection, so
@@ -291,8 +318,16 @@ pub fn build_staging(
     let promoted_connection = Connection::open(&promoted_path)
         .map_err(|error| format!("Failed to open the promoted Live-folder copy: {error}"))?;
 
-    let validation_failures = validate_promoted_copy(promoted_connection, &promoted_path, &requested_days)
-        .map_err(|error| format!("Failed to run validation checks: {error}"))?;
+    let (validation_failures, primary_key_add_elapsed_ms, validation_checks_elapsed_ms) =
+        validate_promoted_copy(promoted_connection, &promoted_path, &requested_days)
+            .map_err(|error| format!("Failed to run validation checks: {error}"))?;
+
+    let promotion_timing = PromotionTiming {
+        copy_to_live_elapsed_ms,
+        primary_key_add_elapsed_ms,
+        validation_checks_elapsed_ms,
+        total_elapsed_ms: promotion_total_start.elapsed().as_millis(),
+    };
 
     let succeeded = validation_failures.is_empty();
 
@@ -368,6 +403,7 @@ pub fn build_staging(
         metadata_last_updated_utc,
         promoted_file_path: final_copy_path,
         validation_failures,
+        promotion_timing,
         succeeded,
     })
 }
@@ -532,7 +568,7 @@ fn validate_promoted_copy(
     connection: Connection,
     promoted_path: &Path,
     requested_days: &[NaiveDate],
-) -> DuckResult<Vec<ValidationFailure>> {
+) -> DuckResult<(Vec<ValidationFailure>, u128, u128)> {
     let mut failures = Vec::new();
 
     // Step 19.00.56: the promotion-time uniqueness constraints Section 4.7
@@ -543,12 +579,22 @@ fn validate_promoted_copy(
     // duplicate evidence -- the full-table duplicate-evidence check Section
     // 6.9.2/6.9.4 call for -- reported as a validation failure like any
     // other, not a hard error that aborts the whole run.
+    //
+    // Step 19.00.62: timed separately from the rest of the validation gate
+    // below -- the specific cost the Scale Gate exists to make visible at
+    // real multi-year scale for the first time, rather than assumed from
+    // DuckDB's published benchmarks.
+    let primary_key_add_start = Instant::now();
+
     if let Err(error) = promotion::add_promotion_constraints(&connection) {
         failures.push(ValidationFailure {
             check_name: "promotion_constraints",
             detail: format!("Adding promotion-time uniqueness constraints failed (duplicate evidence found): {error}"),
         });
     }
+
+    let primary_key_add_elapsed_ms = primary_key_add_start.elapsed().as_millis();
+    let validation_checks_start = Instant::now();
 
     if !requested_days.is_empty() {
         let start_text = requested_days.first().unwrap().format("%Y-%m-%d").to_string();
@@ -643,7 +689,9 @@ fn validate_promoted_copy(
         }
     }
 
-    Ok(failures)
+    let validation_checks_elapsed_ms = validation_checks_start.elapsed().as_millis();
+
+    Ok((failures, primary_key_add_elapsed_ms, validation_checks_elapsed_ms))
 }
 
 /// Proves `database_path` opens cleanly by asking a brand-new, separate OS
