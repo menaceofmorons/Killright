@@ -34,10 +34,24 @@ public partial class MainWindow : Window
 
     private async void ClipboardChanged(object? sender, EventArgs e)
     {
-        if (!System.Windows.Clipboard.ContainsText())
-            return;
+        string text;
 
-        var text = System.Windows.Clipboard.GetText();
+        try
+        {
+            if (!System.Windows.Clipboard.ContainsText())
+                return;
+
+            text = System.Windows.Clipboard.GetText();
+        }
+        catch
+        {
+            // Clipboard access can transiently fail (COMException,
+            // CLIPBRD_E_CANT_OPEN) whenever another process briefly holds
+            // the clipboard open -- not worth crashing the app over. The
+            // next clipboard change will try again (Step CC-12.08.26.02).
+            return;
+        }
+
         var pilotNames = PilotListParser.ParseIfLikelyPilotList(text);
 
         if (pilotNames.Count == 0)
