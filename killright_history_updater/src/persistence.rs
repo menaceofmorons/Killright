@@ -48,7 +48,7 @@ pub fn import_day(connection: &Connection, client: &ZkillHistoryClient, date: Na
         return failed_outcome(date, format!("Failed to mark import day started: {error}"));
     }
 
-    let extraction = client.extract_day_evidence(date, None);
+    let extraction = client.extract_day_evidence_with_retry(date);
 
     if !extraction.day_result.succeeded {
         let error_message = extraction

@@ -135,6 +135,15 @@ impl ZkillHistoryClient {
     /// exactly as it already does for any other extraction failure.
     pub const REQUEST_TIMEOUT_SECONDS: u64 = 60;
 
+    /// Delay between retry attempts in `extract_day_evidence_with_retry`
+    /// (Step CC-12.08.26.01). The zKillboard R2Z2 wiki
+    /// (`https://github.com/zKillboard/zKillboard/wiki/API-(R2Z2)`)
+    /// documents a 20 requests/second/IP ceiling on the R2 bucket this
+    /// endpoint is served from; 2 seconds is comfortably far below that
+    /// even though this sequential retry path has no rate limiter of its
+    /// own (unlike the parallel `extract_days_evidence` path).
+    pub const RETRY_DELAY_SECONDS: u64 = 2;
+
     pub fn new(options: ParallelDownloadOptions) -> reqwest::Result<Self> {
         let http_client = reqwest::blocking::Client::builder()
             .user_agent("KillRight-HistoryUpdater/19.00.44")
@@ -180,6 +189,55 @@ impl ZkillHistoryClient {
         count_day_metrics(date, url, &root)
     }
 
+    /// Retries a single day's extraction up to twice more before giving up
+    /// (Step CC-12.08.26.01): a single transient network error should not
+    /// fail an entire multi-year build over one day (Session finding, 11
+    /// Aug 2026 -- `2020-02-11` failed once during a real 5-year build,
+    /// then imported cleanly on the very next attempt). Deliberately not
+    /// used by `extract_days_evidence` (the parallel path already has its
+    /// own rate-limited design) or by the `extract-day-evidence` CLI
+    /// diagnostic command (which intentionally reports a single raw
+    /// attempt) -- only `persistence::import_day`'s sequential day-import
+    /// loop calls this.
+    ///
+    /// Attempt 1 fails -> wait `RETRY_DELAY_SECONDS` -> Attempt 2. If
+    /// Attempt 2's error is identical to Attempt 1's, stop: a repeated
+    /// identical error looks like a persistent problem, not a transient
+    /// one, and a third attempt is unlikely to help. If Attempt 2's error
+    /// differs from Attempt 1's, that looks more like a transient/flaky
+    /// condition, so try once more -> wait `RETRY_DELAY_SECONDS` ->
+    /// Attempt 3. Whatever Attempt 3's outcome, that is final -- never
+    /// more than 3 attempts total for one day.
+    pub fn extract_day_evidence_with_retry(&self, date: NaiveDate) -> EvidenceDayResult {
+        let retry_delay = Duration::from_secs(Self::RETRY_DELAY_SECONDS);
+
+        let first_attempt = self.extract_day_evidence(date, None);
+
+        if first_attempt.day_result.succeeded {
+            return first_attempt;
+        }
+
+        thread::sleep(retry_delay);
+        let second_attempt = self.extract_day_evidence(date, None);
+
+        if second_attempt.day_result.succeeded {
+            return second_attempt;
+        }
+
+        if retry_errors_match(&first_attempt, &second_attempt) {
+            return annotate_repeated_error(second_attempt, &first_attempt);
+        }
+
+        thread::sleep(retry_delay);
+        let third_attempt = self.extract_day_evidence(date, None);
+
+        if third_attempt.day_result.succeeded {
+            return third_attempt;
+        }
+
+        annotate_exhausted_retries(third_attempt, &first_attempt, &second_attempt)
+    }
+
     pub fn extract_days_evidence(&self, dates: &[NaiveDate]) -> Vec<EvidenceDayResult> {
         if dates.is_empty() {
             return Vec::new();
@@ -211,6 +269,42 @@ impl ZkillHistoryClient {
         results.sort_by(|left, right| left.day_result.date.cmp(&right.day_result.date));
         results
     }
+}
+
+/// Step CC-12.08.26.01: true when two attempts' error messages are
+/// identical -- see `extract_day_evidence_with_retry`'s own doc comment
+/// for why that specifically means "stop retrying" rather than "try
+/// again."
+fn retry_errors_match(first: &EvidenceDayResult, second: &EvidenceDayResult) -> bool {
+    first.day_result.error_message == second.day_result.error_message
+}
+
+/// Step CC-12.08.26.01: rewrites `latest`'s (the second attempt's) error
+/// message to record that two attempts were made and both failed with
+/// the same error, keeping every other field (date, url, and the
+/// always-empty evidence/participant rows a failed attempt carries) from
+/// that second, most recent attempt.
+fn annotate_repeated_error(mut latest: EvidenceDayResult, first_attempt: &EvidenceDayResult) -> EvidenceDayResult {
+    let error = first_attempt.day_result.error_message.as_deref().unwrap_or("(unknown)");
+    latest.day_result.error_message = Some(format!("Failed after 2 attempts, same error both times: {error}"));
+    latest
+}
+
+/// Step CC-12.08.26.01: rewrites `latest`'s (the third attempt's) error
+/// message to record all three distinct errors seen across the full
+/// retry sequence, keeping every other field from the third attempt.
+fn annotate_exhausted_retries(
+    mut latest: EvidenceDayResult,
+    first_attempt: &EvidenceDayResult,
+    second_attempt: &EvidenceDayResult,
+) -> EvidenceDayResult {
+    let first_error = first_attempt.day_result.error_message.as_deref().unwrap_or("(unknown)");
+    let second_error = second_attempt.day_result.error_message.as_deref().unwrap_or("(unknown)");
+    let third_error = latest.day_result.error_message.clone().unwrap_or_else(|| "(unknown)".to_string());
+    latest.day_result.error_message = Some(format!(
+        "Failed after 3 attempts with different errors: (1) {first_error}; (2) {second_error}; (3) {third_error}"
+    ));
+    latest
 }
 
 fn failed_result(date: NaiveDate, url: String, error_message: String) -> EvidenceDayResult {
@@ -503,5 +597,52 @@ mod tests {
         assert_eq!(result.participant_rows.len(), 2);
         assert!(result.participant_rows.iter().any(|row| row.character_id == 1004));
         assert!(result.participant_rows.iter().any(|row| row.character_id == 1005));
+    }
+
+    #[test]
+    fn retry_errors_match_true_for_identical_messages() {
+        let date = NaiveDate::from_ymd_opt(2020, 2, 11).unwrap();
+        let first = failed_result(date, "https://example.invalid/a".to_string(), "error decoding response body".to_string());
+        let second = failed_result(date, "https://example.invalid/b".to_string(), "error decoding response body".to_string());
+
+        assert!(retry_errors_match(&first, &second));
+    }
+
+    #[test]
+    fn retry_errors_match_false_for_different_messages() {
+        let date = NaiveDate::from_ymd_opt(2020, 2, 11).unwrap();
+        let first = failed_result(date, "https://example.invalid/a".to_string(), "error decoding response body".to_string());
+        let second = failed_result(date, "https://example.invalid/b".to_string(), "HTTP 503 Service Unavailable".to_string());
+
+        assert!(!retry_errors_match(&first, &second));
+    }
+
+    #[test]
+    fn annotate_repeated_error_reports_two_attempts_and_the_shared_error() {
+        let date = NaiveDate::from_ymd_opt(2020, 2, 11).unwrap();
+        let first = failed_result(date, "https://example.invalid".to_string(), "error decoding response body".to_string());
+        let second = failed_result(date, "https://example.invalid".to_string(), "error decoding response body".to_string());
+
+        let result = annotate_repeated_error(second, &first);
+
+        assert_eq!(
+            result.day_result.error_message.as_deref(),
+            Some("Failed after 2 attempts, same error both times: error decoding response body")
+        );
+    }
+
+    #[test]
+    fn annotate_exhausted_retries_reports_all_three_distinct_errors() {
+        let date = NaiveDate::from_ymd_opt(2020, 2, 11).unwrap();
+        let first = failed_result(date, "https://example.invalid".to_string(), "error decoding response body".to_string());
+        let second = failed_result(date, "https://example.invalid".to_string(), "HTTP 503 Service Unavailable".to_string());
+        let third = failed_result(date, "https://example.invalid".to_string(), "operation timed out".to_string());
+
+        let result = annotate_exhausted_retries(third, &first, &second);
+
+        assert_eq!(
+            result.day_result.error_message.as_deref(),
+            Some("Failed after 3 attempts with different errors: (1) error decoding response body; (2) HTTP 503 Service Unavailable; (3) operation timed out")
+        );
     }
 }
