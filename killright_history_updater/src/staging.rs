@@ -53,6 +53,16 @@ pub enum ImportRangeMode {
     DefaultTenYearLookback,
     HorizonDaysBackFromToday(i64),
     AnchoredTestAmount(i64, TestAmountUnit),
+    /// Step 19.00.63: an explicit, fixed [start, end] range with no
+    /// frontier or "today" logic at all -- introduced for repairing an
+    /// existing file against a range it should already fully cover,
+    /// regardless of whether what is missing is a single day, a
+    /// consecutive block, or several scattered gaps. `AnchoredTestAmount`
+    /// cannot express this: its range end is always the database's own
+    /// already-completed frontier plus the requested amount, which grows
+    /// forward from whatever is already there rather than re-targeting a
+    /// previously-known range.
+    ExplicitRange(NaiveDate, NaiveDate),
 }
 
 /// Finds the latest day already `Completed` at or after the anchor, or the day
@@ -166,6 +176,7 @@ pub fn build_staging(
     directory: &Path,
     client: &ZkillHistoryClient,
     range_mode: ImportRangeMode,
+    repair_from: Option<&Path>,
 ) -> Result<StagingBuildOutcome, String> {
     // Step 19.00.55: `directory` is the historic-database root (e.g.
     // %LOCALAPPDATA%\KillRight\HistoryUpdater); the working database this
@@ -189,7 +200,7 @@ pub fn build_staging(
     )
     .map_err(|error| format!("Failed to write groupHistory live config: {error}"))?;
 
-    let copy_basis = find_copy_basis(&working_directory);
+    let copy_basis = resolve_copy_basis(repair_from, &working_directory);
     let (staging_path, staging_file_name) = allocate_new_working_filename(&working_directory)
         .map_err(|error| format!("Failed to allocate working filename: {error}"))?;
 
@@ -450,6 +461,27 @@ fn find_copy_basis(directory: &Path) -> Option<PathBuf> {
     }
 }
 
+/// Step 19.00.63: resolves which existing staging file (if any) to use as
+/// this build's copy basis -- an explicit `--repair` override, if given,
+/// otherwise the same latest-validated-build lookup normal incremental
+/// runs have always used (`find_copy_basis`, unchanged above). Introduced
+/// so a build that failed validation on a transient error (an environment
+/// interruption, not a data or code defect) can be repaired against its
+/// own already-completed days instead of restarting the whole requested
+/// range from scratch -- `find_copy_basis` alone cannot do this, since it
+/// only ever returns a *validated* build's file, and a build that failed
+/// validation never writes that marker. The caller is responsible for
+/// passing a Working-folder-style (unconstrained) file, not a promoted
+/// Live/Failed-folder copy that already has primary keys added --
+/// `resolve_copy_basis` does not distinguish between them, matching
+/// `find_copy_basis`'s own existing behaviour.
+fn resolve_copy_basis(repair_from: Option<&Path>, working_directory: &Path) -> Option<PathBuf> {
+    match repair_from {
+        Some(path) => Some(path.to_path_buf()),
+        None => find_copy_basis(working_directory),
+    }
+}
+
 fn write_latest_validated_build_marker(directory: &Path, filename: &str) -> io::Result<()> {
     let marker_path = directory.join(LATEST_VALIDATED_BUILD_MARKER_FILE_NAME);
     fs::write(marker_path, filename)
@@ -506,6 +538,12 @@ fn determine_missing_days(
         ImportRangeMode::AnchoredTestAmount(amount, unit) => {
             compute_anchored_test_range(connection, amount, unit, latest_importable_day)?
         }
+        // Step 19.00.63: used exactly as given, clamped to
+        // latest_importable_day for the same defensive reason
+        // compute_anchored_test_range clamps its own end -- not expected to
+        // trigger for a real repair range, which by definition targets days
+        // already in the past.
+        ImportRangeMode::ExplicitRange(start, end) => (start, end.min(latest_importable_day)),
     };
 
     let horizon_start_text = horizon_start.format("%Y-%m-%d").to_string();
@@ -995,5 +1033,95 @@ mod tests {
         for day in 1..=7 {
             assert!(!missing.contains(&NaiveDate::from_ymd_opt(2016, 8, day).unwrap()));
         }
+    }
+
+    #[test]
+    fn determine_missing_days_explicit_range_finds_gaps_regardless_of_pattern() {
+        let connection = Connection::open_in_memory().unwrap();
+        crate::schema::create_schema(&connection).unwrap();
+        crate::schema::insert_initial_metadata_row(&connection, "2026-08-05T00:00:00Z").unwrap();
+
+        // Simulates a mostly-complete repair target: every day in a small
+        // range is Completed except one scattered gap in the middle --
+        // the same shape as the real 19.00.62 repair (1825 of 1826 days
+        // Completed, one Failed day in the middle of the range).
+        for day in 1..=10 {
+            if day != 5 {
+                insert_completed_day(&connection, &format!("2016-08-{day:02}"));
+            }
+        }
+
+        let utc_today = NaiveDate::from_ymd_opt(2026, 8, 5).unwrap();
+        let missing = determine_missing_days(
+            &connection,
+            ImportRangeMode::ExplicitRange(
+                NaiveDate::from_ymd_opt(2016, 8, 1).unwrap(),
+                NaiveDate::from_ymd_opt(2016, 8, 10).unwrap(),
+            ),
+            utc_today,
+        )
+        .unwrap();
+
+        assert_eq!(missing, vec![NaiveDate::from_ymd_opt(2016, 8, 5).unwrap()]);
+    }
+
+    use std::env;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    /// Section 6.4 Agent Test Independence: a unique, nanosecond-suffixed
+    /// temp directory per test, never shared between tests and never
+    /// dependent on execution order. Mirrors folder_layout.rs's own
+    /// unique_temp_root helper.
+    fn unique_temp_root(test_name: &str) -> PathBuf {
+        let suffix = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        env::temp_dir().join(format!("killright-staging-repair-test-{test_name}-{suffix}"))
+    }
+
+    #[test]
+    fn resolve_copy_basis_returns_explicit_repair_path_when_given() {
+        let directory = unique_temp_root("repair-override");
+        fs::create_dir_all(&directory).unwrap();
+
+        // A validated marker naming a different file exists, proving the
+        // explicit override always wins over it.
+        fs::write(directory.join(LATEST_VALIDATED_BUILD_MARKER_FILE_NAME), "some-other-validated-file.duckdb").unwrap();
+        fs::write(directory.join("some-other-validated-file.duckdb"), b"").unwrap();
+
+        let repair_from = directory.join("CORE.KillRight.History.260812.01.duckdb");
+        fs::write(&repair_from, b"").unwrap();
+
+        let result = resolve_copy_basis(Some(&repair_from), &directory);
+
+        assert_eq!(result, Some(repair_from));
+
+        fs::remove_dir_all(&directory).unwrap();
+    }
+
+    #[test]
+    fn resolve_copy_basis_falls_back_to_find_copy_basis_when_repair_from_is_none() {
+        let directory = unique_temp_root("no-override-fallback");
+        fs::create_dir_all(&directory).unwrap();
+
+        fs::write(directory.join(LATEST_VALIDATED_BUILD_MARKER_FILE_NAME), "KillRight.History.260810.01.duckdb").unwrap();
+        let validated_file = directory.join("KillRight.History.260810.01.duckdb");
+        fs::write(&validated_file, b"").unwrap();
+
+        let result = resolve_copy_basis(None, &directory);
+
+        assert_eq!(result, Some(validated_file));
+
+        fs::remove_dir_all(&directory).unwrap();
+    }
+
+    #[test]
+    fn resolve_copy_basis_returns_none_when_repair_from_is_none_and_no_marker_exists() {
+        let directory = unique_temp_root("no-override-no-marker");
+        fs::create_dir_all(&directory).unwrap();
+
+        let result = resolve_copy_basis(None, &directory);
+
+        assert_eq!(result, None);
+
+        fs::remove_dir_all(&directory).unwrap();
     }
 }

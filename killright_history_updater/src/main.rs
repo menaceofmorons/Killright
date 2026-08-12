@@ -1,4 +1,5 @@
 use std::env;
+use std::path::PathBuf;
 use std::process;
 
 mod database_path;
@@ -301,6 +302,14 @@ fn run_build_staging(arguments: &[String]) {
         }
     };
 
+    let repair_from = match parse_repair_from(arguments) {
+        Ok(value) => value,
+        Err(message) => {
+            eprintln!("{message}");
+            process::exit(1);
+        }
+    };
+
     let lock_path = get_default_lock_path();
 
     let lock = match SingleInstanceLock::acquire(&lock_path) {
@@ -323,7 +332,7 @@ fn run_build_staging(arguments: &[String]) {
         }
     };
 
-    match build_staging(&directory, &client, range_mode) {
+    match build_staging(&directory, &client, range_mode, repair_from.as_deref()) {
         Ok(outcome) => {
             let succeeded = outcome.succeeded;
             print_staging_build_report(&outcome);
@@ -342,11 +351,13 @@ fn run_build_staging(arguments: &[String]) {
 }
 
 fn parse_import_range_mode(arguments: &[String]) -> Result<ImportRangeMode, String> {
-    const USAGE: &str = "Usage: killright_history_updater build-staging [--horizon-days <n>] [--test-amount <n> --test-amount-unit days|months|years]";
+    const USAGE: &str = "Usage: killright_history_updater build-staging [--horizon-days <n>] [--test-amount <n> --test-amount-unit days|months|years] [--range-start <yyyy-mm-dd> --range-end <yyyy-mm-dd>] [--repair <path>]";
 
     let mut horizon_days: Option<i64> = None;
     let mut test_amount: Option<i64> = None;
     let mut test_amount_unit: Option<TestAmountUnit> = None;
+    let mut range_start: Option<NaiveDate> = None;
+    let mut range_end: Option<NaiveDate> = None;
 
     let mut index = 2;
 
@@ -386,20 +397,70 @@ fn parse_import_range_mode(arguments: &[String]) -> Result<ImportRangeMode, Stri
 
                 index += 2;
             }
+            "--range-start" => {
+                let value = arguments.get(index + 1).ok_or_else(|| USAGE.to_string())?;
+                let parsed = NaiveDate::parse_from_str(value, "%Y-%m-%d").map_err(|_| USAGE.to_string())?;
+
+                range_start = Some(parsed);
+                index += 2;
+            }
+            "--range-end" => {
+                let value = arguments.get(index + 1).ok_or_else(|| USAGE.to_string())?;
+                let parsed = NaiveDate::parse_from_str(value, "%Y-%m-%d").map_err(|_| USAGE.to_string())?;
+
+                range_end = Some(parsed);
+                index += 2;
+            }
             _ => {
                 index += 1;
             }
         }
     }
 
-    match (horizon_days, test_amount, test_amount_unit) {
-        (Some(_), Some(_), _) => Err("--horizon-days and --test-amount are mutually exclusive.".to_string()),
-        (Some(days), None, _) => Ok(ImportRangeMode::HorizonDaysBackFromToday(days)),
-        (None, Some(amount), Some(unit)) => Ok(ImportRangeMode::AnchoredTestAmount(amount, unit)),
-        (None, Some(_), None) => Err("--test-amount requires --test-amount-unit days|months|years.".to_string()),
-        (None, None, Some(_)) => Err("--test-amount-unit requires --test-amount <n>.".to_string()),
-        (None, None, None) => Ok(ImportRangeMode::DefaultTenYearLookback),
+    match (horizon_days, test_amount, test_amount_unit, range_start, range_end) {
+        (Some(_), Some(_), _, _, _) => Err("--horizon-days and --test-amount are mutually exclusive.".to_string()),
+        (Some(_), _, _, Some(_), _) | (Some(_), _, _, _, Some(_)) => {
+            Err("--horizon-days and --range-start/--range-end are mutually exclusive.".to_string())
+        }
+        (_, Some(_), _, Some(_), _) | (_, Some(_), _, _, Some(_)) => {
+            Err("--test-amount and --range-start/--range-end are mutually exclusive.".to_string())
+        }
+        (Some(days), None, _, None, None) => Ok(ImportRangeMode::HorizonDaysBackFromToday(days)),
+        (None, Some(amount), Some(unit), None, None) => Ok(ImportRangeMode::AnchoredTestAmount(amount, unit)),
+        (None, Some(_), None, None, None) => Err("--test-amount requires --test-amount-unit days|months|years.".to_string()),
+        (None, None, Some(_), None, None) => Err("--test-amount-unit requires --test-amount <n>.".to_string()),
+        (None, None, _, Some(start), Some(end)) if start <= end => Ok(ImportRangeMode::ExplicitRange(start, end)),
+        (None, None, _, Some(_), Some(_)) => Err("--range-start must not be after --range-end.".to_string()),
+        (None, None, _, Some(_), None) => Err("--range-start requires --range-end.".to_string()),
+        (None, None, _, None, Some(_)) => Err("--range-end requires --range-start.".to_string()),
+        (None, None, None, None, None) => Ok(ImportRangeMode::DefaultTenYearLookback),
     }
+}
+
+/// Step 19.00.63: parses an optional `--repair <path>` override,
+/// independent of `parse_import_range_mode` above (a build can be repaired
+/// under any range mode, though `--range-start`/`--range-end` is the one
+/// that makes sense for it -- so this is intentionally its own small scan
+/// rather than folded into that function's own flag matching). Returns
+/// `Ok(None)` when the flag is absent, leaving `build_staging`'s existing
+/// `find_copy_basis` lookup as the copy-basis source, exactly as before
+/// this step.
+fn parse_repair_from(arguments: &[String]) -> Result<Option<PathBuf>, String> {
+    let mut index = 2;
+
+    while index < arguments.len() {
+        if arguments[index] == "--repair" {
+            let value = arguments
+                .get(index + 1)
+                .ok_or_else(|| "--repair requires a file path.".to_string())?;
+
+            return Ok(Some(PathBuf::from(value)));
+        }
+
+        index += 1;
+    }
+
+    Ok(None)
 }
 
 /// Internal-only command used by `staging::reopen_cleanly` to prove a staging
