@@ -33,6 +33,24 @@ pub const SCHEMA_VERSION: i32 = 1;
 /// this crate's own `determine_missing_days`/`persistence::import_day`
 /// actively rely on every run, not evidence data subject to promotion-time
 /// deduplication.
+///
+/// Step 19.01.01: `SCHEMA_SQL` gains three new tables for Historic
+/// Relationship Classification (Design Specification Section 6.11):
+/// `historic_relationship_classification` (Section 4.8), and
+/// `historic_pilot_affiliation_timeline`/`historic_closed_entity_cache`
+/// (both Section 4.7, new in this step). `historic_relationship_classification`
+/// and `historic_pilot_affiliation_timeline` follow the same no-inline-PK
+/// convention as the four `historic_relationship_*` tables above: promoting
+/// either to Live is explicitly deferred beyond the whole 19.01.** step
+/// family (`KillRight-Historic-Relationship-Classification-Implementation-Plan-19.01.md`),
+/// so there is no promotion-time constraint step to defer to yet.
+/// `historic_closed_entity_cache` is Working-side only by design -- it never
+/// reaches a promotion step at all -- so it declares its `PRIMARY KEY`
+/// inline instead, matching `history_import_day_status` above for the same
+/// reason. `SCHEMA_VERSION` is not bumped by this step, matching how every
+/// prior additive schema change in this file (including the
+/// `historic_relationship_org_context` table and 19.00.55's primary-key
+/// removal) has been handled.
 pub fn create_schema(connection: &Connection) -> Result<()> {
     connection.execute_batch(SCHEMA_SQL)?;
     drop_unconsumed_secondary_indexes(connection)
@@ -190,6 +208,62 @@ CREATE TABLE IF NOT EXISTS historic_relationship_org_context
     first_seen_unlinked_utc VARCHAR,
     last_seen_unlinked_utc VARCHAR,
     last_rebuilt_utc VARCHAR NOT NULL
+);
+
+-- Step 19.01.01: historic_relationship_classification (Design Specification
+-- Section 4.8) -- the persisted output of Historic Relationship
+-- Classification (Section 6.11). No inline PRIMARY KEY, matching the same
+-- working-database convention as the four historic_relationship_* tables
+-- above (Section 6.9.2/19.00.55): promoting this table to Live is explicitly
+-- deferred beyond the whole 19.01.** step family, so there is no
+-- promotion-time constraint step to defer to yet. entity_type is one of
+-- 'P' (pilot), 'C' (corporation), or 'A' (alliance); strength is one of
+-- 'VS', 'S', 'M', 'W' (None is never stored); confidence is one of 'Low',
+-- 'Average', 'High'. Value validation is application-level, not enforced by
+-- this schema (matching how no other VARCHAR-enum column in this file is
+-- constrained by a CHECK).
+CREATE TABLE IF NOT EXISTS historic_relationship_classification
+(
+    pilot_id BIGINT NOT NULL,
+    entity_id BIGINT NOT NULL,
+    entity_type VARCHAR NOT NULL,
+    strength VARCHAR NOT NULL,
+    confidence VARCHAR NOT NULL,
+    last_computed_utc VARCHAR NOT NULL
+);
+
+-- Step 19.01.01: historic_pilot_affiliation_timeline (Design Specification
+-- Section 4.7) -- a pilot's own corporation/alliance affiliation history
+-- over time, built incrementally from historic_relationship_evidence_participants
+-- above as each day is imported (Section 6.9), not from ESI. Scope is
+-- therefore bounded to what appears in qualifying killmail evidence -- see
+-- Section 6.11 Known Limitations. No inline PRIMARY KEY, same reasoning as
+-- historic_relationship_classification above -- Live promotion is deferred
+-- beyond this step family.
+CREATE TABLE IF NOT EXISTS historic_pilot_affiliation_timeline
+(
+    pilot_id BIGINT NOT NULL,
+    corporation_id BIGINT,
+    alliance_id BIGINT,
+    first_seen_utc VARCHAR NOT NULL,
+    last_seen_utc VARCHAR NOT NULL,
+    last_updated_utc VARCHAR NOT NULL
+);
+
+-- Step 19.01.01: historic_closed_entity_cache (Design Specification Section
+-- 4.7) -- append-only cache of corporation/alliance IDs discovered closed
+-- via ESI, backing the Active Entity Short-Circuit (Section 6.11.4).
+-- Working-side only by design -- it never reaches a promotion step at all --
+-- so, unlike the two tables above, its uniqueness constraint is declared
+-- inline here rather than deferred. Matches history_import_day_status's
+-- inline PRIMARY KEY above, for the same reason. entity_type is one of 'C'
+-- (corporation) or 'A' (alliance).
+CREATE TABLE IF NOT EXISTS historic_closed_entity_cache
+(
+    entity_id BIGINT NOT NULL,
+    entity_type VARCHAR NOT NULL,
+    discovered_closed_utc VARCHAR NOT NULL,
+    PRIMARY KEY (entity_id, entity_type)
 );
 
 CREATE INDEX IF NOT EXISTS idx_history_import_day_status_status
@@ -352,5 +426,159 @@ mod tests {
             .unwrap();
 
         assert_eq!(constraint_count, 1);
+    }
+
+    /// Step 19.01.01: confirms all three new Historic Relationship
+    /// Classification tables exist after create_schema runs, using the same
+    /// duckdb_tables() introspection style as duckdb_indexes()/
+    /// duckdb_constraints() above.
+    #[test]
+    fn create_schema_creates_the_three_historic_relationship_classification_tables() {
+        let connection = Connection::open_in_memory().unwrap();
+
+        create_schema(&connection).unwrap();
+
+        let table_count: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM duckdb_tables() \
+                 WHERE table_name IN ( \
+                     'historic_relationship_classification', \
+                     'historic_pilot_affiliation_timeline', \
+                     'historic_closed_entity_cache' \
+                 );",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+
+        assert_eq!(table_count, 3);
+    }
+
+    /// Step 19.01.01: historic_relationship_classification and
+    /// historic_pilot_affiliation_timeline follow the same no-inline-PK
+    /// working-database convention as the four historic_relationship_*
+    /// tables (see the four-table test above) -- Live promotion for either
+    /// is deferred beyond this whole step family.
+    #[test]
+    fn create_schema_leaves_no_primary_key_or_unique_constraints_on_historic_relationship_classification_or_historic_pilot_affiliation_timeline(
+    ) {
+        let connection = Connection::open_in_memory().unwrap();
+
+        create_schema(&connection).unwrap();
+
+        let constraint_count: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM duckdb_constraints() \
+                 WHERE table_name IN ( \
+                     'historic_relationship_classification', \
+                     'historic_pilot_affiliation_timeline' \
+                 ) AND constraint_type IN ('PRIMARY KEY', 'UNIQUE');",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+
+        assert_eq!(constraint_count, 0);
+    }
+
+    /// Step 19.01.01: historic_closed_entity_cache is Working-side only by
+    /// design and never reaches a promotion step, so its uniqueness
+    /// constraint is declared inline and must exist immediately after
+    /// create_schema runs -- unlike the two tables in the test above.
+    #[test]
+    fn create_schema_declares_primary_key_on_historic_closed_entity_cache() {
+        let connection = Connection::open_in_memory().unwrap();
+
+        create_schema(&connection).unwrap();
+
+        let constraint_count: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM duckdb_constraints() \
+                 WHERE table_name = 'historic_closed_entity_cache' AND constraint_type = 'PRIMARY KEY';",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+
+        assert_eq!(constraint_count, 1);
+    }
+
+    #[test]
+    fn historic_relationship_classification_accepts_a_row() {
+        let connection = Connection::open_in_memory().unwrap();
+        create_schema(&connection).unwrap();
+
+        connection
+            .execute_batch(
+                "INSERT INTO historic_relationship_classification \
+                 (pilot_id, entity_id, entity_type, strength, confidence, last_computed_utc) \
+                 VALUES (95465499, 90379338, 'P', 'S', 'High', '2026-08-13T00:00:00Z');",
+            )
+            .unwrap();
+
+        let row_count: i64 = connection
+            .query_row("SELECT COUNT(*) FROM historic_relationship_classification;", [], |row| row.get(0))
+            .unwrap();
+
+        assert_eq!(row_count, 1);
+    }
+
+    #[test]
+    fn historic_pilot_affiliation_timeline_accepts_a_row_with_null_alliance_id() {
+        let connection = Connection::open_in_memory().unwrap();
+        create_schema(&connection).unwrap();
+
+        connection
+            .execute_batch(
+                "INSERT INTO historic_pilot_affiliation_timeline \
+                 (pilot_id, corporation_id, alliance_id, first_seen_utc, last_seen_utc, last_updated_utc) \
+                 VALUES (95465499, 98765432, NULL, '2026-01-01T00:00:00Z', '2026-08-01T00:00:00Z', '2026-08-13T00:00:00Z');",
+            )
+            .unwrap();
+
+        let row_count: i64 = connection
+            .query_row("SELECT COUNT(*) FROM historic_pilot_affiliation_timeline;", [], |row| row.get(0))
+            .unwrap();
+
+        assert_eq!(row_count, 1);
+    }
+
+    #[test]
+    fn historic_closed_entity_cache_accepts_a_row() {
+        let connection = Connection::open_in_memory().unwrap();
+        create_schema(&connection).unwrap();
+
+        connection
+            .execute_batch(
+                "INSERT INTO historic_closed_entity_cache (entity_id, entity_type, discovered_closed_utc) \
+                 VALUES (99005338, 'C', '2026-08-13T00:00:00Z');",
+            )
+            .unwrap();
+
+        let row_count: i64 = connection
+            .query_row("SELECT COUNT(*) FROM historic_closed_entity_cache;", [], |row| row.get(0))
+            .unwrap();
+
+        assert_eq!(row_count, 1);
+    }
+
+    #[test]
+    fn historic_closed_entity_cache_rejects_a_duplicate_entity_id_and_entity_type() {
+        let connection = Connection::open_in_memory().unwrap();
+        create_schema(&connection).unwrap();
+
+        connection
+            .execute_batch(
+                "INSERT INTO historic_closed_entity_cache (entity_id, entity_type, discovered_closed_utc) \
+                 VALUES (99005338, 'C', '2026-08-13T00:00:00Z');",
+            )
+            .unwrap();
+
+        let result = connection.execute_batch(
+            "INSERT INTO historic_closed_entity_cache (entity_id, entity_type, discovered_closed_utc) \
+             VALUES (99005338, 'C', '2026-08-14T00:00:00Z');",
+        );
+
+        assert!(result.is_err());
     }
 }
