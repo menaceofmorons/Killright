@@ -51,6 +51,20 @@ pub const SCHEMA_VERSION: i32 = 1;
 /// prior additive schema change in this file (including the
 /// `historic_relationship_org_context` table and 19.00.55's primary-key
 /// removal) has been handled.
+///
+/// Step 19.01.03: `SCHEMA_SQL` gains one secondary index, `idx_hpat_pilot_id`
+/// on `historic_pilot_affiliation_timeline(pilot_id)`. Unlike the eight
+/// secondary indexes `drop_unconsumed_secondary_indexes` removes above, this
+/// one is added deliberately rather than deferred: Step 19.01.03 is the
+/// first code in this crate to actually query
+/// `historic_pilot_affiliation_timeline` by `pilot_id` (once per distinct
+/// pilot observed in each imported day, from
+/// `persistence::update_pilot_affiliation_timeline`), matching this file's
+/// own stated policy of adding an index only once a real read pattern needs
+/// it (see `drop_unconsumed_secondary_indexes`'s doc comment).
+/// `SCHEMA_VERSION` is still not bumped -- an added index changes no data
+/// shape, matching how `idx_history_import_day_status_status`/
+/// `idx_hids_status_date` below were also added without a version bump.
 pub fn create_schema(connection: &Connection) -> Result<()> {
     connection.execute_batch(SCHEMA_SQL)?;
     drop_unconsumed_secondary_indexes(connection)
@@ -249,6 +263,15 @@ CREATE TABLE IF NOT EXISTS historic_pilot_affiliation_timeline
     last_seen_utc VARCHAR NOT NULL,
     last_updated_utc VARCHAR NOT NULL
 );
+
+-- Step 19.01.03: pilot_id lookup index for historic_pilot_affiliation_timeline
+-- (Implementation Plan Step 19.01.03) -- added deliberately, unlike the eight
+-- secondary indexes removed above, because this step is the first real read
+-- pattern against this table (persistence::update_pilot_affiliation_timeline
+-- looks up each distinct pilot's most-recently-seen row once per imported
+-- day). See create_schema's doc comment.
+CREATE INDEX IF NOT EXISTS idx_hpat_pilot_id
+    ON historic_pilot_affiliation_timeline(pilot_id);
 
 -- Step 19.01.01: historic_closed_entity_cache (Design Specification Section
 -- 4.7) -- append-only cache of corporation/alliance IDs discovered closed
@@ -580,5 +603,27 @@ mod tests {
         );
 
         assert!(result.is_err());
+    }
+
+    /// Step 19.01.03: confirms idx_hpat_pilot_id exists after create_schema
+    /// runs, using the same duckdb_indexes() introspection style as
+    /// count_unconsumed_secondary_indexes above -- but, unlike the eight
+    /// secondary indexes that helper counts, this one is expected to exist,
+    /// not be absent.
+    #[test]
+    fn create_schema_creates_pilot_id_index_on_historic_pilot_affiliation_timeline() {
+        let connection = Connection::open_in_memory().unwrap();
+
+        create_schema(&connection).unwrap();
+
+        let index_count: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM duckdb_indexes() WHERE index_name = 'idx_hpat_pilot_id';",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+
+        assert_eq!(index_count, 1);
     }
 }

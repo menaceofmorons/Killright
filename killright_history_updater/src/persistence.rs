@@ -3,6 +3,7 @@ use std::time::Instant;
 use chrono::{NaiveDate, Utc};
 use duckdb::{params, Connection, Result};
 
+use crate::affiliation_timeline::{apply_daily_affiliation_fragments, build_daily_affiliation_fragments};
 use crate::r2_client::{EvidenceDayResult, EvidenceRecord, ParticipantRecord, ZkillHistoryClient};
 use crate::schema::SCHEMA_VERSION;
 
@@ -10,6 +11,7 @@ pub struct PersistenceTiming {
     pub clear_existing_rows_elapsed_ms: u128,
     pub evidence_append_elapsed_ms: u128,
     pub participant_append_elapsed_ms: u128,
+    pub affiliation_timeline_elapsed_ms: u128,
     pub status_update_elapsed_ms: u128,
     pub total_elapsed_ms: u128,
 }
@@ -22,6 +24,7 @@ pub struct ImportDayOutcome {
     pub qualifying_killmail_count: i32,
     pub persisted_evidence_rows: usize,
     pub persisted_participant_rows: usize,
+    pub affiliation_timeline_updated_pilot_count: usize,
     pub candidate_pair_occurrence_rows: i64,
     pub timing: Option<PersistenceTiming>,
     pub error_message: Option<String>,
@@ -37,6 +40,16 @@ pub struct ImportDayOutcome {
 /// because both call sites (`staging::build_staging`'s loop and
 /// `main::run_import_day`) now behave identically -- there's no longer a
 /// meaningful "manage my own indexes" mode to opt into.
+///
+/// Step 19.01.03: after participant rows are appended, this function also
+/// extends/opens `historic_pilot_affiliation_timeline` rows for every pilot
+/// observed in this day's participant rows (Design Specification Section
+/// 4.7, Implementation Plan Step 19.01.03) -- see
+/// `affiliation_timeline::build_daily_affiliation_fragments`/
+/// `apply_daily_affiliation_fragments`, wired in via
+/// `update_pilot_affiliation_timeline` below. A failure here marks the day
+/// Failed, the same as a failed evidence or participant append, rather than
+/// leaving the day Completed with a stale or missing timeline update.
 pub fn import_day(connection: &Connection, client: &ZkillHistoryClient, date: NaiveDate) -> ImportDayOutcome {
     match is_import_day_completed(connection, date) {
         Ok(true) => return already_completed_outcome(date),
@@ -86,6 +99,17 @@ pub fn import_day(connection: &Connection, client: &ZkillHistoryClient, date: Na
     }
     let participant_append_elapsed_ms = participant_start.elapsed().as_millis();
 
+    let affiliation_timeline_start = Instant::now();
+    let affiliation_timeline_updated_pilot_count = match update_pilot_affiliation_timeline(connection, &extraction.evidence_rows, &extraction.participant_rows) {
+        Ok(count) => count,
+        Err(error) => {
+            let error_message = format!("Failed to update historic_pilot_affiliation_timeline: {error}");
+            let _ = mark_import_day_failed(connection, date, &error_message);
+            return partial_failure_outcome(date, &extraction, error_message);
+        }
+    };
+    let affiliation_timeline_elapsed_ms = affiliation_timeline_start.elapsed().as_millis();
+
     let persisted_evidence_rows = extraction.evidence_rows.len();
     let persisted_participant_rows = extraction.participant_rows.len();
 
@@ -109,6 +133,7 @@ pub fn import_day(connection: &Connection, client: &ZkillHistoryClient, date: Na
             qualifying_killmail_count: extraction.day_result.qualifying_killmail_count,
             persisted_evidence_rows,
             persisted_participant_rows,
+            affiliation_timeline_updated_pilot_count,
             candidate_pair_occurrence_rows: extraction.day_result.candidate_pair_occurrence_rows,
             timing: None,
             error_message: Some(error_message),
@@ -124,11 +149,13 @@ pub fn import_day(connection: &Connection, client: &ZkillHistoryClient, date: Na
         qualifying_killmail_count: extraction.day_result.qualifying_killmail_count,
         persisted_evidence_rows,
         persisted_participant_rows,
+        affiliation_timeline_updated_pilot_count,
         candidate_pair_occurrence_rows: extraction.day_result.candidate_pair_occurrence_rows,
         timing: Some(PersistenceTiming {
             clear_existing_rows_elapsed_ms,
             evidence_append_elapsed_ms,
             participant_append_elapsed_ms,
+            affiliation_timeline_elapsed_ms,
             status_update_elapsed_ms,
             total_elapsed_ms: total_start.elapsed().as_millis(),
         }),
@@ -145,6 +172,7 @@ fn already_completed_outcome(date: NaiveDate) -> ImportDayOutcome {
         qualifying_killmail_count: 0,
         persisted_evidence_rows: 0,
         persisted_participant_rows: 0,
+        affiliation_timeline_updated_pilot_count: 0,
         candidate_pair_occurrence_rows: 0,
         timing: None,
         error_message: None,
@@ -160,6 +188,7 @@ fn failed_outcome(date: NaiveDate, error_message: String) -> ImportDayOutcome {
         qualifying_killmail_count: 0,
         persisted_evidence_rows: 0,
         persisted_participant_rows: 0,
+        affiliation_timeline_updated_pilot_count: 0,
         candidate_pair_occurrence_rows: 0,
         timing: None,
         error_message: Some(error_message),
@@ -175,6 +204,7 @@ fn partial_failure_outcome(date: NaiveDate, extraction: &EvidenceDayResult, erro
         qualifying_killmail_count: extraction.day_result.qualifying_killmail_count,
         persisted_evidence_rows: 0,
         persisted_participant_rows: 0,
+        affiliation_timeline_updated_pilot_count: 0,
         candidate_pair_occurrence_rows: 0,
         timing: None,
         error_message: Some(error_message),
@@ -328,4 +358,102 @@ fn append_participant_rows(connection: &Connection, participant_rows: &[Particip
 
     appender.flush()?;
     Ok(())
+}
+
+/// Applies Step 19.01.03's incremental historic_pilot_affiliation_timeline
+/// maintenance for one imported day (Design Specification Section 4.7):
+/// builds this day's per-pilot affiliation fragments from the same evidence
+/// and participant rows just appended, then applies them via
+/// affiliation_timeline::apply_daily_affiliation_fragments. Returns the
+/// number of distinct pilots touched, for import_day's diagnostic report.
+fn update_pilot_affiliation_timeline(connection: &Connection, evidence_rows: &[EvidenceRecord], participant_rows: &[ParticipantRecord]) -> Result<usize> {
+    let now_utc = Utc::now().to_rfc3339();
+    let fragments = build_daily_affiliation_fragments(evidence_rows, participant_rows);
+
+    apply_daily_affiliation_fragments(connection, &fragments, &now_utc)
+}
+
+#[cfg(test)]
+mod tests {
+    use chrono::TimeZone;
+
+    use super::*;
+
+    fn open_test_schema() -> Connection {
+        let connection = Connection::open_in_memory().unwrap();
+        crate::schema::create_schema(&connection).unwrap();
+        connection
+    }
+
+    fn utc(seconds_of_day: u32) -> chrono::DateTime<Utc> {
+        Utc.with_ymd_and_hms(2026, 8, 13, 0, 0, 0).unwrap() + chrono::Duration::seconds(seconds_of_day as i64)
+    }
+
+    fn evidence(killmail_id: i64, killmail_time_utc: chrono::DateTime<Utc>) -> EvidenceRecord {
+        EvidenceRecord {
+            killmail_id,
+            killmail_time_utc,
+            evidence_date_utc: killmail_time_utc.date_naive(),
+            solar_system_id: Some(30000142),
+            victim_ship_type_id: Some(670),
+            participant_count: 1,
+        }
+    }
+
+    fn participant(killmail_id: i64, character_id: i64, corporation_id: Option<i64>) -> ParticipantRecord {
+        ParticipantRecord {
+            killmail_id,
+            character_id,
+            corporation_id,
+            alliance_id: None,
+            ship_type_id: Some(587),
+        }
+    }
+
+    /// Step 19.01.03: this is the direct integration test of the wiring
+    /// import_day itself relies on -- takes real EvidenceRecord/
+    /// ParticipantRecord data (no ZkillHistoryClient/network dependency,
+    /// unlike import_day as a whole) and confirms a row lands in
+    /// historic_pilot_affiliation_timeline via this crate's own connection,
+    /// not just via affiliation_timeline's own unit tests against the pure
+    /// functions directly.
+    #[test]
+    fn update_pilot_affiliation_timeline_inserts_a_row_for_a_newly_observed_pilot() {
+        let connection = open_test_schema();
+        let evidence_rows = vec![evidence(1, utc(100))];
+        let participant_rows = vec![participant(1, 95465499, Some(98765432))];
+
+        let touched = update_pilot_affiliation_timeline(&connection, &evidence_rows, &participant_rows).unwrap();
+
+        assert_eq!(touched, 1);
+
+        let row_count: i64 = connection
+            .query_row("SELECT COUNT(*) FROM historic_pilot_affiliation_timeline WHERE pilot_id = 95465499;", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(row_count, 1);
+    }
+
+    #[test]
+    fn update_pilot_affiliation_timeline_extends_across_two_separate_calls() {
+        let connection = open_test_schema();
+
+        let day_one_evidence = vec![evidence(1, utc(100))];
+        let day_one_participants = vec![participant(1, 95465499, Some(98765432))];
+        update_pilot_affiliation_timeline(&connection, &day_one_evidence, &day_one_participants).unwrap();
+
+        let day_two_time = utc(100) + chrono::Duration::days(1);
+        let day_two_evidence = vec![evidence(2, day_two_time)];
+        let day_two_participants = vec![participant(2, 95465499, Some(98765432))];
+        update_pilot_affiliation_timeline(&connection, &day_two_evidence, &day_two_participants).unwrap();
+
+        let row_count: i64 = connection
+            .query_row("SELECT COUNT(*) FROM historic_pilot_affiliation_timeline WHERE pilot_id = 95465499;", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(row_count, 1, "two calls with the same corporation_id must extend one row, not open a second");
+
+        let last_seen_utc: String = connection
+            .query_row("SELECT last_seen_utc FROM historic_pilot_affiliation_timeline WHERE pilot_id = 95465499;", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(last_seen_utc, day_two_time.to_rfc3339());
+    }
 }

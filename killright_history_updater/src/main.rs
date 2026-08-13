@@ -2,6 +2,7 @@ use std::env;
 use std::path::PathBuf;
 use std::process;
 
+mod affiliation_timeline;
 mod database_path;
 mod esi_active_status;
 mod folder_layout;
@@ -45,6 +46,7 @@ fn main() {
         "extract-range-evidence" => run_extract_range_evidence(&arguments),
         "check-entity-status" => run_check_entity_status(&arguments),
         "import-day" => run_import_day(&arguments),
+        "print-affiliation-timeline-summary" => run_print_affiliation_timeline_summary(),
         "rebuild-summary" => run_rebuild_summary(),
         "build-staging" => run_build_staging(&arguments),
         "__verify-open" => run_verify_open(&arguments),
@@ -309,6 +311,97 @@ fn run_import_day(arguments: &[String]) {
     if !outcome.succeeded {
         process::exit(1);
     }
+}
+
+/// Diagnostic command: prints a summary of historic_pilot_affiliation_timeline
+/// (Design Specification Section 4.7, Implementation Plan Step 19.01.03) --
+/// total row count plus the five most-recently-updated rows. No rows are
+/// written by this command, matching print-status's own read-only pattern.
+/// Exists so real day-import behaviour (import-day, against a real date)
+/// can be inspected without a specific pilot ID known in advance -- unlike
+/// check-entity-status's known real ESI entity ID, a day's participants are
+/// not knowable ahead of a real import run.
+fn run_print_affiliation_timeline_summary() {
+    let database_path = get_default_database_path();
+
+    if !database_path.exists() {
+        println!("Database does not exist at {}", database_path.display());
+        return;
+    }
+
+    let connection = match Connection::open(&database_path) {
+        Ok(connection) => connection,
+        Err(error) => {
+            eprintln!("Failed to open database: {error}");
+            process::exit(1);
+        }
+    };
+
+    let total_row_count: i64 = match connection.query_row("SELECT COUNT(*) FROM historic_pilot_affiliation_timeline;", [], |row| row.get(0)) {
+        Ok(value) => value,
+        Err(error) => {
+            eprintln!("Failed to query historic_pilot_affiliation_timeline: {error}");
+            process::exit(1);
+        }
+    };
+
+    println!("====================================================");
+    println!("KillRight Historic Updater - Pilot Affiliation Timeline Summary");
+    println!("====================================================");
+    println!("Total rows: {total_row_count}");
+    println!("Most recently updated rows (up to 5):");
+
+    let mut statement = match connection.prepare(
+        "SELECT pilot_id, corporation_id, alliance_id, first_seen_utc, last_seen_utc, last_updated_utc \
+         FROM historic_pilot_affiliation_timeline \
+         ORDER BY last_updated_utc DESC \
+         LIMIT 5;",
+    ) {
+        Ok(statement) => statement,
+        Err(error) => {
+            eprintln!("Failed to prepare historic_pilot_affiliation_timeline query: {error}");
+            process::exit(1);
+        }
+    };
+
+    let rows = statement.query_map([], |row| {
+        Ok((
+            row.get::<_, i64>(0)?,
+            row.get::<_, Option<i64>>(1)?,
+            row.get::<_, Option<i64>>(2)?,
+            row.get::<_, String>(3)?,
+            row.get::<_, String>(4)?,
+            row.get::<_, String>(5)?,
+        ))
+    });
+
+    match rows {
+        Ok(rows) => {
+            for row in rows {
+                match row {
+                    Ok((pilot_id, corporation_id, alliance_id, first_seen_utc, last_seen_utc, last_updated_utc)) => {
+                        println!(
+                            "- pilot_id={pilot_id} corporation_id={} alliance_id={} first_seen_utc={first_seen_utc} last_seen_utc={last_seen_utc} last_updated_utc={last_updated_utc}",
+                            corporation_id.map(|value| value.to_string()).unwrap_or_else(|| "(none)".to_string()),
+                            alliance_id.map(|value| value.to_string()).unwrap_or_else(|| "(none)".to_string()),
+                        );
+                    }
+                    Err(error) => {
+                        eprintln!("Failed to read a historic_pilot_affiliation_timeline row: {error}");
+                        process::exit(1);
+                    }
+                }
+            }
+        }
+        Err(error) => {
+            eprintln!("Failed to query historic_pilot_affiliation_timeline: {error}");
+            process::exit(1);
+        }
+    }
+
+    println!("Notes:");
+    println!("- Diagnostic command: no rows are written by this command.");
+    println!("====================================================");
 }
 
 fn run_rebuild_summary() {
@@ -623,13 +716,15 @@ fn print_import_day_report(outcome: &ImportDayOutcome) {
     println!("Persisted evidence rows: {}", outcome.persisted_evidence_rows);
     println!("Persisted participant rows: {}", outcome.persisted_participant_rows);
     println!("Candidate pair occurrence rows: {}", outcome.candidate_pair_occurrence_rows);
+    println!("Affiliation timeline pilots touched: {}", outcome.affiliation_timeline_updated_pilot_count);
 
     if let Some(timing) = &outcome.timing {
         println!(
-            "Timing (ms): clear={} evidence_append={} participant_append={} status_update={} total={}",
+            "Timing (ms): clear={} evidence_append={} participant_append={} affiliation_timeline={} status_update={} total={}",
             timing.clear_existing_rows_elapsed_ms,
             timing.evidence_append_elapsed_ms,
             timing.participant_append_elapsed_ms,
+            timing.affiliation_timeline_elapsed_ms,
             timing.status_update_elapsed_ms,
             timing.total_elapsed_ms
         );
@@ -729,6 +824,6 @@ fn print_staging_build_report(outcome: &StagingBuildOutcome) {
 
 fn print_usage() {
     eprintln!(
-        "Usage: killright_history_updater <create-schema|print-status|extract-day-evidence|extract-range-evidence|check-entity-status|import-day|rebuild-summary|build-staging>"
+        "Usage: killright_history_updater <create-schema|print-status|extract-day-evidence|extract-range-evidence|check-entity-status|import-day|print-affiliation-timeline-summary|rebuild-summary|build-staging>"
     );
 }
