@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::process;
 
 mod database_path;
+mod esi_active_status;
 mod folder_layout;
 mod live_config;
 mod local_app_data;
@@ -19,6 +20,7 @@ mod summary_rebuild;
 use chrono::NaiveDate;
 use database_path::{get_default_database_path, get_default_lock_path, get_history_updater_directory};
 use duckdb::Connection;
+use esi_active_status::{EntityType, EsiActiveStatusClient};
 use lock::SingleInstanceLock;
 use persistence::{import_day, ImportDayOutcome};
 use r2_client::{EvidenceDayResult, ParallelDownloadOptions, ZkillHistoryClient};
@@ -41,6 +43,7 @@ fn main() {
         "print-status" => status::print_status(&get_default_database_path()),
         "extract-day-evidence" => run_extract_day_evidence(&arguments),
         "extract-range-evidence" => run_extract_range_evidence(&arguments),
+        "check-entity-status" => run_check_entity_status(&arguments),
         "import-day" => run_import_day(&arguments),
         "rebuild-summary" => run_rebuild_summary(),
         "build-staging" => run_build_staging(&arguments),
@@ -177,6 +180,71 @@ fn run_extract_range_evidence(arguments: &[String]) {
 
     if failed_days > 0 {
         process::exit(1);
+    }
+}
+
+/// Diagnostic command: checks a single corporation or alliance's ESI
+/// active status directly, with no database involved -- no rows are
+/// written or read from any database, matching extract-day-evidence's own
+/// no-database-touch diagnostic pattern. Exists so a real ESI check can be
+/// confirmed against a real, live entity ID without running the full
+/// check-and-record path (esi_active_status::ensure_entity_active_status_cached).
+fn run_check_entity_status(arguments: &[String]) {
+    let entity_type = match arguments.get(2).map(String::as_str) {
+        Some("corporation") => EntityType::Corporation,
+        Some("alliance") => EntityType::Alliance,
+        _ => {
+            eprintln!("Usage: killright_history_updater check-entity-status <corporation|alliance> <id>");
+            process::exit(1);
+        }
+    };
+
+    let entity_id: i64 = match arguments.get(3).and_then(|text| text.parse().ok()) {
+        Some(value) => value,
+        None => {
+            eprintln!("Usage: killright_history_updater check-entity-status <corporation|alliance> <id>");
+            process::exit(1);
+        }
+    };
+
+    let client = match EsiActiveStatusClient::new() {
+        Ok(client) => client,
+        Err(error) => {
+            eprintln!("Failed to create HTTP client: {error}");
+            process::exit(1);
+        }
+    };
+
+    let result = match entity_type {
+        EntityType::Corporation => client.check_corporation_active(entity_id),
+        EntityType::Alliance => client.check_alliance_active(entity_id),
+    };
+
+    println!("====================================================");
+    println!("KillRight Historic Updater - Entity Active-Status Check");
+    println!("====================================================");
+    println!("Entity type: {}", entity_type.as_label());
+    println!("Entity ID: {entity_id}");
+
+    match result {
+        Ok(true) => {
+            println!("Status: Active");
+            println!("Notes:");
+            println!("- No rows are written to or read from any database in this step.");
+            println!("====================================================");
+        }
+        Ok(false) => {
+            println!("Status: Closed");
+            println!("Notes:");
+            println!("- No rows are written to or read from any database in this step.");
+            println!("====================================================");
+        }
+        Err(error) => {
+            println!("Status: Error");
+            println!("Error: {error}");
+            println!("====================================================");
+            process::exit(1);
+        }
     }
 }
 
@@ -661,6 +729,6 @@ fn print_staging_build_report(outcome: &StagingBuildOutcome) {
 
 fn print_usage() {
     eprintln!(
-        "Usage: killright_history_updater <create-schema|print-status|extract-day-evidence|extract-range-evidence|import-day|rebuild-summary|build-staging>"
+        "Usage: killright_history_updater <create-schema|print-status|extract-day-evidence|extract-range-evidence|check-entity-status|import-day|rebuild-summary|build-staging>"
     );
 }
