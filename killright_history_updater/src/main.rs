@@ -4,6 +4,7 @@ use std::process;
 
 mod affiliation_timeline;
 mod database_path;
+mod episode_builder;
 mod esi_active_status;
 mod folder_layout;
 mod live_config;
@@ -21,6 +22,7 @@ mod summary_rebuild;
 use chrono::NaiveDate;
 use database_path::{get_default_database_path, get_default_lock_path, get_history_updater_directory};
 use duckdb::Connection;
+use episode_builder::{build_same_c_a_episodes, fetch_pilot_affiliation_segments};
 use esi_active_status::{EntityType, EsiActiveStatusClient};
 use lock::SingleInstanceLock;
 use persistence::{import_day, ImportDayOutcome};
@@ -47,6 +49,7 @@ fn main() {
         "check-entity-status" => run_check_entity_status(&arguments),
         "import-day" => run_import_day(&arguments),
         "print-affiliation-timeline-summary" => run_print_affiliation_timeline_summary(),
+        "print-same-c-a-episodes" => run_print_same_c_a_episodes(&arguments),
         "rebuild-summary" => run_rebuild_summary(),
         "build-staging" => run_build_staging(&arguments),
         "__verify-open" => run_verify_open(&arguments),
@@ -396,6 +399,85 @@ fn run_print_affiliation_timeline_summary() {
         Err(error) => {
             eprintln!("Failed to query historic_pilot_affiliation_timeline: {error}");
             process::exit(1);
+        }
+    }
+
+    println!("Notes:");
+    println!("- Diagnostic command: no rows are written by this command.");
+    println!("====================================================");
+}
+
+/// Diagnostic command: prints the Same C/A episode list between two real
+/// pilots (Design Specification Section 6.11.4, Implementation Plan Step
+/// 19.01.04) by fetching both pilots' `historic_pilot_affiliation_timeline`
+/// history and running `build_same_c_a_episodes` against them. No rows are
+/// written by this command, matching `print-affiliation-timeline-summary`'s
+/// own read-only pattern -- exists purely so this step's Developer
+/// verification test (Section 7.2) can be run against real data, matching
+/// Section 6.11.3's stated Phase 1 scope (no query interface exists for
+/// this component yet).
+fn run_print_same_c_a_episodes(arguments: &[String]) {
+    let pilot_a_id: i64 = match arguments.get(2).and_then(|text| text.parse().ok()) {
+        Some(value) => value,
+        None => {
+            eprintln!("Usage: killright_history_updater print-same-c-a-episodes <pilot_a_id> <pilot_b_id>");
+            process::exit(1);
+        }
+    };
+
+    let pilot_b_id: i64 = match arguments.get(3).and_then(|text| text.parse().ok()) {
+        Some(value) => value,
+        None => {
+            eprintln!("Usage: killright_history_updater print-same-c-a-episodes <pilot_a_id> <pilot_b_id>");
+            process::exit(1);
+        }
+    };
+
+    let database_path = get_default_database_path();
+
+    if !database_path.exists() {
+        println!("Database does not exist at {}", database_path.display());
+        return;
+    }
+
+    let connection = match Connection::open(&database_path) {
+        Ok(connection) => connection,
+        Err(error) => {
+            eprintln!("Failed to open database: {error}");
+            process::exit(1);
+        }
+    };
+
+    let timeline_a = match fetch_pilot_affiliation_segments(&connection, pilot_a_id) {
+        Ok(segments) => segments,
+        Err(error) => {
+            eprintln!("Failed to fetch pilot_id {pilot_a_id}'s affiliation timeline: {error}");
+            process::exit(1);
+        }
+    };
+
+    let timeline_b = match fetch_pilot_affiliation_segments(&connection, pilot_b_id) {
+        Ok(segments) => segments,
+        Err(error) => {
+            eprintln!("Failed to fetch pilot_id {pilot_b_id}'s affiliation timeline: {error}");
+            process::exit(1);
+        }
+    };
+
+    println!("====================================================");
+    println!("KillRight Historic Updater - Same C/A Episodes");
+    println!("====================================================");
+    println!("Pilot A: {pilot_a_id} ({} timeline row(s))", timeline_a.len());
+    println!("Pilot B: {pilot_b_id} ({} timeline row(s))", timeline_b.len());
+
+    let episodes = build_same_c_a_episodes(&timeline_a, &timeline_b);
+
+    if episodes.is_empty() {
+        println!("Episodes: none");
+    } else {
+        println!("Episodes ({}):", episodes.len());
+        for episode in &episodes {
+            println!("- {} to {}", episode.start_utc.to_rfc3339(), episode.end_utc.to_rfc3339());
         }
     }
 
@@ -824,6 +906,6 @@ fn print_staging_build_report(outcome: &StagingBuildOutcome) {
 
 fn print_usage() {
     eprintln!(
-        "Usage: killright_history_updater <create-schema|print-status|extract-day-evidence|extract-range-evidence|check-entity-status|import-day|print-affiliation-timeline-summary|rebuild-summary|build-staging>"
+        "Usage: killright_history_updater <create-schema|print-status|extract-day-evidence|extract-range-evidence|check-entity-status|import-day|print-affiliation-timeline-summary|print-same-c-a-episodes|rebuild-summary|build-staging>"
     );
 }
