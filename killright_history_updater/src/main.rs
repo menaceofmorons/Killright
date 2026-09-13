@@ -11,6 +11,7 @@ mod live_config;
 mod local_app_data;
 mod lock;
 mod persistence;
+mod pilot_to_pilot_strength;
 mod promotion;
 mod r2_client;
 mod rate_limiter;
@@ -26,6 +27,7 @@ use episode_builder::{build_same_c_a_episodes, fetch_pilot_affiliation_segments}
 use esi_active_status::{EntityType, EsiActiveStatusClient};
 use lock::SingleInstanceLock;
 use persistence::{import_day, ImportDayOutcome};
+use pilot_to_pilot_strength::{classify_pilot_to_pilot_strength, Strength};
 use r2_client::{EvidenceDayResult, ParallelDownloadOptions, ZkillHistoryClient};
 use staging::{build_staging, ImportRangeMode, StagingBuildOutcome, TestAmountUnit};
 use summary_rebuild::{rebuild_summary_and_org_context, RebuildStats};
@@ -50,6 +52,7 @@ fn main() {
         "import-day" => run_import_day(&arguments),
         "print-affiliation-timeline-summary" => run_print_affiliation_timeline_summary(),
         "print-same-c-a-episodes" => run_print_same_c_a_episodes(&arguments),
+        "print-pilot-to-pilot-strength" => run_print_pilot_to_pilot_strength(&arguments),
         "rebuild-summary" => run_rebuild_summary(),
         "build-staging" => run_build_staging(&arguments),
         "__verify-open" => run_verify_open(&arguments),
@@ -486,6 +489,59 @@ fn run_print_same_c_a_episodes(arguments: &[String]) {
     println!("====================================================");
 }
 
+fn run_print_pilot_to_pilot_strength(arguments: &[String]) {
+    let pilot_a_id: i64 = match arguments.get(2).and_then(|text| text.parse().ok()) {
+        Some(value) => value,
+        None => {
+            eprintln!("Usage: killright_history_updater print-pilot-to-pilot-strength <pilot_a_id> <pilot_b_id>");
+            process::exit(1);
+        }
+    };
+
+    let pilot_b_id: i64 = match arguments.get(3).and_then(|text| text.parse().ok()) {
+        Some(value) => value,
+        None => {
+            eprintln!("Usage: killright_history_updater print-pilot-to-pilot-strength <pilot_a_id> <pilot_b_id>");
+            process::exit(1);
+        }
+    };
+
+    let database_path = get_default_database_path();
+
+    if !database_path.exists() {
+        println!("Database does not exist at {}", database_path.display());
+        return;
+    }
+
+    let connection = match Connection::open(&database_path) {
+        Ok(connection) => connection,
+        Err(error) => {
+            eprintln!("Failed to open database: {error}");
+            process::exit(1);
+        }
+    };
+
+    println!("====================================================");
+    println!("KillRight Historic Updater - Pilot-to-Pilot Strength");
+    println!("====================================================");
+    println!("Pilot A: {pilot_a_id}");
+    println!("Pilot B: {pilot_b_id}");
+
+    match classify_pilot_to_pilot_strength(&connection, pilot_a_id, pilot_b_id) {
+        Ok(Some(strength)) => println!("Strength: {strength}"),
+        Ok(None) => println!("Strength: Not Applicable (currently same corporation/alliance)"),
+        Err(error) => {
+            eprintln!("Failed to classify pilot-to-pilot strength: {error}");
+            process::exit(1);
+        }
+    }
+
+    println!("Notes:");
+    println!("- Diagnostic command: no rows are written by this command.");
+    println!("- Confidence (Step 19.01.06) and persistence (Step 19.01.09) are both out of scope for this step.");
+    println!("====================================================");
+}
+
 fn run_rebuild_summary() {
     let lock_path = get_default_lock_path();
 
@@ -906,6 +962,6 @@ fn print_staging_build_report(outcome: &StagingBuildOutcome) {
 
 fn print_usage() {
     eprintln!(
-        "Usage: killright_history_updater <create-schema|print-status|extract-day-evidence|extract-range-evidence|check-entity-status|import-day|print-affiliation-timeline-summary|print-same-c-a-episodes|rebuild-summary|build-staging>"
+        "Usage: killright_history_updater <create-schema|print-status|extract-day-evidence|extract-range-evidence|check-entity-status|import-day|print-affiliation-timeline-summary|print-same-c-a-episodes|print-pilot-to-pilot-strength|rebuild-summary|build-staging>"
     );
 }
