@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::process;
 
 mod affiliation_timeline;
+mod confidence;
 mod database_path;
 mod episode_builder;
 mod esi_active_status;
@@ -528,7 +529,10 @@ fn run_print_pilot_to_pilot_strength(arguments: &[String]) {
     println!("Pilot B: {pilot_b_id}");
 
     match classify_pilot_to_pilot_strength(&connection, pilot_a_id, pilot_b_id) {
-        Ok(Some(strength)) => println!("Strength: {strength}"),
+        Ok(Some((strength, confidence))) => {
+            println!("Strength: {strength}");
+            println!("Confidence: {confidence}");
+        }
         Ok(None) => println!("Strength: Not Applicable (currently same corporation/alliance)"),
         Err(error) => {
             eprintln!("Failed to classify pilot-to-pilot strength: {error}");
@@ -538,7 +542,7 @@ fn run_print_pilot_to_pilot_strength(arguments: &[String]) {
 
     println!("Notes:");
     println!("- Diagnostic command: no rows are written by this command.");
-    println!("- Confidence (Step 19.01.06) and persistence (Step 19.01.09) are both out of scope for this step.");
+    println!("- Persistence (Step 19.01.09) is out of scope for this step.");
     println!("====================================================");
 }
 

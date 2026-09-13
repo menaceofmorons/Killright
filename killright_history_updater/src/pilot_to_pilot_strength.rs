@@ -1,6 +1,7 @@
 use chrono::{DateTime, Duration, Utc};
 use duckdb::{params, Connection, Result};
 
+use crate::confidence::{assign_confidence, Confidence, ConfidencePattern};
 use crate::episode_builder::{build_same_c_a_episodes, fetch_pilot_affiliation_segments, is_same_c_a, AffiliationSegment, Episode};
 
 pub const RECENCY_DECAY_SHORT_WINDOW_DAYS: i64 = 90;
@@ -37,10 +38,10 @@ pub fn is_currently_same_c_a(timeline_a: &[AffiliationSegment], timeline_b: &[Af
     }
 }
 
-pub fn classify_episode_count_without_recency(episode_count: usize) -> Option<Strength> {
+pub fn classify_episode_count_without_recency(episode_count: usize) -> Option<(Strength, ConfidencePattern)> {
     match episode_count {
-        0 => Some(Strength::Strong),
-        n if n >= 3 => Some(Strength::VeryStrong),
+        0 => Some((Strength::Strong, ConfidencePattern::NeverSameCA)),
+        n if n >= 3 => Some((Strength::VeryStrong, ConfidencePattern::ThreeOrMore)),
         _ => None,
     }
 }
@@ -121,6 +122,22 @@ pub fn has_shared_evidence_between(connection: &Connection, pilot_a_id: i64, pil
     )
 }
 
+/// Design_Spec_Dense.md §6.11.4 Table53 (TwiceWithGap basis).
+pub fn count_shared_evidence_between(connection: &Connection, pilot_a_id: i64, pilot_b_id: i64, start_exclusive_utc: DateTime<Utc>, end_exclusive_utc: DateTime<Utc>) -> Result<i64> {
+    let mut statement = connection.prepare(
+        "SELECT COUNT(*) FROM historic_relationship_evidence e \
+         JOIN historic_relationship_evidence_participants p1 ON p1.evidence_id = e.evidence_id \
+         JOIN historic_relationship_evidence_participants p2 ON p2.evidence_id = e.evidence_id \
+         WHERE p1.character_id = ? AND p2.character_id = ? \
+           AND e.killmail_time_utc > ? AND e.killmail_time_utc < ?;",
+    )?;
+
+    statement.query_row(
+        params![pilot_a_id, pilot_b_id, start_exclusive_utc.to_rfc3339(), end_exclusive_utc.to_rfc3339()],
+        |row| row.get(0),
+    )
+}
+
 pub fn count_shared_evidence_in_window(connection: &Connection, pilot_a_id: i64, pilot_b_id: i64, window_start_utc: DateTime<Utc>, window_end_utc: DateTime<Utc>) -> Result<i64> {
     let mut statement = connection.prepare(
         "SELECT COUNT(*) FROM historic_relationship_evidence e \
@@ -136,44 +153,64 @@ pub fn count_shared_evidence_in_window(connection: &Connection, pilot_a_id: i64,
     )
 }
 
-pub fn classify_recency_decay(connection: &Connection, pilot_a_id: i64, pilot_b_id: i64, episode_end_utc: DateTime<Utc>, now: DateTime<Utc>) -> Result<Strength> {
+/// Design_Spec_Dense.md §6.11.4 Table53 (NeverSameCA basis).
+pub fn count_all_shared_evidence(connection: &Connection, pilot_a_id: i64, pilot_b_id: i64) -> Result<i64> {
+    let mut statement = connection.prepare(
+        "SELECT COUNT(*) FROM historic_relationship_evidence e \
+         JOIN historic_relationship_evidence_participants p1 ON p1.evidence_id = e.evidence_id \
+         JOIN historic_relationship_evidence_participants p2 ON p2.evidence_id = e.evidence_id \
+         WHERE p1.character_id = ? AND p2.character_id = ?;",
+    )?;
+
+    statement.query_row(params![pilot_a_id, pilot_b_id], |row| row.get(0))
+}
+
+pub fn classify_recency_decay(connection: &Connection, pilot_a_id: i64, pilot_b_id: i64, episode_end_utc: DateTime<Utc>, now: DateTime<Utc>) -> Result<(Strength, i64)> {
     let most_recent_post_evidence_utc = most_recent_shared_evidence_time(connection, pilot_a_id, pilot_b_id, episode_end_utc)?;
     let band = classify_recency_band(most_recent_post_evidence_utc, now);
 
     let window = match recency_volume_modifier_window(band, episode_end_utc, now) {
         Some(window) => window,
-        None => return Ok(band),
+        None => return Ok((band, 0)),
     };
 
     let shared_kill_count_in_window = count_shared_evidence_in_window(connection, pilot_a_id, pilot_b_id, window.0, window.1)?;
 
-    Ok(apply_recency_volume_modifier(band, shared_kill_count_in_window))
+    Ok((apply_recency_volume_modifier(band, shared_kill_count_in_window), shared_kill_count_in_window))
 }
 
-fn classify_exactly_two_episodes(connection: &Connection, pilot_a_id: i64, pilot_b_id: i64, episodes: &[Episode], now: DateTime<Utc>) -> Result<Strength> {
+fn classify_exactly_two_episodes(connection: &Connection, pilot_a_id: i64, pilot_b_id: i64, episodes: &[Episode], now: DateTime<Utc>) -> Result<(Strength, Confidence)> {
     let first_episode = episodes[0];
     let second_episode = episodes[1];
 
     if has_shared_evidence_between(connection, pilot_a_id, pilot_b_id, first_episode.end_utc, second_episode.start_utc)? {
-        return Ok(Strength::Strong);
+        let basis = count_shared_evidence_between(connection, pilot_a_id, pilot_b_id, first_episode.end_utc, second_episode.start_utc)?;
+        return Ok((Strength::Strong, assign_confidence(ConfidencePattern::TwiceWithGap, basis)));
     }
 
-    classify_recency_decay(connection, pilot_a_id, pilot_b_id, second_episode.end_utc, now)
+    let (strength, basis) = classify_recency_decay(connection, pilot_a_id, pilot_b_id, second_episode.end_utc, now)?;
+    Ok((strength, assign_confidence(ConfidencePattern::Recency, basis)))
 }
 
-fn classify_by_episode_count(connection: &Connection, pilot_a_id: i64, pilot_b_id: i64, episodes: &[Episode], now: DateTime<Utc>) -> Result<Strength> {
-    if let Some(strength) = classify_episode_count_without_recency(episodes.len()) {
-        return Ok(strength);
+fn classify_by_episode_count(connection: &Connection, pilot_a_id: i64, pilot_b_id: i64, episodes: &[Episode], now: DateTime<Utc>) -> Result<(Strength, Confidence)> {
+    if let Some((strength, pattern)) = classify_episode_count_without_recency(episodes.len()) {
+        let basis = match pattern {
+            ConfidencePattern::NeverSameCA => count_all_shared_evidence(connection, pilot_a_id, pilot_b_id)?,
+            ConfidencePattern::ThreeOrMore => episodes.len() as i64,
+            ConfidencePattern::Recency | ConfidencePattern::TwiceWithGap => unreachable!("classify_episode_count_without_recency never returns these patterns"),
+        };
+        return Ok((strength, assign_confidence(pattern, basis)));
     }
 
     if episodes.len() == 2 {
         classify_exactly_two_episodes(connection, pilot_a_id, pilot_b_id, episodes, now)
     } else {
-        classify_recency_decay(connection, pilot_a_id, pilot_b_id, episodes[0].end_utc, now)
+        let (strength, basis) = classify_recency_decay(connection, pilot_a_id, pilot_b_id, episodes[0].end_utc, now)?;
+        Ok((strength, assign_confidence(ConfidencePattern::Recency, basis)))
     }
 }
 
-pub fn classify_pilot_to_pilot_strength(connection: &Connection, pilot_a_id: i64, pilot_b_id: i64) -> Result<Option<Strength>> {
+pub fn classify_pilot_to_pilot_strength(connection: &Connection, pilot_a_id: i64, pilot_b_id: i64) -> Result<Option<(Strength, Confidence)>> {
     let timeline_a = fetch_pilot_affiliation_segments(connection, pilot_a_id)?;
     let timeline_b = fetch_pilot_affiliation_segments(connection, pilot_b_id)?;
 
@@ -222,13 +259,13 @@ mod tests {
 
     #[test]
     fn classify_episode_count_without_recency_strong_for_zero_episodes() {
-        assert_eq!(classify_episode_count_without_recency(0), Some(Strength::Strong));
+        assert_eq!(classify_episode_count_without_recency(0), Some((Strength::Strong, ConfidencePattern::NeverSameCA)));
     }
 
     #[test]
     fn classify_episode_count_without_recency_very_strong_for_three_or_more() {
-        assert_eq!(classify_episode_count_without_recency(3), Some(Strength::VeryStrong));
-        assert_eq!(classify_episode_count_without_recency(9), Some(Strength::VeryStrong));
+        assert_eq!(classify_episode_count_without_recency(3), Some((Strength::VeryStrong, ConfidencePattern::ThreeOrMore)));
+        assert_eq!(classify_episode_count_without_recency(9), Some((Strength::VeryStrong, ConfidencePattern::ThreeOrMore)));
     }
 
     #[test]
@@ -478,13 +515,37 @@ mod tests {
     }
 
     #[test]
+    fn count_shared_evidence_between_counts_only_strictly_between_rows() {
+        let connection = open_test_schema();
+        insert_shared_evidence(&connection, 1, days_before_fixed_now(20), PILOT_A, PILOT_B);
+        insert_shared_evidence(&connection, 2, days_before_fixed_now(15), PILOT_A, PILOT_B);
+        insert_shared_evidence(&connection, 3, days_before_fixed_now(10), PILOT_A, PILOT_B);
+
+        let count = count_shared_evidence_between(&connection, PILOT_A, PILOT_B, days_before_fixed_now(20), days_before_fixed_now(10)).unwrap();
+
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn count_all_shared_evidence_counts_every_row_regardless_of_time() {
+        let connection = open_test_schema();
+        insert_shared_evidence(&connection, 1, days_before_fixed_now(500), PILOT_A, PILOT_B);
+        insert_shared_evidence(&connection, 2, days_before_fixed_now(10), PILOT_A, PILOT_B);
+
+        let count = count_all_shared_evidence(&connection, PILOT_A, PILOT_B).unwrap();
+
+        assert_eq!(count, 2);
+    }
+
+    #[test]
     fn classify_recency_decay_none_when_no_post_evidence_exists() {
         let connection = open_test_schema();
         let episode_end = days_before_fixed_now(400);
 
-        let strength = classify_recency_decay(&connection, PILOT_A, PILOT_B, episode_end, fixed_now()).unwrap();
+        let (strength, basis) = classify_recency_decay(&connection, PILOT_A, PILOT_B, episode_end, fixed_now()).unwrap();
 
         assert_eq!(strength, Strength::None);
+        assert_eq!(basis, 0);
     }
 
     #[test]
@@ -493,9 +554,10 @@ mod tests {
         let episode_end = days_before_fixed_now(400);
         insert_shared_evidence(&connection, 1, days_before_fixed_now(120), PILOT_A, PILOT_B);
 
-        let strength = classify_recency_decay(&connection, PILOT_A, PILOT_B, episode_end, fixed_now()).unwrap();
+        let (strength, basis) = classify_recency_decay(&connection, PILOT_A, PILOT_B, episode_end, fixed_now()).unwrap();
 
         assert_eq!(strength, Strength::Weak);
+        assert_eq!(basis, 1);
     }
 
     #[test]
@@ -504,9 +566,10 @@ mod tests {
         let episode_end = days_before_fixed_now(400);
         insert_shared_evidence(&connection, 1, days_before_fixed_now(30), PILOT_A, PILOT_B);
 
-        let strength = classify_recency_decay(&connection, PILOT_A, PILOT_B, episode_end, fixed_now()).unwrap();
+        let (strength, basis) = classify_recency_decay(&connection, PILOT_A, PILOT_B, episode_end, fixed_now()).unwrap();
 
         assert_eq!(strength, Strength::Medium);
+        assert_eq!(basis, 1);
     }
 
     #[test]
@@ -518,9 +581,10 @@ mod tests {
             insert_shared_evidence(&connection, evidence_id, days_before_fixed_now(100 + evidence_id), PILOT_A, PILOT_B);
         }
 
-        let strength = classify_recency_decay(&connection, PILOT_A, PILOT_B, episode_end, fixed_now()).unwrap();
+        let (strength, basis) = classify_recency_decay(&connection, PILOT_A, PILOT_B, episode_end, fixed_now()).unwrap();
 
         assert_eq!(strength, Strength::Medium);
+        assert_eq!(basis, 6);
     }
 
     #[test]
@@ -532,9 +596,10 @@ mod tests {
             insert_shared_evidence(&connection, evidence_id, days_before_fixed_now(100 + evidence_id), PILOT_A, PILOT_B);
         }
 
-        let strength = classify_recency_decay(&connection, PILOT_A, PILOT_B, episode_end, fixed_now()).unwrap();
+        let (strength, basis) = classify_recency_decay(&connection, PILOT_A, PILOT_B, episode_end, fixed_now()).unwrap();
 
         assert_eq!(strength, Strength::Strong);
+        assert_eq!(basis, 10);
     }
 
     #[test]
@@ -546,9 +611,10 @@ mod tests {
             insert_shared_evidence(&connection, evidence_id, days_before_fixed_now(evidence_id), PILOT_A, PILOT_B);
         }
 
-        let strength = classify_recency_decay(&connection, PILOT_A, PILOT_B, episode_end, fixed_now()).unwrap();
+        let (strength, basis) = classify_recency_decay(&connection, PILOT_A, PILOT_B, episode_end, fixed_now()).unwrap();
 
         assert_eq!(strength, Strength::VeryStrong);
+        assert_eq!(basis, 10);
     }
 
     #[test]
@@ -561,9 +627,10 @@ mod tests {
         }
         insert_shared_evidence(&connection, 100, days_before_fixed_now(99), PILOT_A, PILOT_B);
 
-        let strength = classify_recency_decay(&connection, PILOT_A, PILOT_B, episode_end, fixed_now()).unwrap();
+        let (strength, basis) = classify_recency_decay(&connection, PILOT_A, PILOT_B, episode_end, fixed_now()).unwrap();
 
         assert_eq!(strength, Strength::Weak, "pre-split evidence must not feed the post-split Volume Modifier count");
+        assert_eq!(basis, 1, "pre-split evidence must not feed the post-split Volume Modifier count");
     }
 
     fn ago(days: i64) -> DateTime<Utc> {
@@ -585,7 +652,7 @@ mod tests {
         insert_affiliation_segment(&connection, PILOT_A, Some(90111111), None, ago(400), ago(1));
         insert_affiliation_segment(&connection, PILOT_B, Some(90222222), None, ago(400), ago(1));
 
-        assert_eq!(classify_pilot_to_pilot_strength(&connection, PILOT_A, PILOT_B).unwrap(), Some(Strength::Strong));
+        assert_eq!(classify_pilot_to_pilot_strength(&connection, PILOT_A, PILOT_B).unwrap(), Some((Strength::Strong, Confidence::Low)));
     }
 
     #[test]
@@ -600,7 +667,7 @@ mod tests {
         insert_affiliation_segment(&connection, PILOT_A, Some(90333333), None, ago(1020), ago(1010));
         insert_affiliation_segment(&connection, PILOT_A, Some(90555555), None, ago(1010), ago(1000));
 
-        assert_eq!(classify_pilot_to_pilot_strength(&connection, PILOT_A, PILOT_B).unwrap(), Some(Strength::VeryStrong));
+        assert_eq!(classify_pilot_to_pilot_strength(&connection, PILOT_A, PILOT_B).unwrap(), Some((Strength::VeryStrong, Confidence::Average)));
     }
 
     #[test]
@@ -615,7 +682,7 @@ mod tests {
 
         insert_shared_evidence(&connection, 1, ago(1025), PILOT_A, PILOT_B);
 
-        assert_eq!(classify_pilot_to_pilot_strength(&connection, PILOT_A, PILOT_B).unwrap(), Some(Strength::Strong));
+        assert_eq!(classify_pilot_to_pilot_strength(&connection, PILOT_A, PILOT_B).unwrap(), Some((Strength::Strong, Confidence::Low)));
     }
 
     #[test]
@@ -628,7 +695,7 @@ mod tests {
         insert_affiliation_segment(&connection, PILOT_A, Some(90333333), None, ago(1020), ago(1010));
         insert_affiliation_segment(&connection, PILOT_A, Some(90555555), None, ago(1010), ago(1000));
 
-        assert_eq!(classify_pilot_to_pilot_strength(&connection, PILOT_A, PILOT_B).unwrap(), Some(Strength::None));
+        assert_eq!(classify_pilot_to_pilot_strength(&connection, PILOT_A, PILOT_B).unwrap(), Some((Strength::None, Confidence::Low)));
     }
 
     #[test]
@@ -640,6 +707,6 @@ mod tests {
 
         insert_shared_evidence(&connection, 1, ago(30), PILOT_A, PILOT_B);
 
-        assert_eq!(classify_pilot_to_pilot_strength(&connection, PILOT_A, PILOT_B).unwrap(), Some(Strength::Medium));
+        assert_eq!(classify_pilot_to_pilot_strength(&connection, PILOT_A, PILOT_B).unwrap(), Some((Strength::Medium, Confidence::Low)));
     }
 }
