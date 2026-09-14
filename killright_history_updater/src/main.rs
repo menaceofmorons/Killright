@@ -1,8 +1,9 @@
 use std::env;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process;
 
 mod affiliation_timeline;
+mod classification_persistence;
 mod confidence;
 mod database_path;
 mod episode_builder;
@@ -23,6 +24,7 @@ mod status;
 mod summary_rebuild;
 
 use chrono::NaiveDate;
+use classification_persistence::{persist_classification, PersistClassificationOutcome};
 use database_path::{get_default_database_path, get_default_lock_path, get_history_updater_directory};
 use duckdb::Connection;
 use episode_builder::{build_same_c_a_episodes, fetch_pilot_affiliation_segments};
@@ -58,6 +60,7 @@ fn main() {
         "print-pilot-to-pilot-strength" => run_print_pilot_to_pilot_strength(&arguments),
         "print-pilot-vs-group-strength" => run_print_pilot_vs_group_strength(&arguments),
         "rebuild-summary" => run_rebuild_summary(),
+        "persist-classification" => run_persist_classification(),
         "build-staging" => run_build_staging(&arguments),
         "__verify-open" => run_verify_open(&arguments),
         _ => {
@@ -678,6 +681,68 @@ fn run_rebuild_summary() {
     }
 }
 
+/// Step 19.01.09: standalone CLI entry point for the Persistence bulk-persist
+/// pass (Implementation Plan Step 19.01.09) -- reads and writes
+/// historic_relationship_classification against the single database at
+/// `database_path::get_default_database_path()` (the `Test`-subfolder
+/// scratch database every other simple command in this crate already uses),
+/// via classification_persistence::persist_classification. Deliberately its
+/// own command, not chained into build-staging or rebuild-summary -- see
+/// classification_persistence.rs's own module doc comment for why. Running
+/// this against the real Live-folder database is a deliberately later,
+/// separate decision -- deferred to the end of the whole 19.01.** phase
+/// (confirmed with Tom 2026-09-14), not something this command does today.
+fn run_persist_classification() {
+    let lock_path = get_default_lock_path();
+
+    let lock = match SingleInstanceLock::acquire(&lock_path) {
+        Ok(Some(lock)) => lock,
+        Ok(None) => return,
+        Err(error) => {
+            eprintln!("Failed to acquire history update lock: {error}");
+            process::exit(1);
+        }
+    };
+
+    let database_path = get_default_database_path();
+
+    let connection = match Connection::open(&database_path) {
+        Ok(connection) => connection,
+        Err(error) => {
+            eprintln!("Failed to open database: {error}");
+            drop(lock);
+            process::exit(1);
+        }
+    };
+
+    if let Err(error) = schema::create_schema(&connection) {
+        eprintln!("Failed to ensure schema: {error}");
+        drop(lock);
+        process::exit(1);
+    }
+
+    let esi_client = match EsiActiveStatusClient::new() {
+        Ok(client) => client,
+        Err(error) => {
+            eprintln!("Failed to create HTTP client: {error}");
+            drop(lock);
+            process::exit(1);
+        }
+    };
+
+    match persist_classification(&connection, &esi_client) {
+        Ok(outcome) => {
+            print_persist_classification_report(&outcome, &database_path);
+            drop(lock);
+        }
+        Err(error) => {
+            eprintln!("Failed to persist historic_relationship_classification: {error}");
+            drop(lock);
+            process::exit(1);
+        }
+    }
+}
+
 fn run_build_staging(arguments: &[String]) {
     let range_mode = match parse_import_range_mode(arguments) {
         Ok(value) => value,
@@ -977,6 +1042,28 @@ fn print_rebuild_summary_report(stats: &RebuildStats) {
     println!("====================================================");
 }
 
+fn print_persist_classification_report(outcome: &PersistClassificationOutcome, database_path: &Path) {
+    println!("====================================================");
+    println!("KillRight Historic Updater - Historic Relationship Classification Persistence");
+    println!("====================================================");
+    println!("Database: {}", database_path.display());
+    println!("Pilot-to-Pilot candidate pairs: {}", outcome.p2p_candidate_count);
+    println!("Pilot-vs-Group candidates: {}", outcome.pvg_candidate_count);
+    println!("Positive rows persisted: {}", outcome.positive_row_count);
+    println!(
+        "Timing (ms): p2p_classify={} pvg_classify={} live_swap={} total={}",
+        outcome.timing.p2p_classify_elapsed_ms,
+        outcome.timing.pvg_classify_elapsed_ms,
+        outcome.timing.live_swap_elapsed_ms,
+        outcome.timing.total_elapsed_ms
+    );
+    println!("Notes:");
+    println!("- Reads and writes the same database (single connection); historic_relationship_classification is replaced via single-table swap.");
+    println!("- Strength::None is never stored -- only positive rows are persisted (Design Specification Section 6.11.2).");
+    println!("- This is the Test-subfolder scratch database, not the real Live-folder database -- a Live-folder run is deferred to the end of the 19.01.** phase.");
+    println!("====================================================");
+}
+
 fn print_staging_build_report(outcome: &StagingBuildOutcome) {
     println!("====================================================");
     println!("KillRight Historic Updater - Staging Build");
@@ -1048,6 +1135,6 @@ fn print_staging_build_report(outcome: &StagingBuildOutcome) {
 
 fn print_usage() {
     eprintln!(
-        "Usage: killright_history_updater <create-schema|print-status|extract-day-evidence|extract-range-evidence|check-entity-status|import-day|print-affiliation-timeline-summary|print-same-c-a-episodes|print-pilot-to-pilot-strength|print-pilot-vs-group-strength|rebuild-summary|build-staging>"
+        "Usage: killright_history_updater <create-schema|print-status|extract-day-evidence|extract-range-evidence|check-entity-status|import-day|print-affiliation-timeline-summary|print-same-c-a-episodes|print-pilot-to-pilot-strength|print-pilot-vs-group-strength|rebuild-summary|persist-classification|build-staging>"
     );
 }

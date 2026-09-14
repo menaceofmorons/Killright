@@ -16,8 +16,17 @@ pub const WORKING_DIRECTORY_NAME: &str = "Working";
 pub const LIVE_DIRECTORY_NAME: &str = "Live";
 pub const ARCHIVE_DIRECTORY_NAME: &str = "Archive";
 pub const FAILED_DIRECTORY_NAME: &str = "Failed";
+/// Step 19.01.09: holds the standalone-command scratch database
+/// (`database_path.rs::get_default_database_path`) used by `create-schema`,
+/// `import-day`, `rebuild-summary`, `print-*`, and `persist-classification`
+/// -- deliberately segregated into its own subfolder, unambiguously named
+/// apart from `Live`, after this file was twice mistaken for the real
+/// promoted database (by the Developer and by this crate's own
+/// `persist-classification` implementation) while it sat unlabeled at the
+/// historic database root.
+pub const TEST_DIRECTORY_NAME: &str = "Test";
 
-/// Ensures all four subfolders exist under `root` (the historic database
+/// Ensures all five subfolders exist under `root` (the historic database
 /// root, e.g. `%LOCALAPPDATA%\KillRight\HistoryUpdater`), creating any that
 /// are missing along with `root` itself if needed. Safe to call on every
 /// `build_staging` invocation -- `fs::create_dir_all` is a no-op when the
@@ -27,6 +36,7 @@ pub fn ensure_folder_layout(root: &Path) -> io::Result<()> {
     fs::create_dir_all(live_dir(root))?;
     fs::create_dir_all(archive_dir(root))?;
     fs::create_dir_all(failed_dir(root))?;
+    fs::create_dir_all(test_dir(root))?;
     Ok(())
 }
 
@@ -46,6 +56,10 @@ pub fn failed_dir(root: &Path) -> PathBuf {
     root.join(FAILED_DIRECTORY_NAME)
 }
 
+pub fn test_dir(root: &Path) -> PathBuf {
+    root.join(TEST_DIRECTORY_NAME)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -61,8 +75,8 @@ mod tests {
     }
 
     #[test]
-    fn ensure_folder_layout_creates_all_four_subfolders_and_root() {
-        let root = unique_temp_root("creates-all-four");
+    fn ensure_folder_layout_creates_all_five_subfolders_and_root() {
+        let root = unique_temp_root("creates-all-five");
         assert!(!root.exists());
 
         ensure_folder_layout(&root).unwrap();
@@ -71,6 +85,7 @@ mod tests {
         assert!(live_dir(&root).is_dir());
         assert!(archive_dir(&root).is_dir());
         assert!(failed_dir(&root).is_dir());
+        assert!(test_dir(&root).is_dir());
 
         fs::remove_dir_all(&root).unwrap();
     }
@@ -86,6 +101,7 @@ mod tests {
         assert!(live_dir(&root).is_dir());
         assert!(archive_dir(&root).is_dir());
         assert!(failed_dir(&root).is_dir());
+        assert!(test_dir(&root).is_dir());
 
         fs::remove_dir_all(&root).unwrap();
     }
