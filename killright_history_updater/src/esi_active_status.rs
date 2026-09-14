@@ -179,21 +179,33 @@ fn record_entity_closed(connection: &Connection, entity_id: i64, entity_type: En
     Ok(())
 }
 
+/// Purges any already-stored Pilot-vs-Group historic_relationship_classification
+/// row against a newly-closed entity (Section 6.11.4) -- purged outright, not
+/// just excluded from future computation. entity_id/entity_type match the
+/// classification table's own columns (Section 4.8), which for Entity Type
+/// C/A rows are the corporation/alliance ID and type itself; Entity Type P
+/// (pilot-to-pilot) rows are never matched by this query, since their
+/// entity_id is a character ID, not a corporation/alliance ID, and their
+/// entity_type is always 'P'.
+fn purge_stored_relationship_classification_for_entity(connection: &Connection, entity_id: i64, entity_type: EntityType) -> DuckResult<()> {
+    connection.execute(
+        "DELETE FROM historic_relationship_classification WHERE entity_id = ? AND entity_type = ?;",
+        params![entity_id, entity_type.as_cache_char()],
+    )?;
+
+    Ok(())
+}
+
 /// The check-and-record logic itself (Design Specification Section 6.11.4,
 /// Implementation Plan Step 19.01.02): checks historic_closed_entity_cache
 /// first, only calls ESI (via check_active) if the entity isn't already
-/// known-closed, and records a newly-discovered closure. check_active is
-/// injected rather than called directly so this function's cache-first
-/// logic is unit-testable without a real network call -- production
-/// callers (ensure_alliance_active_status_cached/
-/// ensure_corporation_active_status_cached below) pass a closure that
-/// calls the real ESI endpoint.
-///
-/// The purge-on-closure behaviour Section 6.11.4 also describes (purging
-/// any already-stored Pilot-vs-Group row for a newly-closed entity) is
-/// deferred to Step 19.01.08, since no historic_relationship_classification
-/// rows exist yet at this point in the sequence -- see the Implementation
-/// Plan.
+/// known-closed, and records a newly-discovered closure -- purging any
+/// already-stored Pilot-vs-Group classification row against it in the same
+/// step (Implementation Plan Step 19.01.08). check_active is injected
+/// rather than called directly so this function's cache-first logic is
+/// unit-testable without a real network call -- production callers
+/// (ensure_alliance_active_status_cached/ensure_corporation_active_status_cached
+/// below) pass a closure that calls the real ESI endpoint.
 pub fn ensure_entity_active_status_cached<F>(
     connection: &Connection,
     entity_id: i64,
@@ -215,6 +227,9 @@ where
     if !is_active {
         record_entity_closed(connection, entity_id, entity_type, now_utc)
             .map_err(|error| format!("Failed to record newly-closed entity in historic_closed_entity_cache: {error}"))?;
+
+        purge_stored_relationship_classification_for_entity(connection, entity_id, entity_type)
+            .map_err(|error| format!("Failed to purge stored historic_relationship_classification rows for newly-closed entity: {error}"))?;
     }
 
     Ok(is_active)
@@ -363,5 +378,69 @@ mod tests {
     fn entity_type_as_cache_char_matches_schema_convention() {
         assert_eq!(EntityType::Corporation.as_cache_char(), "C");
         assert_eq!(EntityType::Alliance.as_cache_char(), "A");
+    }
+
+    fn insert_classification_row(connection: &Connection, pilot_id: i64, entity_id: i64, entity_type: EntityType) {
+        connection
+            .execute(
+                "INSERT INTO historic_relationship_classification \
+                 (pilot_id, entity_id, entity_type, strength, confidence, last_computed_utc) \
+                 VALUES (?, ?, ?, 'S', 'High', '2026-08-01T00:00:00Z');",
+                params![pilot_id, entity_id, entity_type.as_cache_char()],
+            )
+            .unwrap();
+    }
+
+    fn count_classification_rows(connection: &Connection, entity_id: i64, entity_type: EntityType) -> i64 {
+        connection
+            .query_row(
+                "SELECT COUNT(*) FROM historic_relationship_classification WHERE entity_id = ? AND entity_type = ?;",
+                params![entity_id, entity_type.as_cache_char()],
+                |row| row.get(0),
+            )
+            .unwrap()
+    }
+
+    #[test]
+    fn ensure_entity_active_status_cached_purges_stored_pilot_vs_group_classification_rows_for_a_newly_closed_entity() {
+        let connection = open_test_schema();
+        insert_classification_row(&connection, 95465499, 98765432, EntityType::Corporation);
+
+        let result = ensure_entity_active_status_cached(&connection, 98765432, EntityType::Corporation, "2026-08-13T00:00:00Z", |_, _| {
+            Ok(false)
+        });
+
+        assert_eq!(result, Ok(false));
+        assert_eq!(count_classification_rows(&connection, 98765432, EntityType::Corporation), 0);
+    }
+
+    #[test]
+    fn ensure_entity_active_status_cached_leaves_stored_classification_rows_untouched_when_entity_is_still_active() {
+        let connection = open_test_schema();
+        insert_classification_row(&connection, 95465499, 99005338, EntityType::Alliance);
+
+        let result = ensure_entity_active_status_cached(&connection, 99005338, EntityType::Alliance, "2026-08-13T00:00:00Z", |_, _| {
+            Ok(true)
+        });
+
+        assert_eq!(result, Ok(true));
+        assert_eq!(count_classification_rows(&connection, 99005338, EntityType::Alliance), 1);
+    }
+
+    #[test]
+    fn ensure_entity_active_status_cached_purge_is_scoped_by_entity_type_not_just_entity_id() {
+        let connection = open_test_schema();
+        insert_classification_row(&connection, 95465499, 98765432, EntityType::Alliance);
+
+        let result = ensure_entity_active_status_cached(&connection, 98765432, EntityType::Corporation, "2026-08-13T00:00:00Z", |_, _| {
+            Ok(false)
+        });
+
+        assert_eq!(result, Ok(false));
+        assert_eq!(
+            count_classification_rows(&connection, 98765432, EntityType::Alliance),
+            1,
+            "purge must not remove a row for the same entity_id under a different entity_type"
+        );
     }
 }

@@ -30,7 +30,7 @@ use esi_active_status::{EntityType, EsiActiveStatusClient};
 use lock::SingleInstanceLock;
 use persistence::{import_day, ImportDayOutcome};
 use pilot_to_pilot_strength::{classify_pilot_to_pilot_strength, Strength};
-use pilot_vs_group_strength::classify_pilot_vs_group_strength;
+use pilot_vs_group_strength::{classify_pilot_vs_group_strength_with_active_entity_short_circuit, PilotVsGroupOutcome};
 use r2_client::{EvidenceDayResult, ParallelDownloadOptions, ZkillHistoryClient};
 use staging::{build_staging, ImportRangeMode, StagingBuildOutcome, TestAmountUnit};
 use summary_rebuild::{rebuild_summary_and_org_context, RebuildStats};
@@ -590,6 +590,16 @@ fn run_print_pilot_vs_group_strength(arguments: &[String]) {
         }
     };
 
+    let esi_client = match EsiActiveStatusClient::new() {
+        Ok(client) => client,
+        Err(error) => {
+            eprintln!("Failed to create HTTP client: {error}");
+            process::exit(1);
+        }
+    };
+
+    let now_utc = chrono::Utc::now().to_rfc3339();
+
     println!("====================================================");
     println!("KillRight Historic Updater - Pilot-vs-Group Strength");
     println!("====================================================");
@@ -597,12 +607,15 @@ fn run_print_pilot_vs_group_strength(arguments: &[String]) {
     println!("Entity type: {}", entity_type.as_label());
     println!("Entity ID: {entity_id}");
 
-    match classify_pilot_vs_group_strength(&connection, pilot_id, entity_type, entity_id) {
-        Ok(Some((strength, confidence))) => {
+    match classify_pilot_vs_group_strength_with_active_entity_short_circuit(&connection, &esi_client, pilot_id, entity_type, entity_id, &now_utc) {
+        Ok(PilotVsGroupOutcome::Skipped) => {
+            println!("Strength: Skipped (entity is closed -- Active Entity Short-Circuit, Step 19.01.08)");
+        }
+        Ok(PilotVsGroupOutcome::Classified(Some((strength, confidence)))) => {
             println!("Strength: {strength}");
             println!("Confidence: {confidence}");
         }
-        Ok(None) => println!("Strength: Not Applicable (currently same corporation/alliance, or entity never appears in this pilot's own affiliation history)"),
+        Ok(PilotVsGroupOutcome::Classified(None)) => println!("Strength: Not Applicable (currently same corporation/alliance, or entity never appears in this pilot's own affiliation history)"),
         Err(error) => {
             eprintln!("Failed to classify pilot-vs-group strength: {error}");
             process::exit(1);
@@ -610,8 +623,7 @@ fn run_print_pilot_vs_group_strength(arguments: &[String]) {
     }
 
     println!("Notes:");
-    println!("- Diagnostic command: no rows are written by this command.");
-    println!("- Active Entity Short-Circuit (Step 19.01.08) is out of scope for this step -- no ESI call is made here.");
+    println!("- Diagnostic command: makes a live ESI active-status call for the entity unless it is already cached closed (historic_closed_entity_cache); a newly-discovered closure purges any already-stored classification row for this entity.");
     println!("- Persistence (Step 19.01.09) is out of scope for this step.");
     println!("====================================================");
 }
