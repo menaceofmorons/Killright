@@ -22,6 +22,7 @@ mod schema;
 mod staging;
 mod status;
 mod summary_rebuild;
+mod transitive_inference;
 
 use chrono::NaiveDate;
 use classification_persistence::{persist_classification, PersistClassificationOutcome};
@@ -36,6 +37,7 @@ use pilot_vs_group_strength::{classify_pilot_vs_group_strength_with_active_entit
 use r2_client::{EvidenceDayResult, ParallelDownloadOptions, ZkillHistoryClient};
 use staging::{build_staging, ImportRangeMode, StagingBuildOutcome, TestAmountUnit};
 use summary_rebuild::{rebuild_summary_and_org_context, RebuildStats};
+use transitive_inference::{infer_transitive_p2p_chains, TransitiveChainResult};
 
 fn main() {
     let arguments: Vec<String> = env::args().collect();
@@ -61,6 +63,7 @@ fn main() {
         "print-pilot-vs-group-strength" => run_print_pilot_vs_group_strength(&arguments),
         "rebuild-summary" => run_rebuild_summary(),
         "persist-classification" => run_persist_classification(),
+        "print-transitive-inference" => run_print_transitive_inference(&arguments),
         "build-staging" => run_build_staging(&arguments),
         "__verify-open" => run_verify_open(&arguments),
         _ => {
@@ -743,6 +746,78 @@ fn run_persist_classification() {
     }
 }
 
+/// Step 19.01.10 diagnostic command: prints every single-hop A-B-C
+/// Transitive chain between two pilots, reading directly from the already
+/// persisted historic_relationship_classification table (Step 19.01.09) --
+/// no rows are written here, matching every other print-* command in this
+/// crate. Design_Spec_Dense.md §6.11.3's Phase 1 scope: log-line output
+/// only, no query interface, API response, or UI.
+fn run_print_transitive_inference(arguments: &[String]) {
+    let pilot_a_id: i64 = match arguments.get(2).and_then(|text| text.parse().ok()) {
+        Some(value) => value,
+        None => {
+            eprintln!("Usage: killright_history_updater print-transitive-inference <pilot_a_id> <pilot_c_id>");
+            process::exit(1);
+        }
+    };
+
+    let pilot_c_id: i64 = match arguments.get(3).and_then(|text| text.parse().ok()) {
+        Some(value) => value,
+        None => {
+            eprintln!("Usage: killright_history_updater print-transitive-inference <pilot_a_id> <pilot_c_id>");
+            process::exit(1);
+        }
+    };
+
+    let database_path = get_default_database_path();
+
+    if !database_path.exists() {
+        println!("Database does not exist at {}", database_path.display());
+        return;
+    }
+
+    let connection = match Connection::open(&database_path) {
+        Ok(connection) => connection,
+        Err(error) => {
+            eprintln!("Failed to open database: {error}");
+            process::exit(1);
+        }
+    };
+
+    println!("====================================================");
+    println!("KillRight Historic Updater - Transitive (Chain) Inference");
+    println!("====================================================");
+    println!("Pilot A: {pilot_a_id}");
+    println!("Pilot C: {pilot_c_id}");
+
+    match infer_transitive_p2p_chains(&connection, pilot_a_id, pilot_c_id) {
+        Ok(chains) if chains.is_empty() => println!("Chains: none (no bridge pilot is directly linked to both Pilot A and Pilot C)"),
+        Ok(chains) => {
+            println!("Chains ({}):", chains.len());
+            for chain in &chains {
+                print_transitive_chain_line(pilot_a_id, pilot_c_id, chain);
+            }
+        }
+        Err(error) => {
+            eprintln!("Failed to infer transitive relationships: {error}");
+            process::exit(1);
+        }
+    }
+
+    println!("Notes:");
+    println!("- Diagnostic command: no rows are written by this command.");
+    println!("- Single-hop chains only (A-B-C); chains beyond one hop and folding multiple independent bridges for the same pair are undesigned (Design Specification Section 6.11.7).");
+    println!("- Not persisted -- computed fresh on every call (Design Specification Section 6.11.2).");
+    println!("====================================================");
+}
+
+fn print_transitive_chain_line(pilot_a_id: i64, pilot_c_id: i64, chain: &TransitiveChainResult) {
+    println!(
+        "- Chain {pilot_a_id}-{}-{pilot_c_id}: chain Strength={} chain Confidence={} | final Strength={} final Confidence={}",
+        chain.bridge_pilot_id, chain.chain_strength, chain.chain_confidence, chain.final_strength, chain.final_confidence
+    );
+}
+
 fn run_build_staging(arguments: &[String]) {
     let range_mode = match parse_import_range_mode(arguments) {
         Ok(value) => value,
@@ -1135,6 +1210,6 @@ fn print_staging_build_report(outcome: &StagingBuildOutcome) {
 
 fn print_usage() {
     eprintln!(
-        "Usage: killright_history_updater <create-schema|print-status|extract-day-evidence|extract-range-evidence|check-entity-status|import-day|print-affiliation-timeline-summary|print-same-c-a-episodes|print-pilot-to-pilot-strength|print-pilot-vs-group-strength|rebuild-summary|persist-classification|build-staging>"
+        "Usage: killright_history_updater <create-schema|print-status|extract-day-evidence|extract-range-evidence|check-entity-status|import-day|print-affiliation-timeline-summary|print-same-c-a-episodes|print-pilot-to-pilot-strength|print-pilot-vs-group-strength|rebuild-summary|persist-classification|print-transitive-inference|build-staging>"
     );
 }
