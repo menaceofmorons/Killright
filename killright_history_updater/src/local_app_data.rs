@@ -1,15 +1,5 @@
 use std::env;
 
-/// Resolves the root directory `killright_history_updater` uses for every
-/// `%LOCALAPPDATA%\KillRight\...` path it reads or writes: the staging
-/// directory and lock file (`database_path.rs`), and the live-config/status
-/// files (`live_config.rs`). Checks `KILLRIGHT_LOCALAPPDATA_OVERRIDE` first,
-/// purely so `HistoryUpdaterProcessLauncherIntegrationTests` can point a
-/// real, end-to-end launch of this executable at an isolated temp directory
-/// instead of a developer's live interactive staging state (Step
-/// CC-07.08.26.02). Every real invocation -- the Developer window, a plain
-/// CLI run -- has this variable unset and resolves exactly as before: the
-/// OS's `LOCALAPPDATA`.
 pub fn resolve_local_app_data_root() -> String {
     resolve_local_app_data_root_from(
         env::var("KILLRIGHT_LOCALAPPDATA_OVERRIDE").ok(),

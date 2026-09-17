@@ -12,11 +12,6 @@ pub struct RebuildStats {
     pub total_elapsed_ms: u128,
 }
 
-/// Fully rebuilds `historic_relationship_summary` and `historic_relationship_org_context`
-/// from `historic_relationship_evidence` / `historic_relationship_evidence_participants`,
-/// using one set-based `GROUP BY` pass over the evidence/participant self-join.
-/// Both output tables are cleared and rewritten in full; this crate never performs
-/// per-pair incremental summary maintenance (Seed-Mode semantics only).
 pub fn rebuild_summary_and_org_context(connection: &Connection) -> Result<RebuildStats> {
     let total_start = Instant::now();
     let last_rebuilt_utc = Utc::now().to_rfc3339();
@@ -138,32 +133,26 @@ mod tests {
         crate::schema::create_schema(&connection).unwrap();
         crate::schema::insert_initial_metadata_row(&connection, "2026-08-05T00:00:00Z").unwrap();
 
-        // Event A: same alliance -> linked.
         insert_evidence(&connection, 1, "2025-01-01T00:00:00Z", "2025-01-01");
         insert_participant(&connection, 1, 1001, Some(7000), Some(5000));
         insert_participant(&connection, 1, 1002, Some(7000), Some(5000));
 
-        // Event B: different alliances, same corp -> unlinked (alliance takes precedence).
         insert_evidence(&connection, 2, "2025-02-01T00:00:00Z", "2025-02-01");
         insert_participant(&connection, 2, 1001, Some(7000), Some(5000));
         insert_participant(&connection, 2, 1002, Some(7000), Some(6000));
 
-        // Event C: neither has an alliance, same corp -> linked (corp fallback).
         insert_evidence(&connection, 3, "2025-03-01T00:00:00Z", "2025-03-01");
         insert_participant(&connection, 3, 1001, Some(7000), None);
         insert_participant(&connection, 3, 1002, Some(7000), None);
 
-        // Event D: neither has an alliance, different corp -> unlinked.
         insert_evidence(&connection, 4, "2025-04-01T00:00:00Z", "2025-04-01");
         insert_participant(&connection, 4, 1001, Some(7000), None);
         insert_participant(&connection, 4, 1002, Some(7001), None);
 
-        // Event E: one side has an alliance, the other does not, same corp -> unlinked (alliance takes precedence).
         insert_evidence(&connection, 5, "2025-05-01T00:00:00Z", "2025-05-01");
         insert_participant(&connection, 5, 1001, Some(7000), Some(5000));
         insert_participant(&connection, 5, 1002, Some(7000), None);
 
-        // Event F: neither has an alliance nor a corp on record -> unlinked (no organisation data to link on).
         insert_evidence(&connection, 6, "2025-06-01T00:00:00Z", "2025-06-01");
         insert_participant(&connection, 6, 1001, None, None);
         insert_participant(&connection, 6, 1002, None, None);

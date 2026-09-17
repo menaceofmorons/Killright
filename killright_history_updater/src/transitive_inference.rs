@@ -3,12 +3,6 @@ use duckdb::{params, Connection, OptionalExt, Result};
 use crate::confidence::Confidence;
 use crate::pilot_to_pilot_strength::Strength;
 
-/// Design_Spec_Dense.md §6.11.4: one single-hop A-B-C chain result --
-/// `chain_strength`/`chain_confidence` are the min-combine of the two
-/// contributing links; `final_strength`/`final_confidence` are the
-/// max-combine of that chain value against any direct A-C relationship.
-/// Chains beyond one hop (A-B-C-D) and folding multiple independent bridges
-/// for the same pair are both §6.11.7 UNRESOLVED -- out of scope here.
 pub struct TransitiveChainResult {
     pub bridge_pilot_id: i64,
     pub chain_strength: Strength,
@@ -36,10 +30,6 @@ fn parse_confidence(code: &str) -> Confidence {
     }
 }
 
-/// Every Entity Type P partner directly linked to `pilot_id`, read from
-/// either canonical side of historic_relationship_classification's
-/// pilot_id/entity_id pair (Design_Spec_Dense.md §4.7's lower-character-ID-
-/// first ordering).
 pub fn fetch_direct_p2p_partners(connection: &Connection, pilot_id: i64) -> Result<Vec<(i64, Strength, Confidence)>> {
     let mut statement = connection.prepare(
         "SELECT entity_id, strength, confidence FROM historic_relationship_classification \
@@ -60,8 +50,6 @@ pub fn fetch_direct_p2p_partners(connection: &Connection, pilot_id: i64) -> Resu
     Ok(partners)
 }
 
-/// The direct pilot_a_id-pilot_c_id Entity Type P relationship, if one is
-/// stored, checking both canonical sides.
 pub fn fetch_direct_p2p_relationship(connection: &Connection, pilot_a_id: i64, pilot_c_id: i64) -> Result<Option<(Strength, Confidence)>> {
     connection
         .query_row(
@@ -74,13 +62,6 @@ pub fn fetch_direct_p2p_relationship(connection: &Connection, pilot_a_id: i64, p
         .map(|raw| raw.map(|(strength_code, confidence_code)| (parse_strength(&strength_code), parse_confidence(&confidence_code))))
 }
 
-/// Design_Spec_Dense.md §6.11.4: "within chain A-B-C, inferred A-C strength
-/// takes weaker of two links... Confidence combines the same way... When
-/// pair has both a direct relationship and a chain-inferred one, final
-/// rating takes stronger of the two." One result per bridge pilot directly
-/// linked to both pilot_a_id and pilot_c_id (excluding pilot_a_id/pilot_c_id
-/// themselves) -- never persisted (§6.11.2, §4.8), computed fresh on every
-/// call, sorted by bridge_pilot_id for deterministic log output.
 pub fn infer_transitive_p2p_chains(connection: &Connection, pilot_a_id: i64, pilot_c_id: i64) -> Result<Vec<TransitiveChainResult>> {
     let direct = fetch_direct_p2p_relationship(connection, pilot_a_id, pilot_c_id)?;
     let a_partners = fetch_direct_p2p_partners(connection, pilot_a_id)?;

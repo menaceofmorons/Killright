@@ -2,35 +2,12 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-/// Subfolder names under the historic database root introduced by Step
-/// 19.00.55 (Design Specification v5.4 Section 6.9.2/4.7; the plan's
-/// 19.00.55 section). `Working` holds the in-progress import database this
-/// crate builds (this step); `Live`, `Archive`, and `Failed` are
-/// destinations for later steps -- the promotion copy at 19.00.56,
-/// archive-on-swap at 19.00.60, and failed-build handling at 19.00.58 --
-/// and are created here only so every later step's "first run" behaviour is
-/// exercised against real, already-existing directories rather than each
-/// step separately handling directory creation for a folder an earlier step
-/// should have made.
 pub const WORKING_DIRECTORY_NAME: &str = "Working";
 pub const LIVE_DIRECTORY_NAME: &str = "Live";
 pub const ARCHIVE_DIRECTORY_NAME: &str = "Archive";
 pub const FAILED_DIRECTORY_NAME: &str = "Failed";
-/// Step 19.01.09: holds the standalone-command scratch database
-/// (`database_path.rs::get_default_database_path`) used by `create-schema`,
-/// `import-day`, `rebuild-summary`, `print-*`, and `persist-classification`
-/// -- deliberately segregated into its own subfolder, unambiguously named
-/// apart from `Live`, after this file was twice mistaken for the real
-/// promoted database (by the Developer and by this crate's own
-/// `persist-classification` implementation) while it sat unlabeled at the
-/// historic database root.
 pub const TEST_DIRECTORY_NAME: &str = "Test";
 
-/// Ensures all five subfolders exist under `root` (the historic database
-/// root, e.g. `%LOCALAPPDATA%\KillRight\HistoryUpdater`), creating any that
-/// are missing along with `root` itself if needed. Safe to call on every
-/// `build_staging` invocation -- `fs::create_dir_all` is a no-op when the
-/// directory already exists.
 pub fn ensure_folder_layout(root: &Path) -> io::Result<()> {
     fs::create_dir_all(working_dir(root))?;
     fs::create_dir_all(live_dir(root))?;
@@ -66,9 +43,6 @@ mod tests {
     use std::env;
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    /// Section 6.4 Agent Test Independence: a unique, nanosecond-suffixed
-    /// temp directory per test, never shared between tests and never
-    /// dependent on execution order.
     fn unique_temp_root(test_name: &str) -> PathBuf {
         let suffix = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
         env::temp_dir().join(format!("killright-folder-layout-test-{test_name}-{suffix}"))

@@ -30,26 +30,6 @@ pub struct ImportDayOutcome {
     pub error_message: Option<String>,
 }
 
-/// Imports a single day's evidence and participant rows.
-///
-/// No longer manages bulk-load secondary indexes (Step 19.00.53): those
-/// indexes are no longer part of the schema at all (see
-/// `schema::create_schema`), so there is nothing here to drop before the
-/// Appender inserts or rebuild afterwards. Before this guide, this function
-/// took a `manage_bulk_load_indexes` bool controlling exactly that; it's gone
-/// because both call sites (`staging::build_staging`'s loop and
-/// `main::run_import_day`) now behave identically -- there's no longer a
-/// meaningful "manage my own indexes" mode to opt into.
-///
-/// Step 19.01.03: after participant rows are appended, this function also
-/// extends/opens `historic_pilot_affiliation_timeline` rows for every pilot
-/// observed in this day's participant rows (Design Specification Section
-/// 4.7, Implementation Plan Step 19.01.03) -- see
-/// `affiliation_timeline::build_daily_affiliation_fragments`/
-/// `apply_daily_affiliation_fragments`, wired in via
-/// `update_pilot_affiliation_timeline` below. A failure here marks the day
-/// Failed, the same as a failed evidence or participant append, rather than
-/// leaving the day Completed with a stale or missing timeline update.
 pub fn import_day(connection: &Connection, client: &ZkillHistoryClient, date: NaiveDate) -> ImportDayOutcome {
     match is_import_day_completed(connection, date) {
         Ok(true) => return already_completed_outcome(date),
@@ -360,12 +340,6 @@ fn append_participant_rows(connection: &Connection, participant_rows: &[Particip
     Ok(())
 }
 
-/// Applies Step 19.01.03's incremental historic_pilot_affiliation_timeline
-/// maintenance for one imported day (Design Specification Section 4.7):
-/// builds this day's per-pilot affiliation fragments from the same evidence
-/// and participant rows just appended, then applies them via
-/// affiliation_timeline::apply_daily_affiliation_fragments. Returns the
-/// number of distinct pilots touched, for import_day's diagnostic report.
 fn update_pilot_affiliation_timeline(connection: &Connection, evidence_rows: &[EvidenceRecord], participant_rows: &[ParticipantRecord]) -> Result<usize> {
     let now_utc = Utc::now().to_rfc3339();
     let fragments = build_daily_affiliation_fragments(evidence_rows, participant_rows);
@@ -410,13 +384,6 @@ mod tests {
         }
     }
 
-    /// Step 19.01.03: this is the direct integration test of the wiring
-    /// import_day itself relies on -- takes real EvidenceRecord/
-    /// ParticipantRecord data (no ZkillHistoryClient/network dependency,
-    /// unlike import_day as a whole) and confirms a row lands in
-    /// historic_pilot_affiliation_timeline via this crate's own connection,
-    /// not just via affiliation_timeline's own unit tests against the pure
-    /// functions directly.
     #[test]
     fn update_pilot_affiliation_timeline_inserts_a_row_for_a_newly_observed_pilot() {
         let connection = open_test_schema();

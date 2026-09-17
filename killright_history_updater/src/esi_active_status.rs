@@ -2,22 +2,11 @@ use std::time::Duration;
 
 use duckdb::{params, Connection, Result as DuckResult};
 
-/// ESI's compatibility-date versioning scheme (introduced before this step):
-/// requests must declare which dated API contract they expect via the
-/// X-Compatibility-Date header. The corporation `state` field this module
-/// depends on (Design Specification Section 6.11.4/5.1) is only present in
-/// the response when the header is set to a date on or after 21 Jul 2026 --
-/// confirmed against the live ESI API Explorer, 13 Aug 2026. Without the
-/// header the field is simply absent, not a different value. A fixed date
-/// on or after that cutoff is used rather than "today", since an ESI
-/// compatibility date opts into a fixed dated contract, not a moving one.
 pub const ESI_COMPATIBILITY_DATE: &str = "2026-08-04";
 
 const ALLIANCE_ENDPOINT_FORMAT: &str = "https://esi.evetech.net/alliances/{alliance_id}";
 const CORPORATION_ENDPOINT_FORMAT: &str = "https://esi.evetech.net/corporations/{corporation_id}";
 
-/// Corporation or alliance, matching historic_closed_entity_cache's
-/// entity_type column (Section 4.7): 'C' or 'A'.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EntityType {
     Corporation,
@@ -45,16 +34,8 @@ pub struct EsiActiveStatusClient {
 }
 
 impl EsiActiveStatusClient {
-    /// Matches ZkillHistoryClient's own connect-timeout reasoning
-    /// (r2_client.rs): reqwest::blocking::Client has no default connect
-    /// timeout at all. ESI is normally fast; this is a hard ceiling against
-    /// a network-level stall, not a tuned expectation of ESI's own latency.
     pub const CONNECT_TIMEOUT_SECONDS: u64 = 10;
 
-    /// Matches ZkillHistoryClient's own request-timeout reasoning
-    /// (r2_client.rs). A single ESI corporation/alliance lookup is a small,
-    /// single-object response -- far smaller than a daily killmail history
-    /// file -- so this is set well below ZkillHistoryClient's 60 seconds.
     pub const REQUEST_TIMEOUT_SECONDS: u64 = 20;
 
     pub fn new() -> reqwest::Result<Self> {
@@ -67,9 +48,6 @@ impl EsiActiveStatusClient {
         Ok(EsiActiveStatusClient { http_client })
     }
 
-    /// Alliance status: ESI GET /alliances/{alliance_id} -- 200 OK is
-    /// active, 404 is disbanded (Design Specification Section 6.11.4). No
-    /// special request header needed.
     pub fn check_alliance_active(&self, alliance_id: i64) -> Result<bool, String> {
         let url = ALLIANCE_ENDPOINT_FORMAT.replace("{alliance_id}", &alliance_id.to_string());
 
@@ -83,10 +61,6 @@ impl EsiActiveStatusClient {
         interpret_alliance_status(response.status())
     }
 
-    /// Corporation status: ESI GET /corporations/{corporation_id}, with the
-    /// X-Compatibility-Date request header (Design Specification Section
-    /// 6.11.4/5.1) -- required for the response to include the state field
-    /// at all. The response's state field is "active" or "closed".
     pub fn check_corporation_active(&self, corporation_id: i64) -> Result<bool, String> {
         let url = CORPORATION_ENDPOINT_FORMAT.replace("{corporation_id}", &corporation_id.to_string());
 
@@ -109,9 +83,6 @@ impl EsiActiveStatusClient {
     }
 }
 
-/// Pure decision logic for the alliance check, split out from the HTTP call
-/// itself so it can be unit-tested without a real network call (matching
-/// r2_client.rs's count_day_metrics/extract_day_evidence split).
 fn interpret_alliance_status(status: reqwest::StatusCode) -> Result<bool, String> {
     if status.as_u16() == 200 {
         Ok(true)
@@ -126,11 +97,6 @@ fn interpret_alliance_status(status: reqwest::StatusCode) -> Result<bool, String
     }
 }
 
-/// Pure decision logic for the corporation check's 200-OK body, split out
-/// from the HTTP call itself so it can be unit-tested without a real
-/// network call. The 404 case is handled by the caller before this is
-/// reached (see check_corporation_active) since a 404 body has no state
-/// field to parse.
 fn interpret_corporation_state_body(status: reqwest::StatusCode, body: &str) -> Result<bool, String> {
     if status.as_u16() != 200 {
         return Err(format!(
@@ -152,11 +118,6 @@ fn interpret_corporation_state_body(status: reqwest::StatusCode, body: &str) -> 
     }
 }
 
-/// True when entity_id/entity_type is already recorded in
-/// historic_closed_entity_cache (Section 4.7) -- checked before ever
-/// calling ESI (Section 6.11.4), since the cache is safe as an
-/// append-only, no-expiry source of truth: a disbanded EVE corporation or
-/// alliance ID is never reactivated under the same ID.
 fn is_entity_cached_closed(connection: &Connection, entity_id: i64, entity_type: EntityType) -> DuckResult<bool> {
     let count: i64 = connection.query_row(
         "SELECT COUNT(*) FROM historic_closed_entity_cache WHERE entity_id = ? AND entity_type = ?;",
@@ -167,9 +128,6 @@ fn is_entity_cached_closed(connection: &Connection, entity_id: i64, entity_type:
     Ok(count > 0)
 }
 
-/// Records entity_id/entity_type as newly discovered closed. Append-only,
-/// no expiry (Section 4.7) -- this is only ever called once per entity,
-/// since is_entity_cached_closed short-circuits every later check.
 fn record_entity_closed(connection: &Connection, entity_id: i64, entity_type: EntityType, discovered_closed_utc: &str) -> DuckResult<()> {
     connection.execute(
         "INSERT INTO historic_closed_entity_cache (entity_id, entity_type, discovered_closed_utc) VALUES (?, ?, ?);",
@@ -179,14 +137,6 @@ fn record_entity_closed(connection: &Connection, entity_id: i64, entity_type: En
     Ok(())
 }
 
-/// Purges any already-stored Pilot-vs-Group historic_relationship_classification
-/// row against a newly-closed entity (Section 6.11.4) -- purged outright, not
-/// just excluded from future computation. entity_id/entity_type match the
-/// classification table's own columns (Section 4.8), which for Entity Type
-/// C/A rows are the corporation/alliance ID and type itself; Entity Type P
-/// (pilot-to-pilot) rows are never matched by this query, since their
-/// entity_id is a character ID, not a corporation/alliance ID, and their
-/// entity_type is always 'P'.
 fn purge_stored_relationship_classification_for_entity(connection: &Connection, entity_id: i64, entity_type: EntityType) -> DuckResult<()> {
     connection.execute(
         "DELETE FROM historic_relationship_classification WHERE entity_id = ? AND entity_type = ?;",
@@ -196,16 +146,6 @@ fn purge_stored_relationship_classification_for_entity(connection: &Connection, 
     Ok(())
 }
 
-/// The check-and-record logic itself (Design Specification Section 6.11.4,
-/// Implementation Plan Step 19.01.02): checks historic_closed_entity_cache
-/// first, only calls ESI (via check_active) if the entity isn't already
-/// known-closed, and records a newly-discovered closure -- purging any
-/// already-stored Pilot-vs-Group classification row against it in the same
-/// step (Implementation Plan Step 19.01.08). check_active is injected
-/// rather than called directly so this function's cache-first logic is
-/// unit-testable without a real network call -- production callers
-/// (ensure_alliance_active_status_cached/ensure_corporation_active_status_cached
-/// below) pass a closure that calls the real ESI endpoint.
 pub fn ensure_entity_active_status_cached<F>(
     connection: &Connection,
     entity_id: i64,
@@ -235,8 +175,6 @@ where
     Ok(is_active)
 }
 
-/// Production entry point for an alliance: checks the cache first, then
-/// calls the real ESI alliance endpoint if not already known-closed.
 pub fn ensure_alliance_active_status_cached(
     connection: &Connection,
     esi_client: &EsiActiveStatusClient,
@@ -248,8 +186,6 @@ pub fn ensure_alliance_active_status_cached(
     })
 }
 
-/// Production entry point for a corporation: checks the cache first, then
-/// calls the real ESI corporation endpoint if not already known-closed.
 pub fn ensure_corporation_active_status_cached(
     connection: &Connection,
     esi_client: &EsiActiveStatusClient,

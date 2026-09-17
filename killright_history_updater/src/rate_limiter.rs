@@ -2,10 +2,6 @@ use std::sync::Mutex;
 use std::thread;
 use std::time::{Duration, Instant};
 
-/// Serialises request starts to at most `max_requests_per_second`, matching the
-/// C# `AsyncRequestRateLimiter` in `ZkillHistoryClient.cs`: the gate is held for the
-/// full wait (including the delay), not released mid-sleep, so request starts never
-/// bunch up under concurrent callers.
 pub struct RequestRateLimiter {
     minimum_spacing: Duration,
     next_allowed: Mutex<Instant>,

@@ -6,7 +6,6 @@ use crate::episode_builder::{build_same_c_a_episodes, fetch_pilot_affiliation_se
 use crate::esi_active_status::{ensure_alliance_active_status_cached, ensure_corporation_active_status_cached, EntityType, EsiActiveStatusClient};
 use crate::pilot_to_pilot_strength::{apply_recency_volume_modifier, classify_recency_band, is_currently_same_c_a, recency_volume_modifier_window, Strength};
 
-// Design_Spec_Dense.md §6.11.4 Pilot-vs-Group extension.
 fn group_affiliation_segment(entity_type: EntityType, entity_id: i64) -> AffiliationSegment {
     match entity_type {
         EntityType::Corporation => fixed_group_segment(Some(entity_id), None),
@@ -74,7 +73,6 @@ pub fn has_alongside_evidence_between(
     )
 }
 
-// Design_Spec_Dense.md §6.11.4 Table53 (TwiceWithGap basis), Pilot-vs-Group.
 pub fn count_alongside_evidence_between(
     connection: &Connection,
     pilot_id: i64,
@@ -164,10 +162,6 @@ fn classify_exactly_two_episodes_for_group(
     Ok((strength, assign_confidence(ConfidencePattern::Recency, basis)))
 }
 
-// Design_Spec_Dense.md §6.11.4: unlike Pilot-to-Pilot's zero-episode case
-// (never same c/a, ever -> Strong), classify_pilot_vs_group_strength never
-// calls this with zero episodes -- it returns None first ("no membership to
-// anchor a row to").
 fn classify_by_episode_count_for_group(
     connection: &Connection,
     pilot_id: i64,
@@ -211,27 +205,12 @@ pub fn classify_pilot_vs_group_strength(
     classify_by_episode_count_for_group(connection, pilot_id, entity_type, entity_id, &episodes, now).map(Some)
 }
 
-/// Outcome of classify_pilot_vs_group_strength_with_active_entity_short_circuit:
-/// distinguishes "entity is closed, evaluation skipped entirely" (Design
-/// Specification Section 6.11.4, Implementation Plan Step 19.01.08) from a
-/// completed classification, which may itself still be None (Section 6.11.4
-/// currently-same-c/a or never-anchored cases -- see classify_pilot_vs_group_strength).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PilotVsGroupOutcome {
     Skipped,
     Classified(Option<(Strength, Confidence)>),
 }
 
-/// Active Entity Short-Circuit (Design Specification Section 6.11.4,
-/// Implementation Plan Step 19.01.08): checks entity G's active status
-/// (historic_closed_entity_cache first, then ESI if not already cached
-/// closed -- Section 4.7) before computing/storing a Pilot-vs-Group
-/// relationship for it; evaluation is skipped entirely if closed.
-/// esi_active_status::ensure_corporation_active_status_cached/
-/// ensure_alliance_active_status_cached are the production entry points
-/// built in Step 19.01.02 for exactly this wiring -- they also perform the
-/// purge-on-closure side effect (Step 19.01.08) against
-/// historic_relationship_classification when a closure is newly discovered.
 pub fn classify_pilot_vs_group_strength_with_active_entity_short_circuit(
     connection: &Connection,
     esi_client: &EsiActiveStatusClient,
@@ -504,10 +483,6 @@ mod tests {
                 params![GROUP_CORP, "2026-08-01T00:00:00Z"],
             )
             .unwrap();
-        // No affiliation data at all for PILOT -- classify_pilot_vs_group_strength
-        // would itself return Ok(None) here (never anchored), so asserting
-        // Skipped rather than Classified(None) proves the short circuit, not
-        // the classifier, produced this outcome.
         let esi_client = EsiActiveStatusClient::new().unwrap();
 
         let outcome = classify_pilot_vs_group_strength_with_active_entity_short_circuit(

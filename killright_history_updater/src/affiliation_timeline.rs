@@ -5,14 +5,6 @@ use duckdb::{params, Connection, OptionalExt, Result};
 
 use crate::r2_client::{EvidenceRecord, ParticipantRecord};
 
-/// One contiguous run of the same corporation_id/alliance_id observed for a
-/// single pilot within a single imported day, collapsed from that day's
-/// individual killmail-participant observations (Design Specification
-/// Section 4.7, Implementation Plan Step 19.01.03). Consecutive
-/// observations for the same pilot that share the same corporation_id and
-/// alliance_id collapse into one fragment spanning from the earliest to the
-/// latest such observation that day; a change in either field starts a new
-/// fragment.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PilotDayAffiliationFragment {
     pub character_id: i64,
@@ -22,28 +14,6 @@ pub struct PilotDayAffiliationFragment {
     pub last_seen_utc: DateTime<Utc>,
 }
 
-/// Builds one imported day's affiliation fragments from that day's evidence
-/// and participant rows (Design Specification Section 4.7, Implementation
-/// Plan Step 19.01.03): joins each participant row to its evidence row's
-/// killmail_time_utc via killmail_id (ParticipantRecord::killmail_id
-/// doubles as the future evidence_id once persisted -- see
-/// ParticipantRecord's own doc comment in r2_client.rs), sorts each pilot's
-/// observations into chronological order, then collapses consecutive
-/// same-corporation/alliance observations into fragments.
-///
-/// Pure and DB-free so it is unit-testable without a database, matching
-/// this crate's existing split between pure decision logic and IO (see
-/// esi_active_status.rs's interpret_alliance_status/
-/// interpret_corporation_state_body).
-///
-/// A participant row whose killmail_id has no matching evidence row is
-/// skipped rather than treated as an error -- this should not happen given
-/// persistence::import_day always builds both slices from the same
-/// extraction result, but skipping rather than panicking keeps this
-/// function defensive against a future caller that does not guarantee that
-/// pairing. Returned fragments are grouped by character_id, with each
-/// pilot's own fragments in chronological order -- the grouping
-/// apply_daily_affiliation_fragments below requires.
 pub fn build_daily_affiliation_fragments(
     evidence_rows: &[EvidenceRecord],
     participant_rows: &[ParticipantRecord],
@@ -97,25 +67,12 @@ pub fn build_daily_affiliation_fragments(
     fragments
 }
 
-/// The most-recently-seen historic_pilot_affiliation_timeline row for a
-/// pilot -- "most recently seen" by last_seen_utc.
 struct OpenAffiliationRow {
     corporation_id: Option<i64>,
     alliance_id: Option<i64>,
     first_seen_utc: String,
 }
 
-/// Applies one day's affiliation fragments to
-/// historic_pilot_affiliation_timeline (Design Specification Section 4.7,
-/// Implementation Plan Step 19.01.03): for each pilot, in fragment order,
-/// extends that pilot's most-recently-seen timeline row if the fragment's
-/// corporation_id/alliance_id match it, or opens a new row if they differ
-/// or no row exists yet for that pilot.
-///
-/// fragments must already be grouped by character_id, with each pilot's own
-/// fragments in chronological order -- build_daily_affiliation_fragments
-/// guarantees both. Returns the number of distinct pilots touched, for
-/// persistence::import_day's diagnostic report.
 pub fn apply_daily_affiliation_fragments(connection: &Connection, fragments: &[PilotDayAffiliationFragment], now_utc: &str) -> Result<usize> {
     let mut touched_pilot_count = 0usize;
     let mut index = 0usize;
@@ -165,14 +122,6 @@ pub fn apply_daily_affiliation_fragments(connection: &Connection, fragments: &[P
     Ok(touched_pilot_count)
 }
 
-/// Fetches the most-recently-seen timeline row for a pilot, if any.
-/// "Most recently seen" is ORDER BY last_seen_utc DESC LIMIT 1 -- RFC3339
-/// UTC timestamps sort lexicographically in chronological order, the same
-/// string-comparison convention already used elsewhere in this crate for
-/// VARCHAR timestamp columns (see persistence::mark_import_day_completed's
-/// history_start_day_utc/last_completed_day_utc comparisons). Returns None
-/// when the pilot has no row yet, via OptionalExt::optional() rather than
-/// treating Error::QueryReturnedNoRows as a failure.
 fn fetch_latest_affiliation_row(connection: &Connection, character_id: i64) -> Result<Option<OpenAffiliationRow>> {
     connection
         .query_row(
@@ -193,20 +142,6 @@ fn fetch_latest_affiliation_row(connection: &Connection, character_id: i64) -> R
         .optional()
 }
 
-/// Extends an already-open timeline row's last_seen_utc forward. The row is
-/// identified by (pilot_id, first_seen_utc) rather than a surrogate key,
-/// since this table declares no inline primary key (Step 19.01.01's
-/// working-database convention) and first_seen_utc does not change once a
-/// row is opened -- practically unique per pilot, since two genuinely
-/// different corporation/alliance observations for the same pilot at the
-/// exact same recorded instant is not expected in real zKill data.
-///
-/// GREATEST guards against a fragment whose last_seen_utc is no later than
-/// what is already stored -- not expected given persistence::import_day
-/// processes days in chronological order (Design Specification Section
-/// 6.9.4), but keeps this function safe to call more than once with the
-/// same fragment (for example a retried, previously-partially-applied day)
-/// without ever moving last_seen_utc backwards.
 fn extend_affiliation_row(connection: &Connection, character_id: i64, first_seen_utc: &str, fragment_last_seen_utc: &str, now_utc: &str) -> Result<()> {
     connection.execute(
         "UPDATE historic_pilot_affiliation_timeline \
@@ -218,9 +153,6 @@ fn extend_affiliation_row(connection: &Connection, character_id: i64, first_seen
     Ok(())
 }
 
-/// Opens a new timeline row for a pilot -- either their first row ever, or a
-/// new episode following a corporation/alliance change (Design
-/// Specification Section 4.7).
 fn insert_affiliation_row(connection: &Connection, character_id: i64, fragment: &PilotDayAffiliationFragment, now_utc: &str) -> Result<()> {
     connection.execute(
         "INSERT INTO historic_pilot_affiliation_timeline \
@@ -294,8 +226,6 @@ mod tests {
     #[test]
     fn build_daily_affiliation_fragments_collapses_same_affiliation_observations_out_of_input_order() {
         let evidence_rows = vec![evidence(1, utc(300)), evidence(2, utc(100)), evidence(3, utc(200))];
-        // Deliberately out of chronological order -- the function must sort
-        // by time itself rather than trust input order.
         let participant_rows = vec![
             participant(1, 95465499, Some(98765432), None),
             participant(2, 95465499, Some(98765432), None),
@@ -360,7 +290,6 @@ mod tests {
     #[test]
     fn build_daily_affiliation_fragments_skips_a_participant_row_with_no_matching_evidence_row() {
         let evidence_rows = vec![evidence(1, utc(100))];
-        // killmail_id 2 has no matching evidence row.
         let participant_rows = vec![
             participant(1, 95465499, Some(98765432), None),
             participant(2, 95465499, Some(90379338), None),
@@ -532,10 +461,6 @@ mod tests {
         }];
 
         apply_daily_affiliation_fragments(&connection, &fragments, "2026-08-13T00:00:00Z").unwrap();
-        // Simulates a retried, previously-partially-applied day: the same
-        // fragment applied a second time must not move last_seen_utc
-        // backwards, since GREATEST(last_seen_utc, ?) is used, not a plain
-        // assignment.
         apply_daily_affiliation_fragments(&connection, &fragments, "2026-08-13T00:05:00Z").unwrap();
 
         let row_count: i64 = connection

@@ -1,39 +1,12 @@
 use chrono::{DateTime, Utc};
 use duckdb::{params, Connection, Result};
 
-/// Default `npcCorporationIdThreshold` (Design Specification Sections
-/// 4.7/6.8, reused by 6.11.6): corporation IDs below this are EVE Online's
-/// generic NPC corporations. An explicit placeholder, like every other
-/// threshold in this component -- Tom expects this to be revised once more
-/// real scenarios are worked through. Section 6.11.6 frames this as
-/// "config-driven," but no config-loading mechanism exists in this crate for
-/// any threshold in this family yet, so this follows the same established
-/// convention every other numeric constant in this crate already uses -- a
-/// plain `pub const` (see `staging.rs`'s `TEST_MODE_ANCHOR_YEAR`,
-/// `DEFAULT_INITIAL_HISTORIC_IMPORT_HORIZON_YEARS`). Section 6.11.6's
-/// optional `genericNpcCorporationIds` override list is not implemented --
-/// out of scope until a real scenario needs it.
 pub const NPC_CORPORATION_ID_THRESHOLD: i64 = 1_005_000;
 
-/// True when `corporation_id` is a generic NPC corporation (Design
-/// Specification Sections 4.7/6.8/6.11.4/6.11.6).
 pub fn is_npc_corporation(corporation_id: i64) -> bool {
     corporation_id < NPC_CORPORATION_ID_THRESHOLD
 }
 
-/// One party's corporation/alliance affiliation over a closed time range
-/// `[first_seen_utc, last_seen_utc]` -- either a real
-/// `historic_pilot_affiliation_timeline` row (Step 19.01.03, fetched via
-/// `fetch_pilot_affiliation_segments` below), or a synthetic, unbounded
-/// segment representing a fixed Pilot-vs-Group counterparty G (see
-/// `fixed_group_segment` below).
-///
-/// `corporation_id`/`alliance_id` are both `Option<i64>` so this same struct
-/// serves both cases: a real timeline row always carries `Some`
-/// corporation_id (a pilot always has a corporation in EVE), but an
-/// alliance-only fixed G segment carries `None` for corporation_id --
-/// representing that as `Option<i64>` rather than a sentinel value avoids
-/// misfiring the NPC check in `is_same_c_a` below.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AffiliationSegment {
     pub corporation_id: Option<i64>,
@@ -42,23 +15,12 @@ pub struct AffiliationSegment {
     pub last_seen_utc: DateTime<Utc>,
 }
 
-/// A discrete period during which two parties were continuously same c/a
-/// (Design Specification Section 6.11.4), as built by
-/// `build_same_c_a_episodes`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Episode {
     pub start_utc: DateTime<Utc>,
     pub end_utc: DateTime<Utc>,
 }
 
-/// The Same C/A test (Design Specification Section 6.11.4, Design Notes
-/// Section 2): two affiliations are "same c/a" if their corporation IDs
-/// match, or -- for different corporations -- their alliance IDs match,
-/// unless either side's corporation is a generic NPC corporation, in which
-/// case they are never same c/a, even NPC corp against the identical NPC
-/// corp. Two affiliations both unaligned (`alliance_id: None` on both
-/// sides) are never treated as a match via that `None == None` -- only a
-/// `Some` alliance_id shared by both sides counts.
 pub fn is_same_c_a(a: &AffiliationSegment, b: &AffiliationSegment) -> bool {
     if a.corporation_id.is_some_and(is_npc_corporation) {
         return false;
@@ -74,18 +36,6 @@ pub fn is_same_c_a(a: &AffiliationSegment, b: &AffiliationSegment) -> bool {
     a.alliance_id.is_some() && a.alliance_id == b.alliance_id
 }
 
-/// A synthetic, unbounded `AffiliationSegment` representing a fixed
-/// Pilot-vs-Group counterparty G (Design Specification Section 6.11.4's
-/// Pilot-vs-Group extension) -- either G's own corporation ID (corp case,
-/// `alliance_id: None`) or alliance ID (alliance case, `corporation_id:
-/// None`), never both, matching the Design Notes' Match Test: a pilot
-/// matches G either via their own corporation_id or via their own
-/// alliance_id, never a combined check. `first_seen_utc`/`last_seen_utc`
-/// span the widest range `DateTime<Utc>` can represent, so this segment
-/// always overlaps every real segment passed to `build_same_c_a_episodes`
-/// as the other side -- G itself never has a timeline of its own to
-/// intersect against, so the real side's own segment bounds govern the
-/// resulting episodes.
 pub fn fixed_group_segment(corporation_id: Option<i64>, alliance_id: Option<i64>) -> AffiliationSegment {
     AffiliationSegment {
         corporation_id,
@@ -95,27 +45,6 @@ pub fn fixed_group_segment(corporation_id: Option<i64>, alliance_id: Option<i64>
     }
 }
 
-/// Builds the discrete episode list (Design Specification Section 6.11.4)
-/// where `timeline_a` and `timeline_b` were continuously same c/a, by
-/// sweeping the pairwise overlap between two sorted, non-overlapping
-/// segment lists (a classic two-sorted-interval-list intersection) and
-/// merging consecutive same-c/a overlaps that directly abut into one
-/// `Episode` -- even when the underlying reason for the match changes
-/// partway through (for example one party's corporation changes but they
-/// stay in the same alliance throughout, so same c/a never actually lapsed).
-///
-/// A gap between two same-c/a overlaps -- whether from an actual
-/// not-same-c/a period, or simply a stretch neither party's evidence covers
-/// -- always ends an episode. Deciding whether such a gap should later be
-/// treated as a genuine split or collapsed for lack of between-episode
-/// evidence (Section 6.11.4's exactly-two-episodes rule) is Step
-/// 19.01.05/19.01.07's job, not this routine's -- this only reports what
-/// the affiliation timelines themselves show.
-///
-/// Both slices must already be in chronological, non-overlapping order --
-/// true of every `historic_pilot_affiliation_timeline` row set returned by
-/// `fetch_pilot_affiliation_segments` below (`ORDER BY first_seen_utc`), and
-/// of a single-element `fixed_group_segment` slice.
 pub fn build_same_c_a_episodes(timeline_a: &[AffiliationSegment], timeline_b: &[AffiliationSegment]) -> Vec<Episode> {
     let mut episodes: Vec<Episode> = Vec::new();
     let mut open_episode: Option<Episode> = None;
@@ -171,23 +100,6 @@ pub fn build_same_c_a_episodes(timeline_a: &[AffiliationSegment], timeline_b: &[
     episodes
 }
 
-/// Fetches a pilot's full `historic_pilot_affiliation_timeline` history
-/// (Design Specification Section 4.7, Step 19.01.03), ordered
-/// chronologically -- the Same C/A Test + Episode Builder's real-data input
-/// (Section 6.11.3 Interfaces), for a Pilot-to-Pilot caller (Step 19.01.05)
-/// to pass as either `timeline_a` or `timeline_b` to `build_same_c_a_episodes`
-/// above. A Pilot-vs-Group caller (Step 19.01.07) uses this for the one real
-/// pilot side only -- the fixed group counterparty is `fixed_group_segment`
-/// above, not a database read.
-///
-/// Stored `first_seen_utc`/`last_seen_utc` values are this crate's own
-/// RFC3339 output (`persistence`/`affiliation_timeline`'s own
-/// `to_rfc3339()` writes) and are expected to always parse; a parse failure
-/// indicates database corruption and panics with the offending pilot_id and
-/// text, rather than silently defaulting or threading a non-`duckdb::Error`
-/// type through this function's `Result`, matching how a `DateTime`-parse
-/// precedent already exists in `r2_client.rs` for a different (external,
-/// so-fallible) source.
 pub fn fetch_pilot_affiliation_segments(connection: &Connection, pilot_id: i64) -> Result<Vec<AffiliationSegment>> {
     let mut statement = connection.prepare(
         "SELECT corporation_id, alliance_id, first_seen_utc, last_seen_utc \
