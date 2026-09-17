@@ -122,7 +122,6 @@ pub fn has_shared_evidence_between(connection: &Connection, pilot_a_id: i64, pil
     )
 }
 
-/// Design_Spec_Dense.md §6.11.4 Table53 (TwiceWithGap basis).
 pub fn count_shared_evidence_between(connection: &Connection, pilot_a_id: i64, pilot_b_id: i64, start_exclusive_utc: DateTime<Utc>, end_exclusive_utc: DateTime<Utc>) -> Result<i64> {
     let mut statement = connection.prepare(
         "SELECT COUNT(*) FROM historic_relationship_evidence e \
@@ -153,7 +152,6 @@ pub fn count_shared_evidence_in_window(connection: &Connection, pilot_a_id: i64,
     )
 }
 
-/// Design_Spec_Dense.md §6.11.4 Table53 (NeverSameCA basis).
 pub fn count_all_shared_evidence(connection: &Connection, pilot_a_id: i64, pilot_b_id: i64) -> Result<i64> {
     let mut statement = connection.prepare(
         "SELECT COUNT(*) FROM historic_relationship_evidence e \

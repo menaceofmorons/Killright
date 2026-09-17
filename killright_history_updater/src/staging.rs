@@ -18,24 +18,12 @@ use crate::summary_rebuild::{self, RebuildStats};
 pub const LATEST_VALIDATED_BUILD_MARKER_FILE_NAME: &str = "latest_validated_build.txt";
 pub const DEFAULT_INITIAL_HISTORIC_IMPORT_HORIZON_YEARS: u32 = 10;
 
-/// Suffix used for the per-day progress log written alongside a staging file
-/// while its day-import loop runs (Step CC-07.08.26.01). Paired 1:1 with the
-/// staging file by replacing its `.duckdb` extension with this suffix, so it
-/// shares the same base name -- e.g. `CORE.KillRight.History.260807.02.duckdb`'s
-/// progress log is `CORE.KillRight.History.260807.02.progress.log`. Deliberately
-/// distinct from the C# project's `HistoryUpdaterStagingPaths.WorkingFileSearchPattern`
-/// pairing so the existing orphaned-staging-file cleanup never matches or
-/// deletes it directly.
 pub const PROGRESS_LOG_FILE_SUFFIX: &str = ".progress.log";
 
 pub const TEST_MODE_ANCHOR_YEAR: i32 = 2016;
 pub const TEST_MODE_ANCHOR_MONTH: u32 = 8;
 pub const TEST_MODE_ANCHOR_DAY: u32 = 1;
 
-/// The fixed starting point used only by the Test Amount control (Step 19.00.51).
-/// Never used for a default (blank) build-staging launch, and never derived from
-/// the current date -- the same amount requested on different days therefore
-/// always resolves to the same [start, end] range.
 pub fn test_mode_anchor_start_date() -> NaiveDate {
     NaiveDate::from_ymd_opt(TEST_MODE_ANCHOR_YEAR, TEST_MODE_ANCHOR_MONTH, TEST_MODE_ANCHOR_DAY)
         .expect("test-mode anchor start date must be a valid calendar date")
@@ -53,29 +41,9 @@ pub enum ImportRangeMode {
     DefaultTenYearLookback,
     HorizonDaysBackFromToday(i64),
     AnchoredTestAmount(i64, TestAmountUnit),
-    /// Step 19.00.63: an explicit, fixed [start, end] range with no
-    /// frontier or "today" logic at all -- introduced for repairing an
-    /// existing file against a range it should already fully cover,
-    /// regardless of whether what is missing is a single day, a
-    /// consecutive block, or several scattered gaps. `AnchoredTestAmount`
-    /// cannot express this: its range end is always the database's own
-    /// already-completed frontier plus the requested amount, which grows
-    /// forward from whatever is already there rather than re-targeting a
-    /// previously-known range.
     ExplicitRange(NaiveDate, NaiveDate),
 }
 
-/// Finds the latest day already `Completed` at or after the anchor, or the day
-/// before the anchor if nothing in the test range has been imported yet. This is
-/// the basis Test Amount extends from, so successive runs are additive (a Month
-/// run after a completed Week run extends from day 7, not from the anchor again).
-///
-/// Only considers days at or after `anchor_start`: a database that has also been
-/// used for a default/production run (whose ~10-year lookback can itself reach
-/// back close to the fixed 01 Aug 2016 anchor, depending on when it ran) could
-/// otherwise report a frontier far beyond any test-amount run actually made.
-/// Wipe (Section 3.10) exists to give a clean baseline before a test cycle for
-/// exactly this reason.
 fn find_test_range_frontier(connection: &Connection, anchor_start: NaiveDate) -> DuckResult<NaiveDate> {
     let anchor_start_text = anchor_start.format("%Y-%m-%d").to_string();
 
@@ -94,12 +62,6 @@ fn find_test_range_frontier(connection: &Connection, anchor_start: NaiveDate) ->
     })
 }
 
-/// Computes the inclusive [start, end] range for a Test Amount request: start is
-/// always the fixed anchor date; end is the current frontier (see
-/// `find_test_range_frontier`) plus the requested amount, clamped so it can never
-/// exceed `latest_importable_day` (a defensive guard for an implausibly large
-/// amount -- not expected to trigger for any realistic timing-test value, since
-/// the anchor is a decade in the past).
 fn compute_anchored_test_range(
     connection: &Connection,
     amount: i64,
@@ -129,13 +91,6 @@ pub struct ValidationFailure {
     pub detail: String,
 }
 
-/// Step 19.00.62: timing capture for the promotion and validation-gate
-/// steps, added at the Scale Gate to make the primary-key-add step's real
-/// cost visible at multi-year scale for the first time -- previously only
-/// assumed from DuckDB's published benchmarks. Follows the same
-/// Instant::now()/elapsed().as_millis() pattern already established by
-/// PersistenceTiming (persistence.rs, Step 19.00.38) and RebuildStats
-/// (summary_rebuild.rs, Step 19.00.46).
 pub struct PromotionTiming {
     pub copy_to_live_elapsed_ms: u128,
     pub primary_key_add_elapsed_ms: u128,
@@ -150,24 +105,10 @@ pub struct StagingBuildOutcome {
     pub requested_days: Vec<NaiveDate>,
     pub imported_days: Vec<ImportDayOutcome>,
     pub rebuild_stats: RebuildStats,
-    /// `history_metadata`'s own `last_completed_day_utc`/`last_update_utc`,
-    /// read from the Working database before it was checkpointed and
-    /// promoted (Step 19.00.56). Step 19.00.57: consumed directly by
-    /// `build_staging` on a successful run to populate the `groupHistory`
-    /// live config's `lastCompletedDayUtc`/`lastUpdatedUtc` fields, so no
-    /// caller needs to re-derive them.
     pub metadata_last_completed_day_utc: Option<String>,
     pub metadata_last_updated_utc: Option<String>,
-    /// Step 19.00.56: where the promoted copy of this build ended up --
-    /// `Live/KillRight.History.yymmdd.##.duckdb` when `succeeded` is `true`,
-    /// or `Failed/KillRight.History.yymmdd.##.duckdb` when it is `false`.
-    /// Always populated when this function returns `Ok`: the OS-level copy
-    /// into Live happens unconditionally, before validation runs.
     pub promoted_file_path: PathBuf,
     pub validation_failures: Vec<ValidationFailure>,
-    /// Step 19.00.62: timing for the copy-to-Live, primary-key-add, and
-    /// remaining validation-gate checks -- see PromotionTiming's own doc
-    /// comment.
     pub promotion_timing: PromotionTiming,
     pub succeeded: bool,
 }
@@ -178,11 +119,6 @@ pub fn build_staging(
     range_mode: ImportRangeMode,
     repair_from: Option<&Path>,
 ) -> Result<StagingBuildOutcome, String> {
-    // Step 19.00.55: `directory` is the historic-database root (e.g.
-    // %LOCALAPPDATA%\KillRight\HistoryUpdater); the working database this
-    // function builds lives in its `Working` subfolder, alongside the
-    // sibling `Live`/`Archive`/`Failed` subfolders this and later steps
-    // write to (Design Specification v5.4 Section 6.9.2/4.7).
     folder_layout::ensure_folder_layout(directory)
         .map_err(|error| format!("Failed to create historic database folder layout: {error}"))?;
     let working_directory = folder_layout::working_dir(directory);
@@ -226,18 +162,6 @@ pub fn build_staging(
 
     let mut imported_days = Vec::with_capacity(requested_days.len());
 
-    // Step CC-07.08.26.01: a plain-text progress log, one line before and one
-    // line after each day's import, opened before the loop and written via a
-    // raw, unbuffered File so every line is durable the instant it's written.
-    // Only created when there is at least one day to import, mirroring the
-    // same requested_days.is_empty() guard 19.00.52/19.00.53 used for index
-    // management. This is the only record of exactly which day a run was on
-    // if the process is killed outright (a Halt from the Developer window's
-    // Stop button) -- nothing about a killed process's in-memory state
-    // survives, and stdout from a detached launch
-    // (HistoryUpdaterProcessLauncher.LaunchDetached) is never captured or
-    // shown anywhere. Deleted below once a build succeeds; kept when a build
-    // fails validation, alongside the staging file itself, for diagnosis.
     let progress_log_path = if requested_days.is_empty() {
         None
     } else {
@@ -255,10 +179,6 @@ pub fn build_staging(
         None => None,
     };
 
-    // Step 19.00.53: no unconsumed secondary indexes to drop/rebuild around
-    // this loop any more -- schema::create_schema (called above) already
-    // ensures none exist. See schema.rs's drop_unconsumed_secondary_indexes
-    // doc comment.
     for date in &requested_days {
         if let Some(file) = progress_log_file.as_mut() {
             let _ = writeln!(file, "{} START {date}", Utc::now().to_rfc3339());
@@ -273,11 +193,6 @@ pub fn build_staging(
         imported_days.push(outcome);
     }
 
-    // Close the log file explicitly before any attempt to delete it below --
-    // Windows will not allow deleting a file that is still open (the same
-    // class of issue as this project's documented DuckDB handle-release
-    // gotcha in CLAUDE.md; the rule applies to any file handle, not just
-    // DuckDB's).
     drop(progress_log_file);
 
     let rebuild_stats = summary_rebuild::rebuild_summary_and_org_context(&connection)
@@ -286,34 +201,11 @@ pub fn build_staging(
     let (metadata_last_completed_day_utc, metadata_last_updated_utc) = read_history_metadata_summary(&connection)
         .map_err(|error| format!("Failed to read history_metadata: {error}"))?;
 
-    // Step 19.00.56: checkpoint and close the Working connection before the
-    // OS-level copy into Live below -- CHECKPOINT merges the write-ahead log
-    // into the main database file so a plain file copy captures every
-    // committed change, and the connection must be fully closed first so
-    // nothing else has the file open while it's being read (see
-    // validate_promoted_copy's own CHECKPOINT-then-drop for the same
-    // requirement in the opposite direction). A checkpoint failure here
-    // aborts the whole run via `?`, unlike the validation-gate checks below:
-    // there is nothing valid yet to copy or report as a validated-or-failed
-    // file if the Working database itself cannot even be checkpointed.
     connection
         .execute_batch("CHECKPOINT;")
         .map_err(|error| format!("Failed to checkpoint the working database before promotion: {error}"))?;
     drop(connection);
 
-    // Step 19.00.56: an unconditional OS-level copy of the finished Working
-    // file into Live, under its promoted (un-prefixed) name -- before
-    // validation, per Design Specification v5.4 Section 6.9.4 ("it is copied
-    // under its own versioned name ... into the live folder; primary keys
-    // are added to this copy"). Promoting first and validating the promoted
-    // copy, rather than validating Working and copying afterward, means the
-    // promotion-time uniqueness constraints below run against exactly the
-    // file that ends up in Live or Failed, with nothing able to change in
-    // between.
-    // Step 19.00.62: timed as a whole (copy_to_live + primary-key-add +
-    // remaining validation checks) so PromotionTiming.total_elapsed_ms is a
-    // genuine wall-clock total of this promotion/validation phase, not a sum
-    // of its parts measured separately.
     let promotion_total_start = Instant::now();
 
     let copy_to_live_start = Instant::now();
@@ -321,11 +213,6 @@ pub fn build_staging(
         .map_err(|error| format!("Failed to copy the working database to Live: {error}"))?;
     let copy_to_live_elapsed_ms = copy_to_live_start.elapsed().as_millis();
 
-    // A brand-new connection to a path this process has never opened before
-    // -- not a same-process reopen of the just-closed Working connection, so
-    // none of reopen_cleanly's documented same-process-reopen caveats
-    // (REV-A/REV-B) apply here; those were specific to reopening a path this
-    // process itself had already held open.
     let promoted_connection = Connection::open(&promoted_path)
         .map_err(|error| format!("Failed to open the promoted Live-folder copy: {error}"))?;
 
@@ -342,9 +229,6 @@ pub fn build_staging(
 
     let succeeded = validation_failures.is_empty();
 
-    // Step 19.00.56: this step's own output -- a validated-or-failed file
-    // sitting in Live or Failed, nothing more (Section 1.0). Setting the
-    // live flag to point at it is 19.00.57's job.
     let final_copy_path = if succeeded {
         promoted_path
     } else {
@@ -357,29 +241,10 @@ pub fn build_staging(
             let _ = fs::remove_file(path);
         }
 
-        // The promoted copy's validation is equally valid proof about the
-        // Working database's own data (the copy is byte-identical at the
-        // moment CHECKPOINT completed, before any constraint is added) --
-        // so the "latest validated build" marker for the next incremental
-        // build's copy basis still fires from this same succeeded flag.
         write_latest_validated_build_marker(&working_directory, &staging_file_name)
             .map_err(|error| format!("Failed to update the latest-validated-build marker: {error}"))?;
     }
 
-    // Step 19.00.57: the updater's final action for a successful build --
-    // point activeDatabaseFile at the newly validated Live-folder copy,
-    // advance schemaVersion/lastCompletedDayUtc/lastUpdatedUtc, and drop the
-    // database.new sentinel as the cheap "go re-check" signal (Design
-    // Specification v5.4 Section 6.9.4: "Only a copy that passes has its
-    // live flag set, signalling the application to swap to it"). On
-    // failure, the live config is only cleared of update_in_progress/PID --
-    // whatever activeDatabaseFile pointed at before this run started is left
-    // untouched, exactly as it was before 19.00.56 removed this branching
-    // entirely. Everything that reacts to this flag
-    // (GroupHistorySwapWatcher/GroupHistoryActiveDatabasePathResolver, both
-    // already implemented but not yet called from anywhere the running
-    // application reaches) is application-side and out of scope here --
-    // that starts at 19.00.59.
     if succeeded {
         let updated_live_config = GroupHistoryLiveConfig {
             active_database_file: final_copy_path.to_string_lossy().to_string(),
@@ -419,13 +284,6 @@ pub fn build_staging(
     })
 }
 
-/// Renamed from `allocate_new_staging_filename` at Step 19.00.55: produces
-/// the `CORE.`-prefixed working-database name Section 6.9.2 introduces to
-/// distinguish the unconstrained Working-folder file from its later
-/// promoted, primary-keyed Live-folder copy (19.00.56), which keeps the
-/// unprefixed `KillRight.History.yymmdd.##` name. `directory` is always the
-/// `Working` subfolder (see `build_staging`), not the historic database
-/// root.
 fn allocate_new_working_filename(directory: &Path) -> io::Result<(PathBuf, String)> {
     let today = Utc::now().date_naive();
     let date_prefix = today.format("%y%m%d").to_string();
@@ -461,20 +319,6 @@ fn find_copy_basis(directory: &Path) -> Option<PathBuf> {
     }
 }
 
-/// Step 19.00.63: resolves which existing staging file (if any) to use as
-/// this build's copy basis -- an explicit `--repair` override, if given,
-/// otherwise the same latest-validated-build lookup normal incremental
-/// runs have always used (`find_copy_basis`, unchanged above). Introduced
-/// so a build that failed validation on a transient error (an environment
-/// interruption, not a data or code defect) can be repaired against its
-/// own already-completed days instead of restarting the whole requested
-/// range from scratch -- `find_copy_basis` alone cannot do this, since it
-/// only ever returns a *validated* build's file, and a build that failed
-/// validation never writes that marker. The caller is responsible for
-/// passing a Working-folder-style (unconstrained) file, not a promoted
-/// Live/Failed-folder copy that already has primary keys added --
-/// `resolve_copy_basis` does not distinguish between them, matching
-/// `find_copy_basis`'s own existing behaviour.
 fn resolve_copy_basis(repair_from: Option<&Path>, working_directory: &Path) -> Option<PathBuf> {
     match repair_from {
         Some(path) => Some(path.to_path_buf()),
@@ -487,10 +331,6 @@ fn write_latest_validated_build_marker(directory: &Path, filename: &str) -> io::
     fs::write(marker_path, filename)
 }
 
-/// Computes the per-day progress log path for a staging file: the same
-/// directory, same base name, with `.duckdb` replaced by
-/// `PROGRESS_LOG_FILE_SUFFIX`. `staging_file_name` is always produced by
-/// `allocate_new_working_filename`, which always ends in `.duckdb`.
 fn progress_log_path_for(directory: &Path, staging_file_name: &str) -> PathBuf {
     let base_name = staging_file_name
         .strip_suffix(".duckdb")
@@ -499,11 +339,6 @@ fn progress_log_path_for(directory: &Path, staging_file_name: &str) -> PathBuf {
     directory.join(format!("{base_name}{PROGRESS_LOG_FILE_SUFFIX}"))
 }
 
-/// Formats a single `ImportDayOutcome` as one line for the per-day progress
-/// log. Deliberately terse (day-level status only, not full timing) -- this
-/// log exists to answer "which day was in progress when the process died,"
-/// not to duplicate the detailed report `main.rs` already prints for a
-/// normal foreground run.
 fn describe_outcome(outcome: &ImportDayOutcome) -> String {
     if outcome.already_completed {
         "status=AlreadyCompleted".to_string()
@@ -538,11 +373,6 @@ fn determine_missing_days(
         ImportRangeMode::AnchoredTestAmount(amount, unit) => {
             compute_anchored_test_range(connection, amount, unit, latest_importable_day)?
         }
-        // Step 19.00.63: used exactly as given, clamped to
-        // latest_importable_day for the same defensive reason
-        // compute_anchored_test_range clamps its own end -- not expected to
-        // trigger for a real repair range, which by definition targets days
-        // already in the past.
         ImportRangeMode::ExplicitRange(start, end) => (start, end.min(latest_importable_day)),
     };
 
@@ -579,13 +409,6 @@ fn determine_missing_days(
     Ok(missing_days)
 }
 
-/// Reads the staging build's own `history_metadata.last_completed_day_utc` and
-/// `last_update_utc` columns, already maintained per-day by `persistence::import_day`
-/// since 19.00.45. Step 19.00.56: no longer used to update the live config
-/// directly here (see `StagingBuildOutcome::metadata_last_completed_day_utc`'s
-/// doc comment) -- still read at the same point, while `connection` (the
-/// Working database) is open, before it is checkpointed and closed ahead of
-/// promotion.
 fn read_history_metadata_summary(connection: &Connection) -> DuckResult<(Option<String>, Option<String>)> {
     connection.query_row(
         "SELECT last_completed_day_utc, last_update_utc FROM history_metadata LIMIT 1;",
@@ -598,10 +421,6 @@ fn read_history_metadata_summary(connection: &Connection) -> DuckResult<(Option<
     )
 }
 
-/// Renamed from `validate_staging_build` at Step 19.00.56: this now always
-/// runs against the promoted Live-folder copy's connection, never the
-/// Working database's -- see `build_staging` and Design Specification v5.4
-/// Section 6.9.4 ("The copy then runs the validation gate").
 fn validate_promoted_copy(
     connection: Connection,
     promoted_path: &Path,
@@ -609,19 +428,6 @@ fn validate_promoted_copy(
 ) -> DuckResult<(Vec<ValidationFailure>, u128, u128)> {
     let mut failures = Vec::new();
 
-    // Step 19.00.56: the promotion-time uniqueness constraints Section 4.7
-    // documents per table, added to this Live/Failed-bound copy only. See
-    // promotion::add_promotion_constraints's doc comment for why
-    // CREATE UNIQUE INDEX is used rather than ALTER TABLE ... ADD PRIMARY
-    // KEY. A constraint violation here means the working import produced
-    // duplicate evidence -- the full-table duplicate-evidence check Section
-    // 6.9.2/6.9.4 call for -- reported as a validation failure like any
-    // other, not a hard error that aborts the whole run.
-    //
-    // Step 19.00.62: timed separately from the rest of the validation gate
-    // below -- the specific cost the Scale Gate exists to make visible at
-    // real multi-year scale for the first time, rather than assumed from
-    // DuckDB's published benchmarks.
     let primary_key_add_start = Instant::now();
 
     if let Err(error) = promotion::add_promotion_constraints(&connection) {
@@ -665,12 +471,6 @@ fn validate_promoted_copy(
 
     let mut samples = Vec::new();
 
-    // Scoped so the prepared statement and its row cursor are finalized here,
-    // before CHECKPOINT and drop(connection) below. Left un-dropped, they
-    // only finalize at this function's end -- after the connection is already
-    // closed and the clean-reopen check has already run -- which keeps
-    // DuckDB's underlying file handle open on this process for its entire
-    // remaining lifetime. See Revision note (REV-D) in 19.00.47.
     {
         let mut statement = connection
             .prepare("SELECT pilot_a_id, pilot_b_id, shared_event_count FROM historic_relationship_summary LIMIT 5;")?;
@@ -703,9 +503,6 @@ fn validate_promoted_copy(
 
     let checkpoint_result = connection.execute_batch("CHECKPOINT;");
 
-    // The connection must be fully closed before we can prove the file re-opens cleanly:
-    // DuckDB refuses a second connection to the same file while this process still holds
-    // one open, so the file handle has to be released first.
     drop(connection);
 
     match checkpoint_result {
@@ -732,20 +529,6 @@ fn validate_promoted_copy(
     Ok((failures, primary_key_add_elapsed_ms, validation_checks_elapsed_ms))
 }
 
-/// Proves `database_path` opens cleanly by asking a brand-new, separate OS
-/// process to open it — this same binary, re-invoked with the internal-only
-/// `__verify-open <path>` command — rather than reopening within this process.
-///
-/// A same-process reopen immediately after `drop(connection)` reliably failed
-/// (REV-A, REV-B), including after a full second of retries, always reporting
-/// this process's own PID as the file's holder. A genuinely separate process
-/// (confirmed with Python's `duckdb` package during diagnosis) opened the
-/// identical, still-on-disk file immediately once this process had dropped its
-/// connection. That rules out an OS-level lock or a release-timing race: the
-/// lock is internal to this process, not the file. Asking a fresh child
-/// process to do the opening is also a more faithful test of what this check
-/// was always meant to prove — that the finished file opens cleanly for
-/// whoever opens it next.
 fn reopen_cleanly(database_path: &Path) -> Result<(), String> {
     let executable_path = std::env::current_exe()
         .map_err(|error| format!("Failed to resolve the current executable path: {error}"))?;
@@ -935,7 +718,6 @@ mod tests {
         crate::schema::create_schema(&connection).unwrap();
         crate::schema::insert_initial_metadata_row(&connection, "2026-08-05T00:00:00Z").unwrap();
 
-        // Simulates a completed "1 Week" run (01-07 Aug 2016) before this call.
         for day in 1..=7 {
             insert_completed_day(&connection, &format!("2016-08-{day:02}"));
         }
@@ -944,8 +726,6 @@ mod tests {
         let (start, end) =
             compute_anchored_test_range(&connection, 1, TestAmountUnit::Months, latest_importable_day).unwrap();
 
-        // Anchor stays fixed; end extends from the Week run's frontier (07 Aug), not from
-        // the anchor again -- the resulting range covers the Week plus the new Month.
         assert_eq!(start, NaiveDate::from_ymd_opt(2016, 8, 1).unwrap());
         assert_eq!(end, NaiveDate::from_ymd_opt(2016, 9, 7).unwrap());
     }
@@ -962,8 +742,6 @@ mod tests {
         let (_, end) =
             compute_anchored_test_range(&connection, 1, TestAmountUnit::Months, latest_importable_day).unwrap();
 
-        // 31 Aug + 1 month: September only has 30 days, so chrono's checked_add_months
-        // clamps to the last valid day rather than erroring.
         assert_eq!(end, NaiveDate::from_ymd_opt(2016, 9, 30).unwrap());
     }
 
@@ -1013,7 +791,6 @@ mod tests {
         crate::schema::create_schema(&connection).unwrap();
         crate::schema::insert_initial_metadata_row(&connection, "2026-08-05T00:00:00Z").unwrap();
 
-        // Simulates a completed "1 Week" run (01-07 Aug 2016) before this call.
         for day in 1..=7 {
             insert_completed_day(&connection, &format!("2016-08-{day:02}"));
         }
@@ -1026,9 +803,6 @@ mod tests {
         )
         .unwrap();
 
-        // The already-completed week is skipped; only the newly-added days (08 Aug
-        // through 07 Sep, extending the Week run's frontier by a further month) are
-        // requested -- 31 days, none of them from the first week.
         assert_eq!(missing.len(), 31);
         assert_eq!(missing[0], NaiveDate::from_ymd_opt(2016, 8, 8).unwrap());
         assert_eq!(*missing.last().unwrap(), NaiveDate::from_ymd_opt(2016, 9, 7).unwrap());
@@ -1044,10 +818,6 @@ mod tests {
         crate::schema::create_schema(&connection).unwrap();
         crate::schema::insert_initial_metadata_row(&connection, "2026-08-05T00:00:00Z").unwrap();
 
-        // Simulates a mostly-complete repair target: every day in a small
-        // range is Completed except one scattered gap in the middle --
-        // the same shape as the real 19.00.62 repair (1825 of 1826 days
-        // Completed, one Failed day in the middle of the range).
         for day in 1..=10 {
             if day != 5 {
                 insert_completed_day(&connection, &format!("2016-08-{day:02}"));
@@ -1071,10 +841,6 @@ mod tests {
     use std::env;
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    /// Section 6.4 Agent Test Independence: a unique, nanosecond-suffixed
-    /// temp directory per test, never shared between tests and never
-    /// dependent on execution order. Mirrors folder_layout.rs's own
-    /// unique_temp_root helper.
     fn unique_temp_root(test_name: &str) -> PathBuf {
         let suffix = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
         env::temp_dir().join(format!("killright-staging-repair-test-{test_name}-{suffix}"))
@@ -1085,8 +851,6 @@ mod tests {
         let directory = unique_temp_root("repair-override");
         fs::create_dir_all(&directory).unwrap();
 
-        // A validated marker naming a different file exists, proving the
-        // explicit override always wins over it.
         fs::write(directory.join(LATEST_VALIDATED_BUILD_MARKER_FILE_NAME), "some-other-validated-file.duckdb").unwrap();
         fs::write(directory.join("some-other-validated-file.duckdb"), b"").unwrap();
 

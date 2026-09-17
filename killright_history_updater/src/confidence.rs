@@ -1,5 +1,3 @@
-/// Design_Spec_Dense.md §4.8, §6.11.4. Ord (Low < Average < High) backs
-/// Step 19.01.10's Transitive min/max-combine (transitive_inference.rs).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Confidence {
     Low,
@@ -18,7 +16,6 @@ impl std::fmt::Display for Confidence {
     }
 }
 
-/// Design_Spec_Dense.md §6.11.4 Table53.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfidencePattern {
     NeverSameCA,
@@ -33,7 +30,6 @@ pub const RECENCY_OR_GAP_AVERAGE_MIN_KILLS: i64 = 2;
 pub const RECENCY_OR_GAP_HIGH_MIN_KILLS: i64 = 5;
 pub const THREE_OR_MORE_HIGH_MIN_EPISODES: i64 = 4;
 
-/// Design_Spec_Dense.md §6.11.4 Table53.
 pub fn assign_confidence(pattern: ConfidencePattern, basis: i64) -> Confidence {
     match pattern {
         ConfidencePattern::NeverSameCA => {

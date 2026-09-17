@@ -16,12 +16,6 @@ pub struct GroupHistoryLiveConfig {
     pub last_completed_day_utc: Option<String>,
     pub last_updated_utc: Option<String>,
     pub update_in_progress: bool,
-    /// PID of the process that set `update_in_progress: true`, so a reader
-    /// with no other way to know whether that process is still alive (for
-    /// example a Developer window instance that did not launch it) can check
-    /// for itself -- mirroring `SingleInstanceLock`'s own stale-PID handling
-    /// in `lock.rs` (Step CC-08.08.26.01). Always `None` when
-    /// `update_in_progress` is `false`.
     pub update_in_progress_pid: Option<u32>,
 }
 
@@ -131,8 +125,6 @@ mod tests {
         let directory = std::env::temp_dir().join("killright-live-config-test-legacy");
         fs::create_dir_all(&directory).unwrap();
 
-        // Simulates a live status file written by a pre-CC-08.08.26.01 build,
-        // before updateInProgressPid existed.
         let legacy_json = r#"{
             "groupHistory": {
                 "activeDatabaseFile": "C:\\example\\KillRight.History.260805.01.duckdb",

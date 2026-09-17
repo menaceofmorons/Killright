@@ -8,13 +8,6 @@ pub struct SingleInstanceLock {
 }
 
 impl SingleInstanceLock {
-    /// Attempts to acquire the single-instance lock at `lock_path`.
-    ///
-    /// Returns `Ok(Some(lock))` if the lock was acquired by this process.
-    /// Returns `Ok(None)` if another live process already holds the lock;
-    /// callers should treat this as "attach to the existing run" and stop
-    /// without starting new work. A stale lock file (referencing a PID that
-    /// is no longer running) is removed automatically before retrying.
     pub fn acquire(lock_path: &Path) -> io::Result<Option<SingleInstanceLock>> {
         if let Some(existing_pid) = read_lock_pid(lock_path)? {
             if is_process_running(existing_pid) {

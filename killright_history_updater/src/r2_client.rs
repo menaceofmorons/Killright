@@ -25,9 +25,6 @@ pub struct EvidenceRecord {
 
 #[derive(Debug, Clone)]
 pub struct ParticipantRecord {
-    /// The killmail this participant appeared on. This doubles as the future
-    /// evidence_id when persisted, matching the C# convention where
-    /// evidence_id is the killmail_id directly.
     pub killmail_id: i64,
     pub character_id: i64,
     pub corporation_id: Option<i64>,
@@ -113,35 +110,10 @@ pub struct ZkillHistoryClient {
 }
 
 impl ZkillHistoryClient {
-    /// How long a single request may spend establishing the TCP/TLS
-    /// connection before failing, rather than blocking indefinitely.
-    /// `reqwest::blocking::Client` has no default connect timeout at all.
-    /// Sized well above any observed connection time to
-    /// r2z2.zkillboard.com; exists purely as a hard ceiling against a
-    /// network-level stall (Session finding, 07 Aug 2026).
     pub const CONNECT_TIMEOUT_SECONDS: u64 = 10;
 
-    /// How long a single request may run end-to-end (connect + send +
-    /// receive full response body) before failing. `reqwest::blocking::Client`
-    /// has no default request timeout at all, unlike .NET's `HttpClient`
-    /// (100 second default) -- a single stalled request here blocked the
-    /// whole sequential `build_staging` day-import loop indefinitely (Session
-    /// finding, 07 Aug 2026: a Test Amount run showed zero new days completed
-    /// after 1.5 hours). Sized to roughly 15x the ~4 second per-day time
-    /// observed during a healthy run, comfortably covering a single unusually
-    /// large day's response without letting a stalled request block the run
-    /// for more than a bounded amount of time; a day that still fails at this
-    /// timeout is recorded as a normal `Failed` day and the loop continues,
-    /// exactly as it already does for any other extraction failure.
     pub const REQUEST_TIMEOUT_SECONDS: u64 = 60;
 
-    /// Delay between retry attempts in `extract_day_evidence_with_retry`
-    /// (Step CC-12.08.26.01). The zKillboard R2Z2 wiki
-    /// (`https://github.com/zKillboard/zKillboard/wiki/API-(R2Z2)`)
-    /// documents a 20 requests/second/IP ceiling on the R2 bucket this
-    /// endpoint is served from; 2 seconds is comfortably far below that
-    /// even though this sequential retry path has no rate limiter of its
-    /// own (unlike the parallel `extract_days_evidence` path).
     pub const RETRY_DELAY_SECONDS: u64 = 2;
 
     pub fn new(options: ParallelDownloadOptions) -> reqwest::Result<Self> {
@@ -189,25 +161,6 @@ impl ZkillHistoryClient {
         count_day_metrics(date, url, &root)
     }
 
-    /// Retries a single day's extraction up to twice more before giving up
-    /// (Step CC-12.08.26.01): a single transient network error should not
-    /// fail an entire multi-year build over one day (Session finding, 11
-    /// Aug 2026 -- `2020-02-11` failed once during a real 5-year build,
-    /// then imported cleanly on the very next attempt). Deliberately not
-    /// used by `extract_days_evidence` (the parallel path already has its
-    /// own rate-limited design) or by the `extract-day-evidence` CLI
-    /// diagnostic command (which intentionally reports a single raw
-    /// attempt) -- only `persistence::import_day`'s sequential day-import
-    /// loop calls this.
-    ///
-    /// Attempt 1 fails -> wait `RETRY_DELAY_SECONDS` -> Attempt 2. If
-    /// Attempt 2's error is identical to Attempt 1's, stop: a repeated
-    /// identical error looks like a persistent problem, not a transient
-    /// one, and a third attempt is unlikely to help. If Attempt 2's error
-    /// differs from Attempt 1's, that looks more like a transient/flaky
-    /// condition, so try once more -> wait `RETRY_DELAY_SECONDS` ->
-    /// Attempt 3. Whatever Attempt 3's outcome, that is final -- never
-    /// more than 3 attempts total for one day.
     pub fn extract_day_evidence_with_retry(&self, date: NaiveDate) -> EvidenceDayResult {
         let retry_delay = Duration::from_secs(Self::RETRY_DELAY_SECONDS);
 
@@ -271,28 +224,16 @@ impl ZkillHistoryClient {
     }
 }
 
-/// Step CC-12.08.26.01: true when two attempts' error messages are
-/// identical -- see `extract_day_evidence_with_retry`'s own doc comment
-/// for why that specifically means "stop retrying" rather than "try
-/// again."
 fn retry_errors_match(first: &EvidenceDayResult, second: &EvidenceDayResult) -> bool {
     first.day_result.error_message == second.day_result.error_message
 }
 
-/// Step CC-12.08.26.01: rewrites `latest`'s (the second attempt's) error
-/// message to record that two attempts were made and both failed with
-/// the same error, keeping every other field (date, url, and the
-/// always-empty evidence/participant rows a failed attempt carries) from
-/// that second, most recent attempt.
 fn annotate_repeated_error(mut latest: EvidenceDayResult, first_attempt: &EvidenceDayResult) -> EvidenceDayResult {
     let error = first_attempt.day_result.error_message.as_deref().unwrap_or("(unknown)");
     latest.day_result.error_message = Some(format!("Failed after 2 attempts, same error both times: {error}"));
     latest
 }
 
-/// Step CC-12.08.26.01: rewrites `latest`'s (the third attempt's) error
-/// message to record all three distinct errors seen across the full
-/// retry sequence, keeping every other field from the third attempt.
 fn annotate_exhausted_retries(
     mut latest: EvidenceDayResult,
     first_attempt: &EvidenceDayResult,
@@ -505,12 +446,6 @@ mod tests {
 
         let start = std::time::Instant::now();
 
-        // 10.255.255.1 is a non-routable RFC 1918 address with nothing
-        // listening on it. Depending on the network environment this either
-        // fails immediately (no route) or hangs at the TCP SYN stage until
-        // connect_timeout cuts it off -- either way, it must never hang
-        // indefinitely the way an unconfigured reqwest::blocking::Client did
-        // (Session finding, 07 Aug 2026).
         let result = client.get("http://10.255.255.1/").send();
         let elapsed = start.elapsed();
 

@@ -5,25 +5,10 @@ use duckdb::{Connection, Result as DuckResult};
 
 use crate::folder_layout;
 
-/// Given a Working-folder file name like
-/// `CORE.KillRight.History.260810.01.duckdb`, produces the corresponding
-/// Live-folder promoted name: the same `yymmdd.##` versioned suffix, without
-/// the `CORE.` prefix (matches the C# project's
-/// `HistoryUpdaterStagingPaths.PromotedFileSearchPattern`, declared at
-/// 19.00.55 for this exact purpose). Returns `None` if `working_file_name`
-/// does not start with the expected prefix.
 pub fn promoted_file_name(working_file_name: &str) -> Option<String> {
     working_file_name.strip_prefix("CORE.").map(|name| name.to_string())
 }
 
-/// Copies the finished Working-folder file to its promoted name in Live, via
-/// a plain OS-level file copy. The caller is responsible for checkpointing
-/// and closing the Working connection first (see `staging::build_staging`):
-/// `CHECKPOINT` merges the write-ahead log into the main database file, so a
-/// plain file copy captures everything, and the connection must be fully
-/// closed so nothing else has the file open while it's being read. Design
-/// Specification v5.4 Section 6.9.4: "it is copied under its own versioned
-/// name ... into the live folder."
 pub fn copy_to_live(root: &Path, working_file_name: &str) -> Result<PathBuf, String> {
     let promoted_name = promoted_file_name(working_file_name).ok_or_else(|| {
         format!("Working file name '{working_file_name}' does not start with the expected CORE. prefix")
@@ -40,15 +25,6 @@ pub fn copy_to_live(root: &Path, working_file_name: &str) -> Result<PathBuf, Str
     Ok(live_path)
 }
 
-/// Moves a Live-folder copy that failed validation into Failed, via a plain
-/// OS-level rename (Live and Failed are always sibling subfolders of the
-/// same historic database root, so this never crosses a filesystem
-/// boundary). This is 19.00.56's own share of the plan's "the copy is handed
-/// to 19.00.58 rather than being left in the Live folder or silently
-/// discarded," and of Design Specification Section 6.9.4's "a copy that
-/// fails validation is moved to a separate failed-build folder" -- 19.00.58
-/// (Failed Build Handling) adds user notification on top of this move, not
-/// the move itself.
 pub fn move_to_failed(root: &Path, live_path: &Path) -> Result<PathBuf, String> {
     let failed_directory = folder_layout::failed_dir(root);
     fs::create_dir_all(&failed_directory).map_err(|error| format!("Failed to create Failed directory: {error}"))?;
@@ -62,29 +38,6 @@ pub fn move_to_failed(root: &Path, live_path: &Path) -> Result<PathBuf, String> 
     Ok(failed_path)
 }
 
-/// Adds the promotion-time uniqueness constraints Design Specification v5.4
-/// Section 4.7 documents per table, to a Live-folder copy's connection only.
-///
-/// Uses `CREATE UNIQUE INDEX`, not `ALTER TABLE ... ADD PRIMARY KEY`: DuckDB
-/// (this crate's `duckdb` dependency, version 1.x) does not support adding a
-/// primary key to an already-existing table via `ALTER TABLE` -- confirmed
-/// against duckdb/duckdb issues #15190, #15821, and #15835 ("No support for
-/// that ALTER TABLE option yet!"), all open at the time of this guide. A
-/// unique index is DuckDB's own supported mechanism for enforcing uniqueness
-/// on an existing table (composite/multi-column indexes are supported), and
-/// serves this guide's purpose exactly: `CREATE UNIQUE INDEX` itself fails
-/// if the table already contains duplicate values in the indexed column(s)
-/// -- the full-table duplicate-evidence check Section 6.9.2/6.9.4 call for,
-/// folded into the validation gate rather than a separate step.
-///
-/// One index per primary key Section 4.7 documents for these four tables:
-/// `historic_relationship_evidence` (`evidence_id`, plus a second unique
-/// index for its documented `source_killmail_id` uniqueness),
-/// `historic_relationship_evidence_participants` (`evidence_id`,
-/// `character_id`), `historic_relationship_summary` (`pilot_a_id`,
-/// `pilot_b_id`), `historic_relationship_org_context` (`pilot_a_id`,
-/// `pilot_b_id`). Never applied to the working database -- see
-/// `schema.rs::create_schema`'s doc comment (19.00.55).
 pub fn add_promotion_constraints(connection: &Connection) -> DuckResult<()> {
     connection.execute_batch(
         "CREATE UNIQUE INDEX pk_hre_evidence_id ON historic_relationship_evidence(evidence_id);
@@ -101,9 +54,6 @@ mod tests {
     use std::env;
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    /// Section 6.4 Agent Test Independence: a unique, nanosecond-suffixed
-    /// temp directory per test, never shared between tests and never
-    /// dependent on execution order.
     fn unique_temp_root(test_name: &str) -> PathBuf {
         let suffix = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
         env::temp_dir().join(format!("killright-promotion-test-{test_name}-{suffix}"))

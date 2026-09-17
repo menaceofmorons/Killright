@@ -201,12 +201,6 @@ fn run_extract_range_evidence(arguments: &[String]) {
     }
 }
 
-/// Diagnostic command: checks a single corporation or alliance's ESI
-/// active status directly, with no database involved -- no rows are
-/// written or read from any database, matching extract-day-evidence's own
-/// no-database-touch diagnostic pattern. Exists so a real ESI check can be
-/// confirmed against a real, live entity ID without running the full
-/// check-and-record path (esi_active_status::ensure_entity_active_status_cached).
 fn run_check_entity_status(arguments: &[String]) {
     let entity_type = match arguments.get(2).map(String::as_str) {
         Some("corporation") => EntityType::Corporation,
@@ -329,14 +323,6 @@ fn run_import_day(arguments: &[String]) {
     }
 }
 
-/// Diagnostic command: prints a summary of historic_pilot_affiliation_timeline
-/// (Design Specification Section 4.7, Implementation Plan Step 19.01.03) --
-/// total row count plus the five most-recently-updated rows. No rows are
-/// written by this command, matching print-status's own read-only pattern.
-/// Exists so real day-import behaviour (import-day, against a real date)
-/// can be inspected without a specific pilot ID known in advance -- unlike
-/// check-entity-status's known real ESI entity ID, a day's participants are
-/// not knowable ahead of a real import run.
 fn run_print_affiliation_timeline_summary() {
     let database_path = get_default_database_path();
 
@@ -420,15 +406,6 @@ fn run_print_affiliation_timeline_summary() {
     println!("====================================================");
 }
 
-/// Diagnostic command: prints the Same C/A episode list between two real
-/// pilots (Design Specification Section 6.11.4, Implementation Plan Step
-/// 19.01.04) by fetching both pilots' `historic_pilot_affiliation_timeline`
-/// history and running `build_same_c_a_episodes` against them. No rows are
-/// written by this command, matching `print-affiliation-timeline-summary`'s
-/// own read-only pattern -- exists purely so this step's Developer
-/// verification test (Section 7.2) can be run against real data, matching
-/// Section 6.11.3's stated Phase 1 scope (no query interface exists for
-/// this component yet).
 fn run_print_same_c_a_episodes(arguments: &[String]) {
     let pilot_a_id: i64 = match arguments.get(2).and_then(|text| text.parse().ok()) {
         Some(value) => value,
@@ -684,17 +661,6 @@ fn run_rebuild_summary() {
     }
 }
 
-/// Step 19.01.09: standalone CLI entry point for the Persistence bulk-persist
-/// pass (Implementation Plan Step 19.01.09) -- reads and writes
-/// historic_relationship_classification against the single database at
-/// `database_path::get_default_database_path()` (the `Test`-subfolder
-/// scratch database every other simple command in this crate already uses),
-/// via classification_persistence::persist_classification. Deliberately its
-/// own command, not chained into build-staging or rebuild-summary -- see
-/// classification_persistence.rs's own module doc comment for why. Running
-/// this against the real Live-folder database is a deliberately later,
-/// separate decision -- deferred to the end of the whole 19.01.** phase
-/// (confirmed with Tom 2026-09-14), not something this command does today.
 fn run_persist_classification() {
     let lock_path = get_default_lock_path();
 
@@ -746,12 +712,6 @@ fn run_persist_classification() {
     }
 }
 
-/// Step 19.01.10 diagnostic command: prints every single-hop A-B-C
-/// Transitive chain between two pilots, reading directly from the already
-/// persisted historic_relationship_classification table (Step 19.01.09) --
-/// no rows are written here, matching every other print-* command in this
-/// crate. Design_Spec_Dense.md §6.11.3's Phase 1 scope: log-line output
-/// only, no query interface, API response, or UI.
 fn run_print_transitive_inference(arguments: &[String]) {
     let pilot_a_id: i64 = match arguments.get(2).and_then(|text| text.parse().ok()) {
         Some(value) => value,
@@ -962,14 +922,6 @@ fn parse_import_range_mode(arguments: &[String]) -> Result<ImportRangeMode, Stri
     }
 }
 
-/// Step 19.00.63: parses an optional `--repair <path>` override,
-/// independent of `parse_import_range_mode` above (a build can be repaired
-/// under any range mode, though `--range-start`/`--range-end` is the one
-/// that makes sense for it -- so this is intentionally its own small scan
-/// rather than folded into that function's own flag matching). Returns
-/// `Ok(None)` when the flag is absent, leaving `build_staging`'s existing
-/// `find_copy_basis` lookup as the copy-basis source, exactly as before
-/// this step.
 fn parse_repair_from(arguments: &[String]) -> Result<Option<PathBuf>, String> {
     let mut index = 2;
 
@@ -988,10 +940,6 @@ fn parse_repair_from(arguments: &[String]) -> Result<Option<PathBuf>, String> {
     Ok(None)
 }
 
-/// Internal-only command used by `staging::reopen_cleanly` to prove a staging
-/// file opens cleanly from a genuinely separate OS process, rather than from
-/// within the process that just wrote and dropped its own connection to it.
-/// Not part of the public CLI surface: intentionally omitted from `print_usage`.
 fn run_verify_open(arguments: &[String]) {
     let path = match arguments.get(2) {
         Some(value) => value,
