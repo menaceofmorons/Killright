@@ -690,16 +690,7 @@ fn run_persist_classification() {
         process::exit(1);
     }
 
-    let esi_client = match EsiActiveStatusClient::new() {
-        Ok(client) => client,
-        Err(error) => {
-            eprintln!("Failed to create HTTP client: {error}");
-            drop(lock);
-            process::exit(1);
-        }
-    };
-
-    match persist_classification(&connection, &esi_client) {
+    match persist_classification(&connection) {
         Ok(outcome) => {
             print_persist_classification_report(&outcome, &database_path);
             drop(lock);

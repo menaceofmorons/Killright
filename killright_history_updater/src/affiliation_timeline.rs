@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
-use duckdb::{params, Connection, OptionalExt, Result};
+use duckdb::{params, Connection, Result};
 
 use crate::r2_client::{EvidenceRecord, ParticipantRecord};
 
@@ -67,22 +67,44 @@ pub fn build_daily_affiliation_fragments(
     fragments
 }
 
+#[derive(Clone)]
 struct OpenAffiliationRow {
     corporation_id: Option<i64>,
     alliance_id: Option<i64>,
     first_seen_utc: String,
 }
 
+struct AffiliationExtension {
+    character_id: i64,
+    first_seen_utc: String,
+    fragment_last_seen_utc: String,
+}
+
 pub fn apply_daily_affiliation_fragments(connection: &Connection, fragments: &[PilotDayAffiliationFragment], now_utc: &str) -> Result<usize> {
+    if fragments.is_empty() {
+        return Ok(0);
+    }
+
+    let mut distinct_character_ids: Vec<i64> = Vec::new();
+    for fragment in fragments {
+        if distinct_character_ids.last() != Some(&fragment.character_id) {
+            distinct_character_ids.push(fragment.character_id);
+        }
+    }
+
+    let open_rows = fetch_latest_affiliation_rows(connection, &distinct_character_ids)?;
+
+    let mut extensions: Vec<AffiliationExtension> = Vec::new();
+    let mut inserts: Vec<(i64, PilotDayAffiliationFragment)> = Vec::new();
     let mut touched_pilot_count = 0usize;
     let mut index = 0usize;
 
     while index < fragments.len() {
         let character_id = fragments[index].character_id;
-        let mut current = fetch_latest_affiliation_row(connection, character_id)?;
+        let mut current = open_rows.get(&character_id).cloned();
 
         while index < fragments.len() && fragments[index].character_id == character_id {
-            let fragment = &fragments[index];
+            let fragment = fragments[index].clone();
 
             let extends_current = match &current {
                 Some(row) => row.corporation_id == fragment.corporation_id && row.alliance_id == fragment.alliance_id,
@@ -96,7 +118,11 @@ pub fn apply_daily_affiliation_fragments(connection: &Connection, fragments: &[P
                     .first_seen_utc
                     .clone();
 
-                extend_affiliation_row(connection, character_id, &first_seen_utc, &fragment.last_seen_utc.to_rfc3339(), now_utc)?;
+                extensions.push(AffiliationExtension {
+                    character_id,
+                    first_seen_utc: first_seen_utc.clone(),
+                    fragment_last_seen_utc: fragment.last_seen_utc.to_rfc3339(),
+                });
 
                 current = Some(OpenAffiliationRow {
                     corporation_id: fragment.corporation_id,
@@ -104,13 +130,13 @@ pub fn apply_daily_affiliation_fragments(connection: &Connection, fragments: &[P
                     first_seen_utc,
                 });
             } else {
-                insert_affiliation_row(connection, character_id, fragment, now_utc)?;
-
                 current = Some(OpenAffiliationRow {
                     corporation_id: fragment.corporation_id,
                     alliance_id: fragment.alliance_id,
                     first_seen_utc: fragment.first_seen_utc.to_rfc3339(),
                 });
+
+                inserts.push((character_id, fragment));
             }
 
             index += 1;
@@ -119,54 +145,121 @@ pub fn apply_daily_affiliation_fragments(connection: &Connection, fragments: &[P
         touched_pilot_count += 1;
     }
 
+    apply_affiliation_extensions(connection, &extensions, now_utc)?;
+    append_new_affiliation_rows(connection, &inserts, now_utc)?;
+
     Ok(touched_pilot_count)
 }
 
-fn fetch_latest_affiliation_row(connection: &Connection, character_id: i64) -> Result<Option<OpenAffiliationRow>> {
-    connection
-        .query_row(
-            "SELECT corporation_id, alliance_id, first_seen_utc \
-             FROM historic_pilot_affiliation_timeline \
-             WHERE pilot_id = ? \
-             ORDER BY last_seen_utc DESC \
-             LIMIT 1;",
-            params![character_id],
-            |row| {
-                Ok(OpenAffiliationRow {
-                    corporation_id: row.get(0)?,
-                    alliance_id: row.get(1)?,
-                    first_seen_utc: row.get(2)?,
-                })
-            },
-        )
-        .optional()
+fn fetch_latest_affiliation_rows(connection: &Connection, character_ids: &[i64]) -> Result<HashMap<i64, OpenAffiliationRow>> {
+    connection.execute_batch(
+        "DROP TABLE IF EXISTS affiliation_lookup_keys; \
+         CREATE TEMP TABLE affiliation_lookup_keys (pilot_id BIGINT NOT NULL);",
+    )?;
+
+    {
+        let mut appender = connection.appender("affiliation_lookup_keys")?;
+
+        for character_id in character_ids {
+            appender.append_row(params![*character_id])?;
+        }
+
+        appender.flush()?;
+    }
+
+    let mut open_rows = HashMap::new();
+
+    {
+        let mut statement = connection.prepare(
+            "SELECT ranked.pilot_id, ranked.corporation_id, ranked.alliance_id, ranked.first_seen_utc \
+             FROM ( \
+                 SELECT timeline.pilot_id, timeline.corporation_id, timeline.alliance_id, timeline.first_seen_utc, \
+                        ROW_NUMBER() OVER (PARTITION BY timeline.pilot_id ORDER BY timeline.last_seen_utc DESC) AS row_rank \
+                 FROM historic_pilot_affiliation_timeline timeline \
+                 JOIN affiliation_lookup_keys keys ON keys.pilot_id = timeline.pilot_id \
+             ) ranked \
+             WHERE ranked.row_rank = 1;",
+        )?;
+
+        let rows = statement.query_map([], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                OpenAffiliationRow {
+                    corporation_id: row.get(1)?,
+                    alliance_id: row.get(2)?,
+                    first_seen_utc: row.get(3)?,
+                },
+            ))
+        })?;
+
+        for row in rows {
+            let (pilot_id, open_row) = row?;
+            open_rows.insert(pilot_id, open_row);
+        }
+    }
+
+    connection.execute_batch("DROP TABLE IF EXISTS affiliation_lookup_keys;")?;
+
+    Ok(open_rows)
 }
 
-fn extend_affiliation_row(connection: &Connection, character_id: i64, first_seen_utc: &str, fragment_last_seen_utc: &str, now_utc: &str) -> Result<()> {
-    connection.execute(
-        "UPDATE historic_pilot_affiliation_timeline \
-         SET last_seen_utc = GREATEST(last_seen_utc, ?), last_updated_utc = ? \
-         WHERE pilot_id = ? AND first_seen_utc = ?;",
-        params![fragment_last_seen_utc, now_utc, character_id, first_seen_utc],
+fn apply_affiliation_extensions(connection: &Connection, extensions: &[AffiliationExtension], now_utc: &str) -> Result<()> {
+    if extensions.is_empty() {
+        return Ok(());
+    }
+
+    connection.execute_batch(
+        "DROP TABLE IF EXISTS affiliation_extension_rows; \
+         CREATE TEMP TABLE affiliation_extension_rows ( \
+             pilot_id BIGINT NOT NULL, \
+             first_seen_utc VARCHAR NOT NULL, \
+             fragment_last_seen_utc VARCHAR NOT NULL \
+         );",
     )?;
+
+    {
+        let mut appender = connection.appender("affiliation_extension_rows")?;
+
+        for extension in extensions {
+            appender.append_row(params![extension.character_id, extension.first_seen_utc, extension.fragment_last_seen_utc])?;
+        }
+
+        appender.flush()?;
+    }
+
+    connection.execute(
+        "UPDATE historic_pilot_affiliation_timeline AS timeline \
+         SET last_seen_utc = GREATEST(timeline.last_seen_utc, extensions.fragment_last_seen_utc), \
+             last_updated_utc = ? \
+         FROM affiliation_extension_rows AS extensions \
+         WHERE timeline.pilot_id = extensions.pilot_id AND timeline.first_seen_utc = extensions.first_seen_utc;",
+        params![now_utc],
+    )?;
+
+    connection.execute_batch("DROP TABLE IF EXISTS affiliation_extension_rows;")?;
 
     Ok(())
 }
 
-fn insert_affiliation_row(connection: &Connection, character_id: i64, fragment: &PilotDayAffiliationFragment, now_utc: &str) -> Result<()> {
-    connection.execute(
-        "INSERT INTO historic_pilot_affiliation_timeline \
-         (pilot_id, corporation_id, alliance_id, first_seen_utc, last_seen_utc, last_updated_utc) \
-         VALUES (?, ?, ?, ?, ?, ?);",
-        params![
+fn append_new_affiliation_rows(connection: &Connection, inserts: &[(i64, PilotDayAffiliationFragment)], now_utc: &str) -> Result<()> {
+    if inserts.is_empty() {
+        return Ok(());
+    }
+
+    let mut appender = connection.appender("historic_pilot_affiliation_timeline")?;
+
+    for (character_id, fragment) in inserts {
+        appender.append_row(params![
             character_id,
             fragment.corporation_id,
             fragment.alliance_id,
             fragment.first_seen_utc.to_rfc3339(),
             fragment.last_seen_utc.to_rfc3339(),
             now_utc,
-        ],
-    )?;
+        ])?;
+    }
+
+    appender.flush()?;
 
     Ok(())
 }
@@ -472,5 +565,54 @@ mod tests {
             .query_row("SELECT last_seen_utc FROM historic_pilot_affiliation_timeline WHERE pilot_id = 95465499;", [], |row| row.get(0))
             .unwrap();
         assert_eq!(last_seen_utc, utc(200).to_rfc3339());
+    }
+
+    #[test]
+    fn apply_daily_affiliation_fragments_batches_an_extend_and_an_insert_together_in_one_call() {
+        let connection = open_test_schema();
+        let day_one = vec![PilotDayAffiliationFragment {
+            character_id: 90379338,
+            corporation_id: Some(98765432),
+            alliance_id: None,
+            first_seen_utc: utc(100),
+            last_seen_utc: utc(200),
+        }];
+        apply_daily_affiliation_fragments(&connection, &day_one, "2026-08-13T00:00:00Z").unwrap();
+
+        let day_two_observed_utc = utc(100) + chrono::Duration::days(1);
+        let day_two = vec![
+            PilotDayAffiliationFragment {
+                character_id: 90379338,
+                corporation_id: Some(98765432),
+                alliance_id: None,
+                first_seen_utc: day_two_observed_utc,
+                last_seen_utc: day_two_observed_utc,
+            },
+            PilotDayAffiliationFragment {
+                character_id: 95465499,
+                corporation_id: Some(90111111),
+                alliance_id: None,
+                first_seen_utc: day_two_observed_utc,
+                last_seen_utc: day_two_observed_utc,
+            },
+        ];
+        let touched = apply_daily_affiliation_fragments(&connection, &day_two, "2026-08-14T00:00:00Z").unwrap();
+
+        assert_eq!(touched, 2);
+
+        let row_count: i64 = connection
+            .query_row("SELECT COUNT(*) FROM historic_pilot_affiliation_timeline;", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(row_count, 2, "the matching pilot must extend its row, the new pilot must open exactly one row");
+
+        let extended_last_seen_utc: String = connection
+            .query_row("SELECT last_seen_utc FROM historic_pilot_affiliation_timeline WHERE pilot_id = 90379338;", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(extended_last_seen_utc, day_two_observed_utc.to_rfc3339());
+
+        let inserted_corporation_id: i64 = connection
+            .query_row("SELECT corporation_id FROM historic_pilot_affiliation_timeline WHERE pilot_id = 95465499;", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(inserted_corporation_id, 90111111);
     }
 }

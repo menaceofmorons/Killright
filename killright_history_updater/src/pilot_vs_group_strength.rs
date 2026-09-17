@@ -3,7 +3,7 @@ use duckdb::{params, Connection, Result};
 
 use crate::confidence::{assign_confidence, Confidence, ConfidencePattern};
 use crate::episode_builder::{build_same_c_a_episodes, fetch_pilot_affiliation_segments, fixed_group_segment, AffiliationSegment, Episode};
-use crate::esi_active_status::{ensure_alliance_active_status_cached, ensure_corporation_active_status_cached, EntityType, EsiActiveStatusClient};
+use crate::esi_active_status::{ensure_alliance_active_status_cached, ensure_corporation_active_status_cached, is_entity_cached_closed, EntityType, EsiActiveStatusClient};
 use crate::pilot_to_pilot_strength::{apply_recency_volume_modifier, classify_recency_band, is_currently_same_c_a, recency_volume_modifier_window, Strength};
 
 fn group_affiliation_segment(entity_type: EntityType, entity_id: i64) -> AffiliationSegment {
@@ -225,6 +225,24 @@ pub fn classify_pilot_vs_group_strength_with_active_entity_short_circuit(
     }?;
 
     if !is_active {
+        return Ok(PilotVsGroupOutcome::Skipped);
+    }
+
+    classify_pilot_vs_group_strength(connection, pilot_id, entity_type, entity_id)
+        .map(PilotVsGroupOutcome::Classified)
+        .map_err(|error| format!("Failed to classify pilot-vs-group strength: {error}"))
+}
+
+pub fn classify_pilot_vs_group_strength_with_closed_cache_filter(
+    connection: &Connection,
+    pilot_id: i64,
+    entity_type: EntityType,
+    entity_id: i64,
+) -> Result<PilotVsGroupOutcome, String> {
+    let is_closed = is_entity_cached_closed(connection, entity_id, entity_type)
+        .map_err(|error| format!("Failed to check historic_closed_entity_cache: {error}"))?;
+
+    if is_closed {
         return Ok(PilotVsGroupOutcome::Skipped);
     }
 

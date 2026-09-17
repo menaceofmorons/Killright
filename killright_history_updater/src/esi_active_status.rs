@@ -118,7 +118,7 @@ fn interpret_corporation_state_body(status: reqwest::StatusCode, body: &str) -> 
     }
 }
 
-fn is_entity_cached_closed(connection: &Connection, entity_id: i64, entity_type: EntityType) -> DuckResult<bool> {
+pub fn is_entity_cached_closed(connection: &Connection, entity_id: i64, entity_type: EntityType) -> DuckResult<bool> {
     let count: i64 = connection.query_row(
         "SELECT COUNT(*) FROM historic_closed_entity_cache WHERE entity_id = ? AND entity_type = ?;",
         params![entity_id, entity_type.as_cache_char()],

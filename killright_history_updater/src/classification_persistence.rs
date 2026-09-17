@@ -5,9 +5,9 @@ use duckdb::{params, Connection, Result as DuckResult};
 
 use crate::confidence::Confidence;
 use crate::episode_builder::NPC_CORPORATION_ID_THRESHOLD;
-use crate::esi_active_status::{EntityType, EsiActiveStatusClient};
+use crate::esi_active_status::EntityType;
 use crate::pilot_to_pilot_strength::{classify_pilot_to_pilot_strength, Strength};
-use crate::pilot_vs_group_strength::{classify_pilot_vs_group_strength_with_active_entity_short_circuit, PilotVsGroupOutcome};
+use crate::pilot_vs_group_strength::{classify_pilot_vs_group_strength_with_closed_cache_filter, PilotVsGroupOutcome};
 
 const STAGING_TABLE_NAME: &str = "historic_relationship_classification_staging";
 const PREVIOUS_TABLE_NAME: &str = "historic_relationship_classification_previous";
@@ -111,17 +111,11 @@ pub fn classify_p2p_positives(connection: &Connection, pairs: &[(i64, i64)], now
     Ok(rows)
 }
 
-pub fn classify_pvg_positives(
-    connection: &Connection,
-    esi_client: &EsiActiveStatusClient,
-    candidates: &[(i64, EntityType, i64)],
-    now_utc: &str,
-) -> Result<Vec<ClassificationRow>, String> {
+pub fn classify_pvg_positives(connection: &Connection, candidates: &[(i64, EntityType, i64)], now_utc: &str) -> Result<Vec<ClassificationRow>, String> {
     let mut rows = Vec::new();
 
     for &(pilot_id, entity_type, entity_id) in candidates {
-        let outcome =
-            classify_pilot_vs_group_strength_with_active_entity_short_circuit(connection, esi_client, pilot_id, entity_type, entity_id, now_utc)?;
+        let outcome = classify_pilot_vs_group_strength_with_closed_cache_filter(connection, pilot_id, entity_type, entity_id)?;
 
         if let PilotVsGroupOutcome::Classified(Some((strength, confidence))) = outcome {
             if strength != Strength::None {
@@ -183,7 +177,7 @@ pub fn swap_in_live_classification_table(connection: &Connection, rows: &[Classi
         .map_err(|error| format!("Failed to checkpoint the database after the classification swap: {error}"))
 }
 
-pub fn persist_classification(connection: &Connection, esi_client: &EsiActiveStatusClient) -> Result<PersistClassificationOutcome, String> {
+pub fn persist_classification(connection: &Connection) -> Result<PersistClassificationOutcome, String> {
     let total_start = Instant::now();
     let now_utc = Utc::now().to_rfc3339();
 
@@ -195,7 +189,7 @@ pub fn persist_classification(connection: &Connection, esi_client: &EsiActiveSta
 
     let pvg_start = Instant::now();
     let pvg_candidates = fetch_pvg_candidates(connection).map_err(|error| format!("Failed to fetch Pilot-vs-Group candidates: {error}"))?;
-    let pvg_rows = classify_pvg_positives(connection, esi_client, &pvg_candidates, &now_utc)?;
+    let pvg_rows = classify_pvg_positives(connection, &pvg_candidates, &now_utc)?;
     positive_rows.extend(pvg_rows);
     let pvg_classify_elapsed_ms = pvg_start.elapsed().as_millis();
 
@@ -259,6 +253,7 @@ mod tests {
     const PILOT_A: i64 = 95465499;
     const PILOT_B: i64 = 90379338;
     const GROUP_CORP: i64 = 90333333;
+    const OTHER_CORP: i64 = 90444444;
     const NPC_CORP: i64 = 1000001;
 
     #[test]
@@ -364,11 +359,26 @@ mod tests {
                 params![GROUP_CORP, "2026-08-01T00:00:00Z"],
             )
             .unwrap();
-        let esi_client = EsiActiveStatusClient::new().unwrap();
 
-        let rows = classify_pvg_positives(&connection, &esi_client, &[(PILOT_A, EntityType::Corporation, GROUP_CORP)], "2026-09-14T00:00:00Z").unwrap();
+        let rows = classify_pvg_positives(&connection, &[(PILOT_A, EntityType::Corporation, GROUP_CORP)], "2026-09-14T00:00:00Z").unwrap();
 
         assert!(rows.is_empty(), "a closed entity must be skipped, not classified and discarded");
+    }
+
+    #[test]
+    fn classify_pvg_positives_computes_a_row_for_an_uncached_entity_without_any_esi_dependency() {
+        let connection = open_test_schema();
+        insert_affiliation_segment(&connection, PILOT_A, Some(GROUP_CORP), None, ago(1060), ago(1050));
+        insert_affiliation_segment(&connection, PILOT_A, Some(OTHER_CORP), None, ago(1050), ago(1040));
+        insert_affiliation_segment(&connection, PILOT_A, Some(GROUP_CORP), None, ago(1040), ago(1030));
+        insert_affiliation_segment(&connection, PILOT_A, Some(OTHER_CORP), None, ago(1030), ago(1020));
+        insert_affiliation_segment(&connection, PILOT_A, Some(GROUP_CORP), None, ago(1020), ago(1010));
+        insert_affiliation_segment(&connection, PILOT_A, Some(OTHER_CORP), None, ago(1010), ago(1));
+
+        let rows = classify_pvg_positives(&connection, &[(PILOT_A, EntityType::Corporation, GROUP_CORP)], "2026-09-14T00:00:00Z").unwrap();
+
+        assert_eq!(rows.len(), 1, "an entity absent from historic_closed_entity_cache must be computed and stored unconditionally, with no ESI call involved");
+        assert_eq!(rows[0].strength, "VS");
     }
 
     fn sample_row(pilot_id: i64, entity_id: i64) -> ClassificationRow {
