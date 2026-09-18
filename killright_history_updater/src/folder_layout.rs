@@ -7,6 +7,7 @@ pub const LIVE_DIRECTORY_NAME: &str = "Live";
 pub const ARCHIVE_DIRECTORY_NAME: &str = "Archive";
 pub const FAILED_DIRECTORY_NAME: &str = "Failed";
 pub const TEST_DIRECTORY_NAME: &str = "Test";
+pub const TEMPLATES_DIRECTORY_NAME: &str = "Templates";
 
 pub fn ensure_folder_layout(root: &Path) -> io::Result<()> {
     fs::create_dir_all(working_dir(root))?;
@@ -14,6 +15,7 @@ pub fn ensure_folder_layout(root: &Path) -> io::Result<()> {
     fs::create_dir_all(archive_dir(root))?;
     fs::create_dir_all(failed_dir(root))?;
     fs::create_dir_all(test_dir(root))?;
+    fs::create_dir_all(templates_dir(root))?;
     Ok(())
 }
 
@@ -37,6 +39,10 @@ pub fn test_dir(root: &Path) -> PathBuf {
     root.join(TEST_DIRECTORY_NAME)
 }
 
+pub fn templates_dir(root: &Path) -> PathBuf {
+    root.join(TEMPLATES_DIRECTORY_NAME)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -49,8 +55,8 @@ mod tests {
     }
 
     #[test]
-    fn ensure_folder_layout_creates_all_five_subfolders_and_root() {
-        let root = unique_temp_root("creates-all-five");
+    fn ensure_folder_layout_creates_all_six_subfolders_and_root() {
+        let root = unique_temp_root("creates-all-six");
         assert!(!root.exists());
 
         ensure_folder_layout(&root).unwrap();
@@ -60,6 +66,7 @@ mod tests {
         assert!(archive_dir(&root).is_dir());
         assert!(failed_dir(&root).is_dir());
         assert!(test_dir(&root).is_dir());
+        assert!(templates_dir(&root).is_dir());
 
         fs::remove_dir_all(&root).unwrap();
     }
@@ -76,6 +83,7 @@ mod tests {
         assert!(archive_dir(&root).is_dir());
         assert!(failed_dir(&root).is_dir());
         assert!(test_dir(&root).is_dir());
+        assert!(templates_dir(&root).is_dir());
 
         fs::remove_dir_all(&root).unwrap();
     }

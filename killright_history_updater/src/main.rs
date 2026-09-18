@@ -63,6 +63,7 @@ fn main() {
         "print-pilot-vs-group-strength" => run_print_pilot_vs_group_strength(&arguments),
         "rebuild-summary" => run_rebuild_summary(),
         "persist-classification" => run_persist_classification(),
+        "print-classification-summary" => run_print_classification_summary(),
         "print-transitive-inference" => run_print_transitive_inference(&arguments),
         "build-staging" => run_build_staging(&arguments),
         "__verify-open" => run_verify_open(&arguments),
@@ -703,6 +704,87 @@ fn run_persist_classification() {
     }
 }
 
+fn run_print_classification_summary() {
+    let database_path = get_default_database_path();
+
+    if !database_path.exists() {
+        println!("Database does not exist at {}", database_path.display());
+        return;
+    }
+
+    let connection = match Connection::open(&database_path) {
+        Ok(connection) => connection,
+        Err(error) => {
+            eprintln!("Failed to open database: {error}");
+            process::exit(1);
+        }
+    };
+
+    let total_row_count: i64 = match connection.query_row("SELECT COUNT(*) FROM historic_relationship_classification;", [], |row| row.get(0)) {
+        Ok(value) => value,
+        Err(error) => {
+            eprintln!("Failed to query historic_relationship_classification: {error}");
+            process::exit(1);
+        }
+    };
+
+    println!("====================================================");
+    println!("KillRight Historic Updater - Relationship Classification Summary");
+    println!("====================================================");
+    println!("Total rows: {total_row_count}");
+    println!("Most recently computed rows (up to 5):");
+
+    let mut statement = match connection.prepare(
+        "SELECT pilot_id, entity_id, entity_type, strength, confidence, last_computed_utc \
+         FROM historic_relationship_classification \
+         ORDER BY last_computed_utc DESC \
+         LIMIT 5;",
+    ) {
+        Ok(statement) => statement,
+        Err(error) => {
+            eprintln!("Failed to prepare historic_relationship_classification query: {error}");
+            process::exit(1);
+        }
+    };
+
+    let rows = statement.query_map([], |row| {
+        Ok((
+            row.get::<_, i64>(0)?,
+            row.get::<_, i64>(1)?,
+            row.get::<_, String>(2)?,
+            row.get::<_, String>(3)?,
+            row.get::<_, String>(4)?,
+            row.get::<_, String>(5)?,
+        ))
+    });
+
+    match rows {
+        Ok(rows) => {
+            for row in rows {
+                match row {
+                    Ok((pilot_id, entity_id, entity_type, strength, confidence, last_computed_utc)) => {
+                        println!(
+                            "- pilot_id={pilot_id} entity_id={entity_id} entity_type={entity_type} strength={strength} confidence={confidence} last_computed_utc={last_computed_utc}"
+                        );
+                    }
+                    Err(error) => {
+                        eprintln!("Failed to read a historic_relationship_classification row: {error}");
+                        process::exit(1);
+                    }
+                }
+            }
+        }
+        Err(error) => {
+            eprintln!("Failed to query historic_relationship_classification: {error}");
+            process::exit(1);
+        }
+    }
+
+    println!("Notes:");
+    println!("- Diagnostic command: no rows are written by this command.");
+    println!("====================================================");
+}
+
 fn run_print_transitive_inference(arguments: &[String]) {
     let pilot_a_id: i64 = match arguments.get(2).and_then(|text| text.parse().ok()) {
         Some(value) => value,
@@ -1149,6 +1231,6 @@ fn print_staging_build_report(outcome: &StagingBuildOutcome) {
 
 fn print_usage() {
     eprintln!(
-        "Usage: killright_history_updater <create-schema|print-status|extract-day-evidence|extract-range-evidence|check-entity-status|import-day|print-affiliation-timeline-summary|print-same-c-a-episodes|print-pilot-to-pilot-strength|print-pilot-vs-group-strength|rebuild-summary|persist-classification|print-transitive-inference|build-staging>"
+        "Usage: killright_history_updater <create-schema|print-status|extract-day-evidence|extract-range-evidence|check-entity-status|import-day|print-affiliation-timeline-summary|print-same-c-a-episodes|print-pilot-to-pilot-strength|print-pilot-vs-group-strength|rebuild-summary|persist-classification|print-classification-summary|print-transitive-inference|build-staging>"
     );
 }
