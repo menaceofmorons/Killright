@@ -7,7 +7,9 @@ using Killright.Shared.Constants;
 using Killright.Shared.Time;
 using Killright.Shared.zKill;
 using Killright.UI.ClipboardMonitoring;
+#if HISTORIC_RELATIONSHIPS
 using Killright.UI.DeveloperTools.GroupDetectionHistoryPilot;
+#endif
 using Killright.UI.Diagnostics;
 using Killright.UI.ViewModels;
 
@@ -21,6 +23,15 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+#if HISTORIC_RELATIONSHIPS
+        var historyPilotItem = new System.Windows.Controls.MenuItem
+        {
+            Header = "Group Detection History Pilot"
+        };
+        historyPilotItem.Click += GroupDetectionHistoryPilot_Click;
+        DeveloperMenu.Items.Insert(1, new System.Windows.Controls.Separator());
+        DeveloperMenu.Items.Insert(2, historyPilotItem);
+#endif
         _viewModel = new MainWindowViewModel();
         DataContext = _viewModel;
     }
@@ -245,6 +256,7 @@ public partial class MainWindow : Window
         ApplicationClock.Reset();
     }
 
+#if HISTORIC_RELATIONSHIPS
     private void GroupDetectionHistoryPilot_Click(object sender, RoutedEventArgs e)
     {
         var window = new GroupDetectionHistoryPilotWindow
@@ -254,4 +266,5 @@ public partial class MainWindow : Window
 
         window.ShowDialog();
     }
+#endif
 }

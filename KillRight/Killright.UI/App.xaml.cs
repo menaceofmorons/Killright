@@ -5,7 +5,9 @@ using System.Windows;
 using Killright.Integration.Esi;
 using Killright.Integration.zKill;
 using Killright.Storage.Database;
+#if HISTORIC_RELATIONSHIPS
 using Killright.Storage.GroupHistory;
+#endif
 using Killright.Storage.Identity;
 using Killright.Storage.Killmails;
 using Killright.Storage.zKill;
@@ -27,11 +29,13 @@ public partial class App : Application
     public static IKillrightEngineRuntime EngineRuntime { get; private set; } = null!;
     public static KillRightDatabase Database { get; private set; } = null!;
 
+#if HISTORIC_RELATIONSHIPS
     // Step 19.00.59: exposed for the not-yet-designed Historic Analysis
     // consumer (Section 6.9.5) to resolve the active historic database path
     // from later. GroupHistorySwapWatcher.CheckAndApply below is the only
     // thing that ever repoints it during this application's lifetime.
     public static GroupHistoryActiveDatabasePathResolver GroupHistoryActiveDatabasePathResolver { get; private set; } = null!;
+#endif
 
     protected override void OnStartup(
         StartupEventArgs e)
@@ -40,6 +44,7 @@ public partial class App : Application
 
         Settings = ApplicationSettingsLoader.LoadOrDefault();
 
+#if HISTORIC_RELATIONSHIPS
         // Step 19.00.59: the application half of promotion (Design
         // Specification v5.4 Section 6.9.4) -- react once, at launch, to a
         // live flag left by a completed killright_history_updater build.
@@ -64,6 +69,7 @@ public partial class App : Application
         {
             // Intentionally swallowed -- see comment above.
         }
+#endif
 
         var databasePath = Path.Combine(
             Environment.GetFolderPath(

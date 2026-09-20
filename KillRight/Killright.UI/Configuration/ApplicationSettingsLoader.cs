@@ -38,6 +38,7 @@ public static class ApplicationSettingsLoader
 
     private static ApplicationSettings Normalize(ApplicationSettings settings)
     {
+#if HISTORIC_RELATIONSHIPS
         var batchOptions = settings.GroupHistory.ToBatchOptions();
         var parallelOptions = settings.GroupHistory.ToParallelDownloadOptions();
 
@@ -50,5 +51,8 @@ public static class ApplicationSettingsLoader
                 ZkillDocumentedMaxRequestsPerSecond = parallelOptions.ZkillDocumentedMaxRequestsPerSecond
             }
         };
+#else
+        return settings;
+#endif
     }
 }

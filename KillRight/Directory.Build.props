@@ -1,0 +1,11 @@
+<Project>
+
+    <PropertyGroup>
+        <HistoricRelationships Condition="'$(HistoricRelationships)' == ''">false</HistoricRelationships>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="'$(HistoricRelationships)' == 'true'">
+        <DefineConstants>$(DefineConstants);HISTORIC_RELATIONSHIPS</DefineConstants>
+    </PropertyGroup>
+
+</Project>

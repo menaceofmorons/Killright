@@ -17,4 +17,8 @@
       <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
     </ItemGroup>
 
+    <ItemGroup Condition="'$(HistoricRelationships)' != 'true'">
+        <Compile Remove="GroupHistory*.cs;HistoryUpdater*.cs" />
+    </ItemGroup>
+
 </Project>
