@@ -1,4 +1,4 @@
-namespace Killright.Integration.zKill;
+namespace Killright.Shared.zKill;
 
 public enum zKillActivityType
 {

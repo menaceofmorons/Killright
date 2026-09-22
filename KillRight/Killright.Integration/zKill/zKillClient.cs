@@ -62,7 +62,7 @@ public sealed class zKillClient : IzKillClient
             ApplicationClock.UtcNow);
     }
 
-    public async Task<zKillStatistics?> GetStatisticsAsync(
+    public async Task<zKillStatisticsResult> GetStatisticsAsync(
         long characterId,
         CancellationToken cancellationToken = default)
     {
@@ -73,17 +73,39 @@ public sealed class zKillClient : IzKillClient
                 cancellationToken);
 
             if (!response.IsSuccessStatusCode)
-                return null;
+                return new zKillStatisticsResult(zKillStatisticsOutcome.Failure, null);
 
-            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            var json = await response.Content.ReadAsStringAsync(cancellationToken);
 
-            return await JsonSerializer.DeserializeAsync<zKillStatistics>(
-                stream,
-                cancellationToken: cancellationToken);
+            if (IsNoHistoryResponse(json))
+                return new zKillStatisticsResult(zKillStatisticsOutcome.NoHistory, null);
+
+            var statistics = JsonSerializer.Deserialize<zKillStatistics>(json);
+
+            return statistics is null
+                ? new zKillStatisticsResult(zKillStatisticsOutcome.Failure, null)
+                : new zKillStatisticsResult(zKillStatisticsOutcome.Success, statistics);
         }
         catch
         {
-            return null;
+            return new zKillStatisticsResult(zKillStatisticsOutcome.Failure, null);
+        }
+    }
+
+    private static bool IsNoHistoryResponse(string json)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                && document.RootElement.TryGetProperty("error", out var errorProperty)
+                && errorProperty.ValueKind == JsonValueKind.String
+                && errorProperty.GetString() == "Invalid type or id";
+        }
+        catch (JsonException)
+        {
+            return false;
         }
     }
 

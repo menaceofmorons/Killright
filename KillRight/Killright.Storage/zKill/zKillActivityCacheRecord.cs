@@ -1,4 +1,5 @@
 using Killright.Integration.zKill;
+using Killright.Shared.zKill;
 
 namespace Killright.Storage.zKill;
 

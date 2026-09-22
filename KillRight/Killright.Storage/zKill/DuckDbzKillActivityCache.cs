@@ -1,8 +1,8 @@
 using DuckDB.NET.Data;
 using Killright.Integration.zKill;
 using Killright.Shared.Data;
+using Killright.Shared.zKill;
 using Killright.Storage.Database;
-using Killright.Shared.Time;
 
 namespace Killright.Storage.zKill;
 
@@ -16,7 +16,7 @@ public sealed class DuckDbzKillActivityCache : IzKillActivityCache
         _database = database;
     }
 
-    public Task<zKillActivity?> GetAsync(long characterId, TimeSpan maximumAge, CancellationToken cancellationToken = default)
+    public Task<zKillActivity?> GetAsync(long characterId, CancellationToken cancellationToken = default)
     {
         using var connection = new DuckDBConnection(_database.ConnectionString);
         connection.Open();
@@ -42,9 +42,6 @@ public sealed class DuckDbzKillActivityCache : IzKillActivityCache
             return Task.FromResult<zKillActivity?>(null);
 
         var checkedAtUtc = reader.GetDateTimeOffset(6);
-
-        if (ApplicationClock.UtcNow - checkedAtUtc > maximumAge)
-            return Task.FromResult<zKillActivity?>(null);
 
         var record = new zKillActivityCacheRecord
         {

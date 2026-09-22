@@ -21,4 +21,7 @@ public sealed class zKillStatistics
 
     [JsonPropertyName("soloLosses")]
     public int soloLosses { get; set; }
+
+    [JsonPropertyName("months")]
+    public Dictionary<string, zKillStatisticsMonth>? months { get; set; }
 }

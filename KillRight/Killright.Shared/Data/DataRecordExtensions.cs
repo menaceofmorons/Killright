@@ -25,6 +25,11 @@ public static class DataRecordExtensions
         return reader.IsDBNull(ordinal) ? null : reader.GetDouble(ordinal);
     }
 
+    public static bool? GetNullableBoolean(this IDataRecord reader, int ordinal)
+    {
+        return reader.IsDBNull(ordinal) ? null : reader.GetBoolean(ordinal);
+    }
+
     public static DateTimeOffset GetDateTimeOffset(this IDataRecord reader, int ordinal)
     {
         var value = reader.GetString(ordinal);

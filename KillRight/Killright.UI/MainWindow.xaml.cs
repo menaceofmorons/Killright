@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Interop;
+using Killright.Core.Activity;
 using Killright.Core.Style;
 using Killright.Integration.zKill;
 using Killright.Shared;
@@ -93,22 +94,28 @@ public partial class MainWindow : Window
                 continue;
 
             zKillActivity? activity = null;
+            zKillStatistics? statistics = null;
             var recentStyle = StyleClassification.Unknown;
             var threatBand = "Unk";
 
             if (pilot.CharacterId is not null)
             {
-                var fallbackActivity = await RefreshRecentKillmailsAsync(pilot.CharacterId.Value);
-                activity = await LoadDerivedActivityAsync(pilot.CharacterId.Value, fallbackActivity);
-                var analysisResult = await App.RecentStyleClient.AnalyzeAsync(pilot.CharacterId.Value);
+                var characterId = pilot.CharacterId.Value;
+
+                statistics = await LoadzKillStatisticsAsync(characterId);
+
+                var fallbackActivity = await RefreshRecentKillmailsAsync(characterId);
+                var killmailDerivedActivity = await LoadDerivedActivityAsync(characterId, fallbackActivity);
+
+                activity = await ResolveActivityAsync(characterId, statistics, killmailDerivedActivity);
+
+                var analysisResult = await App.RecentStyleClient.AnalyzeAsync(characterId);
                 recentStyle = analysisResult.RecentStyle;
                 threatBand = analysisResult.ThreatBand;
 
-                if (recentStyle == StyleClassification.Unknown && fallbackActivity?.HasPublicActivityData == true)
+                if (recentStyle == StyleClassification.Unknown && killmailDerivedActivity?.HasPublicActivityData == true)
                     recentStyle = StyleClassification.Inactive;
             }
-
-            var statistics = await LoadzKillStatisticsAsync(pilot.CharacterId);
 
             rows.Add(PilotReportRowFactory.FromPilot(
                 pilot,
@@ -173,7 +180,14 @@ public partial class MainWindow : Window
             // Cache failures should not prevent live zKill stats lookup.
         }
 
-        var statistics = await App.zKillClient.GetStatisticsAsync(characterId.Value);
+        var result = await App.zKillClient.GetStatisticsAsync(characterId.Value);
+
+        var statistics = result.Outcome switch
+        {
+            zKillStatisticsOutcome.Success => result.Statistics,
+            zKillStatisticsOutcome.NoHistory => new zKillStatistics(),
+            _ => null
+        };
 
         if (statistics is null)
             return null;
@@ -184,7 +198,8 @@ public partial class MainWindow : Window
             await App.zKillStatisticsCache.UpsertAsync(
                 characterId.Value,
                 statistics,
-                style);
+                style,
+                noHistory: result.Outcome == zKillStatisticsOutcome.NoHistory);
         }
         catch
         {
@@ -192,6 +207,59 @@ public partial class MainWindow : Window
         }
 
         return statistics;
+    }
+
+    private static async Task<zKillActivity?> ResolveActivityAsync(
+        long characterId,
+        zKillStatistics? statistics,
+        zKillActivity? killmailDerived)
+    {
+        try
+        {
+            var stored = await App.zKillActivityCache.GetAsync(characterId);
+            var (statisticsLastActiveUtc, statisticsActivityType) =
+                LastActiveDeriver.Derive(statistics?.months, ApplicationClock.UtcNow);
+
+            var lastActiveUtc = stored?.LastActiveUtc;
+            var lastActivityType = stored?.LastActivityType;
+
+            if (statisticsLastActiveUtc is not null && (lastActiveUtc is null || statisticsLastActiveUtc > lastActiveUtc))
+            {
+                lastActiveUtc = statisticsLastActiveUtc;
+                lastActivityType = statisticsActivityType;
+            }
+
+            if (killmailDerived?.LastActiveUtc is not null && (lastActiveUtc is null || killmailDerived.LastActiveUtc > lastActiveUtc))
+            {
+                lastActiveUtc = killmailDerived.LastActiveUtc;
+                lastActivityType = killmailDerived.LastActivityType;
+            }
+
+            var hasPublicActivityData = lastActiveUtc is not null
+                || (stored?.HasPublicActivityData ?? false)
+                || (killmailDerived?.HasPublicActivityData ?? false);
+
+            if (stored is null && !hasPublicActivityData)
+                return killmailDerived;
+
+            var merged = new zKillActivity(
+                characterId,
+                hasPublicActivityData,
+                killmailDerived?.KillsWeek ?? stored?.KillsWeek,
+                killmailDerived?.SoloWeek ?? stored?.SoloWeek,
+                lastActiveUtc,
+                lastActivityType,
+                ApplicationClock.UtcNow,
+                killmailDerived?.Error);
+
+            await App.zKillActivityCache.UpsertAsync(merged);
+
+            return merged;
+        }
+        catch
+        {
+            return killmailDerived;
+        }
     }
 
     private static async Task<zKillActivity?> RefreshRecentKillmailsAsync(long characterId)

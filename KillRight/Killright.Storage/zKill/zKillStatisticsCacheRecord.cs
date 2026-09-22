@@ -12,6 +12,7 @@ public sealed class zKillStatisticsCacheRecord
     public required int ShipsLost { get; init; }
     public required int SoloLosses { get; init; }
     public required string GeneralStyle { get; init; }
+    public required bool NoHistory { get; init; }
     public required DateTimeOffset CheckedAtUtc { get; init; }
 
     public zKillStatistics ToStatistics()
@@ -31,6 +32,7 @@ public sealed class zKillStatisticsCacheRecord
         long characterId,
         zKillStatistics statistics,
         string generalStyle,
+        bool noHistory,
         DateTimeOffset checkedAtUtc)
     {
         return new zKillStatisticsCacheRecord
@@ -43,6 +45,7 @@ public sealed class zKillStatisticsCacheRecord
             ShipsLost = statistics.shipsLost,
             SoloLosses = statistics.soloLosses,
             GeneralStyle = generalStyle,
+            NoHistory = noHistory,
             CheckedAtUtc = checkedAtUtc
         };
     }

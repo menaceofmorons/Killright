@@ -3,6 +3,7 @@ using Killright.Integration.zKill;
 using Killright.Shared.Data;
 using Killright.Shared.Killmails;
 using Killright.Shared.Time;
+using Killright.Shared.zKill;
 using Killright.Storage.Database;
 
 namespace Killright.Storage.Killmails;

@@ -33,6 +33,8 @@ public sealed class DuckDbzKillStatisticsCache : IzKillStatisticsCache
                                      ships_lost,
                                      solo_losses,
                                      general_style,
+                                     months_processed,
+                                     no_history_marker,
                                      checked_at_utc
                               FROM main.zkill_statistics_cache
                               WHERE character_id = {characterId}
@@ -44,7 +46,12 @@ public sealed class DuckDbzKillStatisticsCache : IzKillStatisticsCache
         if (!reader.Read())
             return Task.FromResult<zKillStatistics?>(null);
 
-        var checkedAtUtc = reader.GetDateTimeOffset(8);
+        var monthsProcessed = reader.GetNullableBoolean(8);
+
+        if (monthsProcessed != true)
+            return Task.FromResult<zKillStatistics?>(null);
+
+        var checkedAtUtc = reader.GetDateTimeOffset(10);
 
         if (ApplicationClock.UtcNow - checkedAtUtc > maximumAge)
             return Task.FromResult<zKillStatistics?>(null);
@@ -59,6 +66,7 @@ public sealed class DuckDbzKillStatisticsCache : IzKillStatisticsCache
             ShipsLost = reader.GetInt32(5),
             SoloLosses = reader.GetInt32(6),
             GeneralStyle = reader.GetString(7),
+            NoHistory = reader.GetBoolean(9),
             CheckedAtUtc = checkedAtUtc
         };
 
@@ -69,12 +77,14 @@ public sealed class DuckDbzKillStatisticsCache : IzKillStatisticsCache
         long characterId,
         zKillStatistics statistics,
         string generalStyle,
+        bool noHistory,
         CancellationToken cancellationToken = default)
     {
         var record = zKillStatisticsCacheRecord.FromStatistics(
             characterId,
             statistics,
             generalStyle,
+            noHistory,
             ApplicationClock.UtcNow);
 
         using var connection = new DuckDBConnection(_database.ConnectionString);
@@ -97,6 +107,8 @@ public sealed class DuckDbzKillStatisticsCache : IzKillStatisticsCache
                 ships_lost,
                 solo_losses,
                 general_style,
+                months_processed,
+                no_history_marker,
                 checked_at_utc
             ) VALUES (
                 {record.CharacterId},
@@ -107,6 +119,8 @@ public sealed class DuckDbzKillStatisticsCache : IzKillStatisticsCache
                 {record.ShipsLost},
                 {record.SoloLosses},
                 {SqlValueFormatter.String(record.GeneralStyle)},
+                {SqlValueFormatter.Bool(true)},
+                {SqlValueFormatter.Bool(record.NoHistory)},
                 {SqlValueFormatter.Date(record.CheckedAtUtc)}
             );
             """;

@@ -14,5 +14,6 @@ public interface IzKillStatisticsCache
         long characterId,
         zKillStatistics statistics,
         string generalStyle,
+        bool noHistory,
         CancellationToken cancellationToken = default);
 }

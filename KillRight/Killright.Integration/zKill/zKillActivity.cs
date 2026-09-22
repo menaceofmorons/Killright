@@ -1,3 +1,5 @@
+using Killright.Shared.zKill;
+
 namespace Killright.Integration.zKill;
 
 public sealed record zKillActivity(

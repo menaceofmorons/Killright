@@ -108,5 +108,13 @@ public sealed class KillRightDatabase
                               );
                               """;
         command.ExecuteNonQuery();
+
+        using var addMonthsProcessed = connection.CreateCommand();
+        addMonthsProcessed.CommandText = "ALTER TABLE main.zkill_statistics_cache ADD COLUMN IF NOT EXISTS months_processed BOOLEAN;";
+        addMonthsProcessed.ExecuteNonQuery();
+
+        using var addNoHistoryMarker = connection.CreateCommand();
+        addNoHistoryMarker.CommandText = "ALTER TABLE main.zkill_statistics_cache ADD COLUMN IF NOT EXISTS no_history_marker BOOLEAN;";
+        addNoHistoryMarker.ExecuteNonQuery();
     }
 }
