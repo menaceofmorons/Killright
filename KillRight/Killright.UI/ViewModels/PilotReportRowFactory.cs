@@ -14,7 +14,10 @@ public static class PilotReportRowFactory
         zKillActivity? activity,
         zKillStatistics? statistics,
         StyleClassification recentStyle,
-        string threatBand)
+        string threatBand,
+        bool statisticsCallFailed,
+        bool recentCallFailed,
+        string? engineFailureReason)
     {
         var generalStyle = GeneralStyleClassifier.Classify(statistics);
 
@@ -34,7 +37,7 @@ public static class PilotReportRowFactory
             KillsWeek = FormatActivityValue(activity?.HasPublicActivityData, activity?.KillsWeek),
             SoloWeek = FormatActivityValue(activity?.HasPublicActivityData, activity?.SoloWeek),
             LastActive = FormatLastActive(activity),
-            Notes = GetNotes(activity, statistics)
+            Notes = GetNotes(activity, statistics, statisticsCallFailed, recentCallFailed, engineFailureReason)
         };
     }
 
@@ -77,8 +80,19 @@ public static class PilotReportRowFactory
         return LastActiveFormatter.Format(activity.LastActiveUtc, activity.LastActivityType?.ToString());
     }
 
-    private static string GetNotes(zKillActivity? activity, zKillStatistics? statistics)
+    private static string GetNotes(
+        zKillActivity? activity,
+        zKillStatistics? statistics,
+        bool statisticsCallFailed,
+        bool recentCallFailed,
+        string? engineFailureReason)
     {
+        if (engineFailureReason is not null)
+            return $"ESI identity loaded; killright_engine analysis failed ({engineFailureReason}).";
+
+        if (statisticsCallFailed)
+            return "ESI identity loaded; zKill statistics call failed.";
+
         if (activity is null)
             return "ESI identity loaded; zKill activity not loaded.";
 
@@ -86,9 +100,14 @@ public static class PilotReportRowFactory
             return "ESI identity loaded; zKill unavailable.";
 
         if (!activity.HasPublicActivityData)
+        {
+            if (recentCallFailed)
+                return "ESI identity loaded; zKill recent killmail call failed.";
+
             return statistics is null
                 ? "ESI identity loaded; no public zKill activity or stats available."
                 : "ESI identity loaded; zKill stats loaded; no recent activity.";
+        }
 
         return $"Public zKill activity checked {activity.CheckedAtUtc:yyyy-MM-dd HH:mm} UTC.";
     }

@@ -3,7 +3,6 @@
   "lastUpdated": "2026-07-31",
 
   "bands": [
-    { "name": "Unknown", "minimumScore": 0, "maximumScore": 0 },
     { "name": "Low", "minimumScore": 1, "maximumScore": 20 },
     { "name": "Medium", "minimumScore": 21, "maximumScore": 40 },
     { "name": "High", "minimumScore": 41, "maximumScore": 60 },

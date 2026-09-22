@@ -5,6 +5,7 @@ using System.Windows;
 using Killright.Integration.Esi;
 using Killright.Integration.zKill;
 using Killright.Storage.Database;
+using Killright.Storage.Diagnostics;
 #if HISTORIC_RELATIONSHIPS
 using Killright.Storage.GroupHistory;
 #endif
@@ -104,6 +105,9 @@ public partial class App : Application
             new KillrightEngineRuntime(
                 dllPath,
                 databasePath);
+
+        if (!EngineRuntime.IsAvailable)
+            EngineFailureLog.Record("killright_engine failed to initialize (pintel_initialize did not return success).");
 
         RecentStyleClient =
             new RustRecentStyleClient(

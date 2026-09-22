@@ -29,7 +29,7 @@ pub fn analyze_recent_style(request: RecentStyleRequest) -> RecentStyleResult {
         .count();
 
     let recent_style = if analyzed_killmails == 0 {
-        STYLE_UNKNOWN.to_string()
+        STYLE_INACTIVE.to_string()
     } else if is_recent_victim(kill_count, loss_count, solo_losses) {
         classify_victim_style(&losses)
     } else if kill_count > 0 {
@@ -101,10 +101,10 @@ mod tests {
     }
 
     #[test]
-    fn empty_request_returns_unknown_contract_value() {
+    fn empty_request_returns_inactive_contract_value() {
         let result = analyze_recent_style(request(vec![]));
 
-        assert_eq!(result.recent_style, STYLE_UNKNOWN);
+        assert_eq!(result.recent_style, STYLE_INACTIVE);
         assert_eq!(result.analyzed_killmails, 0);
     }
 

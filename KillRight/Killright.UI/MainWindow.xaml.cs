@@ -97,6 +97,9 @@ public partial class MainWindow : Window
             zKillStatistics? statistics = null;
             var recentStyle = StyleClassification.Unknown;
             var threatBand = "Unk";
+            var statisticsCallFailed = false;
+            var recentCallFailed = false;
+            string? engineFailureReason = null;
 
             if (pilot.CharacterId is not null)
             {
@@ -104,14 +107,16 @@ public partial class MainWindow : Window
 
                 var (loadedStatistics, statisticsFetchedThisScan) = await LoadzKillStatisticsAsync(characterId);
                 statistics = loadedStatistics;
+                statisticsCallFailed = statisticsFetchedThisScan && statistics is null;
 
                 var storedActivity = await SafeGetStoredActivityAsync(characterId);
 
-                var newLastSuccessfulCallUtc = await RefreshRecentKillmailsAsync(
+                var (newLastSuccessfulCallUtc, recentCallDidFail) = await RefreshRecentKillmailsAsync(
                     characterId,
                     storedActivity,
                     statistics,
                     statisticsFetchedThisScan);
+                recentCallFailed = recentCallDidFail;
 
                 var killmailDerivedActivity = await LoadDerivedActivityAsync(characterId);
 
@@ -125,9 +130,16 @@ public partial class MainWindow : Window
                 var analysisResult = await App.RecentStyleClient.AnalyzeAsync(characterId);
                 recentStyle = analysisResult.RecentStyle;
                 threatBand = analysisResult.ThreatBand;
+                engineFailureReason = analysisResult.FailureReason;
 
-                if (recentStyle == StyleClassification.Unknown && killmailDerivedActivity?.HasPublicActivityData == true)
-                    recentStyle = StyleClassification.Inactive;
+                if (engineFailureReason is null)
+                {
+                    if (recentCallFailed && killmailDerivedActivity?.HasPublicActivityData != true)
+                        recentStyle = StyleClassification.Unknown;
+
+                    if (statisticsCallFailed)
+                        threatBand = "Unk";
+                }
             }
 
             rows.Add(PilotReportRowFactory.FromPilot(
@@ -135,7 +147,10 @@ public partial class MainWindow : Window
                 activity,
                 statistics,
                 recentStyle,
-                threatBand));
+                threatBand,
+                statisticsCallFailed,
+                recentCallFailed,
+                engineFailureReason));
         }
 
         if (rows.Count == 0)
@@ -284,7 +299,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private static async Task<DateTimeOffset?> RefreshRecentKillmailsAsync(
+    private static async Task<(DateTimeOffset? NewLastSuccessfulCallUtc, bool Failed)> RefreshRecentKillmailsAsync(
         long characterId,
         zKillActivity? storedActivity,
         zKillStatistics? statistics,
@@ -298,7 +313,7 @@ public partial class MainWindow : Window
             var lastSuccessfulCallUtc = storedActivity?.LastSuccessfulRecentCallUtc;
 
             if (RecentCallScheduler.ShouldSkipForInterval(lastSuccessfulCallUtc, now))
-                return null;
+                return (null, false);
 
             var noHistory = statistics?.NoHistory ?? false;
 
@@ -306,7 +321,7 @@ public partial class MainWindow : Window
                 && statisticsFetchedThisScan
                 && RecentCallScheduler.ShouldShortCircuit(statistics?.months, now))
             {
-                return now;
+                return (now, false);
             }
 
             var pastSeconds = RecentCallScheduler.CalculatePastSeconds(lastSuccessfulCallUtc, now);
@@ -321,19 +336,19 @@ public partial class MainWindow : Window
                         await App.zKillStatisticsCache.ClearNoHistoryMarkerAsync(characterId);
                     }
 
-                    return now;
+                    return (now, false);
 
                 case zKillRecentKillmailOutcome.NoHistory:
-                    return now;
+                    return (now, false);
 
                 default:
-                    return null;
+                    return (null, true);
             }
         }
         catch
         {
             // Recent killmail caching must not break the visible report.
-            return null;
+            return (null, true);
         }
     }
 

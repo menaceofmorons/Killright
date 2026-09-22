@@ -14,6 +14,7 @@ pub struct ZKillStatisticsSnapshot {
     pub solo_losses: i32,
     pub general_style: String,
     pub checked_at_utc: String,
+    pub no_history_marker: bool,
 }
 
 pub struct ZKillStatisticsRepository {
@@ -32,7 +33,7 @@ impl ZKillStatisticsRepository {
         let connection = open_connection(&self.database_path)?;
 
         let sql = format!(
-            "SELECT character_id, ships_destroyed, solo_kills, solo_ratio, avg_gang_size, ships_lost, solo_losses, general_style, checked_at_utc \
+            "SELECT character_id, ships_destroyed, solo_kills, solo_ratio, avg_gang_size, ships_lost, solo_losses, general_style, checked_at_utc, no_history_marker \
              FROM main.zkill_statistics_cache \
              WHERE character_id = {} \
              LIMIT 1;",
@@ -43,6 +44,8 @@ impl ZKillStatisticsRepository {
         let mut rows = statement.query([])?;
 
         if let Some(row) = rows.next()? {
+            let no_history_marker: Option<bool> = row.get(9)?;
+
             return Ok(Some(ZKillStatisticsSnapshot {
                 character_id: row.get(0)?,
                 ships_destroyed: row.get(1)?,
@@ -53,6 +56,7 @@ impl ZKillStatisticsRepository {
                 solo_losses: row.get(6)?,
                 general_style: row.get(7)?,
                 checked_at_utc: row.get(8)?,
+                no_history_marker: no_history_marker.unwrap_or(false),
             }));
         }
 

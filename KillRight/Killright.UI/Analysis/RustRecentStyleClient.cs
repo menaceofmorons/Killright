@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Killright.Core.Style;
+using Killright.Storage.Diagnostics;
 
 namespace Killright.UI.Analysis;
 
@@ -22,13 +23,22 @@ public sealed class RustRecentStyleClient
             var requestJson = JsonSerializer.Serialize(request);
             var responseJson = await _runtime.AnalyzePilotAsync(requestJson, cancellationToken);
             var response = JsonSerializer.Deserialize<PilotAnalysisResponse>(responseJson);
+
+            if (!string.IsNullOrWhiteSpace(response?.failure))
+            {
+                EngineFailureLog.Record($"engine analysis failed for character {characterId}: {response.failure}");
+                return PilotEngineAnalysisResult.Failed(response.failure);
+            }
+
             return new PilotEngineAnalysisResult(
                 MapRecentStyle(response?.recent_style),
-                MapThreatBand(response?.threat?.band));
+                MapThreatBand(response?.threat?.band),
+                FailureReason: null);
         }
-        catch
+        catch (Exception exception)
         {
-            return PilotEngineAnalysisResult.Unknown;
+            EngineFailureLog.Record($"engine analysis threw for character {characterId}: {exception.Message}");
+            return PilotEngineAnalysisResult.Failed("exception");
         }
     }
 
@@ -84,6 +94,7 @@ public sealed class RustRecentStyleClient
         public long character_id { get; set; }
         public string? recent_style { get; set; }
         public ThreatAnalysisResponse? threat { get; set; }
+        public string? failure { get; set; }
     }
 
     private sealed class ThreatAnalysisResponse
@@ -96,9 +107,11 @@ public sealed class RustRecentStyleClient
 
 public sealed record PilotEngineAnalysisResult(
     StyleClassification RecentStyle,
-    string ThreatBand)
+    string ThreatBand,
+    string? FailureReason)
 {
-    public static PilotEngineAnalysisResult Unknown { get; } = new(
+    public static PilotEngineAnalysisResult Failed(string reason) => new(
         StyleClassification.Unknown,
-        "Unk");
+        "Unk",
+        reason);
 }

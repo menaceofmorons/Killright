@@ -13,10 +13,8 @@ use kr_engine::repositories::pilot_identity_repository::PilotIdentityRepository;
 use kr_engine::repositories::recent_killmail_repository::RecentKillmailRepository;
 use kr_engine::repositories::zkill_statistics_repository::ZKillStatisticsRepository;
 use kr_engine::shared::database_path::get_database_path;
-use kr_engine::shared::recent_style_contract::{STYLE_INACTIVE, STYLE_UNKNOWN};
 use kr_engine::threat_analysis::{
-    analyze_intrinsic_threat, load_default_threat_configuration, ThreatAnalysisResponse,
-    ThreatConfiguration,
+    analyze_intrinsic_threat, load_default_threat_configuration, ThreatConfiguration,
 };
 pub use kr_engine::*;
 struct RuntimeState {
@@ -55,26 +53,37 @@ pub extern "C" fn pintel_initialize() -> i32 {
 pub extern "C" fn pintel_analyze_pilot(request_json: *const c_char) -> *mut c_char {
     let result = panic::catch_unwind(|| {
         if request_json.is_null() {
-            return unknown_response(0);
+            return failure_response(0, "unreadable_request");
         }
         let request_text = unsafe { CStr::from_ptr(request_json) };
         let request_text = match request_text.to_str() {
             Ok(value) => value,
-            Err(_) => return unknown_response(0),
+            Err(_) => return failure_response(0, "unreadable_request"),
         };
         let request = match serde_json::from_str::<PilotAnalysisRequest>(request_text) {
             Ok(value) => value,
-            Err(_) => return unknown_response(0),
+            Err(_) => return failure_response(0, "unreadable_request"),
         };
         let Some((database_path, threat_configuration)) = get_runtime_state() else {
-            return unknown_response(request.character_id);
+            return failure_response(request.character_id, "missing_runtime");
         };
         let recent_killmail_repository = RecentKillmailRepository::new(database_path.clone());
         let zkill_statistics_repository = ZKillStatisticsRepository::new(database_path.clone());
         let pilot_identity_repository = PilotIdentityRepository::new(database_path);
-        let all_killmails = recent_killmail_repository
-            .get_for_character(request.character_id)
-            .unwrap_or_default();
+
+        let all_killmails = match recent_killmail_repository.get_for_character(request.character_id) {
+            Ok(value) => value,
+            Err(_) => return failure_response(request.character_id, "repository_read_error:killmails"),
+        };
+        let statistics = match zkill_statistics_repository.get_for_character(request.character_id) {
+            Ok(value) => value,
+            Err(_) => return failure_response(request.character_id, "repository_read_error:statistics"),
+        };
+        let identity = match pilot_identity_repository.get_for_character(request.character_id) {
+            Ok(value) => value,
+            Err(_) => return failure_response(request.character_id, "repository_read_error:identity"),
+        };
+
         let cutoff = Utc::now() - Duration::days(7);
         let recent_window_killmails = all_killmails
             .iter()
@@ -85,14 +94,6 @@ pub extern "C" fn pintel_analyze_pilot(request_json: *const c_char) -> *mut c_ch
             })
             .cloned()
             .collect::<Vec<_>>();
-        let statistics = zkill_statistics_repository
-            .get_for_character(request.character_id)
-            .ok()
-            .flatten();
-        let identity = pilot_identity_repository
-            .get_for_character(request.character_id)
-            .ok()
-            .flatten();
         let killmails = recent_window_killmails
             .iter()
             .map(|row| RecentKillmailInput {
@@ -103,17 +104,11 @@ pub extern "C" fn pintel_analyze_pilot(request_json: *const c_char) -> *mut c_ch
                 ship_type_id: row.ship_type_id,
             })
             .collect::<Vec<_>>();
-        let recent_style = if all_killmails.is_empty() {
-            STYLE_UNKNOWN.to_string()
-        } else if recent_window_killmails.is_empty() {
-            STYLE_INACTIVE.to_string()
-        } else {
-            analyze_recent_style(RecentStyleRequest {
-                character_id: request.character_id,
-                killmails,
-            })
-            .recent_style
-        };
+        let recent_style = analyze_recent_style(RecentStyleRequest {
+            character_id: request.character_id,
+            killmails,
+        })
+        .recent_style;
         let threat = analyze_intrinsic_threat(
             &threat_configuration,
             statistics.as_ref(),
@@ -124,9 +119,10 @@ pub extern "C" fn pintel_analyze_pilot(request_json: *const c_char) -> *mut c_ch
             character_id: request.character_id,
             recent_style: Some(recent_style),
             threat: Some(threat),
+            failure: None,
         })
     });
-    result.unwrap_or_else(|_| unknown_response(0))
+    result.unwrap_or_else(|_| failure_response(0, "internal_error"))
 }
 #[no_mangle]
 pub extern "C" fn pintel_shutdown() {
@@ -156,22 +152,19 @@ fn get_runtime_state() -> Option<(PathBuf, ThreatConfiguration)> {
         runtime.threat_configuration.clone(),
     ))
 }
-fn unknown_response(character_id: i64) -> *mut c_char {
+fn failure_response(character_id: i64, reason: &str) -> *mut c_char {
     response_json(PilotAnalysisResponse {
         character_id,
-        recent_style: Some(STYLE_UNKNOWN.to_string()),
-        threat: Some(ThreatAnalysisResponse {
-            score: 0,
-            band: "Unknown".to_string(),
-            confidence: "Low".to_string(),
-        }),
+        recent_style: None,
+        threat: None,
+        failure: Some(reason.to_string()),
     })
 }
 fn response_json(response: PilotAnalysisResponse) -> *mut c_char {
     let json = serde_json::to_string(&response).unwrap_or_else(|_| {
-        "{\"character_id\":0,\"recent_style\":\"Unknown\",\"threat\":{\"score\":0,\"band\":\"Unknown\",\"confidence\":\"Low\"}}".to_string()
+        "{\"character_id\":0,\"failure\":\"internal_error\"}".to_string()
     });
     CString::new(json).unwrap_or_else(|_| {
-        CString::new("{\"character_id\":0,\"recent_style\":\"Unknown\",\"threat\":{\"score\":0,\"band\":\"Unknown\",\"confidence\":\"Low\"}}").unwrap()
+        CString::new("{\"character_id\":0,\"failure\":\"internal_error\"}").unwrap()
     }).into_raw()
 }

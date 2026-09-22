@@ -46,7 +46,7 @@ public sealed class KillrightEngineRuntime : IKillrightEngineRuntime
         if (_disposed || !IsAvailable)
         {
             return Task.FromResult(
-                "{\"character_id\":0,\"recent_style\":\"Unknown\"}");
+                "{\"character_id\":0,\"failure\":\"missing_runtime\"}");
         }
 
         cancellationToken.ThrowIfCancellationRequested();
@@ -71,14 +71,14 @@ public sealed class KillrightEngineRuntime : IKillrightEngineRuntime
             if (responsePointer == nint.Zero)
             {
                 return Task.FromResult(
-                    "{\"character_id\":0,\"recent_style\":\"Unknown\"}");
+                    "{\"character_id\":0,\"failure\":\"missing_runtime\"}");
             }
 
             try
             {
                 return Task.FromResult(
                     Marshal.PtrToStringUTF8(responsePointer)
-                    ?? "{\"character_id\":0,\"recent_style\":\"Unknown\"}");
+                    ?? "{\"character_id\":0,\"failure\":\"missing_runtime\"}");
             }
             finally
             {

@@ -89,7 +89,7 @@ fn validate_threat_bands(configuration: &ThreatConfiguration) -> Result<(), Stri
 
     bands.sort_by_key(|band| band.minimum_score);
 
-    let mut expected_minimum = 0;
+    let mut expected_minimum = 1;
 
     for band in bands {
         if band.minimum_score != expected_minimum {
@@ -110,7 +110,7 @@ fn validate_threat_bands(configuration: &ThreatConfiguration) -> Result<(), Stri
     }
 
     if expected_minimum != 101 {
-        return Err("threat bands must cover score range 0-100".to_string());
+        return Err("threat bands must cover score range 1-100; None (score 0) is assigned by rule, not a configured band".to_string());
     }
 
     Ok(())

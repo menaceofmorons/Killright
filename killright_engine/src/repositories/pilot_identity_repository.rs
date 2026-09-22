@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 
+use chrono::{DateTime, Utc};
+
 use crate::repositories::duckdb_database::open_connection;
 use crate::repositories::repository_error::RepositoryResult;
 
@@ -46,6 +48,8 @@ impl PilotIdentityRepository {
         let mut rows = statement.query([])?;
 
         if let Some(row) = rows.next()? {
+            let cached_at_utc: DateTime<Utc> = row.get(11)?;
+
             return Ok(Some(PilotIdentitySnapshot {
                 input_name: row.get(0)?,
                 character_id: row.get(1)?,
@@ -58,7 +62,7 @@ impl PilotIdentityRepository {
                 alliance_id: row.get(8)?,
                 alliance_name: row.get(9)?,
                 alliance_ticker: row.get(10)?,
-                cached_at_utc: row.get(11)?,
+                cached_at_utc: cached_at_utc.to_rfc3339(),
             }));
         }
 
