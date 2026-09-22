@@ -28,7 +28,7 @@ public static class PilotReportRowFactory
             SecurityStatus = pilot.SecurityStatus?.ToString("0.00") ?? "unk",
             Group = "unk",
             Corporation = pilot.Corporation?.Name ?? "unk",
-            Alliance = pilot.Alliance?.Name ?? "None",
+            Alliance = GetAllianceDisplay(pilot),
             GeneralStyle = StyleDisplayFormatter.Format(generalStyle),
             RecentStyle = StyleDisplayFormatter.Format(recentStyle),
             KillsWeek = FormatActivityValue(activity?.HasPublicActivityData, activity?.KillsWeek),
@@ -51,6 +51,14 @@ public static class PilotReportRowFactory
             VerifyStatus.Partial => "P",
             _ => "unk"
         };
+    }
+
+    private static string GetAllianceDisplay(Pilot pilot)
+    {
+        if (pilot.Alliance is not null)
+            return pilot.Alliance.Name;
+
+        return pilot.AllianceId is null ? "None" : "unk";
     }
 
     private static string FormatActivityValue(bool? hasPublicActivityData, int? value)

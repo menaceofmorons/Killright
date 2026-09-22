@@ -89,7 +89,7 @@ public partial class MainWindow : Window
                 await App.PilotIdentityCache.UpsertAsync(pilot);
             }
 
-            if (pilot.VerifyStatus == VerifyStatus.NoMatch)
+            if (pilot.VerifyStatus is VerifyStatus.NoMatch or VerifyStatus.Failed)
                 continue;
 
             zKillActivity? activity = null;

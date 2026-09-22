@@ -70,6 +70,9 @@ public sealed class DuckDbPilotIdentityCache : IPilotIdentityCache
 
     public Task UpsertAsync(Pilot pilot, CancellationToken cancellationToken = default)
     {
+        if (!IsDefinitive(pilot))
+            return Task.CompletedTask;
+
         var record = PilotIdentityCacheRecord.FromPilot(pilot);
 
         using var connection = new DuckDBConnection(_database.ConnectionString);
@@ -116,5 +119,16 @@ public sealed class DuckDbPilotIdentityCache : IPilotIdentityCache
         }
 
         return Task.CompletedTask;
+    }
+
+    private static bool IsDefinitive(Pilot pilot)
+    {
+        if (pilot.VerifyStatus == VerifyStatus.NoMatch)
+            return true;
+
+        return pilot.VerifyStatus == VerifyStatus.Partial
+            && pilot.CharacterId is not null
+            && pilot.Corporation is not null
+            && (pilot.AllianceId is null || pilot.Alliance is not null);
     }
 }

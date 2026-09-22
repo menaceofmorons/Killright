@@ -33,8 +33,17 @@ public sealed class EsiClient : IEsiClient
 
     public async Task<Pilot> ResolvePilotAsync(string exactPilotName, CancellationToken cancellationToken = default)
     {
-        var character = await ResolveCharacterIdByExactNameAsync(exactPilotName, cancellationToken);
-        if (character is null)
+        var lookup = await ResolveCharacterIdByExactNameAsync(exactPilotName, cancellationToken);
+        if (!lookup.Succeeded)
+        {
+            return new Pilot
+            {
+                InputName = exactPilotName,
+                VerifyStatus = VerifyStatus.Failed
+            };
+        }
+
+        if (lookup.Character is null)
         {
             return new Pilot
             {
@@ -43,6 +52,7 @@ public sealed class EsiClient : IEsiClient
             };
         }
 
+        var character = lookup.Character;
         var characterInfo = await GetCharacterAsync(character.Id, cancellationToken);
         if (characterInfo is null)
         {
@@ -70,24 +80,34 @@ public sealed class EsiClient : IEsiClient
             VerifyStatus = VerifyStatus.Partial,
             SecurityStatus = characterInfo.SecurityStatus,
             Corporation = corp,
-            Alliance = alliance
+            Alliance = alliance,
+            AllianceId = characterInfo.AllianceId
         };
     }
 
-    private async Task<EsiResolvedEntity?> ResolveCharacterIdByExactNameAsync(string exactPilotName, CancellationToken cancellationToken)
+    private async Task<CharacterLookupResult> ResolveCharacterIdByExactNameAsync(string exactPilotName, CancellationToken cancellationToken)
     {
-        var requestUri = $"universe/ids/?datasource={_options.DataSource}&language={_options.Language}";
-        var names = new[] { exactPilotName };
-        using var response = await _http.PostAsJsonAsync(requestUri, names, JsonOptions, cancellationToken);
-        if (!response.IsSuccessStatusCode)
+        try
         {
-            return null;
-        }
+            var requestUri = $"universe/ids/?datasource={_options.DataSource}&language={_options.Language}";
+            var names = new[] { exactPilotName };
+            using var response = await _http.PostAsJsonAsync(requestUri, names, JsonOptions, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                return new CharacterLookupResult(false, null);
+            }
 
-        var result = await response.Content.ReadFromJsonAsync<EsiUniverseIdsResponse>(JsonOptions, cancellationToken);
-        var match = result?.Characters?.FirstOrDefault(c => string.Equals(c.Name, exactPilotName, StringComparison.Ordinal));
-        return match;
+            var result = await response.Content.ReadFromJsonAsync<EsiUniverseIdsResponse>(JsonOptions, cancellationToken);
+            var match = result?.Characters?.FirstOrDefault(c => string.Equals(c.Name, exactPilotName, StringComparison.Ordinal));
+            return new CharacterLookupResult(true, match);
+        }
+        catch
+        {
+            return new CharacterLookupResult(false, null);
+        }
     }
+
+    private readonly record struct CharacterLookupResult(bool Succeeded, EsiResolvedEntity? Character);
 
     private async Task<EsiCharacterResponse?> GetCharacterAsync(long characterId, CancellationToken cancellationToken)
     {
@@ -121,11 +141,18 @@ public sealed class EsiClient : IEsiClient
 
     private async Task<T?> GetOrNullAsync<T>(string uri, CancellationToken cancellationToken)
     {
-        using var response = await _http.GetAsync(uri, cancellationToken);
-        if (!response.IsSuccessStatusCode)
+        try
+        {
+            using var response = await _http.GetAsync(uri, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                return default;
+            }
+            return await response.Content.ReadFromJsonAsync<T>(JsonOptions, cancellationToken);
+        }
+        catch
         {
             return default;
         }
-        return await response.Content.ReadFromJsonAsync<T>(JsonOptions, cancellationToken);
     }
 }

@@ -11,4 +11,5 @@ public sealed record Pilot
     public double? SecurityStatus { get; init; }
     public Corporation? Corporation { get; init; }
     public Alliance? Alliance { get; init; }
+    public long? AllianceId { get; init; }
 }

@@ -4,7 +4,8 @@ public enum VerifyStatus
 {
     NoMatch = 0,
     Partial = 1,
-    Verified = 2
+    Verified = 2,
+    Failed = 3
 }
 
 public enum ThreatLevel
