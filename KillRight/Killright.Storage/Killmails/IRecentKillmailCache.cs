@@ -19,8 +19,4 @@ public interface IRecentKillmailCache
 
     Task RemoveExpiredAsync(
         CancellationToken cancellationToken = default);
-
-    Task<DateTimeOffset?> GetMostRecentKillmailAsync(
-        long characterId,
-        CancellationToken cancellationToken = default);
 }

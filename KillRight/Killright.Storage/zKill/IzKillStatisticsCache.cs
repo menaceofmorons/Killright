@@ -16,4 +16,8 @@ public interface IzKillStatisticsCache
         string generalStyle,
         bool noHistory,
         CancellationToken cancellationToken = default);
+
+    Task ClearNoHistoryMarkerAsync(
+        long characterId,
+        CancellationToken cancellationToken = default);
 }

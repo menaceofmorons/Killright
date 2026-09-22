@@ -84,4 +84,93 @@ public sealed class zKillClientTests
 
         Assert.Equal(zKillStatisticsOutcome.Failure, result.Outcome);
     }
+
+    [Fact]
+    public async Task GetRecentKillmailsAsync_SuccessWithKillmails_ReturnsSuccessOutcome()
+    {
+        var handler = new ScriptedHttpMessageHandler()
+            .OnUriContaining("api/characterID/95465499/pastSeconds", HttpStatusCode.OK, """
+                [{"killmail_id":123456,"killmail_time":"2026-09-20T10:00:00Z","solar_system_id":30000142,
+                  "victim":{"character_id":999,"ship_type_id":587},
+                  "attackers":[{"character_id":95465499,"ship_type_id":11567}],
+                  "zkb":{"hash":"abc123","locationID":40000001,"solo":true,"npc":false}}]
+                """);
+
+        var client = new zKillClient(new HttpClient(handler));
+
+        var result = await client.GetRecentKillmailsAsync(95465499, 604800);
+
+        Assert.Equal(zKillRecentKillmailOutcome.Success, result.Outcome);
+        Assert.Single(result.Killmails);
+        Assert.Equal(123456, result.Killmails[0].KillmailId);
+        Assert.False(result.Killmails[0].IsLoss);
+    }
+
+    [Fact]
+    public async Task GetRecentKillmailsAsync_EmptyArray_ReturnsSuccessWithNoKillmails()
+    {
+        var handler = new ScriptedHttpMessageHandler()
+            .OnUriContaining("api/characterID/91321792/pastSeconds", HttpStatusCode.OK, "[]");
+
+        var client = new zKillClient(new HttpClient(handler));
+
+        var result = await client.GetRecentKillmailsAsync(91321792, 3600);
+
+        Assert.Equal(zKillRecentKillmailOutcome.Success, result.Outcome);
+        Assert.Empty(result.Killmails);
+    }
+
+    [Fact]
+    public async Task GetRecentKillmailsAsync_NoContent_ReturnsSuccessWithNoKillmails()
+    {
+        var handler = new ScriptedHttpMessageHandler()
+            .OnUriContaining("api/characterID/91321792/pastSeconds", HttpStatusCode.NoContent);
+
+        var client = new zKillClient(new HttpClient(handler));
+
+        var result = await client.GetRecentKillmailsAsync(91321792, 3600);
+
+        Assert.Equal(zKillRecentKillmailOutcome.Success, result.Outcome);
+        Assert.Empty(result.Killmails);
+    }
+
+    [Fact]
+    public async Task GetRecentKillmailsAsync_NoHistoryResponse_ReturnsNoHistoryOutcome()
+    {
+        var handler = new ScriptedHttpMessageHandler()
+            .OnUriContaining("api/characterID/98798418/pastSeconds", HttpStatusCode.OK, """{"error":"Invalid type or id"}""");
+
+        var client = new zKillClient(new HttpClient(handler));
+
+        var result = await client.GetRecentKillmailsAsync(98798418, 604800);
+
+        Assert.Equal(zKillRecentKillmailOutcome.NoHistory, result.Outcome);
+        Assert.Empty(result.Killmails);
+    }
+
+    [Fact]
+    public async Task GetRecentKillmailsAsync_HttpFailure_ReturnsFailureOutcome()
+    {
+        var handler = new ScriptedHttpMessageHandler()
+            .OnUriContaining("api/characterID/91321792/pastSeconds", HttpStatusCode.InternalServerError);
+
+        var client = new zKillClient(new HttpClient(handler));
+
+        var result = await client.GetRecentKillmailsAsync(91321792, 3600);
+
+        Assert.Equal(zKillRecentKillmailOutcome.Failure, result.Outcome);
+    }
+
+    [Fact]
+    public async Task GetRecentKillmailsAsync_Throws_ReturnsFailureOutcome()
+    {
+        var handler = new ScriptedHttpMessageHandler()
+            .ThrowOnUriContaining("api/characterID/91321792/pastSeconds", new HttpRequestException());
+
+        var client = new zKillClient(new HttpClient(handler));
+
+        var result = await client.GetRecentKillmailsAsync(91321792, 3600);
+
+        Assert.Equal(zKillRecentKillmailOutcome.Failure, result.Outcome);
+    }
 }

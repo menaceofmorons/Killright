@@ -128,4 +128,22 @@ public sealed class DuckDbzKillStatisticsCache : IzKillStatisticsCache
 
         return Task.CompletedTask;
     }
+
+    public Task ClearNoHistoryMarkerAsync(
+        long characterId,
+        CancellationToken cancellationToken = default)
+    {
+        using var connection = new DuckDBConnection(_database.ConnectionString);
+        connection.Open();
+
+        using var command = connection.CreateCommand();
+        command.CommandText = $"""
+            UPDATE main.zkill_statistics_cache
+            SET no_history_marker = FALSE
+            WHERE character_id = {characterId};
+            """;
+        command.ExecuteNonQuery();
+
+        return Task.CompletedTask;
+    }
 }

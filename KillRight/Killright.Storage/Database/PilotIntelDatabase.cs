@@ -67,6 +67,10 @@ public sealed class KillRightDatabase
                               );
                               """;
         command.ExecuteNonQuery();
+
+        using var addLastRecentCallUtc = connection.CreateCommand();
+        addLastRecentCallUtc.CommandText = "ALTER TABLE main.zkill_activity_cache ADD COLUMN IF NOT EXISTS last_recent_call_utc TEXT;";
+        addLastRecentCallUtc.ExecuteNonQuery();
     }
 
     private static void CreateRecentKillmailCache(DuckDBConnection connection)

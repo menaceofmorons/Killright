@@ -298,29 +298,73 @@ public partial class DiagnosticsWindow : Window
         if (!Confirm("Clear Identity Cache?\n\nThis will force fresh ESI lookups."))
             return;
 
-        _service.ExecuteNonQuery("DELETE FROM main.pilot_identity_cache;");
+        ClearIdentityCache();
         RefreshAll();
         RunSelectedQuery();
     }
 
     private void ClearActivity_Click(object sender, RoutedEventArgs e)
     {
-        if (!Confirm("Clear Activity Cache?\n\nThis will clear derived activity rows."))
+        if (!Confirm("Clear Activity Cache?\n\nThis will clear derived activity rows, the stored Last Active, and the last recent-call time."))
             return;
 
-        _service.ExecuteNonQuery("DELETE FROM main.zkill_activity_cache;");
+        ClearActivityCache();
         RefreshAll();
         RunSelectedQuery();
     }
 
     private void ClearKillmail_Click(object sender, RoutedEventArgs e)
     {
-        if (!Confirm("Clear Recent Killmail Cache?\n\nThis will force recent killmail retrieval."))
+        if (!Confirm("Clear Recent Killmail Cache?\n\nThis will force recent killmail retrieval and reset the last recent-call time."))
             return;
 
-        _service.ExecuteNonQuery("DELETE FROM main.zkill_recent_killmail_cache;");
+        ClearKillmailCache();
         RefreshAll();
         RunSelectedQuery();
+    }
+
+    private void ClearStatistics_Click(object sender, RoutedEventArgs e)
+    {
+        if (!Confirm("Clear Statistics Cache?\n\nThis will force fresh zKill statistics lookups."))
+            return;
+
+        ClearStatisticsCache();
+        RefreshAll();
+        RunSelectedQuery();
+    }
+
+    private void ClearAll_Click(object sender, RoutedEventArgs e)
+    {
+        if (!Confirm("Clear All Caches?\n\nThis will clear the identity, activity, recent killmail and statistics caches, and reset the last recent-call time."))
+            return;
+
+        ClearIdentityCache();
+        ClearActivityCache();
+        ClearKillmailCache();
+        ClearStatisticsCache();
+        RefreshAll();
+        RunSelectedQuery();
+    }
+
+    private void ClearIdentityCache()
+    {
+        _service.ExecuteNonQuery("DELETE FROM main.pilot_identity_cache;");
+    }
+
+    private void ClearActivityCache()
+    {
+        _service.ExecuteNonQuery("DELETE FROM main.zkill_activity_cache;");
+    }
+
+    private void ClearKillmailCache()
+    {
+        _service.ExecuteNonQuery("DELETE FROM main.zkill_recent_killmail_cache;");
+        _service.ExecuteNonQuery("UPDATE main.zkill_activity_cache SET last_recent_call_utc = NULL;");
+    }
+
+    private void ClearStatisticsCache()
+    {
+        _service.ExecuteNonQuery("DELETE FROM main.zkill_statistics_cache;");
     }
 
     private void CopySummary_Click(object sender, RoutedEventArgs e)

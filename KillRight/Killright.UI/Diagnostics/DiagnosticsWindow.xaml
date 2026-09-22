@@ -31,6 +31,8 @@
                 <Button Content="Clear Identity Cache" Width="170" Margin="2" Click="ClearIdentity_Click" />
                 <Button Content="Clear Activity Cache" Width="170" Margin="2" Click="ClearActivity_Click" />
                 <Button Content="Clear Killmail Cache" Width="170" Margin="2" Click="ClearKillmail_Click" />
+                <Button Content="Clear Statistics Cache" Width="170" Margin="2" Click="ClearStatistics_Click" />
+                <Button Content="Clear All" Width="170" Margin="2" Click="ClearAll_Click" />
             </WrapPanel>
 
             <TextBlock x:Name="SummaryText" FontFamily="Consolas" />

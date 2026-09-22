@@ -13,6 +13,7 @@ public sealed class zKillActivityCacheRecord
     public zKillActivityType? LastActivityType { get; init; }
     public required DateTimeOffset CheckedAtUtc { get; init; }
     public string? Error { get; init; }
+    public DateTimeOffset? LastSuccessfulRecentCallUtc { get; init; }
 
     public zKillActivity ToActivity()
     {
@@ -24,7 +25,8 @@ public sealed class zKillActivityCacheRecord
             LastActiveUtc,
             LastActivityType,
             CheckedAtUtc,
-            Error);
+            Error,
+            LastSuccessfulRecentCallUtc);
     }
 
     public static zKillActivityCacheRecord FromActivity(zKillActivity activity)
@@ -38,7 +40,8 @@ public sealed class zKillActivityCacheRecord
             LastActiveUtc = activity.LastActiveUtc,
             LastActivityType = activity.LastActivityType,
             CheckedAtUtc = activity.CheckedAtUtc,
-            Error = activity.Error
+            Error = activity.Error,
+            LastSuccessfulRecentCallUtc = activity.LastSuccessfulRecentCallUtc
         };
     }
 }

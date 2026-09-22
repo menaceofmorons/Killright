@@ -24,42 +24,39 @@ public sealed class zKillClient : IzKillClient
             _http.DefaultRequestHeaders.AcceptEncoding.Add(new StringWithQualityHeaderValue("gzip"));
     }
 
-    public async Task<IReadOnlyList<KillmailRecord>> GetRecentKillmailsAsync(
+    public async Task<zKillRecentKillmailResult> GetRecentKillmailsAsync(
         long characterId,
         int pastSeconds,
         CancellationToken cancellationToken = default)
     {
         var safePastSeconds = Math.Max(1, pastSeconds);
 
-        return await LoadKillmailsAsync(
-            $"api/characterID/{characterId}/pastSeconds/{safePastSeconds}/",
-            characterId,
-            cancellationToken);
-    }
+        try
+        {
+            using var response = await _http.GetAsync(
+                $"api/characterID/{characterId}/pastSeconds/{safePastSeconds}/",
+                cancellationToken);
 
-    public async Task<zKillActivity?> GetLatestActivityAsync(
-        long characterId,
-        CancellationToken cancellationToken = default)
-    {
-        var payload = await LoadzKillKillmailsAsync(
-            $"api/characterID/{characterId}/",
-            cancellationToken);
+            if ((int)response.StatusCode == 204)
+                return new zKillRecentKillmailResult(zKillRecentKillmailOutcome.Success, []);
 
-        var latest = payload.FirstOrDefault();
+            if (!response.IsSuccessStatusCode)
+                return new zKillRecentKillmailResult(zKillRecentKillmailOutcome.Failure, []);
 
-        if (latest is null)
-            return null;
+            var json = await response.Content.ReadAsStringAsync(cancellationToken);
 
-        var isLoss = latest.victim.character_id == characterId;
+            if (IsNoHistoryResponse(json))
+                return new zKillRecentKillmailResult(zKillRecentKillmailOutcome.NoHistory, []);
 
-        return new zKillActivity(
-            characterId,
-            true,
-            0,
-            0,
-            latest.killmail_time,
-            isLoss ? zKillActivityType.Loss : zKillActivityType.Kill,
-            ApplicationClock.UtcNow);
+            var payload = JsonSerializer.Deserialize<List<zKillRecentKillmailDto>>(json) ?? [];
+            var records = BuildKillmailRecords(payload, characterId);
+
+            return new zKillRecentKillmailResult(zKillRecentKillmailOutcome.Success, records);
+        }
+        catch
+        {
+            return new zKillRecentKillmailResult(zKillRecentKillmailOutcome.Failure, []);
+        }
     }
 
     public async Task<zKillStatisticsResult> GetStatisticsAsync(
@@ -109,12 +106,10 @@ public sealed class zKillClient : IzKillClient
         }
     }
 
-    private async Task<IReadOnlyList<KillmailRecord>> LoadKillmailsAsync(
-        string requestUri,
-        long characterId,
-        CancellationToken cancellationToken)
+    private static IReadOnlyList<KillmailRecord> BuildKillmailRecords(
+        List<zKillRecentKillmailDto> payload,
+        long characterId)
     {
-        var payload = await LoadzKillKillmailsAsync(requestUri, cancellationToken);
         var records = new List<KillmailRecord>();
         var cachedAtUtc = ApplicationClock.UtcNow;
 
@@ -141,32 +136,6 @@ public sealed class zKillClient : IzKillClient
         }
 
         return records;
-    }
-
-    private async Task<IReadOnlyList<zKillRecentKillmailDto>> LoadzKillKillmailsAsync(
-        string requestUri,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            using var response = await _http.GetAsync(requestUri, cancellationToken);
-
-            if ((int)response.StatusCode == 204)
-                return [];
-
-            if (!response.IsSuccessStatusCode)
-                return [];
-
-            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-
-            return await JsonSerializer.DeserializeAsync<List<zKillRecentKillmailDto>>(
-                stream,
-                cancellationToken: cancellationToken) ?? [];
-        }
-        catch
-        {
-            return [];
-        }
     }
 
     private sealed class zKillRecentKillmailDto

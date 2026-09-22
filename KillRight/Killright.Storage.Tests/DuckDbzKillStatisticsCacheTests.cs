@@ -48,6 +48,22 @@ public sealed class DuckDbzKillStatisticsCacheTests
         var cached = await cache.GetAsync(98798418, TimeSpan.FromDays(30));
 
         Assert.NotNull(cached);
+        Assert.True(cached!.NoHistory);
+    }
+
+    [Fact]
+    public async Task ClearNoHistoryMarkerAsync_ClearsPreviouslySetMarker()
+    {
+        var (_, cache) = CreateCache();
+
+        await cache.UpsertAsync(98798418, new zKillStatistics(), "Unk", noHistory: true);
+
+        await cache.ClearNoHistoryMarkerAsync(98798418);
+
+        var cached = await cache.GetAsync(98798418, TimeSpan.FromDays(30));
+
+        Assert.NotNull(cached);
+        Assert.False(cached!.NoHistory);
     }
 
     [Fact]

@@ -196,35 +196,6 @@ public sealed class DuckDbRecentKillmailCache : IRecentKillmailCache
         return Task.CompletedTask;
     }
 
-    public Task<DateTimeOffset?> GetMostRecentKillmailAsync(
-        long characterId,
-        CancellationToken cancellationToken = default)
-    {
-        using var connection = new DuckDBConnection(_database.ConnectionString);
-        connection.Open();
-
-        using var command = connection.CreateCommand();
-        command.CommandText = $"""
-                              SELECT MAX(kill_time_utc)
-                              FROM main.zkill_recent_killmail_cache
-                              WHERE character_id = {characterId};
-                              """;
-
-        var value = command.ExecuteScalar();
-
-        if (value is null || value is DBNull)
-            return Task.FromResult<DateTimeOffset?>(null);
-
-        var text = value.ToString();
-
-        if (string.IsNullOrWhiteSpace(text))
-            return Task.FromResult<DateTimeOffset?>(null);
-
-        return DateTimeOffset.TryParse(text, out var parsed)
-            ? Task.FromResult<DateTimeOffset?>(parsed)
-            : Task.FromResult<DateTimeOffset?>(null);
-    }
-
     private static bool KillmailExists(
         DuckDBConnection connection,
         long killmailId)

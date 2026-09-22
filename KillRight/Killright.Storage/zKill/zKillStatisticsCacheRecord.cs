@@ -24,7 +24,8 @@ public sealed class zKillStatisticsCacheRecord
             soloRatio = SoloRatio,
             avgGangSize = AvgGangSize,
             shipsLost = ShipsLost,
-            soloLosses = SoloLosses
+            soloLosses = SoloLosses,
+            NoHistory = NoHistory
         };
     }
 
