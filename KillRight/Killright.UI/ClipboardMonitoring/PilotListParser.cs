@@ -7,7 +7,7 @@ public static class PilotListParser
         var names = text.Split('\n')
             .Select(x => x.Trim())
             .Where(IsValidEveCharacterName)
-            .Distinct(StringComparer.Ordinal)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
         return names;

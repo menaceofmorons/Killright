@@ -17,6 +17,8 @@ public sealed class DuckDbPilotIdentityCache : IPilotIdentityCache
 
     public Task<Pilot?> GetAsync(string inputName, TimeSpan maximumAge, CancellationToken cancellationToken = default)
     {
+        var normalizedInputName = PilotIdentityCacheRecord.NormalizeInputName(inputName);
+
         using var connection = new DuckDBConnection(_database.ConnectionString);
         connection.Open();
 
@@ -35,7 +37,7 @@ public sealed class DuckDbPilotIdentityCache : IPilotIdentityCache
                                      alliance_ticker,
                                      cached_at_utc
                               FROM pilot_identity_cache
-                              WHERE input_name = {SqlValueFormatter.String(inputName)}
+                              WHERE input_name = {SqlValueFormatter.String(normalizedInputName)}
                               LIMIT 1;
                               """;
 

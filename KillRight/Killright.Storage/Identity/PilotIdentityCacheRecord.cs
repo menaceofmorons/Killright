@@ -40,11 +40,16 @@ public sealed class PilotIdentityCacheRecord
         };
     }
 
+    public static string NormalizeInputName(string inputName)
+    {
+        return inputName.Trim().ToUpperInvariant();
+    }
+
     public static PilotIdentityCacheRecord FromPilot(Pilot pilot)
     {
         return new PilotIdentityCacheRecord
         {
-            InputName = pilot.InputName,
+            InputName = NormalizeInputName(pilot.InputName),
             CharacterId = pilot.CharacterId,
             CharacterName = pilot.CharacterName,
             VerifyStatus = pilot.VerifyStatus,

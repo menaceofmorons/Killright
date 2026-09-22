@@ -98,7 +98,7 @@ public sealed class EsiClient : IEsiClient
             }
 
             var result = await response.Content.ReadFromJsonAsync<EsiUniverseIdsResponse>(JsonOptions, cancellationToken);
-            var match = result?.Characters?.FirstOrDefault(c => string.Equals(c.Name, exactPilotName, StringComparison.Ordinal));
+            var match = result?.Characters?.FirstOrDefault();
             return new CharacterLookupResult(true, match);
         }
         catch

@@ -27,6 +27,23 @@ public sealed class EsiClientTests
     }
 
     [Fact]
+    public async Task ResolvePilotAsync_InputCasingDiffersFromCanonical_StillResolves()
+    {
+        var handler = new ScriptedHttpMessageHandler()
+            .OnUriContaining("universe/ids", HttpStatusCode.OK, """{"characters":[{"id":95465499,"name":"T'ral Vsengne"}]}""")
+            .OnUriContaining("characters/95465499", HttpStatusCode.OK, """{"name":"T'ral Vsengne","corporation_id":98765,"security_status":-1.2}""")
+            .OnUriContaining("corporations/98765", HttpStatusCode.OK, """{"name":"Test Corp","ticker":"TSTC"}""");
+
+        var client = new EsiClient(new HttpClient(handler));
+
+        var pilot = await client.ResolvePilotAsync("T'RAL VSENGNE");
+
+        Assert.Equal(VerifyStatus.Partial, pilot.VerifyStatus);
+        Assert.Equal(95465499, pilot.CharacterId);
+        Assert.Equal("T'ral Vsengne", pilot.CharacterName);
+    }
+
+    [Fact]
     public async Task ResolvePilotAsync_FullResolutionNoAlliance_ReturnsPartialWithFullData()
     {
         var handler = new ScriptedHttpMessageHandler()

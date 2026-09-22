@@ -23,6 +23,34 @@ public sealed class DuckDbPilotIdentityCacheTests
     }
 
     [Fact]
+    public async Task GetAsync_DifferentInputCasing_ReturnsSameCachedRow()
+    {
+        var (_, cache) = CreateCache();
+
+        var pilot = new Pilot { InputName = "Lukas Naarii", VerifyStatus = VerifyStatus.NoMatch };
+        await cache.UpsertAsync(pilot);
+
+        var cached = await cache.GetAsync("LUKAS NAARII", TimeSpan.FromHours(24));
+
+        Assert.NotNull(cached);
+    }
+
+    [Fact]
+    public async Task UpsertAsync_DifferentCasingSameCharacter_OverwritesSingleRow()
+    {
+        var (_, cache) = CreateCache();
+
+        await cache.UpsertAsync(new Pilot { InputName = "Lukas Naarii", VerifyStatus = VerifyStatus.NoMatch });
+        await cache.UpsertAsync(new Pilot { InputName = "lukas naarii", VerifyStatus = VerifyStatus.NoMatch });
+
+        var cachedLower = await cache.GetAsync("lukas naarii", TimeSpan.FromHours(24));
+        var cachedUpper = await cache.GetAsync("LUKAS NAARII", TimeSpan.FromHours(24));
+
+        Assert.NotNull(cachedLower);
+        Assert.NotNull(cachedUpper);
+    }
+
+    [Fact]
     public async Task UpsertAsync_CompleteLookup_IsCached()
     {
         var (_, cache) = CreateCache();
