@@ -20,20 +20,21 @@ public sealed class DiagnosticsDataService
         {
             IdentityCacheRows = ExecuteScalarInt("SELECT COUNT(*) FROM main.pilot_identity_cache;"),
             ActivityCacheRows = ExecuteScalarInt("SELECT COUNT(*) FROM main.zkill_activity_cache;"),
-            RecentKillmailRows = ExecuteScalarInt("SELECT COUNT(*) FROM main.zkill_recent_killmail_cache;"),
+            RecentKillmailRows = ExecuteScalarInt("SELECT COUNT(*) FROM main.zkill_killmails;"),
             DuplicateKillmailRows = ExecuteScalarInt("""
                 SELECT COUNT(*)
                 FROM (
                     SELECT killmail_id
-                    FROM main.zkill_recent_killmail_cache
+                    FROM main.zkill_killmails
                     GROUP BY killmail_id
                     HAVING COUNT(*) > 1
                 );
                 """),
             ExpiredKillmailRows = ExecuteScalarInt($"""
                 SELECT COUNT(*)
-                FROM main.zkill_recent_killmail_cache
-                WHERE kill_time_utc < '{ApplicationClock.UtcNow.AddDays(-7).UtcDateTime:O}';
+                FROM main.zkill_killmails
+                WHERE is_qualifying = FALSE
+                  AND kill_time_utc < '{ApplicationClock.UtcNow.AddDays(-14).UtcDateTime:O}';
                 """),
             CurrentUtc = DateTimeOffset.UtcNow,
             EffectiveUtc = ApplicationClock.UtcNow,

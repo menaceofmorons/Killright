@@ -3,10 +3,14 @@ using Killright.Integration.zKill.History;
 using Killright.Storage.GroupHistory.Models;
 
 #endif
+using Killright.Shared.Killmails;
+
 namespace Killright.UI.Configuration;
 
 public sealed class ApplicationSettings
 {
+    public int RecentWindowDays { get; init; } = RecentWindowDefaults.DefaultWindowDays;
+
 #if HISTORIC_RELATIONSHIPS
     public GroupHistoryApplicationSettings GroupHistory { get; init; } = new();
 #endif

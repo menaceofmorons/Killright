@@ -1,7 +1,6 @@
 using System.Net.Http.Headers;
 using System.Text.Json;
 using Killright.Shared.Killmails;
-using Killright.Shared.Time;
 using Killright.Shared.zKill;
 
 namespace Killright.Integration.zKill;
@@ -38,25 +37,24 @@ public sealed class zKillClient : IzKillClient
                 cancellationToken);
 
             if ((int)response.StatusCode == 204)
-                return new zKillRecentKillmailResult(zKillRecentKillmailOutcome.Success, [], []);
+                return new zKillRecentKillmailResult(zKillRecentKillmailOutcome.Success, []);
 
             if (!response.IsSuccessStatusCode)
-                return new zKillRecentKillmailResult(zKillRecentKillmailOutcome.Failure, [], []);
+                return new zKillRecentKillmailResult(zKillRecentKillmailOutcome.Failure, []);
 
             var json = await response.Content.ReadAsStringAsync(cancellationToken);
 
             if (IsNoHistoryResponse(json))
-                return new zKillRecentKillmailResult(zKillRecentKillmailOutcome.NoHistory, [], []);
+                return new zKillRecentKillmailResult(zKillRecentKillmailOutcome.NoHistory, []);
 
             var payload = JsonSerializer.Deserialize<List<zKillRecentKillmailDto>>(json) ?? [];
-            var records = BuildKillmailRecords(payload, characterId);
             var rawKillmails = BuildRawKillmails(payload);
 
-            return new zKillRecentKillmailResult(zKillRecentKillmailOutcome.Success, records, rawKillmails);
+            return new zKillRecentKillmailResult(zKillRecentKillmailOutcome.Success, rawKillmails);
         }
         catch
         {
-            return new zKillRecentKillmailResult(zKillRecentKillmailOutcome.Failure, [], []);
+            return new zKillRecentKillmailResult(zKillRecentKillmailOutcome.Failure, []);
         }
     }
 
@@ -105,38 +103,6 @@ public sealed class zKillClient : IzKillClient
         {
             return false;
         }
-    }
-
-    private static IReadOnlyList<KillmailRecord> BuildKillmailRecords(
-        List<zKillRecentKillmailDto> payload,
-        long characterId)
-    {
-        var records = new List<KillmailRecord>();
-        var cachedAtUtc = ApplicationClock.UtcNow;
-
-        foreach (var killmail in payload)
-        {
-            var isLoss = killmail.victim.character_id == characterId;
-            var shipTypeId = isLoss
-                ? killmail.victim.ship_type_id
-                : killmail.attackers.FirstOrDefault(attacker => attacker.character_id == characterId)?.ship_type_id;
-
-            records.Add(new KillmailRecord(
-                killmail.killmail_id,
-                killmail.zkb.hash,
-                characterId,
-                killmail.killmail_time,
-                isLoss,
-                killmail.attackers.Count,
-                killmail.zkb.solo,
-                shipTypeId,
-                killmail.solar_system_id,
-                killmail.zkb.locationID,
-                killmail.zkb.npc,
-                cachedAtUtc));
-        }
-
-        return records;
     }
 
     private static IReadOnlyList<RawKillmail> BuildRawKillmails(

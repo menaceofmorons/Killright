@@ -101,9 +101,6 @@ public sealed class zKillClientTests
         var result = await client.GetRecentKillmailsAsync(95465499, 604800);
 
         Assert.Equal(zKillRecentKillmailOutcome.Success, result.Outcome);
-        Assert.Single(result.Killmails);
-        Assert.Equal(123456, result.Killmails[0].KillmailId);
-        Assert.False(result.Killmails[0].IsLoss);
 
         Assert.Single(result.RawKillmails);
         var raw = result.RawKillmails[0];
@@ -128,7 +125,7 @@ public sealed class zKillClientTests
         var result = await client.GetRecentKillmailsAsync(91321792, 3600);
 
         Assert.Equal(zKillRecentKillmailOutcome.Success, result.Outcome);
-        Assert.Empty(result.Killmails);
+        Assert.Empty(result.RawKillmails);
     }
 
     [Fact]
@@ -142,7 +139,7 @@ public sealed class zKillClientTests
         var result = await client.GetRecentKillmailsAsync(91321792, 3600);
 
         Assert.Equal(zKillRecentKillmailOutcome.Success, result.Outcome);
-        Assert.Empty(result.Killmails);
+        Assert.Empty(result.RawKillmails);
     }
 
     [Fact]
@@ -156,7 +153,7 @@ public sealed class zKillClientTests
         var result = await client.GetRecentKillmailsAsync(98798418, 604800);
 
         Assert.Equal(zKillRecentKillmailOutcome.NoHistory, result.Outcome);
-        Assert.Empty(result.Killmails);
+        Assert.Empty(result.RawKillmails);
     }
 
     [Fact]

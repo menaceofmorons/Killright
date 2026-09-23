@@ -1,4 +1,5 @@
 ﻿{
+  "recentWindowDays": 14,
   "groupHistory": {
     "importBatchSize": 150,
     "parallelDownloadWorkers": 20,

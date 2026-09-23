@@ -94,7 +94,7 @@ public partial class App : Application
         zKillActivityCache =
             new DuckDbzKillActivityCache(database);
         RecentKillmailCache =
-            new DuckDbRecentKillmailCache(database);
+            new DuckDbRecentKillmailCache(database, Settings.RecentWindowDays);
         KillmailStore =
             new DuckDbKillmailStore(database);
         zKillStatisticsCache =

@@ -1,7 +1,6 @@
 using DuckDB.NET.Data;
 using Killright.Integration.zKill;
 using Killright.Shared.Data;
-using Killright.Shared.Killmails;
 using Killright.Shared.Time;
 using Killright.Shared.zKill;
 using Killright.Storage.Database;
@@ -11,59 +10,12 @@ namespace Killright.Storage.Killmails;
 public sealed class DuckDbRecentKillmailCache : IRecentKillmailCache
 {
     private readonly KillRightDatabase _database;
+    private readonly int _recentWindowDays;
 
-    public DuckDbRecentKillmailCache(KillRightDatabase database)
+    public DuckDbRecentKillmailCache(KillRightDatabase database, int recentWindowDays)
     {
         _database = database;
-    }
-
-    public Task<IReadOnlyList<KillmailRecord>> GetForCharacterAsync(
-        long characterId,
-        CancellationToken cancellationToken = default)
-    {
-        using var connection = new DuckDBConnection(_database.ConnectionString);
-        connection.Open();
-
-        using var command = connection.CreateCommand();
-        command.CommandText = $"""
-                              SELECT killmail_id,
-                                     killmail_hash,
-                                     character_id,
-                                     kill_time_utc,
-                                     is_loss,
-                                     attacker_count,
-                                     is_solo,
-                                     ship_type_id,
-                                     system_id,
-                                     location_id,
-                                     is_npc,
-                                     cached_at_utc
-                              FROM main.zkill_recent_killmail_cache
-                              WHERE character_id = {characterId}
-                              ORDER BY kill_time_utc DESC;
-                              """;
-
-        using var reader = command.ExecuteReader();
-        var results = new List<KillmailRecord>();
-
-        while (reader.Read())
-        {
-            results.Add(new KillmailRecord(
-                reader.GetInt64(0),
-                reader.GetNullableString(1),
-                reader.GetInt64(2),
-                reader.GetDateTimeOffset(3),
-                reader.GetBoolean(4),
-                reader.GetInt32(5),
-                reader.GetBoolean(6),
-                reader.GetNullableInt64(7),
-                reader.GetNullableInt64(8),
-                reader.GetNullableInt64(9),
-                reader.GetBoolean(10),
-                reader.GetDateTimeOffset(11)));
-        }
-
-        return Task.FromResult<IReadOnlyList<KillmailRecord>>(results);
+        _recentWindowDays = recentWindowDays;
     }
 
     public Task<zKillActivity> GetDerivedActivityAsync(
@@ -78,10 +30,17 @@ public sealed class DuckDbRecentKillmailCache : IRecentKillmailCache
         using var command = connection.CreateCommand();
         command.CommandText = $"""
                               SELECT kill_time_utc,
-                                     is_loss,
+                                     TRUE AS is_loss,
                                      is_solo
-                              FROM main.zkill_recent_killmail_cache
-                              WHERE character_id = {characterId}
+                              FROM main.zkill_killmails
+                              WHERE victim_character_id = {characterId}
+                              UNION ALL
+                              SELECT k.kill_time_utc,
+                                     FALSE AS is_loss,
+                                     k.is_solo
+                              FROM main.zkill_killmail_attackers a
+                              JOIN main.zkill_killmails k ON k.killmail_id = a.killmail_id
+                              WHERE a.character_id = {characterId}
                               ORDER BY kill_time_utc DESC;
                               """;
 
@@ -128,89 +87,43 @@ public sealed class DuckDbRecentKillmailCache : IRecentKillmailCache
             ApplicationClock.UtcNow));
     }
 
-    public Task UpsertAsync(
-        IReadOnlyList<KillmailRecord> killmails,
-        CancellationToken cancellationToken = default)
-    {
-        if (killmails.Count == 0)
-            return Task.CompletedTask;
-
-        using var connection = new DuckDBConnection(_database.ConnectionString);
-        connection.Open();
-
-        foreach (var killmail in killmails)
-        {
-            if (KillmailExists(connection, killmail.KillmailId))
-                continue;
-
-            using var insertCommand = connection.CreateCommand();
-            insertCommand.CommandText = $"""
-                INSERT INTO main.zkill_recent_killmail_cache (
-                    killmail_id,
-                    killmail_hash,
-                    character_id,
-                    kill_time_utc,
-                    is_loss,
-                    attacker_count,
-                    is_solo,
-                    ship_type_id,
-                    system_id,
-                    location_id,
-                    is_npc,
-                    cached_at_utc
-                ) VALUES (
-                    {killmail.KillmailId},
-                    {SqlValueFormatter.String(killmail.KillmailHash)},
-                    {killmail.CharacterId},
-                    {SqlValueFormatter.Date(killmail.KillTimeUtc)},
-                    {SqlValueFormatter.Bool(killmail.IsLoss)},
-                    {killmail.AttackerCount},
-                    {SqlValueFormatter.Bool(killmail.IsSolo)},
-                    {SqlValueFormatter.Long(killmail.ShipTypeId)},
-                    {SqlValueFormatter.Long(killmail.SystemId)},
-                    {SqlValueFormatter.Long(killmail.LocationId)},
-                    {SqlValueFormatter.Bool(killmail.IsNpc)},
-                    {SqlValueFormatter.Date(killmail.CachedAtUtc)}
-                );
-                """;
-            insertCommand.ExecuteNonQuery();
-        }
-
-        return Task.CompletedTask;
-    }
-
     public Task RemoveExpiredAsync(CancellationToken cancellationToken = default)
     {
-        var cutoffUtc = ApplicationClock.UtcNow.AddDays(-7);
+        var cutoffUtc = ApplicationClock.UtcNow.AddDays(-_recentWindowDays);
 
         using var connection = new DuckDBConnection(_database.ConnectionString);
         connection.Open();
 
-        using var command = connection.CreateCommand();
-        command.CommandText = $"""
-                              DELETE FROM main.zkill_recent_killmail_cache
-                              WHERE kill_time_utc < {SqlValueFormatter.Date(cutoffUtc)};
-                              """;
-        command.ExecuteNonQuery();
+        using var transaction = connection.BeginTransaction();
+
+        using (var deleteAttackers = connection.CreateCommand())
+        {
+            deleteAttackers.Transaction = transaction;
+            deleteAttackers.CommandText = $"""
+                                DELETE FROM main.zkill_killmail_attackers
+                                WHERE killmail_id IN (
+                                    SELECT killmail_id
+                                    FROM main.zkill_killmails
+                                    WHERE is_qualifying = FALSE
+                                      AND kill_time_utc < {SqlValueFormatter.Date(cutoffUtc)}
+                                );
+                                """;
+            deleteAttackers.ExecuteNonQuery();
+        }
+
+        using (var deleteKillmails = connection.CreateCommand())
+        {
+            deleteKillmails.Transaction = transaction;
+            deleteKillmails.CommandText = $"""
+                                DELETE FROM main.zkill_killmails
+                                WHERE is_qualifying = FALSE
+                                  AND kill_time_utc < {SqlValueFormatter.Date(cutoffUtc)};
+                                """;
+            deleteKillmails.ExecuteNonQuery();
+        }
+
+        transaction.Commit();
 
         return Task.CompletedTask;
-    }
-
-    private static bool KillmailExists(
-        DuckDBConnection connection,
-        long killmailId)
-    {
-        using var command = connection.CreateCommand();
-        command.CommandText = $"""
-                              SELECT COUNT(*)
-                              FROM main.zkill_recent_killmail_cache
-                              WHERE killmail_id = {killmailId};
-                              """;
-
-        var value = command.ExecuteScalar();
-
-        return value is not null &&
-               value is not DBNull &&
-               Convert.ToInt64(value) > 0;
     }
 }

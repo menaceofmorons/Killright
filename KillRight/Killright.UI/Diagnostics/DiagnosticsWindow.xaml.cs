@@ -14,7 +14,15 @@ public partial class DiagnosticsWindow : Window
                    MAX(kill_time_utc) AS latest_killmail_utc,
                    MAX(cached_at_utc) AS latest_cache_write_utc,
                    COUNT(*) AS cached_killmails
-            FROM main.zkill_recent_killmail_cache
+            FROM (
+                SELECT victim_character_id AS character_id, kill_time_utc, cached_at_utc
+                FROM main.zkill_killmails
+                WHERE victim_character_id IS NOT NULL
+                UNION ALL
+                SELECT a.character_id, k.kill_time_utc, k.cached_at_utc
+                FROM main.zkill_killmail_attackers a
+                JOIN main.zkill_killmails k ON k.killmail_id = a.killmail_id
+            ) combined
             GROUP BY character_id
             ORDER BY latest_killmail_utc DESC;
             """,
@@ -22,7 +30,15 @@ public partial class DiagnosticsWindow : Window
         ["Latest Killmail Per Pilot"] = """
             SELECT character_id,
                    MAX(kill_time_utc) AS latest_killmail_utc
-            FROM main.zkill_recent_killmail_cache
+            FROM (
+                SELECT victim_character_id AS character_id, kill_time_utc
+                FROM main.zkill_killmails
+                WHERE victim_character_id IS NOT NULL
+                UNION ALL
+                SELECT a.character_id, k.kill_time_utc
+                FROM main.zkill_killmail_attackers a
+                JOIN main.zkill_killmails k ON k.killmail_id = a.killmail_id
+            ) combined
             GROUP BY character_id
             ORDER BY latest_killmail_utc DESC;
             """,
@@ -30,7 +46,14 @@ public partial class DiagnosticsWindow : Window
         ["Killmail Count Per Pilot"] = """
             SELECT character_id,
                    COUNT(*) AS cached_killmails
-            FROM main.zkill_recent_killmail_cache
+            FROM (
+                SELECT victim_character_id AS character_id
+                FROM main.zkill_killmails
+                WHERE victim_character_id IS NOT NULL
+                UNION ALL
+                SELECT character_id
+                FROM main.zkill_killmail_attackers
+            ) combined
             GROUP BY character_id
             ORDER BY character_id;
             """,
@@ -38,35 +61,36 @@ public partial class DiagnosticsWindow : Window
         ["Duplicate Killmail Check"] = """
             SELECT killmail_id,
                    COUNT(*) AS duplicate_count
-            FROM main.zkill_recent_killmail_cache
+            FROM main.zkill_killmails
             GROUP BY killmail_id
             HAVING COUNT(*) > 1;
             """,
 
         ["Expired Killmail Check"] = """
             SELECT *
-            FROM main.zkill_recent_killmail_cache
-            WHERE kill_time_utc < CAST((CURRENT_TIMESTAMP - INTERVAL '7 days') AS TEXT)
+            FROM main.zkill_killmails
+            WHERE is_qualifying = FALSE
+              AND kill_time_utc < '{{RecentWindowCutoffUtc}}'
             ORDER BY kill_time_utc DESC;
             """,
 
         ["Recent Killmail Rows"] = """
             SELECT *
-            FROM main.zkill_recent_killmail_cache
+            FROM main.zkill_killmails
             ORDER BY kill_time_utc DESC
             LIMIT 100;
             """,
 
         ["Ship Usage Check"] = """
             SELECT killmail_id,
-                   character_id,
-                   is_loss,
-                   ship_type_id,
-                   attacker_count,
+                   victim_character_id,
+                   is_qualifying,
+                   victim_ship_type_id,
+                   unique_attacker_count,
                    is_solo,
                    kill_time_utc
-            FROM main.zkill_recent_killmail_cache
-            WHERE ship_type_id IS NOT NULL
+            FROM main.zkill_killmails
+            WHERE victim_ship_type_id IS NOT NULL
             ORDER BY kill_time_utc DESC
             LIMIT 100;
             """,
@@ -149,7 +173,7 @@ public partial class DiagnosticsWindow : Window
 
         KillmailGrid.ItemsSource = _service.LoadRows("""
             SELECT *
-            FROM main.zkill_recent_killmail_cache
+            FROM main.zkill_killmails
             ORDER BY kill_time_utc DESC
             LIMIT 500;
             """).DefaultView;
@@ -181,6 +205,8 @@ public partial class DiagnosticsWindow : Window
 
         if (!DiagnosticQueries.TryGetValue(selected, out var sql))
             return;
+
+        sql = sql.Replace("{{RecentWindowCutoffUtc}}", ApplicationClock.UtcNow.AddDays(-14).UtcDateTime.ToString("O"));
 
         QueryText.Text = sql;
         _lastQueryRows = _service.LoadRows(sql);
@@ -358,7 +384,8 @@ public partial class DiagnosticsWindow : Window
 
     private void ClearKillmailCache()
     {
-        _service.ExecuteNonQuery("DELETE FROM main.zkill_recent_killmail_cache;");
+        _service.ExecuteNonQuery("DELETE FROM main.zkill_killmail_attackers;");
+        _service.ExecuteNonQuery("DELETE FROM main.zkill_killmails;");
         _service.ExecuteNonQuery("UPDATE main.zkill_activity_cache SET last_recent_call_utc = NULL;");
     }
 

@@ -25,7 +25,6 @@ public sealed class KillRightDatabase
 
         CreatePilotIdentityCache(connection);
         CreatezKillActivityCache(connection);
-        CreateRecentKillmailCache(connection);
         CreatezKillStatisticsCache(connection);
         CreateZkillKillmailsTables(connection);
     }
@@ -72,28 +71,6 @@ public sealed class KillRightDatabase
         using var addLastRecentCallUtc = connection.CreateCommand();
         addLastRecentCallUtc.CommandText = "ALTER TABLE main.zkill_activity_cache ADD COLUMN IF NOT EXISTS last_recent_call_utc TEXT;";
         addLastRecentCallUtc.ExecuteNonQuery();
-    }
-
-    private static void CreateRecentKillmailCache(DuckDBConnection connection)
-    {
-        using var command = connection.CreateCommand();
-        command.CommandText = """
-                              CREATE TABLE IF NOT EXISTS main.zkill_recent_killmail_cache (
-                                  killmail_id BIGINT PRIMARY KEY,
-                                  killmail_hash TEXT,
-                                  character_id BIGINT NOT NULL,
-                                  kill_time_utc TEXT NOT NULL,
-                                  is_loss BOOLEAN NOT NULL,
-                                  attacker_count INTEGER NOT NULL,
-                                  is_solo BOOLEAN NOT NULL,
-                                  ship_type_id BIGINT,
-                                  system_id BIGINT,
-                                  location_id BIGINT,
-                                  is_npc BOOLEAN NOT NULL,
-                                  cached_at_utc TEXT NOT NULL
-                              );
-                              """;
-        command.ExecuteNonQuery();
     }
 
     private static void CreatezKillStatisticsCache(DuckDBConnection connection)

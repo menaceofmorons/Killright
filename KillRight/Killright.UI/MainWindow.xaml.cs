@@ -330,14 +330,11 @@ public partial class MainWindow : Window
             switch (result.Outcome)
             {
                 case zKillRecentKillmailOutcome.Success:
-                    if (result.Killmails.Count > 0)
+                    if (result.RawKillmails.Count > 0)
                     {
-                        await App.RecentKillmailCache.UpsertAsync(result.Killmails);
+                        await App.KillmailStore.UpsertAsync(characterId, result.RawKillmails);
                         await App.zKillStatisticsCache.ClearNoHistoryMarkerAsync(characterId);
                     }
-
-                    if (result.RawKillmails.Count > 0)
-                        await App.KillmailStore.UpsertAsync(characterId, result.RawKillmails);
 
                     return (now, false);
 
