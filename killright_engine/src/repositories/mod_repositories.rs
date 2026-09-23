@@ -1,6 +1,9 @@
 #[path = "duckdb_database.rs"]
 pub mod duckdb_database;
 
+#[path = "killmail_relationship_repository.rs"]
+pub mod killmail_relationship_repository;
+
 #[path = "pilot_identity_repository.rs"]
 pub mod pilot_identity_repository;
 
