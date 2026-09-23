@@ -336,6 +336,9 @@ public partial class MainWindow : Window
                         await App.zKillStatisticsCache.ClearNoHistoryMarkerAsync(characterId);
                     }
 
+                    if (result.RawKillmails.Count > 0)
+                        await App.KillmailStore.UpsertAsync(characterId, result.RawKillmails);
+
                     return (now, false);
 
                 case zKillRecentKillmailOutcome.NoHistory:

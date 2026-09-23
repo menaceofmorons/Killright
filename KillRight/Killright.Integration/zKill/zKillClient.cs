@@ -38,24 +38,25 @@ public sealed class zKillClient : IzKillClient
                 cancellationToken);
 
             if ((int)response.StatusCode == 204)
-                return new zKillRecentKillmailResult(zKillRecentKillmailOutcome.Success, []);
+                return new zKillRecentKillmailResult(zKillRecentKillmailOutcome.Success, [], []);
 
             if (!response.IsSuccessStatusCode)
-                return new zKillRecentKillmailResult(zKillRecentKillmailOutcome.Failure, []);
+                return new zKillRecentKillmailResult(zKillRecentKillmailOutcome.Failure, [], []);
 
             var json = await response.Content.ReadAsStringAsync(cancellationToken);
 
             if (IsNoHistoryResponse(json))
-                return new zKillRecentKillmailResult(zKillRecentKillmailOutcome.NoHistory, []);
+                return new zKillRecentKillmailResult(zKillRecentKillmailOutcome.NoHistory, [], []);
 
             var payload = JsonSerializer.Deserialize<List<zKillRecentKillmailDto>>(json) ?? [];
             var records = BuildKillmailRecords(payload, characterId);
+            var rawKillmails = BuildRawKillmails(payload);
 
-            return new zKillRecentKillmailResult(zKillRecentKillmailOutcome.Success, records);
+            return new zKillRecentKillmailResult(zKillRecentKillmailOutcome.Success, records, rawKillmails);
         }
         catch
         {
-            return new zKillRecentKillmailResult(zKillRecentKillmailOutcome.Failure, []);
+            return new zKillRecentKillmailResult(zKillRecentKillmailOutcome.Failure, [], []);
         }
     }
 
@@ -138,6 +139,37 @@ public sealed class zKillClient : IzKillClient
         return records;
     }
 
+    private static IReadOnlyList<RawKillmail> BuildRawKillmails(
+        List<zKillRecentKillmailDto> payload)
+    {
+        var raw = new List<RawKillmail>();
+
+        foreach (var killmail in payload)
+        {
+            var attackers = killmail.attackers
+                .Select(attacker => new KillmailAttacker(
+                    attacker.character_id,
+                    attacker.corporation_id,
+                    attacker.alliance_id,
+                    attacker.ship_type_id))
+                .ToList();
+
+            raw.Add(new RawKillmail(
+                killmail.killmail_id,
+                killmail.zkb.hash,
+                killmail.killmail_time,
+                killmail.solar_system_id,
+                killmail.zkb.locationID,
+                killmail.victim.character_id,
+                killmail.victim.ship_type_id,
+                killmail.zkb.solo,
+                killmail.zkb.npc,
+                attackers));
+        }
+
+        return raw;
+    }
+
     private sealed class zKillRecentKillmailDto
     {
         public long killmail_id { get; set; }
@@ -157,6 +189,8 @@ public sealed class zKillClient : IzKillClient
     private sealed class zKillAttackerDto
     {
         public long? character_id { get; set; }
+        public long? corporation_id { get; set; }
+        public long? alliance_id { get; set; }
         public long? ship_type_id { get; set; }
     }
 

@@ -25,6 +25,7 @@ public partial class App : Application
     public static IPilotIdentityCache PilotIdentityCache { get; private set; } = null!;
     public static IzKillActivityCache zKillActivityCache { get; private set; } = null!;
     public static IRecentKillmailCache RecentKillmailCache { get; private set; } = null!;
+    public static IKillmailStore KillmailStore { get; private set; } = null!;
     public static IzKillStatisticsCache zKillStatisticsCache { get; private set; } = null!;
     public static RustRecentStyleClient RecentStyleClient { get; private set; } = null!;
     public static IKillrightEngineRuntime EngineRuntime { get; private set; } = null!;
@@ -94,6 +95,8 @@ public partial class App : Application
             new DuckDbzKillActivityCache(database);
         RecentKillmailCache =
             new DuckDbRecentKillmailCache(database);
+        KillmailStore =
+            new DuckDbKillmailStore(database);
         zKillStatisticsCache =
             new DuckDbzKillStatisticsCache(database);
 

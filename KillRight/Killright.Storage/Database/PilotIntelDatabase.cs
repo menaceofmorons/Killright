@@ -27,6 +27,7 @@ public sealed class KillRightDatabase
         CreatezKillActivityCache(connection);
         CreateRecentKillmailCache(connection);
         CreatezKillStatisticsCache(connection);
+        CreateZkillKillmailsTables(connection);
     }
 
     private static void CreatePilotIdentityCache(DuckDBConnection connection)
@@ -120,5 +121,40 @@ public sealed class KillRightDatabase
         using var addNoHistoryMarker = connection.CreateCommand();
         addNoHistoryMarker.CommandText = "ALTER TABLE main.zkill_statistics_cache ADD COLUMN IF NOT EXISTS no_history_marker BOOLEAN;";
         addNoHistoryMarker.ExecuteNonQuery();
+    }
+
+    private static void CreateZkillKillmailsTables(DuckDBConnection connection)
+    {
+        using var killmailsCommand = connection.CreateCommand();
+        killmailsCommand.CommandText = """
+                              CREATE TABLE IF NOT EXISTS main.zkill_killmails (
+                                  killmail_id BIGINT PRIMARY KEY,
+                                  killmail_hash TEXT,
+                                  kill_time_utc TEXT NOT NULL,
+                                  system_id BIGINT NOT NULL,
+                                  location_id BIGINT,
+                                  victim_character_id BIGINT,
+                                  victim_ship_type_id BIGINT,
+                                  unique_attacker_count INTEGER NOT NULL,
+                                  is_solo BOOLEAN NOT NULL,
+                                  is_npc BOOLEAN NOT NULL,
+                                  is_qualifying BOOLEAN NOT NULL,
+                                  cached_at_utc TEXT NOT NULL
+                              );
+                              """;
+        killmailsCommand.ExecuteNonQuery();
+
+        using var attackersCommand = connection.CreateCommand();
+        attackersCommand.CommandText = """
+                              CREATE TABLE IF NOT EXISTS main.zkill_killmail_attackers (
+                                  killmail_id BIGINT NOT NULL,
+                                  character_id BIGINT NOT NULL,
+                                  corporation_id BIGINT,
+                                  alliance_id BIGINT,
+                                  ship_type_id BIGINT,
+                                  PRIMARY KEY (killmail_id, character_id)
+                              );
+                              """;
+        attackersCommand.ExecuteNonQuery();
     }
 }
