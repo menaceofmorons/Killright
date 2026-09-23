@@ -11,6 +11,12 @@ public sealed class ApplicationSettings
 {
     public int RecentWindowDays { get; init; } = RecentWindowDefaults.DefaultWindowDays;
 
+    public string? BackupFolder { get; init; }
+
+    public int BackupRotationCount { get; init; } = KillmailBackupDefaults.DefaultRotationCount;
+
+    public bool AlphaReleaseSchemaLocked { get; init; }
+
 #if HISTORIC_RELATIONSHIPS
     public GroupHistoryApplicationSettings GroupHistory { get; init; } = new();
 #endif

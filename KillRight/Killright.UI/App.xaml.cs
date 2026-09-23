@@ -4,6 +4,7 @@ using System.Net.Http;
 using System.Windows;
 using Killright.Integration.Esi;
 using Killright.Integration.zKill;
+using Killright.Shared.Killmails;
 using Killright.Storage.Database;
 using Killright.Storage.Diagnostics;
 #if HISTORIC_RELATIONSHIPS
@@ -30,6 +31,8 @@ public partial class App : Application
     public static RustRecentStyleClient RecentStyleClient { get; private set; } = null!;
     public static IKillrightEngineRuntime EngineRuntime { get; private set; } = null!;
     public static KillRightDatabase Database { get; private set; } = null!;
+    public static IKillmailBackupService KillmailBackupService { get; private set; } = null!;
+    public static bool SkipBackupOnClose { get; set; }
 
 #if HISTORIC_RELATIONSHIPS
     // Step 19.00.59: exposed for the not-yet-designed Historic Analysis
@@ -79,6 +82,8 @@ public partial class App : Application
             "KillRight",
             "KillRight.duckdb");
 
+        var databaseFileExistedBeforeStartup = File.Exists(databasePath);
+
         var database =
             new KillRightDatabase(
                 new KillRightDatabaseOptions
@@ -87,7 +92,26 @@ public partial class App : Application
                 });
 
         Database = database;
-        database.EnsureCreated();
+
+        var wasRecovered = database.EnsureCreatedWithRecovery(reason =>
+            EngineFailureLog.Record($"Operational database was corrupt at startup and has been rebuilt. {reason}"));
+
+        var backupFolder = Settings.BackupFolder
+            ?? Path.Combine(Path.GetDirectoryName(databasePath)!, KillmailBackupDefaults.DefaultBackupFolderName);
+
+        KillmailBackupService =
+            new DuckDbKillmailBackupService(
+                database,
+                backupFolder,
+                Settings.BackupRotationCount);
+
+        if (wasRecovered || !databaseFileExistedBeforeStartup)
+        {
+            var restored = KillmailBackupService.TryRestoreAsync().GetAwaiter().GetResult();
+
+            if (restored)
+                EngineFailureLog.Record("Restored killmail and attacker tables from the latest backup.");
+        }
 
         PilotIdentityCache =
             new DuckDbPilotIdentityCache(database);
@@ -154,6 +178,18 @@ public partial class App : Application
     {
         try
         {
+            if (!SkipBackupOnClose)
+            {
+                try
+                {
+                    KillmailBackupService?.BackupAsync().GetAwaiter().GetResult();
+                }
+                catch (Exception ex)
+                {
+                    EngineFailureLog.Record($"Backup on close failed; previous backup copy stands. {ex.Message}");
+                }
+            }
+
             EngineRuntime?.Dispose();
         }
         finally

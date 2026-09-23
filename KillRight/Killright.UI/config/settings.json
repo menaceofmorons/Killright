@@ -1,5 +1,7 @@
 ﻿{
   "recentWindowDays": 14,
+  "backupRotationCount": 5,
+  "alphaReleaseSchemaLocked": false,
   "groupHistory": {
     "importBatchSize": 150,
     "parallelDownloadWorkers": 20,

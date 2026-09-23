@@ -157,7 +157,9 @@ public partial class DiagnosticsWindow : Window
             $"Activity Cache Rows:      {summary.ActivityCacheRows}\n" +
             $"Recent Killmail Rows:     {summary.RecentKillmailRows}\n" +
             $"Duplicate Killmail Rows:  {summary.DuplicateKillmailRows}\n" +
-            $"Expired Killmail Rows:    {summary.ExpiredKillmailRows}";
+            $"Expired Killmail Rows:    {summary.ExpiredKillmailRows}\n" +
+            $"Schema Version:           {summary.SchemaVersion}\n" +
+            $"Alpha Release Locked:     {summary.AlphaReleaseSchemaLocked}";
 
         IdentityGrid.ItemsSource = _service.LoadRows("""
             SELECT *
@@ -195,6 +197,8 @@ public partial class DiagnosticsWindow : Window
                Recent Killmail Rows:     {summary.RecentKillmailRows}
                Duplicate Killmail Rows:  {summary.DuplicateKillmailRows}
                Expired Killmail Rows:    {summary.ExpiredKillmailRows}
+               Schema Version:           {summary.SchemaVersion}
+               Alpha Release Locked:     {summary.AlphaReleaseSchemaLocked}
                """;
     }
 
@@ -341,7 +345,7 @@ public partial class DiagnosticsWindow : Window
 
     private void ClearKillmail_Click(object sender, RoutedEventArgs e)
     {
-        if (!Confirm("Clear Recent Killmail Cache?\n\nThis will force recent killmail retrieval and reset the last recent-call time."))
+        if (!Confirm("Clear Recent Killmail Cache?\n\nThis will force recent killmail retrieval and reset the last recent-call time. Retained qualifying killmails are not deleted."))
             return;
 
         ClearKillmailCache();
@@ -361,7 +365,7 @@ public partial class DiagnosticsWindow : Window
 
     private void ClearAll_Click(object sender, RoutedEventArgs e)
     {
-        if (!Confirm("Clear All Caches?\n\nThis will clear the identity, activity, recent killmail and statistics caches, and reset the last recent-call time."))
+        if (!Confirm("Clear All Caches?\n\nThis will clear the identity, activity, recent killmail and statistics caches, and reset the last recent-call time. Retained qualifying killmails are not deleted."))
             return;
 
         ClearIdentityCache();
@@ -384,8 +388,15 @@ public partial class DiagnosticsWindow : Window
 
     private void ClearKillmailCache()
     {
-        _service.ExecuteNonQuery("DELETE FROM main.zkill_killmail_attackers;");
-        _service.ExecuteNonQuery("DELETE FROM main.zkill_killmails;");
+        _service.ExecuteNonQuery("""
+            DELETE FROM main.zkill_killmail_attackers
+            WHERE killmail_id IN (
+                SELECT killmail_id
+                FROM main.zkill_killmails
+                WHERE is_qualifying = FALSE
+            );
+            """);
+        _service.ExecuteNonQuery("DELETE FROM main.zkill_killmails WHERE is_qualifying = FALSE;");
         _service.ExecuteNonQuery("UPDATE main.zkill_activity_cache SET last_recent_call_utc = NULL;");
     }
 

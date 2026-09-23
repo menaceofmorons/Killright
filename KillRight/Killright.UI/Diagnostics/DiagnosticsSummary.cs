@@ -10,4 +10,6 @@ public sealed class DiagnosticsSummary
     public DateTimeOffset CurrentUtc { get; init; }
     public DateTimeOffset EffectiveUtc { get; init; }
     public int OffsetDays { get; init; }
+    public int SchemaVersion { get; init; }
+    public bool AlphaReleaseSchemaLocked { get; init; }
 }

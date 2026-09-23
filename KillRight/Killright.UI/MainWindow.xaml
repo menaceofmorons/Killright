@@ -6,15 +6,22 @@
         Width="1450"
         Topmost="True">
     <DockPanel Margin="8">
-        <Menu DockPanel.Dock="Top">
-            <MenuItem x:Name="DeveloperMenu"
-                      Header="_Developer">
-                <MenuItem Header="Diagnostics"
-                          Click="Diagnostics_Click" />
-                <MenuItem Header="Reset Developer Clock"
-                          Click="ResetDeveloperClock_Click" />
-            </MenuItem>
-        </Menu>
+        <DockPanel DockPanel.Dock="Top">
+            <Menu DockPanel.Dock="Left">
+                <MenuItem x:Name="DeveloperMenu"
+                          Header="_Developer">
+                    <MenuItem Header="Diagnostics"
+                              Click="Diagnostics_Click" />
+                    <MenuItem Header="Reset Developer Clock"
+                              Click="ResetDeveloperClock_Click" />
+                </MenuItem>
+            </Menu>
+            <CheckBox x:Name="SkipBackupOnCloseCheckBox"
+                      Content="Skip backup on close"
+                      DockPanel.Dock="Left"
+                      VerticalAlignment="Center"
+                      Margin="12,0,0,0" />
+        </DockPanel>
         <Grid>
             <ScrollViewer HorizontalScrollBarVisibility="Auto"
                           VerticalScrollBarVisibility="Disabled">

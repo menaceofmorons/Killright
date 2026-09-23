@@ -38,7 +38,9 @@ public sealed class DiagnosticsDataService
                 """),
             CurrentUtc = DateTimeOffset.UtcNow,
             EffectiveUtc = ApplicationClock.UtcNow,
-            OffsetDays = ApplicationClock.OffsetDays
+            OffsetDays = ApplicationClock.OffsetDays,
+            SchemaVersion = _database.GetSchemaVersion(),
+            AlphaReleaseSchemaLocked = App.Settings.AlphaReleaseSchemaLocked
         };
     }
 

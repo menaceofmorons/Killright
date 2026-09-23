@@ -4,6 +4,8 @@ namespace Killright.Storage.Database;
 
 public sealed class KillRightDatabase
 {
+    public const int CurrentSchemaVersion = 1;
+
     private readonly KillRightDatabaseOptions _options;
 
     public KillRightDatabase(KillRightDatabaseOptions options)
@@ -27,6 +29,49 @@ public sealed class KillRightDatabase
         CreatezKillActivityCache(connection);
         CreatezKillStatisticsCache(connection);
         CreateZkillKillmailsTables(connection);
+        CreateSchemaMetadata(connection);
+    }
+
+    public bool EnsureCreatedWithRecovery(Action<string>? onCorruptionDetected = null)
+    {
+        try
+        {
+            EnsureCreated();
+            return false;
+        }
+        catch (Exception ex)
+        {
+            onCorruptionDetected?.Invoke(ex.Message);
+            QuarantineExistingDatabaseFiles();
+            EnsureCreated();
+            return true;
+        }
+    }
+
+    public int GetSchemaVersion()
+    {
+        using var connection = new DuckDBConnection(ConnectionString);
+        connection.Open();
+
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT schema_version FROM main.schema_metadata LIMIT 1;";
+
+        return Convert.ToInt32(command.ExecuteScalar());
+    }
+
+    private void QuarantineExistingDatabaseFiles()
+    {
+        if (!File.Exists(_options.DatabasePath))
+            return;
+
+        var quarantineSuffix = $".corrupt-{DateTimeOffset.UtcNow:yyyyMMddHHmmss}";
+
+        File.Move(_options.DatabasePath, _options.DatabasePath + quarantineSuffix, overwrite: true);
+
+        var walPath = _options.DatabasePath + ".wal";
+
+        if (File.Exists(walPath))
+            File.Move(walPath, walPath + quarantineSuffix, overwrite: true);
     }
 
     private static void CreatePilotIdentityCache(DuckDBConnection connection)
@@ -133,5 +178,24 @@ public sealed class KillRightDatabase
                               );
                               """;
         attackersCommand.ExecuteNonQuery();
+    }
+
+    private static void CreateSchemaMetadata(DuckDBConnection connection)
+    {
+        using var createTable = connection.CreateCommand();
+        createTable.CommandText = """
+                              CREATE TABLE IF NOT EXISTS main.schema_metadata (
+                                  schema_version INTEGER NOT NULL
+                              );
+                              """;
+        createTable.ExecuteNonQuery();
+
+        using var insertIfAbsent = connection.CreateCommand();
+        insertIfAbsent.CommandText = $"""
+                              INSERT INTO main.schema_metadata (schema_version)
+                              SELECT {CurrentSchemaVersion}
+                              WHERE NOT EXISTS (SELECT 1 FROM main.schema_metadata);
+                              """;
+        insertIfAbsent.ExecuteNonQuery();
     }
 }

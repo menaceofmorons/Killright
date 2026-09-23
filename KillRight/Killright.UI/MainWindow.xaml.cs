@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Interop;
 using Killright.Core.Activity;
@@ -42,6 +43,12 @@ public partial class MainWindow : Window
         base.OnSourceInitialized(e);
         _clipboardMonitor = new ClipboardMonitor(new WindowInteropHelper(this).Handle);
         _clipboardMonitor.ClipboardChanged += ClipboardChanged;
+    }
+
+    protected override void OnClosing(CancelEventArgs e)
+    {
+        base.OnClosing(e);
+        App.SkipBackupOnClose = SkipBackupOnCloseCheckBox.IsChecked == true;
     }
 
     private async void ClipboardChanged(object? sender, EventArgs e)
