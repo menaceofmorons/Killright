@@ -1,3 +1,6 @@
+#[path = "activity_cache_repository.rs"]
+pub mod activity_cache_repository;
+
 #[path = "duckdb_database.rs"]
 pub mod duckdb_database;
 

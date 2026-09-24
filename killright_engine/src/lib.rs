@@ -17,6 +17,7 @@ use kr_engine::group_analysis::group_detection_configuration::{
 use kr_engine::group_analysis::group_relationship_scoring::score_and_select_relationships;
 use kr_engine::recent_style::recent_style_analyzer::analyze_recent_style;
 use kr_engine::recent_style::{RecentKillmailInput, RecentStyleRequest};
+use kr_engine::repositories::activity_cache_repository::ActivityCacheRepository;
 use kr_engine::repositories::killmail_relationship_repository::KillmailRelationshipRepository;
 use kr_engine::repositories::pilot_identity_repository::PilotIdentityRepository;
 use kr_engine::repositories::recent_killmail_repository::{RecentKillmailRepository, RecentKillmailSnapshot};
@@ -112,7 +113,8 @@ pub extern "C" fn pintel_analyze_pilot(request_json: *const c_char) -> *mut c_ch
 
         let recent_killmail_repository = RecentKillmailRepository::new(database_path.clone());
         let zkill_statistics_repository = ZKillStatisticsRepository::new(database_path.clone());
-        let pilot_identity_repository = PilotIdentityRepository::new(database_path);
+        let pilot_identity_repository = PilotIdentityRepository::new(database_path.clone());
+        let activity_cache_repository = ActivityCacheRepository::new(database_path);
 
         let all_killmails = match recent_killmail_repository.get_for_character(request.character_id) {
             Ok(value) => value,
@@ -126,11 +128,21 @@ pub extern "C" fn pintel_analyze_pilot(request_json: *const c_char) -> *mut c_ch
             Ok(value) => value,
             Err(_) => return failure_response(request.character_id, "repository_read_error:identity"),
         };
+        let coverage_start_text = match activity_cache_repository.get_coverage_start_for_character(request.character_id) {
+            Ok(value) => value,
+            Err(_) => return failure_response(request.character_id, "repository_read_error:activity_cache"),
+        };
+        let coverage_start_utc = coverage_start_text.and_then(|text| {
+            DateTime::parse_from_rfc3339(&text)
+                .ok()
+                .map(|value| value.with_timezone(&Utc))
+        });
 
+        let now = Utc::now();
         let recent_window_killmails = filter_recent_window(
             &all_killmails,
             recent_window_configuration.recent_window_days,
-            Utc::now(),
+            now,
         );
         let killmails = recent_window_killmails
             .iter()
@@ -152,6 +164,9 @@ pub extern "C" fn pintel_analyze_pilot(request_json: *const c_char) -> *mut c_ch
             statistics.as_ref(),
             &recent_window_killmails,
             identity.as_ref(),
+            coverage_start_utc,
+            now,
+            recent_window_configuration.recent_window_days,
         );
         response_json(PilotAnalysisResponse {
             character_id: request.character_id,

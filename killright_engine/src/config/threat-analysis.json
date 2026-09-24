@@ -1,14 +1,6 @@
 ﻿{
-  "version": "1.0",
-  "lastUpdated": "2026-07-31",
-
-  "bands": [
-    { "name": "Low", "minimumScore": 1, "maximumScore": 20 },
-    { "name": "Medium", "minimumScore": 21, "maximumScore": 40 },
-    { "name": "High", "minimumScore": 41, "maximumScore": 60 },
-    { "name": "Very High", "minimumScore": 61, "maximumScore": 80 },
-    { "name": "Extreme", "minimumScore": 81, "maximumScore": 100 }
-  ],
+  "version": "2.0",
+  "lastUpdated": "2026-09-24",
 
   "componentWeights": {
     "historicalCapability": { "maximumScore": 40 },
@@ -111,12 +103,12 @@
   },
 
   "recentActivity": {
-    "bands": [
-      { "maximumRecentKills": 0, "score": 0 },
-      { "maximumRecentKills": 5, "score": 2 },
-      { "maximumRecentKills": 20, "score": 5 },
-      { "maximumRecentKills": 50, "score": 8 },
-      { "maximumRecentKills": 999999, "score": 10 }
+    "points": [
+      { "dailyRate": 0.0, "score": 0.0 },
+      { "dailyRate": 0.71, "score": 2.0 },
+      { "dailyRate": 2.86, "score": 5.0 },
+      { "dailyRate": 7.14, "score": 8.0 },
+      { "dailyRate": 14.3, "score": 10.0 }
     ]
   },
 
@@ -130,11 +122,8 @@
   },
 
   "confidence": {
-    "low": { "minimumHistoricalVolume": 0 },
-    "medium": { "minimumHistoricalVolume": 25 },
-    "high": {
-      "minimumHistoricalVolume": 100,
-      "requiresRecentActivity": true
-    }
+    "killWeight": 0.9,
+    "killCap": 100.0,
+    "recentActivityBonus": 10.0
   }
 }

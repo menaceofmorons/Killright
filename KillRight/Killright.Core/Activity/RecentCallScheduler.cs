@@ -33,6 +33,25 @@ public static class RecentCallScheduler
         return Math.Clamp(hours * 3600, MinimumWindowSeconds, MaximumWindowSeconds);
     }
 
+    public static DateTimeOffset? ResolveCoverageStartUtc(
+        DateTimeOffset? storedCoverageStartUtc,
+        DateTimeOffset? previousSuccessfulCallUtc,
+        int? pastSecondsRequested,
+        DateTimeOffset now)
+    {
+        if (pastSecondsRequested is not int seconds)
+            return storedCoverageStartUtc;
+
+        var windowStartUtc = now - TimeSpan.FromSeconds(seconds);
+
+        var isFirstSuccessfulCall = storedCoverageStartUtc is null;
+        var leavesAGap = previousSuccessfulCallUtc is null || windowStartUtc > previousSuccessfulCallUtc;
+
+        return isFirstSuccessfulCall || leavesAGap
+            ? windowStartUtc
+            : storedCoverageStartUtc;
+    }
+
     public static bool ShouldShortCircuit(IReadOnlyDictionary<string, zKillStatisticsMonth>? months, DateTimeOffset today)
     {
         var hasCurrentMonthData = HasDataForMonth(months, today.Year, today.Month);

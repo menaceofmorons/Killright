@@ -3,16 +3,19 @@ using System.Linq;
 using System.Text.Json;
 using Killright.Core.Style;
 using Killright.Storage.Diagnostics;
+using Killright.UI.Configuration;
 
 namespace Killright.UI.Analysis;
 
 public sealed class RustRecentStyleClient
 {
     private readonly IKillrightEngineRuntime _runtime;
+    private readonly IReadOnlyList<ThreatBandSetting> _threatBands;
 
-    public RustRecentStyleClient(IKillrightEngineRuntime runtime)
+    public RustRecentStyleClient(IKillrightEngineRuntime runtime, IReadOnlyList<ThreatBandSetting>? threatBands = null)
     {
         _runtime = runtime;
+        _threatBands = ThreatBandSetting.ValidateOrDefault(threatBands);
     }
 
     public async Task<PilotEngineAnalysisResult> AnalyzeAsync(
@@ -34,7 +37,7 @@ public sealed class RustRecentStyleClient
 
             return new PilotEngineAnalysisResult(
                 MapRecentStyle(response?.recent_style),
-                MapThreatBand(response?.threat?.band),
+                MapThreatScore(response?.threat?.score),
                 FailureReason: null);
         }
         catch (Exception exception)
@@ -107,14 +110,9 @@ public sealed class RustRecentStyleClient
         };
     }
 
-    private static string MapThreatBand(string? value)
+    private string MapThreatScore(int? score)
     {
-        var normalized = value?.Trim();
-        return string.IsNullOrWhiteSpace(normalized)
-            ? "Unk"
-            : normalized == "Unknown"
-                ? "Unk"
-                : normalized;
+        return ThreatBandMapper.MapScore(score, _threatBands);
     }
 
     private static class RecentStyleContract
@@ -146,8 +144,7 @@ public sealed class RustRecentStyleClient
     private sealed class ThreatAnalysisResponse
     {
         public int score { get; set; }
-        public string? band { get; set; }
-        public string? confidence { get; set; }
+        public int confidence { get; set; }
     }
 
     private sealed class GroupDetectionResponse
@@ -200,6 +197,29 @@ public sealed record PilotEngineAnalysisResult(
 {
     public static PilotEngineAnalysisResult Failed(string reason) => new(
         StyleClassification.Unknown,
-        "Unk",
+        ThreatBandMapper.Unknown,
         reason);
+}
+
+public static class ThreatBandMapper
+{
+    public const string None = "None";
+    public const string Unknown = "Unk";
+
+    public static string MapScore(int? score, IReadOnlyList<ThreatBandSetting> bands)
+    {
+        if (score is not int value)
+            return Unknown;
+
+        if (value <= 0)
+            return None;
+
+        foreach (var band in bands)
+        {
+            if (value >= band.MinimumScore && value <= band.MaximumScore)
+                return band.Name;
+        }
+
+        return None;
+    }
 }

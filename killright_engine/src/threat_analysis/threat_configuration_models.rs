@@ -5,7 +5,6 @@ pub struct ThreatConfiguration {
     pub version: String,
     #[serde(rename = "lastUpdated")]
     pub last_updated: String,
-    pub bands: Vec<ThreatBandConfiguration>,
     #[serde(rename = "componentWeights")]
     pub component_weights: ThreatComponentWeights,
     #[serde(rename = "historicalCapability")]
@@ -18,15 +17,6 @@ pub struct ThreatConfiguration {
     #[serde(rename = "securityStatus")]
     pub security_status: SecurityStatusConfiguration,
     pub confidence: ConfidenceConfiguration,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct ThreatBandConfiguration {
-    pub name: String,
-    #[serde(rename = "minimumScore")]
-    pub minimum_score: i32,
-    #[serde(rename = "maximumScore")]
-    pub maximum_score: i32,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -137,14 +127,14 @@ pub struct LossQualityBand {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct RecentActivityConfiguration {
-    pub bands: Vec<RecentActivityBand>,
+    pub points: Vec<RecentActivityPoint>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct RecentActivityBand {
-    #[serde(rename = "maximumRecentKills")]
-    pub maximum_recent_kills: usize,
-    pub score: i32,
+pub struct RecentActivityPoint {
+    #[serde(rename = "dailyRate")]
+    pub daily_rate: f64,
+    pub score: f64,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -161,21 +151,10 @@ pub struct SecurityStatusBand {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ConfidenceConfiguration {
-    pub low: ConfidenceBand,
-    pub medium: ConfidenceBand,
-    pub high: HighConfidenceBand,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct ConfidenceBand {
-    #[serde(rename = "minimumHistoricalVolume")]
-    pub minimum_historical_volume: i32,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct HighConfidenceBand {
-    #[serde(rename = "minimumHistoricalVolume")]
-    pub minimum_historical_volume: i32,
-    #[serde(rename = "requiresRecentActivity")]
-    pub requires_recent_activity: bool,
+    #[serde(rename = "killWeight")]
+    pub kill_weight: f64,
+    #[serde(rename = "killCap")]
+    pub kill_cap: f64,
+    #[serde(rename = "recentActivityBonus")]
+    pub recent_activity_bonus: f64,
 }

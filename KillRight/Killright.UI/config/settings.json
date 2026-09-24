@@ -2,6 +2,13 @@
   "recentWindowDays": 14,
   "backupRotationCount": 5,
   "alphaReleaseSchemaLocked": false,
+  "threatBands": [
+    { "name": "Low", "minimumScore": 1, "maximumScore": 20 },
+    { "name": "Medium", "minimumScore": 21, "maximumScore": 40 },
+    { "name": "High", "minimumScore": 41, "maximumScore": 60 },
+    { "name": "Very High", "minimumScore": 61, "maximumScore": 80 },
+    { "name": "Extreme", "minimumScore": 81, "maximumScore": 100 }
+  ],
   "groupHistory": {
     "importBatchSize": 150,
     "parallelDownloadWorkers": 20,

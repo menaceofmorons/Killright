@@ -80,6 +80,46 @@ public sealed class RecentCallSchedulerTests
     }
 
     [Fact]
+    public void ResolveCoverageStartUtc_NoRequestMade_ReturnsStoredValueUnchanged()
+    {
+        var stored = Now.AddDays(-10);
+
+        var result = RecentCallScheduler.ResolveCoverageStartUtc(stored, Now.AddHours(-2), null, Now);
+
+        Assert.Equal(stored, result);
+    }
+
+    [Fact]
+    public void ResolveCoverageStartUtc_FirstSuccessfulCall_UsesRequestedWindowStart()
+    {
+        var result = RecentCallScheduler.ResolveCoverageStartUtc(null, null, 604800, Now);
+
+        Assert.Equal(Now.AddSeconds(-604800), result);
+    }
+
+    [Fact]
+    public void ResolveCoverageStartUtc_ContinuousWithPreviousCall_KeepsStoredValue()
+    {
+        var stored = Now.AddDays(-10);
+        var previousCall = Now.AddSeconds(-3600);
+
+        var result = RecentCallScheduler.ResolveCoverageStartUtc(stored, previousCall, 3900, Now);
+
+        Assert.Equal(stored, result);
+    }
+
+    [Fact]
+    public void ResolveCoverageStartUtc_GapSincePreviousCall_ResetsToWindowStart()
+    {
+        var stored = Now.AddDays(-10);
+        var previousCall = Now.AddDays(-8);
+
+        var result = RecentCallScheduler.ResolveCoverageStartUtc(stored, previousCall, 604800, Now);
+
+        Assert.Equal(Now.AddSeconds(-604800), result);
+    }
+
+    [Fact]
     public void ShouldShortCircuit_NullMonths_ReturnsTrue()
     {
         Assert.True(RecentCallScheduler.ShouldShortCircuit(null, Now));

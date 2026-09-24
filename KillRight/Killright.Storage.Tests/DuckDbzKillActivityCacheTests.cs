@@ -57,6 +57,33 @@ public sealed class DuckDbzKillActivityCacheTests
     }
 
     [Fact]
+    public async Task UpsertThenGet_RoundTripsRecentCoverageStartUtc()
+    {
+        var (_, cache) = CreateCache();
+
+        var lastCall = new DateTimeOffset(2026, 9, 22, 9, 30, 0, TimeSpan.Zero);
+        var coverageStart = new DateTimeOffset(2026, 9, 8, 9, 25, 0, TimeSpan.Zero);
+        var activity = new zKillActivity(
+            95465499,
+            true,
+            2,
+            0,
+            new DateTimeOffset(2026, 9, 20, 0, 0, 0, TimeSpan.Zero),
+            zKillActivityType.Kill,
+            DateTimeOffset.UtcNow,
+            null,
+            lastCall,
+            coverageStart);
+
+        await cache.UpsertAsync(activity);
+
+        var cached = await cache.GetAsync(95465499);
+
+        Assert.NotNull(cached);
+        Assert.Equal(coverageStart, cached!.RecentCoverageStartUtc);
+    }
+
+    [Fact]
     public async Task GetAsync_RowCheckedLongAgo_IsStillReturned()
     {
         var (_, cache) = CreateCache();

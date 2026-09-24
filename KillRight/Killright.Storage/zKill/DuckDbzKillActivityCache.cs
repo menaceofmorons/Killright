@@ -31,7 +31,8 @@ public sealed class DuckDbzKillActivityCache : IzKillActivityCache
                                      last_activity_type,
                                      checked_at_utc,
                                      error,
-                                     last_recent_call_utc
+                                     last_recent_call_utc,
+                                     recent_coverage_start_utc
                               FROM zkill_activity_cache
                               WHERE character_id = {characterId}
                               LIMIT 1;
@@ -54,7 +55,8 @@ public sealed class DuckDbzKillActivityCache : IzKillActivityCache
             LastActivityType = ReadActivityTypeOrNull(reader.GetNullableString(5)),
             CheckedAtUtc = checkedAtUtc,
             Error = reader.GetNullableString(7),
-            LastSuccessfulRecentCallUtc = reader.GetNullableDateTimeOffset(8)
+            LastSuccessfulRecentCallUtc = reader.GetNullableDateTimeOffset(8),
+            RecentCoverageStartUtc = reader.GetNullableDateTimeOffset(9)
         };
 
         return Task.FromResult<zKillActivity?>(record.ToActivity());
@@ -85,7 +87,8 @@ public sealed class DuckDbzKillActivityCache : IzKillActivityCache
                                             last_activity_type,
                                             checked_at_utc,
                                             error,
-                                            last_recent_call_utc
+                                            last_recent_call_utc,
+                                            recent_coverage_start_utc
                                         ) VALUES (
                                             {record.CharacterId},
                                             {SqlValueFormatter.Bool(record.HasPublicActivityData)},
@@ -95,7 +98,8 @@ public sealed class DuckDbzKillActivityCache : IzKillActivityCache
                                             {SqlValueFormatter.String(record.LastActivityType?.ToString())},
                                             {SqlValueFormatter.Date(record.CheckedAtUtc)},
                                             {SqlValueFormatter.String(record.Error)},
-                                            {SqlValueFormatter.Date(record.LastSuccessfulRecentCallUtc)}
+                                            {SqlValueFormatter.Date(record.LastSuccessfulRecentCallUtc)},
+                                            {SqlValueFormatter.Date(record.RecentCoverageStartUtc)}
                                         );
                                         """;
             insertCommand.ExecuteNonQuery();

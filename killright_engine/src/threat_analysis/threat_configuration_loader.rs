@@ -59,8 +59,9 @@ fn configuration_candidates() -> Vec<PathBuf> {
 
 fn validate_threat_configuration(configuration: &ThreatConfiguration) -> Result<(), String> {
     validate_component_weights(configuration)?;
-    validate_threat_bands(configuration)?;
     validate_non_negative_scores(configuration)?;
+    validate_recent_activity_points(configuration)?;
+    validate_security_status_bounds(configuration)?;
 
     Ok(())
 }
@@ -84,33 +85,50 @@ fn validate_component_weights(configuration: &ThreatConfiguration) -> Result<(),
     Ok(())
 }
 
-fn validate_threat_bands(configuration: &ThreatConfiguration) -> Result<(), String> {
-    let mut bands = configuration.bands.clone();
+fn validate_recent_activity_points(configuration: &ThreatConfiguration) -> Result<(), String> {
+    let points = &configuration.recent_activity.points;
 
-    bands.sort_by_key(|band| band.minimum_score);
-
-    let mut expected_minimum = 1;
-
-    for band in bands {
-        if band.minimum_score != expected_minimum {
-            return Err(format!(
-                "threat band '{}' starts at {}, expected {}",
-                band.name, band.minimum_score, expected_minimum
-            ));
-        }
-
-        if band.maximum_score < band.minimum_score {
-            return Err(format!(
-                "threat band '{}' maximum is below minimum",
-                band.name
-            ));
-        }
-
-        expected_minimum = band.maximum_score + 1;
+    if points.is_empty() {
+        return Err("recentActivity.points must not be empty".to_string());
     }
 
-    if expected_minimum != 101 {
-        return Err("threat bands must cover score range 1-100; None (score 0) is assigned by rule, not a configured band".to_string());
+    let maximum_score = configuration.component_weights.recent_activity.maximum_score as f64;
+    let mut previous_rate = f64::MIN;
+    let mut previous_score = f64::MIN;
+
+    for point in points {
+        if point.daily_rate <= previous_rate {
+            return Err("recentActivity.points must be strictly ordered by ascending dailyRate".to_string());
+        }
+
+        if point.score < previous_score {
+            return Err("recentActivity.points scores must be non-decreasing by dailyRate".to_string());
+        }
+
+        if point.score < 0.0 || point.score > maximum_score {
+            return Err(format!(
+                "recentActivity.points score {} is outside the component maximum of {}",
+                point.score, maximum_score
+            ));
+        }
+
+        previous_rate = point.daily_rate;
+        previous_score = point.score;
+    }
+
+    Ok(())
+}
+
+fn validate_security_status_bounds(configuration: &ThreatConfiguration) -> Result<(), String> {
+    let maximum_score = configuration.component_weights.security_status.maximum_score;
+
+    for band in &configuration.security_status.bands {
+        if band.score < 0 || band.score > maximum_score {
+            return Err(format!(
+                "securityStatus band score {} is outside the component maximum of {}",
+                band.score, maximum_score
+            ));
+        }
     }
 
     Ok(())

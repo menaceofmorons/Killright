@@ -11,4 +11,5 @@ public sealed record zKillActivity(
     zKillActivityType? LastActivityType,
     DateTimeOffset CheckedAtUtc,
     string? Error = null,
-    DateTimeOffset? LastSuccessfulRecentCallUtc = null);
+    DateTimeOffset? LastSuccessfulRecentCallUtc = null,
+    DateTimeOffset? RecentCoverageStartUtc = null);

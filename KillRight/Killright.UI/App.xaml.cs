@@ -138,7 +138,8 @@ public partial class App : Application
 
         RecentStyleClient =
             new RustRecentStyleClient(
-                EngineRuntime);
+                EngineRuntime,
+                Settings.ThreatBands);
 
         var esiHttpClient =
             new HttpClient

@@ -118,7 +118,7 @@ public partial class MainWindow : Window
 
                 var storedActivity = await SafeGetStoredActivityAsync(characterId);
 
-                var (newLastSuccessfulCallUtc, recentCallDidFail) = await RefreshRecentKillmailsAsync(
+                var (newLastSuccessfulCallUtc, recentCallDidFail, pastSecondsRequested) = await RefreshRecentKillmailsAsync(
                     characterId,
                     storedActivity,
                     statistics,
@@ -132,7 +132,8 @@ public partial class MainWindow : Window
                     statistics,
                     storedActivity,
                     killmailDerivedActivity,
-                    newLastSuccessfulCallUtc);
+                    newLastSuccessfulCallUtc,
+                    pastSecondsRequested);
 
                 var analysisResult = await App.RecentStyleClient.AnalyzeAsync(characterId);
                 recentStyle = analysisResult.RecentStyle;
@@ -278,7 +279,8 @@ public partial class MainWindow : Window
         zKillStatistics? statistics,
         zKillActivity? stored,
         zKillActivity? killmailDerived,
-        DateTimeOffset? newLastSuccessfulCallUtc)
+        DateTimeOffset? newLastSuccessfulCallUtc,
+        int? pastSecondsRequested)
     {
         try
         {
@@ -301,6 +303,7 @@ public partial class MainWindow : Window
             }
 
             var lastSuccessfulRecentCallUtc = newLastSuccessfulCallUtc ?? stored?.LastSuccessfulRecentCallUtc;
+            var recentCoverageStartUtc = ResolveCoverageStartUtc(stored, pastSecondsRequested);
 
             var hasPublicActivityData = lastActiveUtc is not null
                 || (stored?.HasPublicActivityData ?? false)
@@ -318,7 +321,8 @@ public partial class MainWindow : Window
                 lastActivityType,
                 ApplicationClock.UtcNow,
                 killmailDerived?.Error,
-                lastSuccessfulRecentCallUtc);
+                lastSuccessfulRecentCallUtc,
+                recentCoverageStartUtc);
 
             await App.zKillActivityCache.UpsertAsync(merged);
 
@@ -330,7 +334,16 @@ public partial class MainWindow : Window
         }
     }
 
-    private static async Task<(DateTimeOffset? NewLastSuccessfulCallUtc, bool Failed)> RefreshRecentKillmailsAsync(
+    private static DateTimeOffset? ResolveCoverageStartUtc(zKillActivity? stored, int? pastSecondsRequested)
+    {
+        return RecentCallScheduler.ResolveCoverageStartUtc(
+            stored?.RecentCoverageStartUtc,
+            stored?.LastSuccessfulRecentCallUtc,
+            pastSecondsRequested,
+            ApplicationClock.UtcNow);
+    }
+
+    private static async Task<(DateTimeOffset? NewLastSuccessfulCallUtc, bool Failed, int? PastSecondsRequested)> RefreshRecentKillmailsAsync(
         long characterId,
         zKillActivity? storedActivity,
         zKillStatistics? statistics,
@@ -344,7 +357,7 @@ public partial class MainWindow : Window
             var lastSuccessfulCallUtc = storedActivity?.LastSuccessfulRecentCallUtc;
 
             if (RecentCallScheduler.ShouldSkipForInterval(lastSuccessfulCallUtc, now))
-                return (null, false);
+                return (null, false, null);
 
             var noHistory = statistics?.NoHistory ?? false;
 
@@ -352,7 +365,7 @@ public partial class MainWindow : Window
                 && statisticsFetchedThisScan
                 && RecentCallScheduler.ShouldShortCircuit(statistics?.months, now))
             {
-                return (now, false);
+                return (now, false, null);
             }
 
             var pastSeconds = RecentCallScheduler.CalculatePastSeconds(lastSuccessfulCallUtc, now);
@@ -367,19 +380,19 @@ public partial class MainWindow : Window
                         await App.zKillStatisticsCache.ClearNoHistoryMarkerAsync(characterId);
                     }
 
-                    return (now, false);
+                    return (now, false, pastSeconds);
 
                 case zKillRecentKillmailOutcome.NoHistory:
-                    return (now, false);
+                    return (now, false, pastSeconds);
 
                 default:
-                    return (null, true);
+                    return (null, true, null);
             }
         }
         catch
         {
             // Recent killmail caching must not break the visible report.
-            return (null, true);
+            return (null, true, null);
         }
     }
 
