@@ -200,12 +200,12 @@ fn score_link(
     }
 }
 
-fn direct_strength(counted_shared_kills: i64, minimum_shared_events: i64, strength_step: i32) -> f64 {
+pub(crate) fn direct_strength(counted_shared_kills: i64, minimum_shared_events: i64, strength_step: i32) -> f64 {
     let levels_above_minimum = counted_shared_kills - minimum_shared_events + 1;
     (strength_step as f64 * levels_above_minimum as f64).min(100.0)
 }
 
-fn direct_confidence(
+pub(crate) fn direct_confidence(
     counted_shared_kill_gang_sizes: &[i64],
     split_bonus_applied: bool,
     counted_shared_kills: i64,
@@ -225,7 +225,7 @@ fn direct_confidence(
     (gang_quality * sample + bonus).min(100.0)
 }
 
-fn average_gang_size_weight(gang_sizes: &[i64], weights: &[GangSizeWeight]) -> f64 {
+pub(crate) fn average_gang_size_weight(gang_sizes: &[i64], weights: &[GangSizeWeight]) -> f64 {
     if gang_sizes.is_empty() {
         return 0.0;
     }
@@ -243,7 +243,7 @@ fn gang_size_weight(gang_size: i64, weights: &[GangSizeWeight]) -> f64 {
         .unwrap_or(0.0)
 }
 
-fn sample_factor(
+pub(crate) fn sample_factor(
     counted_shared_kills: i64,
     minimum_shared_events: i64,
     minimum: f64,
@@ -264,21 +264,23 @@ fn sample_factor(
     minimum + (maximum - minimum) * progress
 }
 
-fn chain_strength(weaker_link_strength: f64, chain_discount: f64, chain_age_days: f64, recent_window_days: i64) -> f64 {
+pub(crate) fn chain_strength(weaker_link_strength: f64, chain_discount: f64, chain_age_days: f64, recent_window_days: i64) -> f64 {
     let window = recent_window_days.max(1) as f64;
     let age_decay = (1.0 - chain_age_days / window).max(0.0);
 
     (weaker_link_strength * chain_discount * age_decay).min(100.0).max(0.0)
 }
 
-fn chain_confidence(weaker_link_confidence: f64, distinct_intermediary_count: i64, per_additional: i32, maximum_bonus: i32) -> f64 {
+pub(crate) fn intermediary_bonus(distinct_intermediary_count: i64, per_additional: i32, maximum_bonus: i32) -> f64 {
     let additional = (distinct_intermediary_count - 1).max(0);
-    let bonus = (additional as f64 * per_additional as f64).min(maximum_bonus as f64);
-
-    (weaker_link_confidence + bonus).min(100.0)
+    (additional as f64 * per_additional as f64).min(maximum_bonus as f64)
 }
 
-fn round_to_integer(value: f64) -> i32 {
+pub(crate) fn chain_confidence(weaker_link_confidence: f64, distinct_intermediary_count: i64, per_additional: i32, maximum_bonus: i32) -> f64 {
+    (weaker_link_confidence + intermediary_bonus(distinct_intermediary_count, per_additional, maximum_bonus)).min(100.0)
+}
+
+pub(crate) fn round_to_integer(value: f64) -> i32 {
     value.max(0.0).trunc() as i32
 }
 

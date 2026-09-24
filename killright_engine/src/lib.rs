@@ -7,13 +7,15 @@ use std::sync::{Mutex, OnceLock};
 #[path = "kr_engine.rs"]
 pub mod kr_engine;
 use kr_engine::contracts::{
-    GroupDetectionResponse, GroupRelationshipResponse, PilotAnalysisRequest, PilotAnalysisResponse,
+    GroupDetectionDiagnosticsEnvelope, GroupDetectionResponse, GroupRelationshipResponse, PilotAnalysisRequest,
+    PilotAnalysisResponse, ThreatDiagnosticsEnvelope,
 };
 use kr_engine::group_analysis::chained_relationship_analyzer::analyze_chained_relationships;
 use kr_engine::group_analysis::direct_relationship_analyzer::analyze_direct_relationships;
 use kr_engine::group_analysis::group_detection_configuration::{
     load_default_group_detection_configuration, GroupDetectionConfiguration,
 };
+use kr_engine::group_analysis::group_detection_diagnostics::run_group_detection_diagnostics;
 use kr_engine::group_analysis::group_relationship_scoring::score_and_select_relationships;
 use kr_engine::recent_style::recent_style_analyzer::analyze_recent_style;
 use kr_engine::recent_style::{RecentKillmailInput, RecentStyleRequest};
@@ -27,7 +29,8 @@ use kr_engine::shared::recent_window_configuration::{
     load_default_recent_window_configuration, RecentWindowConfiguration,
 };
 use kr_engine::threat_analysis::{
-    analyze_intrinsic_threat, load_default_threat_configuration, ThreatConfiguration,
+    analyze_intrinsic_threat, analyze_intrinsic_threat_diagnostics, load_default_threat_configuration,
+    ThreatConfiguration,
 };
 pub use kr_engine::*;
 struct RuntimeState {
@@ -237,6 +240,174 @@ fn analyze_group_detection(
         failure: None,
     })
 }
+#[no_mangle]
+pub extern "C" fn pintel_diagnose_group_detection(request_json: *const c_char) -> *mut c_char {
+    let result = panic::catch_unwind(|| {
+        if request_json.is_null() {
+            return group_detection_diagnostics_failure(0, "unreadable_request");
+        }
+        let request_text = unsafe { CStr::from_ptr(request_json) };
+        let request_text = match request_text.to_str() {
+            Ok(value) => value,
+            Err(_) => return group_detection_diagnostics_failure(0, "unreadable_request"),
+        };
+        let request = match serde_json::from_str::<PilotAnalysisRequest>(request_text) {
+            Ok(value) => value,
+            Err(_) => return group_detection_diagnostics_failure(0, "unreadable_request"),
+        };
+        let Some((database_path, _threat_configuration, recent_window_configuration, group_detection_configuration)) =
+            get_runtime_state()
+        else {
+            return group_detection_diagnostics_failure(request.character_id, "missing_runtime");
+        };
+        let Some(scanned_character_ids) = &request.scanned_character_ids else {
+            return group_detection_diagnostics_failure(request.character_id, "missing_scanned_character_ids");
+        };
+
+        let killmail_relationship_repository = KillmailRelationshipRepository::new(database_path.clone());
+        let pilot_identity_repository = PilotIdentityRepository::new(database_path);
+
+        let direct_evidence = match killmail_relationship_repository.get_attacker_evidence_for_scan_set(scanned_character_ids) {
+            Ok(value) => value,
+            Err(_) => return group_detection_diagnostics_failure(request.character_id, "repository_read_error:direct_evidence"),
+        };
+        let chain_evidence = match killmail_relationship_repository
+            .get_qualifying_attacker_evidence_touching_scan_set(scanned_character_ids)
+        {
+            Ok(value) => value,
+            Err(_) => return group_detection_diagnostics_failure(request.character_id, "repository_read_error:chain_evidence"),
+        };
+        let current_identities = match pilot_identity_repository.get_for_characters(scanned_character_ids) {
+            Ok(value) => value,
+            Err(_) => return group_detection_diagnostics_failure(request.character_id, "repository_read_error:identity"),
+        };
+
+        let diagnostics = run_group_detection_diagnostics(
+            &direct_evidence,
+            &chain_evidence,
+            &current_identities,
+            &group_detection_configuration,
+            recent_window_configuration.recent_window_days,
+            Utc::now(),
+        );
+
+        group_detection_diagnostics_json(GroupDetectionDiagnosticsEnvelope {
+            character_id: request.character_id,
+            diagnostics: Some(diagnostics.into()),
+            failure: None,
+        })
+    });
+    result.unwrap_or_else(|_| group_detection_diagnostics_failure(0, "internal_error"))
+}
+
+#[no_mangle]
+pub extern "C" fn pintel_diagnose_threat(request_json: *const c_char) -> *mut c_char {
+    let result = panic::catch_unwind(|| {
+        if request_json.is_null() {
+            return threat_diagnostics_failure(0, "unreadable_request");
+        }
+        let request_text = unsafe { CStr::from_ptr(request_json) };
+        let request_text = match request_text.to_str() {
+            Ok(value) => value,
+            Err(_) => return threat_diagnostics_failure(0, "unreadable_request"),
+        };
+        let request = match serde_json::from_str::<PilotAnalysisRequest>(request_text) {
+            Ok(value) => value,
+            Err(_) => return threat_diagnostics_failure(0, "unreadable_request"),
+        };
+        let Some((database_path, threat_configuration, recent_window_configuration, _group_detection_configuration)) =
+            get_runtime_state()
+        else {
+            return threat_diagnostics_failure(request.character_id, "missing_runtime");
+        };
+
+        let recent_killmail_repository = RecentKillmailRepository::new(database_path.clone());
+        let zkill_statistics_repository = ZKillStatisticsRepository::new(database_path.clone());
+        let pilot_identity_repository = PilotIdentityRepository::new(database_path.clone());
+        let activity_cache_repository = ActivityCacheRepository::new(database_path);
+
+        let all_killmails = match recent_killmail_repository.get_for_character(request.character_id) {
+            Ok(value) => value,
+            Err(_) => return threat_diagnostics_failure(request.character_id, "repository_read_error:killmails"),
+        };
+        let statistics = match zkill_statistics_repository.get_for_character(request.character_id) {
+            Ok(value) => value,
+            Err(_) => return threat_diagnostics_failure(request.character_id, "repository_read_error:statistics"),
+        };
+        let identity = match pilot_identity_repository.get_for_character(request.character_id) {
+            Ok(value) => value,
+            Err(_) => return threat_diagnostics_failure(request.character_id, "repository_read_error:identity"),
+        };
+        let coverage_start_text = match activity_cache_repository.get_coverage_start_for_character(request.character_id) {
+            Ok(value) => value,
+            Err(_) => return threat_diagnostics_failure(request.character_id, "repository_read_error:activity_cache"),
+        };
+        let coverage_start_utc = coverage_start_text.and_then(|text| {
+            DateTime::parse_from_rfc3339(&text)
+                .ok()
+                .map(|value| value.with_timezone(&Utc))
+        });
+
+        let now = Utc::now();
+        let recent_window_killmails = filter_recent_window(
+            &all_killmails,
+            recent_window_configuration.recent_window_days,
+            now,
+        );
+
+        let diagnostics = analyze_intrinsic_threat_diagnostics(
+            &threat_configuration,
+            statistics.as_ref(),
+            &recent_window_killmails,
+            identity.as_ref(),
+            coverage_start_utc,
+            now,
+            recent_window_configuration.recent_window_days,
+        );
+
+        threat_diagnostics_json(ThreatDiagnosticsEnvelope {
+            character_id: request.character_id,
+            diagnostics: Some(diagnostics.into()),
+            failure: None,
+        })
+    });
+    result.unwrap_or_else(|_| threat_diagnostics_failure(0, "internal_error"))
+}
+
+fn group_detection_diagnostics_failure(character_id: i64, reason: &str) -> *mut c_char {
+    group_detection_diagnostics_json(GroupDetectionDiagnosticsEnvelope {
+        character_id,
+        diagnostics: None,
+        failure: Some(reason.to_string()),
+    })
+}
+
+fn group_detection_diagnostics_json(envelope: GroupDetectionDiagnosticsEnvelope) -> *mut c_char {
+    let json = serde_json::to_string(&envelope).unwrap_or_else(|_| {
+        "{\"character_id\":0,\"failure\":\"internal_error\"}".to_string()
+    });
+    CString::new(json).unwrap_or_else(|_| {
+        CString::new("{\"character_id\":0,\"failure\":\"internal_error\"}").unwrap()
+    }).into_raw()
+}
+
+fn threat_diagnostics_failure(character_id: i64, reason: &str) -> *mut c_char {
+    threat_diagnostics_json(ThreatDiagnosticsEnvelope {
+        character_id,
+        diagnostics: None,
+        failure: Some(reason.to_string()),
+    })
+}
+
+fn threat_diagnostics_json(envelope: ThreatDiagnosticsEnvelope) -> *mut c_char {
+    let json = serde_json::to_string(&envelope).unwrap_or_else(|_| {
+        "{\"character_id\":0,\"failure\":\"internal_error\"}".to_string()
+    });
+    CString::new(json).unwrap_or_else(|_| {
+        CString::new("{\"character_id\":0,\"failure\":\"internal_error\"}").unwrap()
+    }).into_raw()
+}
+
 #[no_mangle]
 pub extern "C" fn pintel_shutdown() {
     let _ = panic::catch_unwind(|| {

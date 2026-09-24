@@ -7,7 +7,9 @@ public sealed class KillrightEngineRuntime : IKillrightEngineRuntime
 {
     private readonly nint _libraryHandle;
     private readonly InitializeDelegate _initialize;
-    private readonly AnalyzePilotDelegate _analyzePilot;
+    private readonly JsonExportDelegate _analyzePilot;
+    private readonly JsonExportDelegate _diagnoseGroupDetection;
+    private readonly JsonExportDelegate _diagnoseThreat;
     private readonly ShutdownDelegate _shutdown;
     private readonly FreeStringDelegate _freeString;
     private bool _disposed;
@@ -27,8 +29,14 @@ public sealed class KillrightEngineRuntime : IKillrightEngineRuntime
         _initialize = GetExport<InitializeDelegate>(
             "pintel_initialize");
 
-        _analyzePilot = GetExport<AnalyzePilotDelegate>(
+        _analyzePilot = GetExport<JsonExportDelegate>(
             "pintel_analyze_pilot");
+
+        _diagnoseGroupDetection = GetExport<JsonExportDelegate>(
+            "pintel_diagnose_group_detection");
+
+        _diagnoseThreat = GetExport<JsonExportDelegate>(
+            "pintel_diagnose_threat");
 
         _shutdown = GetExport<ShutdownDelegate>(
             "pintel_shutdown");
@@ -42,6 +50,28 @@ public sealed class KillrightEngineRuntime : IKillrightEngineRuntime
     public Task<string> AnalyzePilotAsync(
         string requestJson,
         CancellationToken cancellationToken = default)
+    {
+        return InvokeJsonExport(_analyzePilot, requestJson, cancellationToken);
+    }
+
+    public Task<string> DiagnoseGroupDetectionAsync(
+        string requestJson,
+        CancellationToken cancellationToken = default)
+    {
+        return InvokeJsonExport(_diagnoseGroupDetection, requestJson, cancellationToken);
+    }
+
+    public Task<string> DiagnoseThreatAsync(
+        string requestJson,
+        CancellationToken cancellationToken = default)
+    {
+        return InvokeJsonExport(_diagnoseThreat, requestJson, cancellationToken);
+    }
+
+    private Task<string> InvokeJsonExport(
+        JsonExportDelegate export,
+        string requestJson,
+        CancellationToken cancellationToken)
     {
         if (_disposed || !IsAvailable)
         {
@@ -66,7 +96,7 @@ public sealed class KillrightEngineRuntime : IKillrightEngineRuntime
                 requestBytes.Length);
 
             var responsePointer =
-                _analyzePilot(requestPointer);
+                export(requestPointer);
 
             if (responsePointer == nint.Zero)
             {
@@ -125,7 +155,7 @@ public sealed class KillrightEngineRuntime : IKillrightEngineRuntime
     private delegate int InitializeDelegate();
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    private delegate nint AnalyzePilotDelegate(
+    private delegate nint JsonExportDelegate(
         nint requestJson);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]

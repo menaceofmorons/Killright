@@ -5,6 +5,7 @@ use crate::repositories::pilot_identity_repository::PilotIdentitySnapshot;
 
 #[derive(Clone)]
 pub(crate) struct SharedKillEvent {
+    pub killmail_id: i64,
     pub kill_time_utc: String,
     pub is_same_corporation_or_alliance: bool,
     pub unique_attacker_count: i64,
@@ -48,6 +49,7 @@ pub(crate) fn build_shared_events_by_pair(
                     .entry(pair_key)
                     .or_default()
                     .push(SharedKillEvent {
+                        killmail_id: first.killmail_id,
                         kill_time_utc: first.kill_time_utc.clone(),
                         is_same_corporation_or_alliance: is_same,
                         unique_attacker_count: first.unique_attacker_count,

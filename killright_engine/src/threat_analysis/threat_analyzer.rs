@@ -49,7 +49,7 @@ pub fn analyze_intrinsic_threat(
     ThreatAnalysisResponse { score, confidence }
 }
 
-fn is_threat_none(
+pub(crate) fn is_threat_none(
     statistics: Option<&ZKillStatisticsSnapshot>,
     recent_killmails: &[RecentKillmailSnapshot],
 ) -> bool {
@@ -59,7 +59,7 @@ fn is_threat_none(
     }
 }
 
-fn calculate_historical_capability_score(
+pub(crate) fn calculate_historical_capability_score(
     configuration: &HistoricalCapabilityConfiguration,
     statistics: Option<&ZKillStatisticsSnapshot>,
 ) -> i32 {
@@ -97,7 +97,7 @@ fn calculate_historical_capability_score(
     (kill_volume_score + solo_kill_score + solo_ratio_score + style_score).clamp(0, 40)
 }
 
-fn calculate_survivability_score(
+pub(crate) fn calculate_survivability_score(
     configuration: &SurvivabilityConfiguration,
     statistics: Option<&ZKillStatisticsSnapshot>,
 ) -> i32 {
@@ -132,7 +132,7 @@ fn calculate_survivability_score(
         .unwrap_or(0)
 }
 
-fn calculate_loss_quality_score(
+pub(crate) fn calculate_loss_quality_score(
     configuration: &LossQualityConfiguration,
     statistics: Option<&ZKillStatisticsSnapshot>,
 ) -> i32 {
@@ -164,6 +164,14 @@ fn calculate_loss_quality_score(
         .unwrap_or(0)
 }
 
+pub(crate) struct RecentActivityDiagnostics {
+    pub coverage_start_present: bool,
+    pub observed_days: f64,
+    pub counted_kills: i64,
+    pub daily_rate: f64,
+    pub score: f64,
+}
+
 fn calculate_recent_activity_modifier(
     configuration: &RecentActivityConfiguration,
     recent_killmails: &[RecentKillmailSnapshot],
@@ -171,8 +179,31 @@ fn calculate_recent_activity_modifier(
     now: DateTime<Utc>,
     recent_window_days: i64,
 ) -> f64 {
+    calculate_recent_activity_diagnostics(
+        configuration,
+        recent_killmails,
+        coverage_start_utc,
+        now,
+        recent_window_days,
+    )
+    .score
+}
+
+pub(crate) fn calculate_recent_activity_diagnostics(
+    configuration: &RecentActivityConfiguration,
+    recent_killmails: &[RecentKillmailSnapshot],
+    coverage_start_utc: Option<DateTime<Utc>>,
+    now: DateTime<Utc>,
+    recent_window_days: i64,
+) -> RecentActivityDiagnostics {
     let Some(coverage_start_utc) = coverage_start_utc else {
-        return 0.0;
+        return RecentActivityDiagnostics {
+            coverage_start_present: false,
+            observed_days: 0.0,
+            counted_kills: 0,
+            daily_rate: 0.0,
+            score: 0.0,
+        };
     };
 
     let observed_seconds = (now - coverage_start_utc).num_seconds().max(0);
@@ -180,7 +211,13 @@ fn calculate_recent_activity_modifier(
     let observed_days = observed_seconds.min(window_seconds) as f64 / 86_400.0;
 
     if observed_days <= 0.0 {
-        return 0.0;
+        return RecentActivityDiagnostics {
+            coverage_start_present: true,
+            observed_days: 0.0,
+            counted_kills: 0,
+            daily_rate: 0.0,
+            score: 0.0,
+        };
     }
 
     let counted_kills = recent_killmails
@@ -194,8 +231,15 @@ fn calculate_recent_activity_modifier(
         .count();
 
     let daily_rate = counted_kills as f64 / observed_days;
+    let score = interpolate_recent_activity_score(&configuration.points, daily_rate);
 
-    interpolate_recent_activity_score(&configuration.points, daily_rate)
+    RecentActivityDiagnostics {
+        coverage_start_present: true,
+        observed_days,
+        counted_kills: counted_kills as i64,
+        daily_rate,
+        score,
+    }
 }
 
 fn interpolate_recent_activity_score(points: &[RecentActivityPoint], daily_rate: f64) -> f64 {
@@ -231,7 +275,7 @@ fn interpolate_recent_activity_score(points: &[RecentActivityPoint], daily_rate:
     last.score
 }
 
-fn calculate_security_modifier(
+pub(crate) fn calculate_security_modifier(
     configuration: &SecurityStatusConfiguration,
     identity: Option<&PilotIdentitySnapshot>,
 ) -> i32 {
@@ -252,7 +296,7 @@ fn calculate_security_modifier(
         .unwrap_or(0)
 }
 
-fn calculate_confidence(
+pub(crate) fn calculate_confidence(
     configuration: &ConfidenceConfiguration,
     statistics: Option<&ZKillStatisticsSnapshot>,
     recent_killmails: &[RecentKillmailSnapshot],

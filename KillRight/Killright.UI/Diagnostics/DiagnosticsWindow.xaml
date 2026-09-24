@@ -86,6 +86,56 @@
                               AutoGenerateColumns="True" />
                 </DockPanel>
             </TabItem>
+
+            <TabItem Header="Group Detection">
+                <DockPanel Margin="6">
+                    <StackPanel DockPanel.Dock="Top" Orientation="Vertical" Margin="0,0,0,8">
+                        <WrapPanel Margin="0,0,0,6">
+                            <TextBlock Text="Scanned Character IDs (comma-separated):" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <TextBox x:Name="GroupDetectionScanSetText" Width="320" Margin="0,0,6,0" />
+                            <Button Content="Run Group Detection Diagnostics" Width="220" Margin="2" Click="RunGroupDetectionDiagnostics_Click" />
+                        </WrapPanel>
+                        <TextBlock x:Name="GroupDetectionTimingText" FontFamily="Consolas" />
+                    </StackPanel>
+
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <DockPanel Grid.Row="0">
+                            <TextBlock DockPanel.Dock="Top" Text="Direct Relationships" FontWeight="Bold" Margin="0,0,0,2" />
+                            <DataGrid x:Name="DirectRelationshipsGrid" IsReadOnly="True" AutoGenerateColumns="True" />
+                        </DockPanel>
+
+                        <DockPanel Grid.Row="1">
+                            <TextBlock DockPanel.Dock="Top" Text="Chains" FontWeight="Bold" Margin="0,4,0,2" />
+                            <DataGrid x:Name="ChainsGrid" IsReadOnly="True" AutoGenerateColumns="True" />
+                        </DockPanel>
+
+                        <DockPanel Grid.Row="2">
+                            <TextBlock DockPanel.Dock="Top" Text="Intermediary Hubs" FontWeight="Bold" Margin="0,4,0,2" />
+                            <DataGrid x:Name="HubsGrid" IsReadOnly="True" AutoGenerateColumns="True" />
+                        </DockPanel>
+                    </Grid>
+                </DockPanel>
+            </TabItem>
+
+            <TabItem Header="Threat Breakdown">
+                <DockPanel Margin="6">
+                    <StackPanel DockPanel.Dock="Top" Orientation="Vertical" Margin="0,0,0,8">
+                        <WrapPanel Margin="0,0,0,6">
+                            <TextBlock Text="Character ID:" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <TextBox x:Name="ThreatDiagnosticsCharacterIdText" Width="160" Margin="0,0,6,0" />
+                            <Button Content="Run Threat Diagnostics" Width="180" Margin="2" Click="RunThreatDiagnostics_Click" />
+                        </WrapPanel>
+                    </StackPanel>
+
+                    <DataGrid x:Name="ThreatBreakdownGrid" IsReadOnly="True" AutoGenerateColumns="True" />
+                </DockPanel>
+            </TabItem>
         </TabControl>
     </DockPanel>
 </Window>

@@ -12,3 +12,6 @@ pub mod group_detection_configuration;
 
 #[path = "group_relationship_scoring.rs"]
 pub mod group_relationship_scoring;
+
+#[path = "group_detection_diagnostics.rs"]
+pub mod group_detection_diagnostics;

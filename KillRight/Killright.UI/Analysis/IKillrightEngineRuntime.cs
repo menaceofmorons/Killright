@@ -7,4 +7,12 @@ public interface IKillrightEngineRuntime : IDisposable
     Task<string> AnalyzePilotAsync(
         string requestJson,
         CancellationToken cancellationToken = default);
+
+    Task<string> DiagnoseGroupDetectionAsync(
+        string requestJson,
+        CancellationToken cancellationToken = default);
+
+    Task<string> DiagnoseThreatAsync(
+        string requestJson,
+        CancellationToken cancellationToken = default);
 }
