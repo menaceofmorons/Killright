@@ -64,6 +64,53 @@ impl KillmailRelationshipRepository {
 
         Ok(results)
     }
+
+    pub fn get_qualifying_attacker_evidence_touching_scan_set(
+        &self,
+        character_ids: &[i64],
+    ) -> RepositoryResult<Vec<KillmailAttackerEvidence>> {
+        if character_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let connection = open_connection(&self.database_path)?;
+
+        let ids = character_ids
+            .iter()
+            .map(|character_id| character_id.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
+
+        let sql = format!(
+            "SELECT a.killmail_id, a.character_id, a.corporation_id, a.alliance_id, k.kill_time_utc \
+             FROM main.zkill_killmail_attackers a \
+             JOIN main.zkill_killmails k ON k.killmail_id = a.killmail_id \
+             WHERE k.is_qualifying = TRUE \
+             AND a.killmail_id IN ( \
+                 SELECT DISTINCT killmail_id FROM main.zkill_killmail_attackers WHERE character_id IN ({ids}) \
+             ) \
+             ORDER BY a.killmail_id, k.kill_time_utc;");
+
+        let mut statement = connection.prepare(&sql)?;
+
+        let rows = statement.query_map([], |row| {
+            Ok(KillmailAttackerEvidence {
+                killmail_id: row.get(0)?,
+                character_id: row.get(1)?,
+                corporation_id: row.get(2)?,
+                alliance_id: row.get(3)?,
+                kill_time_utc: row.get(4)?,
+            })
+        })?;
+
+        let mut results = Vec::new();
+
+        for row in rows {
+            results.push(row?);
+        }
+
+        Ok(results)
+    }
 }
 
 #[cfg(test)]
@@ -145,6 +192,76 @@ mod tests {
 
         let repository = KillmailRelationshipRepository::new(path.clone());
         let rows = repository.get_attacker_evidence_for_scan_set(&[]).unwrap();
+
+        std::fs::remove_file(&path).unwrap();
+
+        assert!(rows.is_empty());
+    }
+
+    #[test]
+    fn get_qualifying_attacker_evidence_touching_scan_set_includes_intermediary_outside_scan_set() {
+        let path = std::env::temp_dir().join(format!("killmail-relationship-repo-{}.duckdb", unique_suffix()));
+        let connection = Connection::open(&path).unwrap();
+        create_schema(&connection);
+
+        connection.execute_batch(
+            "INSERT INTO zkill_killmails VALUES
+                (1, 'hash1', '2026-09-20T00:00:00+00:00', 30000142, 40000001, 999, 587, 2, FALSE, FALSE, TRUE, '2026-09-20T00:00:00+00:00');
+            INSERT INTO zkill_killmail_attackers VALUES
+                (1, 95465499, 98000001, NULL, 11567),
+                (1, 90000003, 98000003, NULL, 670);",
+        )
+        .unwrap();
+        drop(connection);
+
+        let repository = KillmailRelationshipRepository::new(path.clone());
+        let rows = repository
+            .get_qualifying_attacker_evidence_touching_scan_set(&[95465499])
+            .unwrap();
+
+        std::fs::remove_file(&path).unwrap();
+
+        assert_eq!(rows.len(), 2);
+        assert!(rows.iter().any(|row| row.character_id == 95465499));
+        assert!(rows.iter().any(|row| row.character_id == 90000003));
+    }
+
+    #[test]
+    fn get_qualifying_attacker_evidence_touching_scan_set_excludes_non_qualifying_killmails() {
+        let path = std::env::temp_dir().join(format!("killmail-relationship-repo-{}.duckdb", unique_suffix()));
+        let connection = Connection::open(&path).unwrap();
+        create_schema(&connection);
+
+        connection.execute_batch(
+            "INSERT INTO zkill_killmails VALUES
+                (1, 'hash1', '2026-09-20T00:00:00+00:00', 30000142, 40000001, 999, 587, 1, TRUE, FALSE, FALSE, '2026-09-20T00:00:00+00:00');
+            INSERT INTO zkill_killmail_attackers VALUES
+                (1, 95465499, 98000001, NULL, 11567);",
+        )
+        .unwrap();
+        drop(connection);
+
+        let repository = KillmailRelationshipRepository::new(path.clone());
+        let rows = repository
+            .get_qualifying_attacker_evidence_touching_scan_set(&[95465499])
+            .unwrap();
+
+        std::fs::remove_file(&path).unwrap();
+
+        assert!(rows.is_empty());
+    }
+
+    #[test]
+    fn get_qualifying_attacker_evidence_touching_scan_set_empty_scan_set_returns_empty() {
+        let path = std::env::temp_dir().join(format!("killmail-relationship-repo-{}.duckdb", unique_suffix()));
+        let connection = Connection::open(&path).unwrap();
+        create_schema(&connection);
+        drop(connection);
+
+        let repository = KillmailRelationshipRepository::new(path.clone());
+        let rows = repository
+            .get_qualifying_attacker_evidence_touching_scan_set(&[])
+            .unwrap();
 
         std::fs::remove_file(&path).unwrap();
 
