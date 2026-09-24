@@ -10,6 +10,7 @@ pub struct KillmailAttackerEvidence {
     pub corporation_id: Option<i64>,
     pub alliance_id: Option<i64>,
     pub kill_time_utc: String,
+    pub unique_attacker_count: i64,
 }
 
 pub struct KillmailRelationshipRepository {
@@ -38,7 +39,7 @@ impl KillmailRelationshipRepository {
             .join(",");
 
         let sql = format!(
-            "SELECT a.killmail_id, a.character_id, a.corporation_id, a.alliance_id, k.kill_time_utc \
+            "SELECT a.killmail_id, a.character_id, a.corporation_id, a.alliance_id, k.kill_time_utc, k.unique_attacker_count \
              FROM main.zkill_killmail_attackers a \
              JOIN main.zkill_killmails k ON k.killmail_id = a.killmail_id \
              WHERE a.character_id IN ({ids}) \
@@ -53,6 +54,7 @@ impl KillmailRelationshipRepository {
                 corporation_id: row.get(2)?,
                 alliance_id: row.get(3)?,
                 kill_time_utc: row.get(4)?,
+                unique_attacker_count: row.get(5)?,
             })
         })?;
 
@@ -82,7 +84,7 @@ impl KillmailRelationshipRepository {
             .join(",");
 
         let sql = format!(
-            "SELECT a.killmail_id, a.character_id, a.corporation_id, a.alliance_id, k.kill_time_utc \
+            "SELECT a.killmail_id, a.character_id, a.corporation_id, a.alliance_id, k.kill_time_utc, k.unique_attacker_count \
              FROM main.zkill_killmail_attackers a \
              JOIN main.zkill_killmails k ON k.killmail_id = a.killmail_id \
              WHERE k.is_qualifying = TRUE \
@@ -100,6 +102,7 @@ impl KillmailRelationshipRepository {
                 corporation_id: row.get(2)?,
                 alliance_id: row.get(3)?,
                 kill_time_utc: row.get(4)?,
+                unique_attacker_count: row.get(5)?,
             })
         })?;
 

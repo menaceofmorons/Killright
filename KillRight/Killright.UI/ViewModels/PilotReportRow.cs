@@ -1,7 +1,11 @@
+using Killright.UI.Analysis;
+
 namespace Killright.UI.ViewModels;
 
 public class PilotReportRow
 {
+    public long? CharacterId { get; set; }
+    public IReadOnlyList<PilotRelationship> GroupRelationships { get; set; } = Array.Empty<PilotRelationship>();
     public string Pilot { get; set; } = string.Empty;
     public string Verify { get; set; } = string.Empty;
     public string Threat { get; set; } = string.Empty;

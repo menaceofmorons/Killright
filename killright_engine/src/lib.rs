@@ -6,9 +6,18 @@ use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 #[path = "kr_engine.rs"]
 pub mod kr_engine;
-use kr_engine::contracts::{PilotAnalysisRequest, PilotAnalysisResponse};
+use kr_engine::contracts::{
+    GroupDetectionResponse, GroupRelationshipResponse, PilotAnalysisRequest, PilotAnalysisResponse,
+};
+use kr_engine::group_analysis::chained_relationship_analyzer::analyze_chained_relationships;
+use kr_engine::group_analysis::direct_relationship_analyzer::analyze_direct_relationships;
+use kr_engine::group_analysis::group_detection_configuration::{
+    load_default_group_detection_configuration, GroupDetectionConfiguration,
+};
+use kr_engine::group_analysis::group_relationship_scoring::score_and_select_relationships;
 use kr_engine::recent_style::recent_style_analyzer::analyze_recent_style;
 use kr_engine::recent_style::{RecentKillmailInput, RecentStyleRequest};
+use kr_engine::repositories::killmail_relationship_repository::KillmailRelationshipRepository;
 use kr_engine::repositories::pilot_identity_repository::PilotIdentityRepository;
 use kr_engine::repositories::recent_killmail_repository::{RecentKillmailRepository, RecentKillmailSnapshot};
 use kr_engine::repositories::zkill_statistics_repository::ZKillStatisticsRepository;
@@ -24,6 +33,7 @@ struct RuntimeState {
     database_path: PathBuf,
     threat_configuration: ThreatConfiguration,
     recent_window_configuration: RecentWindowConfiguration,
+    group_detection_configuration: GroupDetectionConfiguration,
 }
 static RUNTIME: OnceLock<Mutex<Option<RuntimeState>>> = OnceLock::new();
 #[no_mangle]
@@ -47,6 +57,13 @@ pub extern "C" fn pintel_initialize() -> i32 {
                 return 0;
             }
         };
+        let group_detection_configuration = match load_default_group_detection_configuration() {
+            Ok(value) => value,
+            Err(error) => {
+                eprintln!("{}", error);
+                return 0;
+            }
+        };
         let cell = RUNTIME.get_or_init(|| Mutex::new(None));
         let mut guard = match cell.lock() {
             Ok(value) => value,
@@ -56,6 +73,7 @@ pub extern "C" fn pintel_initialize() -> i32 {
             database_path,
             threat_configuration,
             recent_window_configuration,
+            group_detection_configuration,
         });
         1
     });
@@ -76,9 +94,22 @@ pub extern "C" fn pintel_analyze_pilot(request_json: *const c_char) -> *mut c_ch
             Ok(value) => value,
             Err(_) => return failure_response(0, "unreadable_request"),
         };
-        let Some((database_path, threat_configuration, recent_window_configuration)) = get_runtime_state() else {
+        let Some((database_path, threat_configuration, recent_window_configuration, group_detection_configuration)) =
+            get_runtime_state()
+        else {
             return failure_response(request.character_id, "missing_runtime");
         };
+
+        if let Some(scanned_character_ids) = &request.scanned_character_ids {
+            return analyze_group_detection(
+                request.character_id,
+                scanned_character_ids,
+                database_path,
+                &recent_window_configuration,
+                &group_detection_configuration,
+            );
+        }
+
         let recent_killmail_repository = RecentKillmailRepository::new(database_path.clone());
         let zkill_statistics_repository = ZKillStatisticsRepository::new(database_path.clone());
         let pilot_identity_repository = PilotIdentityRepository::new(database_path);
@@ -126,10 +157,70 @@ pub extern "C" fn pintel_analyze_pilot(request_json: *const c_char) -> *mut c_ch
             character_id: request.character_id,
             recent_style: Some(recent_style),
             threat: Some(threat),
+            group_detection: None,
             failure: None,
         })
     });
     result.unwrap_or_else(|_| failure_response(0, "internal_error"))
+}
+
+fn analyze_group_detection(
+    character_id: i64,
+    scanned_character_ids: &[i64],
+    database_path: PathBuf,
+    recent_window_configuration: &RecentWindowConfiguration,
+    group_detection_configuration: &GroupDetectionConfiguration,
+) -> *mut c_char {
+    let killmail_relationship_repository = KillmailRelationshipRepository::new(database_path.clone());
+    let pilot_identity_repository = PilotIdentityRepository::new(database_path);
+
+    let direct_evidence = match killmail_relationship_repository.get_attacker_evidence_for_scan_set(scanned_character_ids) {
+        Ok(value) => value,
+        Err(_) => return failure_response(character_id, "repository_read_error:direct_evidence"),
+    };
+    let chain_evidence = match killmail_relationship_repository
+        .get_qualifying_attacker_evidence_touching_scan_set(scanned_character_ids)
+    {
+        Ok(value) => value,
+        Err(_) => return failure_response(character_id, "repository_read_error:chain_evidence"),
+    };
+    let current_identities = match pilot_identity_repository.get_for_characters(scanned_character_ids) {
+        Ok(value) => value,
+        Err(_) => return failure_response(character_id, "repository_read_error:identity"),
+    };
+
+    let direct_relationships = analyze_direct_relationships(
+        &direct_evidence,
+        &current_identities,
+        group_detection_configuration.npc_corporation_id_threshold,
+        group_detection_configuration.minimum_shared_events,
+    );
+    let chained_relationships = analyze_chained_relationships(
+        &chain_evidence,
+        &current_identities,
+        group_detection_configuration.npc_corporation_id_threshold,
+        group_detection_configuration.minimum_shared_events,
+        recent_window_configuration.recent_window_days,
+        Utc::now(),
+    );
+
+    let scored_relationships = score_and_select_relationships(
+        &direct_relationships,
+        &chained_relationships,
+        group_detection_configuration,
+        recent_window_configuration.recent_window_days,
+    );
+
+    let relationships: Vec<GroupRelationshipResponse> =
+        scored_relationships.into_iter().map(GroupRelationshipResponse::from).collect();
+
+    response_json(PilotAnalysisResponse {
+        character_id,
+        recent_style: None,
+        threat: None,
+        group_detection: Some(GroupDetectionResponse { relationships }),
+        failure: None,
+    })
 }
 #[no_mangle]
 pub extern "C" fn pintel_shutdown() {
@@ -150,7 +241,8 @@ pub extern "C" fn pintel_free_string(value: *mut c_char) {
         let _ = CString::from_raw(value);
     }
 }
-fn get_runtime_state() -> Option<(PathBuf, ThreatConfiguration, RecentWindowConfiguration)> {
+fn get_runtime_state(
+) -> Option<(PathBuf, ThreatConfiguration, RecentWindowConfiguration, GroupDetectionConfiguration)> {
     let cell = RUNTIME.get()?;
     let guard = cell.lock().ok()?;
     let runtime = guard.as_ref()?;
@@ -158,6 +250,7 @@ fn get_runtime_state() -> Option<(PathBuf, ThreatConfiguration, RecentWindowConf
         runtime.database_path.clone(),
         runtime.threat_configuration.clone(),
         runtime.recent_window_configuration.clone(),
+        runtime.group_detection_configuration.clone(),
     ))
 }
 
@@ -183,6 +276,7 @@ fn failure_response(character_id: i64, reason: &str) -> *mut c_char {
         character_id,
         recent_style: None,
         threat: None,
+        group_detection: None,
         failure: Some(reason.to_string()),
     })
 }

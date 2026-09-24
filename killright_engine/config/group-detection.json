@@ -1,0 +1,23 @@
+{
+    "minimumSharedEvents": 2,
+    "npcCorporationIdThreshold": 1005000,
+    "genericNpcCorporationIds": null,
+    "strengthStep": 10,
+    "gangSizeWeights": [
+        { "maximumGangSize": 3, "weight": 1.0 },
+        { "maximumGangSize": 5, "weight": 0.75 },
+        { "maximumGangSize": 7, "weight": 0.5 },
+        { "maximumGangSize": 10, "weight": 0.25 }
+    ],
+    "sampleFactor": {
+        "minimum": 0.5,
+        "maximum": 1.0,
+        "saturatesAtCountedSharedKills": 10
+    },
+    "splitBonus": 20,
+    "chainDiscount": 0.75,
+    "intermediaryBonus": {
+        "perAdditional": 10,
+        "maximum": 30
+    }
+}

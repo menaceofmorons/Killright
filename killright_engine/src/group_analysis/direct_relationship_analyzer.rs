@@ -14,6 +14,8 @@ pub struct DirectRelationship {
     pub pilot_b: i64,
     pub counted_shared_kills: i64,
     pub last_counted_kill_time_utc: String,
+    pub split_bonus_applied: bool,
+    pub counted_shared_kill_gang_sizes: Vec<i64>,
 }
 
 pub fn analyze_direct_relationships(
@@ -41,7 +43,7 @@ pub fn analyze_direct_relationships(
 
         events.sort_by(|left, right| left.kill_time_utc.cmp(&right.kill_time_utc));
 
-        let counted_events = apply_after_split_rule(&events);
+        let (counted_events, split_bonus_applied) = apply_after_split_rule(&events);
 
         if (counted_events.len() as i64) < minimum_shared_events {
             continue;
@@ -53,11 +55,18 @@ pub fn analyze_direct_relationships(
             .max()
             .expect("counted_events is non-empty after the threshold check");
 
+        let counted_shared_kill_gang_sizes = counted_events
+            .iter()
+            .map(|event| event.unique_attacker_count)
+            .collect();
+
         relationships.push(DirectRelationship {
             pilot_a,
             pilot_b,
             counted_shared_kills: counted_events.len() as i64,
             last_counted_kill_time_utc,
+            split_bonus_applied,
+            counted_shared_kill_gang_sizes,
         });
     }
 
@@ -73,6 +82,8 @@ mod tests {
     const SHARED_CORP: i64 = 5_000_009;
     const GATE_CORP: i64 = 5_000_005;
 
+    const DEFAULT_GANG_SIZE: i64 = 2;
+
     fn evidence(
         killmail_id: i64,
         character_id: i64,
@@ -86,6 +97,7 @@ mod tests {
             corporation_id,
             alliance_id,
             kill_time_utc: kill_time_utc.to_string(),
+            unique_attacker_count: DEFAULT_GANG_SIZE,
         }
     }
 

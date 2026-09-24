@@ -25,7 +25,16 @@
               Link="duckdb.dll"
               CopyToOutputDirectory="PreserveNewest" />
         <None Include="config\settings.json"
-              CopyToOutputDirectory="PreserveNewest" />              
+              CopyToOutputDirectory="PreserveNewest" />
+        <None Include="..\..\killright_engine\config\recent-window.json"
+              Link="config\recent-window.json"
+              CopyToOutputDirectory="PreserveNewest" />
+        <None Include="..\..\killright_engine\config\group-detection.json"
+              Link="config\group-detection.json"
+              CopyToOutputDirectory="PreserveNewest" />
+        <None Include="..\..\killright_engine\target\debug\killright_engine.dll"
+              Link="killright_engine.dll"
+              CopyToOutputDirectory="PreserveNewest" />
     </ItemGroup>
 
     <ItemGroup Condition="'$(HistoricRelationships)' != 'true'">

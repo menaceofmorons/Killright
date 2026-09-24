@@ -17,8 +17,12 @@ pub struct ChainedRelationship {
     pub intermediary_in_scan: bool,
     pub link_ab_counted_shared_kills: i64,
     pub link_ab_most_recent_in_window_kill_time_utc: String,
+    pub link_ab_split_bonus_applied: bool,
+    pub link_ab_counted_shared_kill_gang_sizes: Vec<i64>,
     pub link_cb_counted_shared_kills: i64,
     pub link_cb_most_recent_in_window_kill_time_utc: String,
+    pub link_cb_split_bonus_applied: bool,
+    pub link_cb_counted_shared_kill_gang_sizes: Vec<i64>,
     pub chain_age_days: f64,
 }
 
@@ -26,6 +30,8 @@ struct LinkEvidence {
     counted_shared_kills: i64,
     most_recent_within_window: DateTime<Utc>,
     most_recent_within_window_kill_time_utc: String,
+    split_bonus_applied: bool,
+    counted_shared_kill_gang_sizes: Vec<i64>,
 }
 
 pub fn analyze_chained_relationships(
@@ -94,8 +100,12 @@ pub fn analyze_chained_relationships(
                     intermediary_in_scan: scanned_character_ids.contains(&intermediary_pilot_b),
                     link_ab_counted_shared_kills: link_ab.counted_shared_kills,
                     link_ab_most_recent_in_window_kill_time_utc: link_ab.most_recent_within_window_kill_time_utc,
+                    link_ab_split_bonus_applied: link_ab.split_bonus_applied,
+                    link_ab_counted_shared_kill_gang_sizes: link_ab.counted_shared_kill_gang_sizes,
                     link_cb_counted_shared_kills: link_cb.counted_shared_kills,
                     link_cb_most_recent_in_window_kill_time_utc: link_cb.most_recent_within_window_kill_time_utc,
+                    link_cb_split_bonus_applied: link_cb.split_bonus_applied,
+                    link_cb_counted_shared_kill_gang_sizes: link_cb.counted_shared_kill_gang_sizes,
                     chain_age_days,
                 });
             }
@@ -163,7 +173,7 @@ fn evaluate_link(
     let mut events = shared_events_by_pair.get(&pair_key)?.clone();
     events.sort_by(|left, right| left.kill_time_utc.cmp(&right.kill_time_utc));
 
-    let counted_events = apply_after_split_rule(&events);
+    let (counted_events, split_bonus_applied) = apply_after_split_rule(&events);
 
     if (counted_events.len() as i64) < minimum_shared_events {
         return None;
@@ -175,10 +185,17 @@ fn evaluate_link(
         .filter(|(time, _)| *time >= window_cutoff)
         .max_by_key(|(time, _)| *time)?;
 
+    let counted_shared_kill_gang_sizes = counted_events
+        .iter()
+        .map(|event| event.unique_attacker_count)
+        .collect();
+
     Some(LinkEvidence {
         counted_shared_kills: counted_events.len() as i64,
         most_recent_within_window,
         most_recent_within_window_kill_time_utc,
+        split_bonus_applied,
+        counted_shared_kill_gang_sizes,
     })
 }
 
@@ -200,6 +217,8 @@ mod tests {
     const GATE_CORP: i64 = 5_000_005;
     const OTHER_CORP: i64 = 5_000_007;
 
+    const DEFAULT_GANG_SIZE: i64 = 2;
+
     fn evidence(
         killmail_id: i64,
         character_id: i64,
@@ -212,6 +231,7 @@ mod tests {
             corporation_id,
             alliance_id: None,
             kill_time_utc: kill_time_utc.to_string(),
+            unique_attacker_count: DEFAULT_GANG_SIZE,
         }
     }
 

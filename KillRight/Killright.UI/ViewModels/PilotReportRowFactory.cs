@@ -23,6 +23,7 @@ public static class PilotReportRowFactory
 
         return new PilotReportRow
         {
+            CharacterId = pilot.CharacterId,
             Pilot = GetPilotName(pilot),
             Verify = GetVerifyDisplay(pilot.VerifyStatus),
             Threat = string.IsNullOrWhiteSpace(threatBand)

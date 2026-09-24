@@ -1,5 +1,6 @@
 use serde::Serialize;
 
+use crate::contracts::group_detection_response::GroupDetectionResponse;
 use crate::threat_analysis::ThreatAnalysisResponse;
 
 #[derive(Debug, Serialize)]
@@ -11,6 +12,9 @@ pub struct PilotAnalysisResponse {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub threat: Option<ThreatAnalysisResponse>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub group_detection: Option<GroupDetectionResponse>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub failure: Option<String>,

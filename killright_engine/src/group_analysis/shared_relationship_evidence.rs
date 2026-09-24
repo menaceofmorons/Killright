@@ -7,6 +7,7 @@ use crate::repositories::pilot_identity_repository::PilotIdentitySnapshot;
 pub(crate) struct SharedKillEvent {
     pub kill_time_utc: String,
     pub is_same_corporation_or_alliance: bool,
+    pub unique_attacker_count: i64,
 }
 
 pub(crate) fn group_attackers_by_killmail(
@@ -49,6 +50,7 @@ pub(crate) fn build_shared_events_by_pair(
                     .push(SharedKillEvent {
                         kill_time_utc: first.kill_time_utc.clone(),
                         is_same_corporation_or_alliance: is_same,
+                        unique_attacker_count: first.unique_attacker_count,
                     });
             }
         }
@@ -57,7 +59,9 @@ pub(crate) fn build_shared_events_by_pair(
     shared_events
 }
 
-pub(crate) fn apply_after_split_rule(events_sorted_by_time: &[SharedKillEvent]) -> Vec<&SharedKillEvent> {
+pub(crate) fn apply_after_split_rule(
+    events_sorted_by_time: &[SharedKillEvent],
+) -> (Vec<&SharedKillEvent>, bool) {
     let mut seen_same = false;
     let mut split_detected = false;
 
@@ -69,14 +73,16 @@ pub(crate) fn apply_after_split_rule(events_sorted_by_time: &[SharedKillEvent]) 
         }
     }
 
-    if split_detected {
+    let counted_events = if split_detected {
         events_sorted_by_time.iter().collect()
     } else {
         events_sorted_by_time
             .iter()
             .filter(|event| !event.is_same_corporation_or_alliance)
             .collect()
-    }
+    };
+
+    (counted_events, split_detected)
 }
 
 pub(crate) fn is_same_corporation_or_alliance(

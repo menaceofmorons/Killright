@@ -163,10 +163,34 @@ public partial class MainWindow : Window
         if (rows.Count == 0)
             return;
 
+        await AttachGroupRelationshipsAsync(rows);
+
         _viewModel.Pilots.Clear();
 
         foreach (var row in rows)
             _viewModel.Pilots.Add(row);
+    }
+
+    private static async Task AttachGroupRelationshipsAsync(List<PilotReportRow> rows)
+    {
+        var scannedCharacterIds = rows
+            .Where(row => row.CharacterId is not null)
+            .Select(row => row.CharacterId!.Value)
+            .Distinct()
+            .ToList();
+
+        if (scannedCharacterIds.Count < 2)
+            return;
+
+        var groupResult = await App.RecentStyleClient.AnalyzeGroupAsync(scannedCharacterIds);
+
+        foreach (var row in rows)
+        {
+            if (row.CharacterId is null)
+                continue;
+
+            row.GroupRelationships = groupResult.ForCharacter(row.CharacterId.Value).ToList();
+        }
     }
 
     private static async Task<zKillActivity?> LoadDerivedActivityAsync(long characterId)
