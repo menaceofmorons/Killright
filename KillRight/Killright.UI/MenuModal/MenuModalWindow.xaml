@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="KillRight — Menu"
         Width="420"
-        Height="280"
+        Height="380"
         ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False"
@@ -58,6 +58,41 @@
                         <ComboBoxItem Content="Small" Tag="Small" />
                         <ComboBoxItem Content="Tiny" Tag="Tiny" />
                     </ComboBox>
+                </StackPanel>
+            </TabItem>
+            <TabItem Header="Columns">
+                <StackPanel Margin="12">
+                    <ListBox x:Name="ColumnsListBox"
+                             MaxHeight="220"
+                             BorderThickness="0"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             AllowDrop="True"
+                             DragOver="ColumnsListBox_DragOver"
+                             Drop="ColumnsListBox_Drop">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,2">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0"
+                                               Text="⠿"
+                                               Width="20"
+                                               VerticalAlignment="Center"
+                                               Cursor="SizeAll"
+                                               PreviewMouseLeftButtonDown="DragHandle_PreviewMouseLeftButtonDown"
+                                               PreviewMouseMove="DragHandle_PreviewMouseMove" />
+                                    <CheckBox Grid.Column="1"
+                                              Content="{Binding Label}"
+                                              IsChecked="{Binding IsVisible}"
+                                              IsEnabled="{Binding CanHide}"
+                                              Checked="ColumnVisibility_Changed"
+                                              Unchecked="ColumnVisibility_Changed" />
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
                 </StackPanel>
             </TabItem>
         </TabControl>

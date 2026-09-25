@@ -13,7 +13,7 @@ public sealed class UiStateStore
         _statePath = statePath ?? UiStateLoader.GetDefaultStatePath();
 
         var result = UiStateLoader.LoadOrDefault(_statePath);
-        _current = result.State;
+        _current = result.State with { Columns = UiStateDefaults.ReconcileColumns(result.State.Columns) };
         WasCorruptOnLoad = result.WasCorrupt;
         IsUsingDefaults = !result.FileExisted || result.WasCorrupt;
 
@@ -37,6 +37,13 @@ public sealed class UiStateStore
     public void UpdateBounds(double left, double top, double width, double height)
     {
         _current = _current with { WindowLeft = left, WindowTop = top, WindowWidth = width, WindowHeight = height };
+        _debounceTimer.Stop();
+        _debounceTimer.Start();
+    }
+
+    public void UpdateColumns(IReadOnlyList<ColumnState> columns)
+    {
+        _current = _current with { Columns = columns };
         _debounceTimer.Stop();
         _debounceTimer.Start();
     }

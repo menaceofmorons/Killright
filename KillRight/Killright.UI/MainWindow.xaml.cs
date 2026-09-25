@@ -1,7 +1,11 @@
 using System.ComponentModel;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Media;
 using Killright.Core.Activity;
 using Killright.Core.Style;
 using Killright.Integration.zKill;
@@ -21,6 +25,7 @@ namespace Killright.UI;
 public partial class MainWindow : Window
 {
     private readonly MainWindowViewModel _viewModel;
+    private readonly Dictionary<string, DataGridColumn> _columnsById;
     private ClipboardMonitor? _clipboardMonitor;
     private bool _menuModalOpen;
 
@@ -52,6 +57,26 @@ public partial class MainWindow : Window
             Top = initial.WindowTop;
         }
 
+        _columnsById = new Dictionary<string, DataGridColumn>
+        {
+            [ColumnIds.Pilot] = ColumnPilot,
+            [ColumnIds.Verify] = ColumnVerify,
+            [ColumnIds.Threat] = ColumnThreat,
+            [ColumnIds.SecurityStatus] = ColumnSecurityStatus,
+            [ColumnIds.Group] = ColumnGroup,
+            [ColumnIds.Corporation] = ColumnCorporation,
+            [ColumnIds.Alliance] = ColumnAlliance,
+            [ColumnIds.GeneralStyle] = ColumnGeneralStyle,
+            [ColumnIds.RecentStyle] = ColumnRecentStyle,
+            [ColumnIds.KillsWeek] = ColumnKillsWeek,
+            [ColumnIds.SoloWeek] = ColumnSoloWeek,
+            [ColumnIds.LastActive] = ColumnLastActive,
+            [ColumnIds.Notes] = ColumnNotes
+        };
+
+        ApplyPreviewColumns(initial);
+        HookColumnLiveUpdateEvents();
+
         LocationChanged += MainWindow_LocationChanged;
         SizeChanged += MainWindow_SizeChanged;
     }
@@ -63,6 +88,117 @@ public partial class MainWindow : Window
         Height = state.WindowHeight;
         Left = state.WindowLeft;
         Top = state.WindowTop;
+    }
+
+    internal void ApplyPreviewColumns(UiStateModel state)
+    {
+        foreach (var columnState in state.Columns.OrderBy(column => column.DisplayIndex))
+        {
+            if (!_columnsById.TryGetValue(columnState.Id, out var column))
+                continue;
+
+            column.DisplayIndex = Math.Min(columnState.DisplayIndex, PilotGrid.Columns.Count - 1);
+            column.Width = new DataGridLength(columnState.Width);
+            column.Visibility = columnState.Visible ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        ResetSortIfHiddenColumnIsSorted();
+    }
+
+    private void HookColumnLiveUpdateEvents()
+    {
+        foreach (var column in _columnsById.Values)
+        {
+            DependencyPropertyDescriptor
+                .FromProperty(DataGridColumn.WidthProperty, typeof(DataGridColumn))
+                .AddValueChanged(column, (_, _) => PersistColumnLayout());
+        }
+    }
+
+    private void PilotGrid_ColumnDisplayIndexChanged(object? sender, DataGridColumnEventArgs e)
+    {
+        PersistColumnLayout();
+    }
+
+    private void PersistColumnLayout()
+    {
+        var snapshot = _columnsById
+            .Select(pair => new ColumnState
+            {
+                Id = pair.Key,
+                DisplayIndex = pair.Value.DisplayIndex,
+                Width = pair.Value.Width.Value,
+                Visible = pair.Value.Visibility == Visibility.Visible
+            })
+            .OrderBy(columnState => columnState.DisplayIndex)
+            .ToList();
+
+        App.UiState.UpdateColumns(snapshot);
+    }
+
+    private void PilotGrid_PreviewMouseRightButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (FindAncestor<DataGridColumnHeader>(e.OriginalSource as DependencyObject) is not { Column: { } column } header)
+            return;
+
+        var columnId = _columnsById.FirstOrDefault(pair => pair.Value == column).Key;
+
+        if (columnId is null)
+            return;
+
+        var hideItem = new MenuItem { Header = "Hide", IsEnabled = columnId != ColumnIds.Pilot };
+        hideItem.Click += (_, _) => HideColumn(columnId);
+
+        var contextMenu = new ContextMenu();
+        contextMenu.Items.Add(hideItem);
+        header.ContextMenu = contextMenu;
+        contextMenu.IsOpen = true;
+    }
+
+    private void HideColumn(string columnId)
+    {
+        if (columnId == ColumnIds.Pilot || !_columnsById.TryGetValue(columnId, out var column))
+            return;
+
+        column.Visibility = Visibility.Collapsed;
+        ResetSortIfHiddenColumnIsSorted();
+        PersistColumnLayout();
+    }
+
+    private void ResetSortIfHiddenColumnIsSorted()
+    {
+        if (PilotGrid.Items.SortDescriptions.Count == 0)
+            return;
+
+        var sortedPropertyName = PilotGrid.Items.SortDescriptions[0].PropertyName;
+        var sortedColumn = _columnsById.Values.FirstOrDefault(column => GetBindingPath(column) == sortedPropertyName);
+
+        if (sortedColumn is null || sortedColumn.Visibility == Visibility.Visible)
+            return;
+
+        PilotGrid.Items.SortDescriptions.Clear();
+
+        foreach (var column in _columnsById.Values)
+            column.SortDirection = null;
+
+        PilotGrid.Items.SortDescriptions.Add(new SortDescription(GetBindingPath(ColumnPilot), ListSortDirection.Ascending));
+        ColumnPilot.SortDirection = ListSortDirection.Ascending;
+    }
+
+    private static string GetBindingPath(DataGridColumn column) =>
+        ((Binding)((DataGridBoundColumn)column).Binding).Path.Path;
+
+    private static T? FindAncestor<T>(DependencyObject? current) where T : DependencyObject
+    {
+        while (current is not null)
+        {
+            if (current is T match)
+                return match;
+
+            current = VisualTreeHelper.GetParent(current);
+        }
+
+        return null;
     }
 
     protected override void OnSourceInitialized(EventArgs e)

@@ -68,7 +68,8 @@
                     </Grid>
                 </ControlTemplate>
             </ScrollViewer.Template>
-            <DataGrid ItemsSource="{Binding Pilots}"
+            <DataGrid x:Name="PilotGrid"
+                      ItemsSource="{Binding Pilots}"
                       AutoGenerateColumns="False"
                       IsReadOnly="True"
                       CanUserSortColumns="True"
@@ -82,7 +83,9 @@
                       HorizontalGridLinesBrush="{DynamicResource Brush.Border}"
                       Foreground="{DynamicResource Brush.Text.Primary}"
                       RowHeight="{DynamicResource GridRowHeight}"
-                      FontSize="{DynamicResource GridFontSize}">
+                      FontSize="{DynamicResource GridFontSize}"
+                      ColumnDisplayIndexChanged="PilotGrid_ColumnDisplayIndexChanged"
+                      PreviewMouseRightButtonUp="PilotGrid_PreviewMouseRightButtonUp">
                 <DataGrid.ColumnHeaderStyle>
                     <Style TargetType="DataGridColumnHeader">
                         <Setter Property="Background" Value="{DynamicResource Brush.Header.Background}" />
@@ -108,19 +111,19 @@
                     </Style>
                 </DataGrid.RowStyle>
                 <DataGrid.Columns>
-                    <DataGridTextColumn Header="Pilot" Binding="{Binding Pilot}" Width="170" />
-                    <DataGridTextColumn Header="Verify" Binding="{Binding Verify}" Width="70" />
-                    <DataGridTextColumn Header="Threat" Binding="{Binding Threat}" Width="90" />
-                    <DataGridTextColumn Header="Sec" Binding="{Binding SecurityStatus}" Width="70" />
-                    <DataGridTextColumn Header="Group" Binding="{Binding Group}" Width="90" />
-                    <DataGridTextColumn Header="Corporation" Binding="{Binding Corporation}" Width="210" />
-                    <DataGridTextColumn Header="Alliance" Binding="{Binding Alliance}" Width="210" />
-                    <DataGridTextColumn Header="General Style" Binding="{Binding GeneralStyle}" Width="120" />
-                    <DataGridTextColumn Header="Recent Style" Binding="{Binding RecentStyle}" Width="120" />
-                    <DataGridTextColumn Header="Kills Week" Binding="{Binding KillsWeek}" Width="95" />
-                    <DataGridTextColumn Header="Solo Week" Binding="{Binding SoloWeek}" Width="95" />
-                    <DataGridTextColumn Header="Last Active" Binding="{Binding LastActive}" Width="160" />
-                    <DataGridTextColumn Header="Notes" Binding="{Binding Notes}" Width="260" />
+                    <DataGridTextColumn x:Name="ColumnPilot" Header="Pilot" Binding="{Binding Pilot}" Width="170" />
+                    <DataGridTextColumn x:Name="ColumnVerify" Header="Verify" Binding="{Binding Verify}" Width="70" />
+                    <DataGridTextColumn x:Name="ColumnThreat" Header="Threat" Binding="{Binding Threat}" Width="90" />
+                    <DataGridTextColumn x:Name="ColumnSecurityStatus" Header="Sec" Binding="{Binding SecurityStatus}" Width="70" />
+                    <DataGridTextColumn x:Name="ColumnGroup" Header="Group" Binding="{Binding Group}" Width="90" />
+                    <DataGridTextColumn x:Name="ColumnCorporation" Header="Corporation" Binding="{Binding Corporation}" Width="210" />
+                    <DataGridTextColumn x:Name="ColumnAlliance" Header="Alliance" Binding="{Binding Alliance}" Width="210" />
+                    <DataGridTextColumn x:Name="ColumnGeneralStyle" Header="General Style" Binding="{Binding GeneralStyle}" Width="120" />
+                    <DataGridTextColumn x:Name="ColumnRecentStyle" Header="Recent Style" Binding="{Binding RecentStyle}" Width="120" />
+                    <DataGridTextColumn x:Name="ColumnKillsWeek" Header="Kills Week" Binding="{Binding KillsWeek}" Width="95" />
+                    <DataGridTextColumn x:Name="ColumnSoloWeek" Header="Solo Week" Binding="{Binding SoloWeek}" Width="95" />
+                    <DataGridTextColumn x:Name="ColumnLastActive" Header="Last Active" Binding="{Binding LastActive}" Width="160" />
+                    <DataGridTextColumn x:Name="ColumnNotes" Header="Notes" Binding="{Binding Notes}" Width="260" />
                 </DataGrid.Columns>
             </DataGrid>
         </ScrollViewer>

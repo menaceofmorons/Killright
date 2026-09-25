@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using Killright.UI.Shortcuts;
 using Killright.UI.Theme;
 using Killright.UI.UiState;
@@ -26,6 +27,7 @@ public partial class MenuModalWindow : Window
         SkipBackupOnCloseCheckBox.IsChecked = _workingSkipBackupOnClose;
         SelectComboBoxItem(ThemeComboBox, _workingState.Theme.ToString());
         SelectComboBoxItem(FontTierComboBox, _workingState.GridFontTier.ToString());
+        RefreshColumnsList();
         _initializing = false;
     }
 
@@ -53,6 +55,132 @@ public partial class MenuModalWindow : Window
         var tier = Enum.Parse<GridFontTier>((string)item.Tag);
         _workingState = _workingState with { GridFontTier = tier };
         AppearanceManager.ApplyFontTier(tier);
+    }
+
+    private void ColumnVisibility_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_initializing || sender is not CheckBox { DataContext: ColumnRow row })
+            return;
+
+        if (row.Id == ColumnIds.Pilot)
+            return;
+
+        var isVisible = ((CheckBox)sender).IsChecked == true;
+
+        _workingState = _workingState with
+        {
+            Columns = _workingState.Columns
+                .Select(column => column.Id == row.Id ? column with { Visible = isVisible } : column)
+                .ToList()
+        };
+
+        _owner.ApplyPreviewColumns(_workingState);
+    }
+
+    private ColumnRow? _draggedRow;
+    private Point _dragStartPoint;
+
+    private void DragHandle_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        _dragStartPoint = e.GetPosition(null);
+        _draggedRow = ((FrameworkElement)sender).DataContext as ColumnRow;
+    }
+
+    private void DragHandle_PreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (_draggedRow is null || e.LeftButton != MouseButtonState.Pressed)
+            return;
+
+        var current = e.GetPosition(null);
+
+        if (Math.Abs(current.X - _dragStartPoint.X) < SystemParameters.MinimumHorizontalDragDistance
+            && Math.Abs(current.Y - _dragStartPoint.Y) < SystemParameters.MinimumVerticalDragDistance)
+            return;
+
+        var row = _draggedRow;
+        _draggedRow = null;
+        DragDrop.DoDragDrop((DependencyObject)sender, row, DragDropEffects.Move);
+    }
+
+    private void ColumnsListBox_DragOver(object sender, DragEventArgs e)
+    {
+        e.Effects = e.Data.GetDataPresent(typeof(ColumnRow)) ? DragDropEffects.Move : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void ColumnsListBox_Drop(object sender, DragEventArgs e)
+    {
+        if (e.Data.GetData(typeof(ColumnRow)) is not ColumnRow draggedRow)
+            return;
+
+        var targetRow = FindRowUnderMouse(e.GetPosition(ColumnsListBox));
+
+        if (targetRow is null || targetRow.Id == draggedRow.Id)
+            return;
+
+        var ordered = _workingState.Columns.OrderBy(column => column.DisplayIndex).ToList();
+        var fromIndex = ordered.FindIndex(column => column.Id == draggedRow.Id);
+        var toIndex = ordered.FindIndex(column => column.Id == targetRow.Id);
+
+        if (fromIndex < 0 || toIndex < 0)
+            return;
+
+        var moved = ordered[fromIndex];
+        ordered.RemoveAt(fromIndex);
+        ordered.Insert(toIndex, moved);
+
+        _workingState = _workingState with
+        {
+            Columns = ordered.Select((column, position) => column with { DisplayIndex = position }).ToList()
+        };
+
+        _owner.ApplyPreviewColumns(_workingState);
+        RefreshColumnsList();
+    }
+
+    private ColumnRow? FindRowUnderMouse(Point position)
+    {
+        if (FindAncestorOrSelf<ListBoxItem>(ColumnsListBox.InputHitTest(position) as DependencyObject) is not { } item)
+            return null;
+
+        return item.DataContext as ColumnRow;
+    }
+
+    private static T? FindAncestorOrSelf<T>(DependencyObject? current) where T : DependencyObject
+    {
+        while (current is not null)
+        {
+            if (current is T match)
+                return match;
+
+            current = VisualTreeHelper.GetParent(current);
+        }
+
+        return null;
+    }
+
+    private void RefreshColumnsList()
+    {
+        var labels = UiStateDefaults.ColumnCatalog.ToDictionary(catalogEntry => catalogEntry.Id, catalogEntry => catalogEntry.Label);
+
+        ColumnsListBox.ItemsSource = _workingState.Columns
+            .OrderBy(column => column.DisplayIndex)
+            .Select(column => new ColumnRow
+            {
+                Id = column.Id,
+                Label = labels[column.Id],
+                IsVisible = column.Visible,
+                CanHide = column.Id != ColumnIds.Pilot
+            })
+            .ToList();
+    }
+
+    private sealed class ColumnRow
+    {
+        public string Id { get; init; } = string.Empty;
+        public string Label { get; init; } = string.Empty;
+        public bool IsVisible { get; init; }
+        public bool CanHide { get; init; }
     }
 
     private static void SelectComboBoxItem(ComboBox comboBox, string tag)
@@ -100,13 +228,16 @@ public partial class MenuModalWindow : Window
             WindowHeight = UiStateDefaults.WindowHeight,
             AlwaysOnTop = UiStateDefaults.AlwaysOnTop,
             Theme = UiStateDefaults.Theme,
-            GridFontTier = UiStateDefaults.DefaultGridFontTier
+            GridFontTier = UiStateDefaults.DefaultGridFontTier,
+            Columns = UiStateDefaults.DefaultColumns
         };
 
         AlwaysOnTopCheckBox.IsChecked = _workingState.AlwaysOnTop;
         SelectComboBoxItem(ThemeComboBox, _workingState.Theme.ToString());
         SelectComboBoxItem(FontTierComboBox, _workingState.GridFontTier.ToString());
+        RefreshColumnsList();
         _owner.ApplyPreviewBounds(_workingState);
+        _owner.ApplyPreviewColumns(_workingState);
     }
 
     private void Ok_Click(object sender, RoutedEventArgs e)
@@ -132,6 +263,7 @@ public partial class MenuModalWindow : Window
             _owner.ApplyPreviewBounds(App.UiState.Current);
             AppearanceManager.ApplyTheme(App.UiState.Current.Theme);
             AppearanceManager.ApplyFontTier(App.UiState.Current.GridFontTier);
+            _owner.ApplyPreviewColumns(App.UiState.Current);
         }
     }
 

@@ -139,4 +139,65 @@ public class UiStateLoaderTests
             File.Delete(path);
         }
     }
+
+    [Fact]
+    public void SaveThenLoad_RoundTripsColumns()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"ui-state-{Guid.NewGuid():N}.json");
+
+        try
+        {
+            var state = new UiStateModel
+            {
+                Columns = new[]
+                {
+                    new ColumnState { Id = ColumnIds.Verify, DisplayIndex = 0, Width = 80, Visible = false },
+                    new ColumnState { Id = ColumnIds.Pilot, DisplayIndex = 1, Width = 190, Visible = true }
+                }
+            };
+
+            UiStateLoader.Save(state, path);
+            var result = UiStateLoader.LoadOrDefault(path);
+
+            Assert.False(result.WasCorrupt);
+            Assert.Equal(2, result.State.Columns.Count);
+            var verify = result.State.Columns.Single(column => column.Id == ColumnIds.Verify);
+            Assert.Equal(0, verify.DisplayIndex);
+            Assert.Equal(80, verify.Width);
+            Assert.False(verify.Visible);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void LoadOrDefault_PreColumnsSchemaFile_DefaultsColumns()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"ui-state-{Guid.NewGuid():N}.json");
+
+        try
+        {
+            File.WriteAllText(path, """
+                {
+                  "version": 1,
+                  "windowLeft": 10,
+                  "windowTop": 20,
+                  "windowWidth": 900,
+                  "windowHeight": 500,
+                  "alwaysOnTop": true
+                }
+                """);
+
+            var result = UiStateLoader.LoadOrDefault(path);
+
+            Assert.False(result.WasCorrupt);
+            Assert.Equal(UiStateDefaults.DefaultColumns.Count, result.State.Columns.Count);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
 }
