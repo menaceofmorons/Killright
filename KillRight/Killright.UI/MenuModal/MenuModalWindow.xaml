@@ -39,6 +39,27 @@
                             Click="ResetToDefaults_Click" />
                 </StackPanel>
             </TabItem>
+            <TabItem Header="Appearance">
+                <StackPanel Margin="12">
+                    <TextBlock Text="Theme" />
+                    <ComboBox x:Name="ThemeComboBox"
+                              Margin="0,4,0,12"
+                              SelectionChanged="Theme_Changed">
+                        <ComboBoxItem Content="Light" Tag="Light" />
+                        <ComboBoxItem Content="Dark" Tag="Dark" />
+                        <ComboBoxItem Content="Follow Windows" Tag="FollowWindows" />
+                    </ComboBox>
+                    <TextBlock Text="Grid Font Size" />
+                    <ComboBox x:Name="FontTierComboBox"
+                              Margin="0,4,0,0"
+                              SelectionChanged="FontTier_Changed">
+                        <ComboBoxItem Content="Large" Tag="Large" />
+                        <ComboBoxItem Content="Medium" Tag="Medium" />
+                        <ComboBoxItem Content="Small" Tag="Small" />
+                        <ComboBoxItem Content="Tiny" Tag="Tiny" />
+                    </ComboBox>
+                </StackPanel>
+            </TabItem>
         </TabControl>
     </DockPanel>
 </Window>

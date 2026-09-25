@@ -15,6 +15,7 @@ using Killright.Storage.Killmails;
 using Killright.Storage.zKill;
 using Killright.UI.Analysis;
 using Killright.UI.Configuration;
+using Killright.UI.Theme;
 using Killright.UI.UiState;
 
 namespace Killright.UI;
@@ -61,6 +62,9 @@ public partial class App : Application
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
         }
+
+        AppearanceManager.ApplyTheme(UiState.Current.Theme);
+        AppearanceManager.ApplyFontTier(UiState.Current.GridFontTier);
 
 #if HISTORIC_RELATIONSHIPS
         // Step 19.00.59: the application half of promotion (Design

@@ -1,7 +1,9 @@
 using System.ComponentModel;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using Killright.UI.Shortcuts;
+using Killright.UI.Theme;
 using Killright.UI.UiState;
 
 namespace Killright.UI.MenuModal;
@@ -22,6 +24,8 @@ public partial class MenuModalWindow : Window
         _workingSkipBackupOnClose = App.SkipBackupOnClose;
         AlwaysOnTopCheckBox.IsChecked = _workingState.AlwaysOnTop;
         SkipBackupOnCloseCheckBox.IsChecked = _workingSkipBackupOnClose;
+        SelectComboBoxItem(ThemeComboBox, _workingState.Theme.ToString());
+        SelectComboBoxItem(FontTierComboBox, _workingState.GridFontTier.ToString());
         _initializing = false;
     }
 
@@ -29,6 +33,38 @@ public partial class MenuModalWindow : Window
     {
         _workingState = _workingState with { AlwaysOnTop = AlwaysOnTopCheckBox.IsChecked == true };
         _owner.Topmost = _workingState.AlwaysOnTop;
+    }
+
+    private void Theme_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (_initializing || ThemeComboBox.SelectedItem is not ComboBoxItem item)
+            return;
+
+        var theme = Enum.Parse<AppTheme>((string)item.Tag);
+        _workingState = _workingState with { Theme = theme };
+        AppearanceManager.ApplyTheme(theme);
+    }
+
+    private void FontTier_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (_initializing || FontTierComboBox.SelectedItem is not ComboBoxItem item)
+            return;
+
+        var tier = Enum.Parse<GridFontTier>((string)item.Tag);
+        _workingState = _workingState with { GridFontTier = tier };
+        AppearanceManager.ApplyFontTier(tier);
+    }
+
+    private static void SelectComboBoxItem(ComboBox comboBox, string tag)
+    {
+        foreach (var obj in comboBox.Items)
+        {
+            if (obj is ComboBoxItem item && (string)item.Tag == tag)
+            {
+                comboBox.SelectedItem = item;
+                return;
+            }
+        }
     }
 
     private void SkipBackupOnClose_Changed(object sender, RoutedEventArgs e)
@@ -62,10 +98,14 @@ public partial class MenuModalWindow : Window
             WindowTop = top,
             WindowWidth = UiStateDefaults.WindowWidth,
             WindowHeight = UiStateDefaults.WindowHeight,
-            AlwaysOnTop = UiStateDefaults.AlwaysOnTop
+            AlwaysOnTop = UiStateDefaults.AlwaysOnTop,
+            Theme = UiStateDefaults.Theme,
+            GridFontTier = UiStateDefaults.DefaultGridFontTier
         };
 
         AlwaysOnTopCheckBox.IsChecked = _workingState.AlwaysOnTop;
+        SelectComboBoxItem(ThemeComboBox, _workingState.Theme.ToString());
+        SelectComboBoxItem(FontTierComboBox, _workingState.GridFontTier.ToString());
         _owner.ApplyPreviewBounds(_workingState);
     }
 
@@ -88,7 +128,11 @@ public partial class MenuModalWindow : Window
         base.OnClosing(e);
 
         if (!_committed)
+        {
             _owner.ApplyPreviewBounds(App.UiState.Current);
+            AppearanceManager.ApplyTheme(App.UiState.Current.Theme);
+            AppearanceManager.ApplyFontTier(App.UiState.Current.GridFontTier);
+        }
     }
 
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e)

@@ -7,6 +7,7 @@
         MinHeight="60"
         WindowStyle="None"
         ResizeMode="CanResize"
+        Background="{DynamicResource Brush.Window.Background}"
         PreviewKeyDown="Window_PreviewKeyDown"
         PreviewMouseLeftButtonDown="Window_PreviewMouseLeftButtonDown">
     <shell:WindowChrome.WindowChrome>
@@ -16,16 +17,96 @@
                              CornerRadius="0"
                              UseAeroCaptionButtons="False" />
     </shell:WindowChrome.WindowChrome>
-    <Grid Margin="8">
+    <Grid Margin="2,0,0,0">
         <ScrollViewer HorizontalScrollBarVisibility="Auto"
                       VerticalScrollBarVisibility="Disabled">
+            <ScrollViewer.Template>
+                <ControlTemplate TargetType="ScrollViewer">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <ScrollContentPresenter x:Name="PART_ScrollContentPresenter"
+                                                 Grid.Row="0"
+                                                 CanContentScroll="{TemplateBinding CanContentScroll}" />
+                        <ScrollBar x:Name="PART_HorizontalScrollBar"
+                                   Grid.Row="1"
+                                   Orientation="Horizontal"
+                                   Height="10"
+                                   MinHeight="0"
+                                   Background="Transparent"
+                                   Value="{TemplateBinding HorizontalOffset}"
+                                   Maximum="{TemplateBinding ScrollableWidth}"
+                                   ViewportSize="{TemplateBinding ViewportWidth}"
+                                   Visibility="{TemplateBinding ComputedHorizontalScrollBarVisibility}">
+                            <ScrollBar.Template>
+                                <ControlTemplate TargetType="ScrollBar">
+                                    <Track x:Name="PART_Track"
+                                           Orientation="Horizontal"
+                                           IsDirectionReversed="False"
+                                           Minimum="{TemplateBinding Minimum}"
+                                           Maximum="{TemplateBinding Maximum}"
+                                           Value="{TemplateBinding Value}"
+                                           ViewportSize="{TemplateBinding ViewportSize}">
+                                        <Track.Thumb>
+                                            <Thumb shell:WindowChrome.IsHitTestVisibleInChrome="True">
+                                                <Thumb.Template>
+                                                    <ControlTemplate TargetType="Thumb">
+                                                        <Border Background="{DynamicResource Brush.Border}"
+                                                                Height="3"
+                                                                VerticalAlignment="Center"
+                                                                CornerRadius="1.5" />
+                                                    </ControlTemplate>
+                                                </Thumb.Template>
+                                            </Thumb>
+                                        </Track.Thumb>
+                                    </Track>
+                                </ControlTemplate>
+                            </ScrollBar.Template>
+                        </ScrollBar>
+                    </Grid>
+                </ControlTemplate>
+            </ScrollViewer.Template>
             <DataGrid ItemsSource="{Binding Pilots}"
                       AutoGenerateColumns="False"
                       IsReadOnly="True"
                       CanUserSortColumns="True"
                       GridLinesVisibility="Horizontal"
                       HeadersVisibility="Column"
-                      MinWidth="1960">
+                      MinWidth="1960"
+                      BorderThickness="0"
+                      Background="{DynamicResource Brush.Grid.Background}"
+                      RowBackground="{DynamicResource Brush.Grid.Background}"
+                      AlternatingRowBackground="{DynamicResource Brush.Grid.Background}"
+                      HorizontalGridLinesBrush="{DynamicResource Brush.Border}"
+                      Foreground="{DynamicResource Brush.Text.Primary}"
+                      RowHeight="{DynamicResource GridRowHeight}"
+                      FontSize="{DynamicResource GridFontSize}">
+                <DataGrid.ColumnHeaderStyle>
+                    <Style TargetType="DataGridColumnHeader">
+                        <Setter Property="Background" Value="{DynamicResource Brush.Header.Background}" />
+                        <Setter Property="Foreground" Value="{DynamicResource Brush.Header.Text}" />
+                        <Setter Property="Height" Value="{DynamicResource GridHeaderHeight}" />
+                        <Setter Property="Padding" Value="6,0,0,0" />
+                    </Style>
+                </DataGrid.ColumnHeaderStyle>
+                <DataGrid.CellStyle>
+                    <Style TargetType="DataGridCell">
+                        <Setter Property="Background" Value="Transparent" />
+                        <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
+                        <Setter Property="BorderThickness" Value="0" />
+                    </Style>
+                </DataGrid.CellStyle>
+                <DataGrid.RowStyle>
+                    <Style TargetType="DataGridRow">
+                        <Style.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter Property="Background" Value="{DynamicResource Brush.Row.Highlight}" />
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </DataGrid.RowStyle>
                 <DataGrid.Columns>
                     <DataGridTextColumn Header="Pilot" Binding="{Binding Pilot}" Width="170" />
                     <DataGridTextColumn Header="Verify" Binding="{Binding Verify}" Width="70" />
