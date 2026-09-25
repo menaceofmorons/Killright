@@ -10,6 +10,8 @@ public partial class MenuModalWindow : Window
 {
     private readonly MainWindow _owner;
     private UiStateModel _workingState;
+    private bool _workingSkipBackupOnClose;
+    private bool _initializing = true;
     private bool _committed;
 
     public MenuModalWindow(MainWindow owner)
@@ -17,13 +19,30 @@ public partial class MenuModalWindow : Window
         InitializeComponent();
         _owner = owner;
         _workingState = App.UiState.Current;
+        _workingSkipBackupOnClose = App.SkipBackupOnClose;
         AlwaysOnTopCheckBox.IsChecked = _workingState.AlwaysOnTop;
+        SkipBackupOnCloseCheckBox.IsChecked = _workingSkipBackupOnClose;
+        _initializing = false;
     }
 
     private void AlwaysOnTop_Changed(object sender, RoutedEventArgs e)
     {
         _workingState = _workingState with { AlwaysOnTop = AlwaysOnTopCheckBox.IsChecked == true };
         _owner.Topmost = _workingState.AlwaysOnTop;
+    }
+
+    private void SkipBackupOnClose_Changed(object sender, RoutedEventArgs e)
+    {
+        _workingSkipBackupOnClose = SkipBackupOnCloseCheckBox.IsChecked == true;
+
+        if (_initializing || !_workingSkipBackupOnClose)
+            return;
+
+        MessageBox.Show(
+            "Skip Backup on Close is a one-off setting for this session only. Backup will run normally the next time KillRight starts.",
+            "KillRight",
+            MessageBoxButton.OK,
+            MessageBoxImage.Warning);
     }
 
     private void ResetToDefaults_Click(object sender, RoutedEventArgs e)
@@ -54,6 +73,7 @@ public partial class MenuModalWindow : Window
     {
         _committed = true;
         App.UiState.Commit(_workingState);
+        App.SkipBackupOnClose = _workingSkipBackupOnClose;
         DialogResult = true;
         Close();
     }

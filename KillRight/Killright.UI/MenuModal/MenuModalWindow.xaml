@@ -28,6 +28,11 @@
                               Content="Always on top"
                               Checked="AlwaysOnTop_Changed"
                               Unchecked="AlwaysOnTop_Changed" />
+                    <CheckBox x:Name="SkipBackupOnCloseCheckBox"
+                              Content="Skip Backup on Close"
+                              Margin="0,8,0,0"
+                              Checked="SkipBackupOnClose_Changed"
+                              Unchecked="SkipBackupOnClose_Changed" />
                     <Button Content="Reset to Defaults"
                             HorizontalAlignment="Left"
                             Margin="0,16,0,0"
