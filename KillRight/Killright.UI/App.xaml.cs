@@ -15,12 +15,14 @@ using Killright.Storage.Killmails;
 using Killright.Storage.zKill;
 using Killright.UI.Analysis;
 using Killright.UI.Configuration;
+using Killright.UI.UiState;
 
 namespace Killright.UI;
 
 public partial class App : Application
 {
     public static ApplicationSettings Settings { get; private set; } = null!;
+    public static UiStateStore UiState { get; private set; } = null!;
     public static IEsiClient EsiClient { get; private set; } = null!;
     public static IzKillClient zKillClient { get; private set; } = null!;
     public static IPilotIdentityCache PilotIdentityCache { get; private set; } = null!;
@@ -48,6 +50,17 @@ public partial class App : Application
         base.OnStartup(e);
 
         Settings = ApplicationSettingsLoader.LoadOrDefault();
+
+        UiState = new UiStateStore();
+
+        if (UiState.WasCorruptOnLoad)
+        {
+            MessageBox.Show(
+                "Saved window and display settings could not be read and have been reset to defaults.",
+                "KillRight",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
 
 #if HISTORIC_RELATIONSHIPS
         // Step 19.00.59: the application half of promotion (Design

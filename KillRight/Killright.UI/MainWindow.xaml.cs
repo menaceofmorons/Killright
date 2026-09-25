@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Windows;
+using System.Windows.Input;
 using System.Windows.Interop;
 using Killright.Core.Activity;
 using Killright.Core.Style;
@@ -9,10 +10,10 @@ using Killright.Shared.Constants;
 using Killright.Shared.Time;
 using Killright.Shared.zKill;
 using Killright.UI.ClipboardMonitoring;
-#if HISTORIC_RELATIONSHIPS
-using Killright.UI.DeveloperTools.GroupDetectionHistoryPilot;
-#endif
-using Killright.UI.Diagnostics;
+using Killright.UI.Interop;
+using Killright.UI.MenuModal;
+using Killright.UI.Shortcuts;
+using Killright.UI.UiState;
 using Killright.UI.ViewModels;
 
 namespace Killright.UI;
@@ -21,34 +22,131 @@ public partial class MainWindow : Window
 {
     private readonly MainWindowViewModel _viewModel;
     private ClipboardMonitor? _clipboardMonitor;
+    private bool _menuModalOpen;
 
     public MainWindow()
     {
         InitializeComponent();
-#if HISTORIC_RELATIONSHIPS
-        var historyPilotItem = new System.Windows.Controls.MenuItem
-        {
-            Header = "Group Detection History Pilot"
-        };
-        historyPilotItem.Click += GroupDetectionHistoryPilot_Click;
-        DeveloperMenu.Items.Insert(1, new System.Windows.Controls.Separator());
-        DeveloperMenu.Items.Insert(2, historyPilotItem);
-#endif
         _viewModel = new MainWindowViewModel();
         DataContext = _viewModel;
+
+        var initial = App.UiState.Current;
+        Topmost = initial.AlwaysOnTop;
+        Width = initial.WindowWidth;
+        Height = initial.WindowHeight;
+
+        if (App.UiState.IsUsingDefaults)
+        {
+            var workArea = SystemParameters.WorkArea;
+            (Left, Top) = WindowBoundsCalculator.CenterOn(
+                workArea.Left,
+                workArea.Top,
+                workArea.Width,
+                workArea.Height,
+                initial.WindowWidth,
+                initial.WindowHeight);
+        }
+        else
+        {
+            Left = initial.WindowLeft;
+            Top = initial.WindowTop;
+        }
+
+        LocationChanged += MainWindow_LocationChanged;
+        SizeChanged += MainWindow_SizeChanged;
+    }
+
+    internal void ApplyPreviewBounds(UiStateModel state)
+    {
+        Topmost = state.AlwaysOnTop;
+        Width = state.WindowWidth;
+        Height = state.WindowHeight;
+        Left = state.WindowLeft;
+        Top = state.WindowTop;
     }
 
     protected override void OnSourceInitialized(EventArgs e)
     {
         base.OnSourceInitialized(e);
-        _clipboardMonitor = new ClipboardMonitor(new WindowInteropHelper(this).Handle);
+
+        var handle = new WindowInteropHelper(this).Handle;
+        WindowStyleInterop.RemoveMaximizeBox(handle);
+
+        _clipboardMonitor = new ClipboardMonitor(handle);
         _clipboardMonitor.ClipboardChanged += ClipboardChanged;
     }
 
     protected override void OnClosing(CancelEventArgs e)
     {
         base.OnClosing(e);
-        App.SkipBackupOnClose = SkipBackupOnCloseCheckBox.IsChecked == true;
+        App.UiState.SaveNow();
+    }
+
+    private void MainWindow_LocationChanged(object? sender, EventArgs e)
+    {
+        if (_menuModalOpen)
+            return;
+
+        App.UiState.UpdateBounds(Left, Top, Width, Height);
+    }
+
+    private void MainWindow_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (_menuModalOpen)
+            return;
+
+        App.UiState.UpdateBounds(Left, Top, Width, Height);
+    }
+
+    private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.System && e.SystemKey is Key.LeftAlt or Key.RightAlt)
+        {
+            e.Handled = true;
+            return;
+        }
+
+        if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.M)
+        {
+            e.Handled = true;
+            OpenMenuModal();
+        }
+        else if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.Q)
+        {
+            e.Handled = true;
+            Close();
+        }
+        else if (e.Key == Key.F1)
+        {
+            e.Handled = true;
+            new ShortcutsWindow { Owner = this }.ShowDialog();
+        }
+    }
+
+    private void Window_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (Keyboard.Modifiers == ModifierKeys.Alt)
+        {
+            e.Handled = true;
+            DragMove();
+        }
+    }
+
+    private void OpenMenuModal()
+    {
+        if (_menuModalOpen)
+            return;
+
+        _menuModalOpen = true;
+
+        try
+        {
+            new MenuModalWindow(this) { Owner = this }.ShowDialog();
+        }
+        finally
+        {
+            _menuModalOpen = false;
+        }
     }
 
     private async void ClipboardChanged(object? sender, EventArgs e)
@@ -396,30 +494,4 @@ public partial class MainWindow : Window
         }
     }
 
-    private void Diagnostics_Click(object sender, RoutedEventArgs e)
-    {
-        var window = new DiagnosticsWindow
-        {
-            Owner = this
-        };
-
-        window.Show();
-    }
-
-    private void ResetDeveloperClock_Click(object sender, RoutedEventArgs e)
-    {
-        ApplicationClock.Reset();
-    }
-
-#if HISTORIC_RELATIONSHIPS
-    private void GroupDetectionHistoryPilot_Click(object sender, RoutedEventArgs e)
-    {
-        var window = new GroupDetectionHistoryPilotWindow
-        {
-            Owner = this
-        };
-
-        window.ShowDialog();
-    }
-#endif
 }
