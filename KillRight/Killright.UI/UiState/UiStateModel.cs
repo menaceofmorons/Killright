@@ -64,6 +64,8 @@ public sealed record UiStateModel
     public GridFontTier GridFontTier { get; init; } = UiStateDefaults.DefaultGridFontTier;
 
     public IReadOnlyList<ColumnState> Columns { get; init; } = UiStateDefaults.DefaultColumns;
+
+    public bool DeveloperTabRevealed { get; init; } = UiStateDefaults.DeveloperTabRevealed;
 }
 
 public static class UiStateDefaults
@@ -74,6 +76,7 @@ public static class UiStateDefaults
     public const bool AlwaysOnTop = true;
     public const AppTheme Theme = AppTheme.FollowWindows;
     public const GridFontTier DefaultGridFontTier = GridFontTier.Medium;
+    public const bool DeveloperTabRevealed = false;
 
     public static readonly IReadOnlyList<(string Id, double Width, string Label)> ColumnCatalog = new[]
     {

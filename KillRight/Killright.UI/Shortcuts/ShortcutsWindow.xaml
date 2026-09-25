@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="KillRight — Shortcuts"
         Width="360"
-        Height="240"
+        Height="260"
         ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False">
@@ -19,6 +19,7 @@
             <ListBoxItem Content="Ctrl+M — Open menu" />
             <ListBoxItem Content="Ctrl+Q — Quit" />
             <ListBoxItem Content="F1 — Show this shortcut list" />
+            <ListBoxItem Content="Ctrl+Shift+D — Reveal/hide Developer tab (inside menu)" />
             <ListBoxItem Content="Alt + drag — Move window" />
             <ListBoxItem Content="Win+Down — Minimize window" />
         </ListBox>

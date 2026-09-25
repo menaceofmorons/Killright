@@ -19,6 +19,7 @@ public class UiStateLoaderTests
         Assert.Equal(UiStateDefaults.AlwaysOnTop, result.State.AlwaysOnTop);
         Assert.Equal(UiStateDefaults.Theme, result.State.Theme);
         Assert.Equal(UiStateDefaults.DefaultGridFontTier, result.State.GridFontTier);
+        Assert.Equal(UiStateDefaults.DeveloperTabRevealed, result.State.DeveloperTabRevealed);
     }
 
     [Fact]
@@ -57,7 +58,8 @@ public class UiStateLoaderTests
                 WindowHeight = 640,
                 AlwaysOnTop = false,
                 Theme = AppTheme.Dark,
-                GridFontTier = GridFontTier.Small
+                GridFontTier = GridFontTier.Small,
+                DeveloperTabRevealed = true
             };
 
             UiStateLoader.Save(state, path);
@@ -72,6 +74,7 @@ public class UiStateLoaderTests
             Assert.Equal(state.AlwaysOnTop, result.State.AlwaysOnTop);
             Assert.Equal(state.Theme, result.State.Theme);
             Assert.Equal(state.GridFontTier, result.State.GridFontTier);
+            Assert.Equal(state.DeveloperTabRevealed, result.State.DeveloperTabRevealed);
         }
         finally
         {
@@ -133,6 +136,35 @@ public class UiStateLoaderTests
             Assert.False(result.WasCorrupt);
             Assert.Equal(UiStateDefaults.Theme, result.State.Theme);
             Assert.Equal(UiStateDefaults.DefaultGridFontTier, result.State.GridFontTier);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void LoadOrDefault_PreDeveloperTabSchemaFile_DefaultsDeveloperTabRevealed()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"ui-state-{Guid.NewGuid():N}.json");
+
+        try
+        {
+            File.WriteAllText(path, """
+                {
+                  "version": 1,
+                  "windowLeft": 10,
+                  "windowTop": 20,
+                  "windowWidth": 900,
+                  "windowHeight": 500,
+                  "alwaysOnTop": true
+                }
+                """);
+
+            var result = UiStateLoader.LoadOrDefault(path);
+
+            Assert.False(result.WasCorrupt);
+            Assert.Equal(UiStateDefaults.DeveloperTabRevealed, result.State.DeveloperTabRevealed);
         }
         finally
         {

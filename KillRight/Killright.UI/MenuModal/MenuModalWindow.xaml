@@ -1,6 +1,7 @@
 <Window x:Class="Killright.UI.MenuModal.MenuModalWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:diagnostics="clr-namespace:Killright.UI.Diagnostics"
         Title="KillRight — Menu"
         Width="420"
         Height="380"
@@ -21,7 +22,8 @@
                     Width="80"
                     Click="Cancel_Click" />
         </StackPanel>
-        <TabControl>
+        <TabControl x:Name="MenuTabControl"
+                    SelectionChanged="MenuTabControl_SelectionChanged">
             <TabItem Header="Config">
                 <StackPanel Margin="12">
                     <CheckBox x:Name="AlwaysOnTopCheckBox"
@@ -94,6 +96,11 @@
                         </ListBox.ItemTemplate>
                     </ListBox>
                 </StackPanel>
+            </TabItem>
+            <TabItem x:Name="DeveloperTabItem"
+                     Header="Developer"
+                     Visibility="Collapsed">
+                <diagnostics:DiagnosticsView />
             </TabItem>
         </TabControl>
     </DockPanel>

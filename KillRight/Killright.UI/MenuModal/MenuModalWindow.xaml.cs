@@ -11,6 +11,11 @@ namespace Killright.UI.MenuModal;
 
 public partial class MenuModalWindow : Window
 {
+    private const double DefaultWidth = 420;
+    private const double DefaultHeight = 380;
+    private const double DeveloperTabWidth = 1100;
+    private const double DeveloperTabHeight = 760;
+
     private readonly MainWindow _owner;
     private UiStateModel _workingState;
     private bool _workingSkipBackupOnClose;
@@ -28,7 +33,16 @@ public partial class MenuModalWindow : Window
         SelectComboBoxItem(ThemeComboBox, _workingState.Theme.ToString());
         SelectComboBoxItem(FontTierComboBox, _workingState.GridFontTier.ToString());
         RefreshColumnsList();
+        DeveloperTabItem.Visibility = _workingState.DeveloperTabRevealed ? Visibility.Visible : Visibility.Collapsed;
+        MenuTabControl.SelectedIndex = 0;
         _initializing = false;
+
+        Loaded += MenuModalWindow_Loaded;
+    }
+
+    private void MenuModalWindow_Loaded(object sender, RoutedEventArgs e)
+    {
+        MenuTabControl.SelectedIndex = 0;
     }
 
     private void AlwaysOnTop_Changed(object sender, RoutedEventArgs e)
@@ -229,13 +243,17 @@ public partial class MenuModalWindow : Window
             AlwaysOnTop = UiStateDefaults.AlwaysOnTop,
             Theme = UiStateDefaults.Theme,
             GridFontTier = UiStateDefaults.DefaultGridFontTier,
-            Columns = UiStateDefaults.DefaultColumns
+            Columns = UiStateDefaults.DefaultColumns,
+            DeveloperTabRevealed = UiStateDefaults.DeveloperTabRevealed
         };
 
         AlwaysOnTopCheckBox.IsChecked = _workingState.AlwaysOnTop;
         SelectComboBoxItem(ThemeComboBox, _workingState.Theme.ToString());
         SelectComboBoxItem(FontTierComboBox, _workingState.GridFontTier.ToString());
         RefreshColumnsList();
+        DeveloperTabItem.Visibility = Visibility.Collapsed;
+        if (MenuTabControl.SelectedItem == DeveloperTabItem)
+            MenuTabControl.SelectedIndex = 0;
         _owner.ApplyPreviewBounds(_workingState);
         _owner.ApplyPreviewColumns(_workingState);
     }
@@ -252,6 +270,57 @@ public partial class MenuModalWindow : Window
     private void Cancel_Click(object sender, RoutedEventArgs e)
     {
         Close();
+    }
+
+    private void ToggleDeveloperTab()
+    {
+        var revealing = !_workingState.DeveloperTabRevealed;
+        _workingState = _workingState with { DeveloperTabRevealed = revealing };
+        DeveloperTabItem.Visibility = revealing ? Visibility.Visible : Visibility.Collapsed;
+
+        if (revealing)
+        {
+            MessageBox.Show(
+                "The Developer tab exposes internal diagnostics and cache-clearing tools not intended for general use.",
+                "KillRight",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
+        else if (MenuTabControl.SelectedItem == DeveloperTabItem)
+        {
+            MenuTabControl.SelectedIndex = 0;
+        }
+    }
+
+    private void MenuTabControl_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_initializing)
+            return;
+
+        var selectedDeveloperTab = MenuTabControl.SelectedItem == DeveloperTabItem;
+
+        if (selectedDeveloperTab)
+        {
+            Width = DeveloperTabWidth;
+            Height = DeveloperTabHeight;
+        }
+        else
+        {
+            Width = DefaultWidth;
+            Height = DefaultHeight;
+        }
+
+        UpdateLayout();
+
+        if (selectedDeveloperTab)
+            ForceCompositorRepaint();
+    }
+
+    private void ForceCompositorRepaint()
+    {
+        var previousState = WindowState;
+        WindowState = WindowState.Minimized;
+        WindowState = previousState;
     }
 
     protected override void OnClosing(CancelEventArgs e)
@@ -274,6 +343,11 @@ public partial class MenuModalWindow : Window
             e.Handled = true;
             Close();
             _owner.Close();
+        }
+        else if (Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && e.Key == Key.D)
+        {
+            e.Handled = true;
+            ToggleDeveloperTab();
         }
         else if (e.Key == Key.F1)
         {

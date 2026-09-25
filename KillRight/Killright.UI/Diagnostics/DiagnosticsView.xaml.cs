@@ -1,11 +1,12 @@
 using System.Data;
 using System.Text;
 using System.Windows;
+using System.Windows.Controls;
 using Killright.Shared.Time;
 
 namespace Killright.UI.Diagnostics;
 
-public partial class DiagnosticsWindow : Window
+public partial class DiagnosticsView : UserControl
 {
     private static readonly Dictionary<string, string> DiagnosticQueries = new()
     {
@@ -261,7 +262,7 @@ public partial class DiagnosticsWindow : Window
     private readonly EngineDiagnosticsClient _engineDiagnosticsClient;
     private DataTable _lastQueryRows = new();
 
-    public DiagnosticsWindow()
+    public DiagnosticsView()
     {
         InitializeComponent();
         _service = new DiagnosticsDataService(App.Database);
