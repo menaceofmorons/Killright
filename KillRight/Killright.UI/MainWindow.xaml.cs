@@ -125,13 +125,25 @@ public partial class MainWindow : Window
 
     private void PersistColumnLayout()
     {
+        // Width/DisplayIndex changes (dragging a column border or header) fire
+        // this via HookColumnLiveUpdateEvents/PilotGrid_ColumnDisplayIndexChanged
+        // even while a Developer-gated column's rendered Visibility only
+        // reflects the *effective* (gate-dependent) state, not the user's raw
+        // checkbox preference (§IsEffectivelyVisible). Deriving Visible from
+        // pair.Value.Visibility here would silently overwrite that preference
+        // -- e.g. collapsing Notes/Verify back to unchecked the moment the
+        // Developer tab is hidden and any column is resized. Preserve the
+        // existing stored preference instead; HideColumn is the only place
+        // that deliberately changes a column's persisted visibility.
+        var previousVisibleById = App.UiState.Current.Columns.ToDictionary(column => column.Id, column => column.Visible);
+
         var snapshot = _columnsById
             .Select(pair => new ColumnState
             {
                 Id = pair.Key,
                 DisplayIndex = pair.Value.DisplayIndex,
                 Width = pair.Value.Width.Value,
-                Visible = pair.Value.Visibility == Visibility.Visible
+                Visible = previousVisibleById.GetValueOrDefault(pair.Key)
             })
             .OrderBy(columnState => columnState.DisplayIndex)
             .ToList();
@@ -191,7 +203,11 @@ public partial class MainWindow : Window
 
         column.Visibility = Visibility.Collapsed;
         ResetSortIfHiddenColumnIsSorted();
-        PersistColumnLayout();
+
+        var updatedColumns = App.UiState.Current.Columns
+            .Select(columnState => columnState.Id == columnId ? columnState with { Visible = false } : columnState)
+            .ToList();
+        App.UiState.UpdateColumns(updatedColumns);
     }
 
     private void ResetSortIfHiddenColumnIsSorted()
