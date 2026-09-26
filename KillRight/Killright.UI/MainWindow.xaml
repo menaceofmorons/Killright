@@ -2,6 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        xmlns:controls="clr-namespace:Killright.UI.Controls"
         Title="KillRight"
         MinWidth="120"
         MinHeight="60"
@@ -17,6 +18,31 @@
                              CornerRadius="0"
                              UseAeroCaptionButtons="False" />
     </shell:WindowChrome.WindowChrome>
+    <Window.Resources>
+        <Style x:Key="ColumnHeaderStyle" TargetType="DataGridColumnHeader">
+            <Setter Property="Background" Value="{DynamicResource Brush.Header.Background}" />
+            <Setter Property="Foreground" Value="{DynamicResource Brush.Header.Text}" />
+            <Setter Property="Height" Value="{DynamicResource GridHeaderHeight}" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+        </Style>
+        <Style x:Key="ColumnHeaderStyleCentered" TargetType="DataGridColumnHeader" BasedOn="{StaticResource ColumnHeaderStyle}">
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+        </Style>
+        <Style x:Key="ColumnHeaderStyleRight" TargetType="DataGridColumnHeader" BasedOn="{StaticResource ColumnHeaderStyle}">
+            <Setter Property="Padding" Value="0,0,6,0" />
+            <Setter Property="HorizontalContentAlignment" Value="Right" />
+        </Style>
+        <Style x:Key="CellStyle" TargetType="DataGridCell">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+        </Style>
+        <Style x:Key="CellStyleCentered" TargetType="DataGridCell" BasedOn="{StaticResource CellStyle}">
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+        </Style>
+    </Window.Resources>
     <Grid Margin="2,0,0,0">
         <ScrollViewer HorizontalScrollBarVisibility="Auto"
                       VerticalScrollBarVisibility="Disabled">
@@ -75,7 +101,7 @@
                       CanUserSortColumns="True"
                       GridLinesVisibility="Horizontal"
                       HeadersVisibility="Column"
-                      MinWidth="1960"
+                      MinWidth="1120"
                       BorderThickness="0"
                       Background="{DynamicResource Brush.Grid.Background}"
                       RowBackground="{DynamicResource Brush.Grid.Background}"
@@ -85,22 +111,9 @@
                       RowHeight="{DynamicResource GridRowHeight}"
                       FontSize="{DynamicResource GridFontSize}"
                       ColumnDisplayIndexChanged="PilotGrid_ColumnDisplayIndexChanged"
-                      PreviewMouseRightButtonUp="PilotGrid_PreviewMouseRightButtonUp">
-                <DataGrid.ColumnHeaderStyle>
-                    <Style TargetType="DataGridColumnHeader">
-                        <Setter Property="Background" Value="{DynamicResource Brush.Header.Background}" />
-                        <Setter Property="Foreground" Value="{DynamicResource Brush.Header.Text}" />
-                        <Setter Property="Height" Value="{DynamicResource GridHeaderHeight}" />
-                        <Setter Property="Padding" Value="6,0,0,0" />
-                    </Style>
-                </DataGrid.ColumnHeaderStyle>
-                <DataGrid.CellStyle>
-                    <Style TargetType="DataGridCell">
-                        <Setter Property="Background" Value="Transparent" />
-                        <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
-                        <Setter Property="BorderThickness" Value="0" />
-                    </Style>
-                </DataGrid.CellStyle>
+                      PreviewMouseRightButtonUp="PilotGrid_PreviewMouseRightButtonUp"
+                      ColumnHeaderStyle="{StaticResource ColumnHeaderStyle}"
+                      CellStyle="{StaticResource CellStyle}">
                 <DataGrid.RowStyle>
                     <Style TargetType="DataGridRow">
                         <Style.Triggers>
@@ -111,19 +124,55 @@
                     </Style>
                 </DataGrid.RowStyle>
                 <DataGrid.Columns>
-                    <DataGridTextColumn x:Name="ColumnPilot" Header="Pilot" Binding="{Binding Pilot}" Width="170" />
-                    <DataGridTextColumn x:Name="ColumnVerify" Header="Verify" Binding="{Binding Verify}" Width="70" />
-                    <DataGridTextColumn x:Name="ColumnThreat" Header="Threat" Binding="{Binding Threat}" Width="90" />
-                    <DataGridTextColumn x:Name="ColumnSecurityStatus" Header="Sec" Binding="{Binding SecurityStatus}" Width="70" />
-                    <DataGridTextColumn x:Name="ColumnGroup" Header="Group" Binding="{Binding Group}" Width="90" />
+                    <DataGridTemplateColumn x:Name="ColumnThreat" Header="T" Width="50" SortMemberPath="Threat" HeaderStyle="{StaticResource ColumnHeaderStyleCentered}" CellStyle="{StaticResource CellStyleCentered}">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <controls:ThreatGlyph Band="{Binding Threat}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTextColumn x:Name="ColumnPilot" Header="Pilot" Binding="{Binding Pilot}" Width="170">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding EngineAnalysisFailed}" Value="True">
+                                        <Setter Property="FontStyle" Value="Italic" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn x:Name="ColumnStyle" Header="Style" Binding="{Binding Style}" Width="60" HeaderStyle="{StaticResource ColumnHeaderStyleCentered}">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="HorizontalAlignment" Value="Stretch" />
+                                <Setter Property="TextAlignment" Value="Center" />
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn x:Name="ColumnSecurityStatus" Header="Sec" Binding="{Binding SecurityStatus}" Width="70" HeaderStyle="{StaticResource ColumnHeaderStyleRight}">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="HorizontalAlignment" Value="Stretch" />
+                                <Setter Property="TextAlignment" Value="Right" />
+                                <Setter Property="Margin" Value="0,0,6,0" />
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn x:Name="ColumnWeek" Header="Week" Binding="{Binding Week}" Width="60" HeaderStyle="{StaticResource ColumnHeaderStyleCentered}">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="HorizontalAlignment" Value="Stretch" />
+                                <Setter Property="TextAlignment" Value="Center" />
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
                     <DataGridTextColumn x:Name="ColumnCorporation" Header="Corporation" Binding="{Binding Corporation}" Width="210" />
                     <DataGridTextColumn x:Name="ColumnAlliance" Header="Alliance" Binding="{Binding Alliance}" Width="210" />
-                    <DataGridTextColumn x:Name="ColumnGeneralStyle" Header="General Style" Binding="{Binding GeneralStyle}" Width="120" />
-                    <DataGridTextColumn x:Name="ColumnRecentStyle" Header="Recent Style" Binding="{Binding RecentStyle}" Width="120" />
-                    <DataGridTextColumn x:Name="ColumnKillsWeek" Header="Kills Week" Binding="{Binding KillsWeek}" Width="95" />
-                    <DataGridTextColumn x:Name="ColumnSoloWeek" Header="Solo Week" Binding="{Binding SoloWeek}" Width="95" />
-                    <DataGridTextColumn x:Name="ColumnLastActive" Header="Last Active" Binding="{Binding LastActive}" Width="160" />
+                    <DataGridTextColumn x:Name="ColumnLastActive" Header="Last Kill" Binding="{Binding LastKill}" Width="90" />
                     <DataGridTextColumn x:Name="ColumnNotes" Header="Notes" Binding="{Binding Notes}" Width="260" />
+                    <DataGridTextColumn x:Name="ColumnVerify" Header="Verify" Binding="{Binding Verify}" Width="70" />
+                    <DataGridTextColumn x:Name="ColumnGroup" Header="Group" Binding="{Binding Group}" Width="90" />
                 </DataGrid.Columns>
             </DataGrid>
         </ScrollViewer>

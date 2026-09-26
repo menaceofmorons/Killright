@@ -2,7 +2,7 @@ using Killright.Core.Models;
 using Killright.Core.Style;
 using Killright.Integration.zKill;
 using Killright.Shared;
-using Killright.Shared.Formatting;
+using Killright.Shared.Time;
 using Killright.Shared.zKill;
 
 namespace Killright.UI.ViewModels;
@@ -25,19 +25,20 @@ public static class PilotReportRowFactory
         {
             CharacterId = pilot.CharacterId,
             Pilot = GetPilotName(pilot),
+            EngineAnalysisFailed = engineFailureReason is not null,
             Verify = GetVerifyDisplay(pilot.VerifyStatus),
             Threat = string.IsNullOrWhiteSpace(threatBand)
                 ? "Unk"
                 : threatBand,
             SecurityStatus = pilot.SecurityStatus?.ToString("0.00") ?? "unk",
             Group = "unk",
+            CorporationId = pilot.Corporation?.CorporationId,
             Corporation = pilot.Corporation?.Name ?? "unk",
+            AllianceId = pilot.Alliance?.AllianceId,
             Alliance = GetAllianceDisplay(pilot),
-            GeneralStyle = StyleDisplayFormatter.Format(generalStyle),
-            RecentStyle = StyleDisplayFormatter.Format(recentStyle),
-            KillsWeek = FormatActivityValue(activity?.HasPublicActivityData, activity?.KillsWeek),
-            SoloWeek = FormatActivityValue(activity?.HasPublicActivityData, activity?.SoloWeek),
-            LastActive = FormatLastActive(activity),
+            Style = $"{StyleLetterCodeFormatter.FormatGeneral(generalStyle)}/{StyleLetterCodeFormatter.FormatRecent(recentStyle)}",
+            Week = $"{FormatActivityValue(activity?.HasPublicActivityData, activity?.KillsWeek)}/{FormatActivityValue(activity?.HasPublicActivityData, activity?.SoloWeek)}",
+            LastKill = FormatLastKill(activity),
             Notes = GetNotes(activity, statistics, statisticsCallFailed, recentCallFailed, engineFailureReason)
         };
     }
@@ -73,12 +74,26 @@ public static class PilotReportRowFactory
         return value?.ToString() ?? "-";
     }
 
-    private static string FormatLastActive(zKillActivity? activity)
+    private static string FormatLastKill(zKillActivity? activity)
     {
         if (activity?.HasPublicActivityData != true)
             return "-";
 
-        return LastActiveFormatter.Format(activity.LastActiveUtc, activity.LastActivityType?.ToString());
+        if (activity.LastActivityType != zKillActivityType.Kill || activity.LastActiveUtc is null)
+            return "-";
+
+        return FormatKillAge(ApplicationClock.UtcNow - activity.LastActiveUtc.Value);
+    }
+
+    internal static string FormatKillAge(TimeSpan age)
+    {
+        if (age.TotalHours < 24)
+            return $"{Math.Max(1, (int)Math.Ceiling(age.TotalHours))}h";
+
+        if (age.TotalDays < 30)
+            return $"{(int)age.TotalDays}d";
+
+        return ">30d";
     }
 
     private static string GetNotes(

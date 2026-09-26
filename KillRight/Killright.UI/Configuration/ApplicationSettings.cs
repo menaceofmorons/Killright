@@ -19,6 +19,8 @@ public sealed class ApplicationSettings
 
     public IReadOnlyList<ThreatBandSetting> ThreatBands { get; init; } = ThreatBandSetting.Defaults;
 
+    public long NpcCorporationIdThreshold { get; init; } = 1_005_000;
+
 #if HISTORIC_RELATIONSHIPS
     public GroupHistoryApplicationSettings GroupHistory { get; init; } = new();
 #endif

@@ -66,10 +66,8 @@ public partial class MainWindow : Window
             [ColumnIds.Group] = ColumnGroup,
             [ColumnIds.Corporation] = ColumnCorporation,
             [ColumnIds.Alliance] = ColumnAlliance,
-            [ColumnIds.GeneralStyle] = ColumnGeneralStyle,
-            [ColumnIds.RecentStyle] = ColumnRecentStyle,
-            [ColumnIds.KillsWeek] = ColumnKillsWeek,
-            [ColumnIds.SoloWeek] = ColumnSoloWeek,
+            [ColumnIds.Style] = ColumnStyle,
+            [ColumnIds.Week] = ColumnWeek,
             [ColumnIds.LastActive] = ColumnLastActive,
             [ColumnIds.Notes] = ColumnNotes
         };
@@ -99,7 +97,9 @@ public partial class MainWindow : Window
 
             column.DisplayIndex = Math.Min(columnState.DisplayIndex, PilotGrid.Columns.Count - 1);
             column.Width = new DataGridLength(columnState.Width);
-            column.Visibility = columnState.Visible ? Visibility.Visible : Visibility.Collapsed;
+            column.Visibility = UiStateDefaults.IsEffectivelyVisible(columnState, state.DeveloperTabRevealed)
+                ? Visibility.Visible
+                : Visibility.Collapsed;
         }
 
         ResetSortIfHiddenColumnIsSorted();
@@ -185,8 +185,12 @@ public partial class MainWindow : Window
         ColumnPilot.SortDirection = ListSortDirection.Ascending;
     }
 
-    private static string GetBindingPath(DataGridColumn column) =>
-        ((Binding)((DataGridBoundColumn)column).Binding).Path.Path;
+    private static string GetBindingPath(DataGridColumn column) => column switch
+    {
+        DataGridBoundColumn bound => ((Binding)bound.Binding).Path.Path,
+        DataGridTemplateColumn template => template.SortMemberPath ?? string.Empty,
+        _ => string.Empty
+    };
 
     private static T? FindAncestor<T>(DependencyObject? current) where T : DependencyObject
     {
@@ -399,6 +403,7 @@ public partial class MainWindow : Window
             return;
 
         await AttachGroupRelationshipsAsync(rows);
+        PilotGroupCountAnnotator.Annotate(rows, App.Settings.NpcCorporationIdThreshold);
 
         _viewModel.Pilots.Clear();
 

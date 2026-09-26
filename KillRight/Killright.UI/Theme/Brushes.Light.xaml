@@ -7,4 +7,7 @@
     <SolidColorBrush x:Key="Brush.Header.Text" Color="#FF000000" />
     <SolidColorBrush x:Key="Brush.Row.Highlight" Color="#FFCCE4FF" />
     <SolidColorBrush x:Key="Brush.Border" Color="#FFC0C0C0" />
+    <SolidColorBrush x:Key="Brush.Threat.Yellow" Color="#FFE6C300" />
+    <SolidColorBrush x:Key="Brush.Threat.Amber" Color="#FFE68A00" />
+    <SolidColorBrush x:Key="Brush.Threat.Red" Color="#FFD32F2F" />
 </ResourceDictionary>

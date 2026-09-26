@@ -175,14 +175,16 @@ public partial class MenuModalWindow : Window
 
     private void RefreshColumnsList()
     {
-        var labels = UiStateDefaults.ColumnCatalog.ToDictionary(catalogEntry => catalogEntry.Id, catalogEntry => catalogEntry.Label);
+        var catalogById = UiStateDefaults.ColumnCatalog.ToDictionary(catalogEntry => catalogEntry.Id);
 
         ColumnsListBox.ItemsSource = _workingState.Columns
+            .Where(column => catalogById.TryGetValue(column.Id, out var catalogEntry)
+                && (!catalogEntry.RequiresDeveloperMode || _workingState.DeveloperTabRevealed))
             .OrderBy(column => column.DisplayIndex)
             .Select(column => new ColumnRow
             {
                 Id = column.Id,
-                Label = labels[column.Id],
+                Label = catalogById[column.Id].Label,
                 IsVisible = column.Visible,
                 CanHide = column.Id != ColumnIds.Pilot
             })
@@ -277,6 +279,8 @@ public partial class MenuModalWindow : Window
         var revealing = !_workingState.DeveloperTabRevealed;
         _workingState = _workingState with { DeveloperTabRevealed = revealing };
         DeveloperTabItem.Visibility = revealing ? Visibility.Visible : Visibility.Collapsed;
+        RefreshColumnsList();
+        _owner.ApplyPreviewColumns(_workingState);
 
         if (revealing)
         {
