@@ -50,6 +50,9 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
+        DispatcherUnhandledException += OnDispatcherUnhandledException;
+        AppDomain.CurrentDomain.UnhandledException += OnAppDomainUnhandledException;
+
         Settings = ApplicationSettingsLoader.LoadOrDefault();
 
         UiState = new UiStateStore();
@@ -214,5 +217,18 @@ public partial class App : Application
         {
             base.OnExit(e);
         }
+    }
+
+    private static void OnDispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
+    {
+        EngineFailureLog.Record($"Unhandled UI-thread exception: {e.Exception}");
+        MessageBox.Show(e.Exception.ToString(), "KillRight - Unexpected Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        e.Handled = true;
+    }
+
+    private static void OnAppDomainUnhandledException(object sender, UnhandledExceptionEventArgs e)
+    {
+        if (e.ExceptionObject is Exception ex)
+            EngineFailureLog.Record($"Unhandled fatal exception: {ex}");
     }
 }

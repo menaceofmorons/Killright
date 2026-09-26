@@ -1,4 +1,5 @@
 using DuckDB.NET.Data;
+using Killright.Shared.zKill;
 using Killright.Storage.Database;
 using Killright.Storage.Killmails;
 using Xunit;
@@ -81,6 +82,52 @@ public sealed class DuckDbRecentKillmailCacheTests
 
         Assert.False(activity.HasPublicActivityData);
         Assert.Null(activity.KillsWeek);
+    }
+
+    [Fact]
+    public async Task GetMostRecentKillmailAsync_MostRecentIsALoss_ReturnsLossDetail()
+    {
+        var (database, cache) = CreateCache(recentWindowDays: 14);
+
+        InsertKillmail(database, 700007, DateTimeOffset.UtcNow.AddDays(-1), isQualifying: true, victimCharacterId: ScannedCharacterId);
+        InsertKillmail(database, 700008, DateTimeOffset.UtcNow.AddDays(-3), isQualifying: true, victimCharacterId: OtherCharacterId);
+        InsertAttacker(database, 700008, ScannedCharacterId);
+
+        var result = await cache.GetMostRecentKillmailAsync(ScannedCharacterId);
+
+        Assert.NotNull(result);
+        Assert.Equal(zKillActivityType.Loss, result!.ActivityType);
+        Assert.Equal(587, result.ShipTypeId);
+        Assert.Null(result.VictimShipTypeId);
+        Assert.Null(result.AttackerCount);
+    }
+
+    [Fact]
+    public async Task GetMostRecentKillmailAsync_MostRecentIsAKill_ReturnsKillDetail()
+    {
+        var (database, cache) = CreateCache(recentWindowDays: 14);
+
+        InsertKillmail(database, 700009, DateTimeOffset.UtcNow.AddDays(-3), isQualifying: true, victimCharacterId: ScannedCharacterId);
+        InsertKillmail(database, 700010, DateTimeOffset.UtcNow.AddDays(-1), isQualifying: true, victimCharacterId: OtherCharacterId);
+        InsertAttacker(database, 700010, ScannedCharacterId);
+
+        var result = await cache.GetMostRecentKillmailAsync(ScannedCharacterId);
+
+        Assert.NotNull(result);
+        Assert.Equal(zKillActivityType.Kill, result!.ActivityType);
+        Assert.Equal(11567, result.ShipTypeId);
+        Assert.Equal(587, result.VictimShipTypeId);
+        Assert.Equal(2, result.AttackerCount);
+    }
+
+    [Fact]
+    public async Task GetMostRecentKillmailAsync_NoRetainedKillmails_ReturnsNull()
+    {
+        var (_, cache) = CreateCache(recentWindowDays: 14);
+
+        var result = await cache.GetMostRecentKillmailAsync(ScannedCharacterId);
+
+        Assert.Null(result);
     }
 
     private static (KillRightDatabase Database, DuckDbRecentKillmailCache Cache) CreateCache(int recentWindowDays)

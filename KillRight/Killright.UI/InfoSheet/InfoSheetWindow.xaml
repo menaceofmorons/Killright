@@ -1,0 +1,103 @@
+<Window x:Class="Killright.UI.InfoSheet.InfoSheetWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        SizeToContent="WidthAndHeight"
+        WindowStartupLocation="Manual"
+        Background="Transparent"
+        Deactivated="InfoSheetWindow_Deactivated">
+    <Window.Resources>
+        <Style x:Key="SheetTitleStyle" TargetType="Border">
+            <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}" />
+            <Setter Property="BorderThickness" Value="0,1,0,1" />
+            <Setter Property="Padding" Value="0,4,0,4" />
+        </Style>
+    </Window.Resources>
+    <Border Background="{DynamicResource Brush.Grid.Background}"
+            BorderBrush="{DynamicResource Brush.Border}"
+            BorderThickness="1"
+            Padding="10">
+        <StackPanel MinWidth="220">
+            <Border Style="{StaticResource SheetTitleStyle}">
+                <TextBlock Text="{Binding StatsTitle}" FontWeight="Bold" HorizontalAlignment="Center" Foreground="{DynamicResource Brush.Text.Primary}" />
+            </Border>
+            <TextBlock Text="{Binding ErrorLine}" Visibility="{Binding ErrorLineVisibility}" Margin="0,6,0,0" Foreground="{DynamicResource Brush.Threat.Red}" />
+
+            <Grid Margin="0,6,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition />
+                    <RowDefinition />
+                    <RowDefinition />
+                    <RowDefinition />
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Foreground="{DynamicResource Brush.Text.Primary}">
+                    <Run Text="Birthday: " FontWeight="Bold" /><Run Text="{Binding BirthdayValue, Mode=OneWay}" />
+                </TextBlock>
+
+                <TextBlock Grid.Row="1" Grid.Column="0" Foreground="{DynamicResource Brush.Text.Primary}">
+                    <Run Text="Threat: " FontWeight="Bold" /><Run Text="{Binding ThreatValue, Mode=OneWay}" />
+                </TextBlock>
+                <TextBlock Grid.Row="1" Grid.Column="1" Foreground="{DynamicResource Brush.Text.Primary}">
+                    <Run Text="Sec: " FontWeight="Bold" /><Run Text="{Binding SecValue, Mode=OneWay}" />
+                </TextBlock>
+
+                <TextBlock Grid.Row="2" Grid.Column="0" Foreground="{DynamicResource Brush.Text.Primary}">
+                    <Run Text="Kills: " FontWeight="Bold" /><Run Text="{Binding KillsValue, Mode=OneWay}" />
+                </TextBlock>
+                <TextBlock Grid.Row="2" Grid.Column="1" Foreground="{DynamicResource Brush.Text.Primary}">
+                    <Run Text="Solos: " FontWeight="Bold" /><Run Text="{Binding SolosValue, Mode=OneWay}" />
+                </TextBlock>
+
+                <TextBlock Grid.Row="3" Grid.Column="0" Foreground="{DynamicResource Brush.Text.Primary}">
+                    <Run Text="General: " FontWeight="Bold" /><Run Text="{Binding GeneralValue, Mode=OneWay}" />
+                </TextBlock>
+                <TextBlock Grid.Row="3" Grid.Column="1" Foreground="{DynamicResource Brush.Text.Primary}">
+                    <Run Text="Recent: " FontWeight="Bold" /><Run Text="{Binding RecentValue, Mode=OneWay}" />
+                </TextBlock>
+            </Grid>
+
+            <StackPanel Visibility="{Binding DeveloperFieldsVisibility}" Margin="0,6,0,0">
+                <TextBlock Foreground="{DynamicResource Brush.Text.Primary}">
+                    <Run Text="Verify: " FontWeight="Bold" /><Run Text="{Binding VerifyValue, Mode=OneWay}" />
+                </TextBlock>
+                <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource Brush.Text.Primary}">
+                    <Run Text="Notes: " FontWeight="Bold" /><Run Text="{Binding NotesValue, Mode=OneWay}" />
+                </TextBlock>
+            </StackPanel>
+
+            <Border Style="{StaticResource SheetTitleStyle}" Margin="0,10,0,0">
+                <TextBlock Text="Last Activity" FontWeight="Bold" HorizontalAlignment="Center" Foreground="{DynamicResource Brush.Text.Primary}" />
+            </Border>
+            <StackPanel Margin="0,4,0,0">
+                <TextBlock Foreground="{DynamicResource Brush.Text.Primary}">
+                    <Run Text="Date/Time: " FontWeight="Bold" /><Run Text="{Binding LastActivityDateTimeValue, Mode=OneWay}" />
+                </TextBlock>
+                <TextBlock Foreground="{DynamicResource Brush.Text.Primary}">
+                    <Run Text="Kill/Loss: " FontWeight="Bold" /><Run Text="{Binding LastActivityKillLossValue, Mode=OneWay}" />
+                </TextBlock>
+                <TextBlock Foreground="{DynamicResource Brush.Text.Primary}">
+                    <Run Text="System: " FontWeight="Bold" /><Run Text="{Binding LastActivitySystemValue, Mode=OneWay}" />
+                </TextBlock>
+                <TextBlock Foreground="{DynamicResource Brush.Text.Primary}">
+                    <Run Text="Ship: " FontWeight="Bold" /><Run Text="{Binding LastActivityShipValue, Mode=OneWay}" />
+                </TextBlock>
+                <TextBlock Visibility="{Binding LastActivityKillOnlyVisibility}" Foreground="{DynamicResource Brush.Text.Primary}">
+                    <Run Text="Weapon: " FontWeight="Bold" /><Run Text="{Binding LastActivityWeaponValue, Mode=OneWay}" />
+                </TextBlock>
+                <TextBlock Visibility="{Binding LastActivityKillOnlyVisibility}" Foreground="{DynamicResource Brush.Text.Primary}">
+                    <Run Text="Victim: " FontWeight="Bold" /><Run Text="{Binding LastActivityVictimValue, Mode=OneWay}" />
+                </TextBlock>
+                <TextBlock Visibility="{Binding LastActivityKillOnlyVisibility}" Foreground="{DynamicResource Brush.Text.Primary}">
+                    <Run Text="Attackers: " FontWeight="Bold" /><Run Text="{Binding LastActivityAttackersValue, Mode=OneWay}" />
+                </TextBlock>
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</Window>

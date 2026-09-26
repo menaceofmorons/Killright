@@ -94,6 +94,10 @@ public sealed class KillRightDatabase
                               );
                               """;
         command.ExecuteNonQuery();
+
+        using var addBirthday = connection.CreateCommand();
+        addBirthday.CommandText = "ALTER TABLE main.pilot_identity_cache ADD COLUMN IF NOT EXISTS birthday DATE;";
+        addBirthday.ExecuteNonQuery();
     }
 
     private static void CreatezKillActivityCache(DuckDBConnection connection)

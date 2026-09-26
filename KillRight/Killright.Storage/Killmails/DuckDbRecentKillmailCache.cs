@@ -87,6 +87,53 @@ public sealed class DuckDbRecentKillmailCache : IRecentKillmailCache
             ApplicationClock.UtcNow));
     }
 
+    public Task<PilotRecentKillmail?> GetMostRecentKillmailAsync(
+        long characterId,
+        CancellationToken cancellationToken = default)
+    {
+        using var connection = new DuckDBConnection(_database.ConnectionString);
+        connection.Open();
+
+        using var command = connection.CreateCommand();
+        command.CommandText = $"""
+                              SELECT kill_time_utc,
+                                     TRUE AS is_loss,
+                                     system_id,
+                                     victim_ship_type_id AS ship_type_id,
+                                     CAST(NULL AS BIGINT) AS victim_ship_type_id,
+                                     CAST(NULL AS INTEGER) AS attacker_count
+                              FROM main.zkill_killmails
+                              WHERE victim_character_id = {characterId}
+                              UNION ALL
+                              SELECT k.kill_time_utc,
+                                     FALSE AS is_loss,
+                                     k.system_id,
+                                     a.ship_type_id AS ship_type_id,
+                                     k.victim_ship_type_id,
+                                     k.unique_attacker_count AS attacker_count
+                              FROM main.zkill_killmail_attackers a
+                              JOIN main.zkill_killmails k ON k.killmail_id = a.killmail_id
+                              WHERE a.character_id = {characterId}
+                              ORDER BY kill_time_utc DESC
+                              LIMIT 1;
+                              """;
+
+        using var reader = command.ExecuteReader();
+
+        if (!reader.Read())
+            return Task.FromResult<PilotRecentKillmail?>(null);
+
+        var isLoss = reader.GetBoolean(1);
+
+        return Task.FromResult<PilotRecentKillmail?>(new PilotRecentKillmail(
+            reader.GetDateTimeOffset(0),
+            isLoss ? zKillActivityType.Loss : zKillActivityType.Kill,
+            reader.GetInt64(2),
+            reader.GetNullableInt64(3),
+            reader.GetNullableInt64(4),
+            reader.GetNullableInt32(5)));
+    }
+
     public Task RemoveExpiredAsync(CancellationToken cancellationToken = default)
     {
         var cutoffUtc = ApplicationClock.UtcNow.AddDays(-_recentWindowDays);

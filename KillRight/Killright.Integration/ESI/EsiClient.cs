@@ -81,7 +81,10 @@ public sealed class EsiClient : IEsiClient
             SecurityStatus = characterInfo.SecurityStatus,
             Corporation = corp,
             Alliance = alliance,
-            AllianceId = characterInfo.AllianceId
+            AllianceId = characterInfo.AllianceId,
+            Birthday = characterInfo.Birthday is null
+                ? null
+                : DateOnly.FromDateTime(characterInfo.Birthday.Value.UtcDateTime)
         };
     }
 

@@ -39,6 +39,11 @@ public static class SqlValueFormatter
         return $"'{value.ToUniversalTime():O}'";
     }
 
+    public static string Date(DateOnly? value)
+    {
+        return value is null ? "NULL" : $"'{value.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}'";
+    }
+
     public static string Escape(string value)
     {
         return value.Replace("'", "''");

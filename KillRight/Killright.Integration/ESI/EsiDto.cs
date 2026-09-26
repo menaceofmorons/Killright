@@ -30,6 +30,9 @@ internal sealed record EsiCharacterResponse
 
     [JsonPropertyName("security_status")]
     public double? SecurityStatus { get; init; }
+
+    [JsonPropertyName("birthday")]
+    public DateTimeOffset? Birthday { get; init; }
 }
 
 internal sealed record EsiCorporationResponse

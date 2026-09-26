@@ -12,4 +12,5 @@ public sealed record Pilot
     public Corporation? Corporation { get; init; }
     public Alliance? Alliance { get; init; }
     public long? AllianceId { get; init; }
+    public DateOnly? Birthday { get; init; }
 }

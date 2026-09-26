@@ -125,6 +125,60 @@ public sealed class DuckDbPilotIdentityCacheTests
         Assert.Null(cached);
     }
 
+    [Fact]
+    public async Task GetBirthdayAsync_AfterUpsert_ReturnsBirthday()
+    {
+        var (_, cache) = CreateCache();
+
+        var pilot = new Pilot
+        {
+            InputName = "T'ral Vsengne",
+            CharacterId = 95465499,
+            CharacterName = "T'ral Vsengne",
+            VerifyStatus = VerifyStatus.Partial,
+            Corporation = new Corporation { CorporationId = 98765, Name = "Test Corp" },
+            Birthday = new DateOnly(2015, 6, 12)
+        };
+        await cache.UpsertAsync(pilot);
+
+        var birthday = await cache.GetBirthdayAsync("T'ral Vsengne");
+
+        Assert.Equal(new DateOnly(2015, 6, 12), birthday);
+    }
+
+    [Fact]
+    public async Task GetBirthdayAsync_RowOlderThanIdentityTtl_StillReturnsBirthday()
+    {
+        var (_, cache) = CreateCache();
+
+        var pilot = new Pilot
+        {
+            InputName = "T'ral Vsengne",
+            CharacterId = 95465499,
+            CharacterName = "T'ral Vsengne",
+            VerifyStatus = VerifyStatus.Partial,
+            Corporation = new Corporation { CorporationId = 98765, Name = "Test Corp" },
+            Birthday = new DateOnly(2015, 6, 12)
+        };
+        await cache.UpsertAsync(pilot);
+
+        var expiredIdentity = await cache.GetAsync("T'ral Vsengne", TimeSpan.Zero);
+        var birthday = await cache.GetBirthdayAsync("T'ral Vsengne");
+
+        Assert.Null(expiredIdentity);
+        Assert.Equal(new DateOnly(2015, 6, 12), birthday);
+    }
+
+    [Fact]
+    public async Task GetBirthdayAsync_NoCachedRow_ReturnsNull()
+    {
+        var (_, cache) = CreateCache();
+
+        var birthday = await cache.GetBirthdayAsync("Lukas Naarii");
+
+        Assert.Null(birthday);
+    }
+
     private static (KillRightDatabase Database, DuckDbPilotIdentityCache Cache) CreateCache()
     {
         var path = Path.Combine(Path.GetTempPath(), $"pilotIdentity.{Guid.NewGuid():N}.duckdb");

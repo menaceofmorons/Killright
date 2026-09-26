@@ -35,7 +35,8 @@ public sealed class DuckDbPilotIdentityCache : IPilotIdentityCache
                                      alliance_id,
                                      alliance_name,
                                      alliance_ticker,
-                                     cached_at_utc
+                                     cached_at_utc,
+                                     birthday
                               FROM pilot_identity_cache
                               WHERE input_name = {SqlValueFormatter.String(normalizedInputName)}
                               LIMIT 1;
@@ -64,10 +65,34 @@ public sealed class DuckDbPilotIdentityCache : IPilotIdentityCache
             AllianceId = reader.GetNullableInt64(8),
             AllianceName = reader.GetNullableString(9),
             AllianceTicker = reader.GetNullableString(10),
-            CachedAtUtc = cachedAtUtc
+            CachedAtUtc = cachedAtUtc,
+            Birthday = reader.IsDBNull(12) ? null : DateOnly.FromDateTime(reader.GetDateTime(12))
         };
 
         return Task.FromResult<Pilot?>(record.ToPilot());
+    }
+
+    public Task<DateOnly?> GetBirthdayAsync(string inputName, CancellationToken cancellationToken = default)
+    {
+        var normalizedInputName = PilotIdentityCacheRecord.NormalizeInputName(inputName);
+
+        using var connection = new DuckDBConnection(_database.ConnectionString);
+        connection.Open();
+
+        using var command = connection.CreateCommand();
+        command.CommandText = $"""
+                              SELECT birthday
+                              FROM pilot_identity_cache
+                              WHERE input_name = {SqlValueFormatter.String(normalizedInputName)}
+                              LIMIT 1;
+                              """;
+
+        using var reader = command.ExecuteReader();
+
+        if (!reader.Read() || reader.IsDBNull(0))
+            return Task.FromResult<DateOnly?>(null);
+
+        return Task.FromResult<DateOnly?>(DateOnly.FromDateTime(reader.GetDateTime(0)));
     }
 
     public Task UpsertAsync(Pilot pilot, CancellationToken cancellationToken = default)
@@ -101,7 +126,8 @@ public sealed class DuckDbPilotIdentityCache : IPilotIdentityCache
                                             alliance_id,
                                             alliance_name,
                                             alliance_ticker,
-                                            cached_at_utc
+                                            cached_at_utc,
+                                            birthday
                                         ) VALUES (
                                             {SqlValueFormatter.String(record.InputName)},
                                             {SqlValueFormatter.Long(record.CharacterId)},
@@ -114,7 +140,8 @@ public sealed class DuckDbPilotIdentityCache : IPilotIdentityCache
                                             {SqlValueFormatter.Long(record.AllianceId)},
                                             {SqlValueFormatter.String(record.AllianceName)},
                                             {SqlValueFormatter.String(record.AllianceTicker)},
-                                            {SqlValueFormatter.Date(record.CachedAtUtc)}
+                                            {SqlValueFormatter.Date(record.CachedAtUtc)},
+                                            {SqlValueFormatter.Date(record.Birthday)}
                                         );
                                         """;
             insertCommand.ExecuteNonQuery();

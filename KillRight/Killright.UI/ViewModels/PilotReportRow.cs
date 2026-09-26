@@ -17,7 +17,14 @@ public class PilotReportRow
     public long? AllianceId { get; set; }
     public string Alliance { get; set; } = string.Empty;
     public string Style { get; set; } = string.Empty;
+    public string GeneralStyle { get; set; } = string.Empty;
+    public string RecentStyle { get; set; } = string.Empty;
     public string Week { get; set; } = string.Empty;
+    public string Kills { get; set; } = string.Empty;
+    public string Solos { get; set; } = string.Empty;
     public string LastKill { get; set; } = string.Empty;
     public string Notes { get; set; } = string.Empty;
+    public string Birthday { get; set; } = string.Empty;
+    public string? StatsFailureSource { get; set; }
+    public PilotLastActivitySummary? LastActivity { get; set; }
 }

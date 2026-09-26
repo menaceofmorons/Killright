@@ -13,7 +13,9 @@ using Killright.Shared;
 using Killright.Shared.Constants;
 using Killright.Shared.Time;
 using Killright.Shared.zKill;
+using Killright.Storage.Killmails;
 using Killright.UI.ClipboardMonitoring;
+using Killright.UI.InfoSheet;
 using Killright.UI.Interop;
 using Killright.UI.MenuModal;
 using Killright.UI.Shortcuts;
@@ -28,6 +30,7 @@ public partial class MainWindow : Window
     private readonly Dictionary<string, DataGridColumn> _columnsById;
     private ClipboardMonitor? _clipboardMonitor;
     private bool _menuModalOpen;
+    private InfoSheetWindow? _infoSheet;
 
     public MainWindow()
     {
@@ -138,21 +141,47 @@ public partial class MainWindow : Window
 
     private void PilotGrid_PreviewMouseRightButtonUp(object sender, MouseButtonEventArgs e)
     {
-        if (FindAncestor<DataGridColumnHeader>(e.OriginalSource as DependencyObject) is not { Column: { } column } header)
+        if (FindAncestor<DataGridColumnHeader>(e.OriginalSource as DependencyObject) is { Column: { } column } header)
+        {
+            var columnId = _columnsById.FirstOrDefault(pair => pair.Value == column).Key;
+
+            if (columnId is null)
+                return;
+
+            var hideItem = new MenuItem { Header = "Hide", IsEnabled = columnId != ColumnIds.Pilot };
+            hideItem.Click += (_, _) => HideColumn(columnId);
+
+            var contextMenu = new ContextMenu();
+            contextMenu.Items.Add(hideItem);
+            header.ContextMenu = contextMenu;
+            contextMenu.IsOpen = true;
             return;
+        }
 
-        var columnId = _columnsById.FirstOrDefault(pair => pair.Value == column).Key;
+        if (FindAncestor<DataGridCell>(e.OriginalSource as DependencyObject) is { Column: var cellColumn } cell
+            && cellColumn == ColumnPilot
+            && FindAncestor<DataGridRow>(cell) is { Item: PilotReportRow row })
+        {
+            OpenInfoSheet(row, PointToScreen(e.GetPosition(this)));
+        }
+    }
 
-        if (columnId is null)
-            return;
+    private void OpenInfoSheet(PilotReportRow row, Point screenPosition)
+    {
+        _infoSheet?.Close();
 
-        var hideItem = new MenuItem { Header = "Hide", IsEnabled = columnId != ColumnIds.Pilot };
-        hideItem.Click += (_, _) => HideColumn(columnId);
+        var dpi = VisualTreeHelper.GetDpi(this);
+        var infoSheet = new InfoSheetWindow(row, App.UiState.Current.DeveloperTabRevealed)
+        {
+            Owner = this,
+            Topmost = Topmost,
+            Left = screenPosition.X / dpi.DpiScaleX,
+            Top = screenPosition.Y / dpi.DpiScaleY
+        };
 
-        var contextMenu = new ContextMenu();
-        contextMenu.Items.Add(hideItem);
-        header.ContextMenu = contextMenu;
-        contextMenu.IsOpen = true;
+        infoSheet.Closed += (_, _) => _infoSheet = null;
+        _infoSheet = infoSheet;
+        infoSheet.Show();
     }
 
     private void HideColumn(string columnId)
@@ -345,6 +374,8 @@ public partial class MainWindow : Window
             var statisticsCallFailed = false;
             var recentCallFailed = false;
             string? engineFailureReason = null;
+            PilotRecentKillmail? lastActivity = null;
+            var birthday = await SafeGetBirthdayAsync(pilotName);
 
             if (pilot.CharacterId is not null)
             {
@@ -373,6 +404,8 @@ public partial class MainWindow : Window
                     newLastSuccessfulCallUtc,
                     pastSecondsRequested);
 
+                lastActivity = await LoadMostRecentKillmailAsync(characterId);
+
                 var analysisResult = await App.RecentStyleClient.AnalyzeAsync(characterId);
                 recentStyle = analysisResult.RecentStyle;
                 threatBand = analysisResult.ThreatBand;
@@ -396,7 +429,9 @@ public partial class MainWindow : Window
                 threatBand,
                 statisticsCallFailed,
                 recentCallFailed,
-                engineFailureReason));
+                engineFailureReason,
+                birthday,
+                lastActivity));
         }
 
         if (rows.Count == 0)
@@ -430,6 +465,30 @@ public partial class MainWindow : Window
                 continue;
 
             row.GroupRelationships = groupResult.ForCharacter(row.CharacterId.Value).ToList();
+        }
+    }
+
+    private static async Task<DateOnly?> SafeGetBirthdayAsync(string pilotName)
+    {
+        try
+        {
+            return await App.PilotIdentityCache.GetBirthdayAsync(pilotName);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static async Task<PilotRecentKillmail?> LoadMostRecentKillmailAsync(long characterId)
+    {
+        try
+        {
+            return await App.RecentKillmailCache.GetMostRecentKillmailAsync(characterId);
+        }
+        catch
+        {
+            return null;
         }
     }
 

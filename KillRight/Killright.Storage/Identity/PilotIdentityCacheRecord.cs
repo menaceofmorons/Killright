@@ -16,6 +16,7 @@ public sealed class PilotIdentityCacheRecord
     public long? AllianceId { get; init; }
     public string? AllianceName { get; init; }
     public string? AllianceTicker { get; init; }
+    public DateOnly? Birthday { get; init; }
     public required DateTime CachedAtUtc { get; init; }
 
     public Pilot ToPilot()
@@ -36,7 +37,8 @@ public sealed class PilotIdentityCacheRecord
             VerifyStatus = VerifyStatus,
             SecurityStatus = SecurityStatus,
             Corporation = corporation,
-            Alliance = alliance
+            Alliance = alliance,
+            Birthday = Birthday
         };
     }
 
@@ -60,6 +62,7 @@ public sealed class PilotIdentityCacheRecord
             AllianceId = pilot.Alliance?.AllianceId,
             AllianceName = pilot.Alliance?.Name,
             AllianceTicker = pilot.Alliance?.Ticker,
+            Birthday = pilot.Birthday,
             CachedAtUtc = DateTime.UtcNow
         };
     }
