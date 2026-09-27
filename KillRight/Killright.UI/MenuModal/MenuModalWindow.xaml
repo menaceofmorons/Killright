@@ -35,10 +35,23 @@
                               Margin="0,8,0,0"
                               Checked="SkipBackupOnClose_Changed"
                               Unchecked="SkipBackupOnClose_Changed" />
-                    <Button Content="Reset to Defaults"
-                            HorizontalAlignment="Left"
-                            Margin="0,16,0,0"
-                            Click="ResetToDefaults_Click" />
+                    <TextBlock Text="Default"
+                               FontWeight="Bold"
+                               Margin="0,16,0,4" />
+                    <StackPanel Orientation="Horizontal">
+                        <Button Content="Save"
+                                Width="80"
+                                Click="SaveUserDefault_Click" />
+                        <Button x:Name="ResetMineButton"
+                                Content="Reset Mine"
+                                Width="80"
+                                Margin="8,0,0,0"
+                                Click="ResetMine_Click" />
+                        <Button Content="Reset System"
+                                Width="80"
+                                Margin="8,0,0,0"
+                                Click="ResetSystem_Click" />
+                    </StackPanel>
                 </StackPanel>
             </TabItem>
             <TabItem Header="Appearance">

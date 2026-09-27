@@ -34,4 +34,55 @@ public class WindowBoundsCalculatorTests
         Assert.Equal(1920 + 160, left);
         Assert.Equal(272, top);
     }
+
+    [Fact]
+    public void ClampToVirtualScreen_WithinBounds_Unchanged()
+    {
+        var (left, top) = WindowBoundsCalculator.ClampToVirtualScreen(
+            left: 100,
+            top: 200,
+            windowWidth: 720,
+            windowHeight: 360,
+            virtualScreenLeft: 0,
+            virtualScreenTop: 0,
+            virtualScreenWidth: 1920,
+            virtualScreenHeight: 1080);
+
+        Assert.Equal(100, left);
+        Assert.Equal(200, top);
+    }
+
+    [Fact]
+    public void ClampToVirtualScreen_PositionOffDisconnectedMonitor_ClampsIntoVirtualScreen()
+    {
+        var (left, top) = WindowBoundsCalculator.ClampToVirtualScreen(
+            left: 3000,
+            top: -500,
+            windowWidth: 720,
+            windowHeight: 360,
+            virtualScreenLeft: 0,
+            virtualScreenTop: 0,
+            virtualScreenWidth: 1920,
+            virtualScreenHeight: 1080);
+
+        Assert.Equal(1200, left);
+        Assert.Equal(0, top);
+    }
+
+    [Fact]
+    public void ClampToVirtualScreen_WindowLargerThanVirtualScreen_AnchorsToOrigin()
+    {
+        var (left, top) = WindowBoundsCalculator.ClampToVirtualScreen(
+            left: 100,
+            top: 100,
+            windowWidth: 2000,
+            windowHeight: 1200,
+            virtualScreenLeft: 0,
+            virtualScreenTop: 0,
+            virtualScreenWidth: 1920,
+            virtualScreenHeight: 1080);
+
+        Assert.Equal(0, left);
+        Assert.Equal(0, top);
+    }
 }

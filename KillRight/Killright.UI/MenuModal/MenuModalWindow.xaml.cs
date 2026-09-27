@@ -36,6 +36,7 @@ public partial class MenuModalWindow : Window
         _workingSkipBackupOnClose = App.SkipBackupOnClose;
         AlwaysOnTopCheckBox.IsChecked = _workingState.AlwaysOnTop;
         SkipBackupOnCloseCheckBox.IsChecked = _workingSkipBackupOnClose;
+        ResetMineButton.IsEnabled = _workingState.UserDefault is not null;
         SelectComboBoxItem(ThemeComboBox, _workingState.Theme.ToString());
         SelectComboBoxItem(FontTierComboBox, _workingState.GridFontTier.ToString());
         RefreshColumnsList();
@@ -423,7 +424,36 @@ public partial class MenuModalWindow : Window
             MessageBoxImage.Warning);
     }
 
-    private void ResetToDefaults_Click(object sender, RoutedEventArgs e)
+    private void SaveUserDefault_Click(object sender, RoutedEventArgs e)
+    {
+        _workingState = _workingState with { UserDefault = UserDefaultManager.CaptureFrom(_workingState) };
+        ResetMineButton.IsEnabled = true;
+    }
+
+    private void ResetMine_Click(object sender, RoutedEventArgs e)
+    {
+        if (_workingState.UserDefault is not { } snapshot)
+            return;
+
+        _workingState = UserDefaultManager.ApplyTo(
+            _workingState,
+            snapshot,
+            SystemParameters.VirtualScreenLeft,
+            SystemParameters.VirtualScreenTop,
+            SystemParameters.VirtualScreenWidth,
+            SystemParameters.VirtualScreenHeight);
+
+        AlwaysOnTopCheckBox.IsChecked = _workingState.AlwaysOnTop;
+        SelectComboBoxItem(ThemeComboBox, _workingState.Theme.ToString());
+        SelectComboBoxItem(FontTierComboBox, _workingState.GridFontTier.ToString());
+        RefreshColumnsList();
+        RefreshPilotSwatches();
+        RefreshRelatedSwatches();
+        _owner.ApplyPreviewBounds(_workingState);
+        _owner.ApplyPreviewColumns(_workingState);
+    }
+
+    private void ResetSystem_Click(object sender, RoutedEventArgs e)
     {
         var workArea = SystemParameters.WorkArea;
         var (left, top) = WindowBoundsCalculator.CenterOn(
@@ -444,7 +474,6 @@ public partial class MenuModalWindow : Window
             Theme = UiStateDefaults.Theme,
             GridFontTier = UiStateDefaults.DefaultGridFontTier,
             Columns = UiStateDefaults.DefaultColumns,
-            DeveloperTabRevealed = UiStateDefaults.DeveloperTabRevealed,
             PilotHighlightColorHex = UiStateDefaults.PilotHighlightColorHex,
             RelatedHighlightColorHex = UiStateDefaults.RelatedHighlightColorHex
         };
@@ -455,9 +484,6 @@ public partial class MenuModalWindow : Window
         RefreshColumnsList();
         RefreshPilotSwatches();
         RefreshRelatedSwatches();
-        DeveloperTabItem.Visibility = Visibility.Collapsed;
-        if (MenuTabControl.SelectedItem == DeveloperTabItem)
-            MenuTabControl.SelectedIndex = 0;
         _owner.ApplyPreviewBounds(_workingState);
         _owner.ApplyPreviewColumns(_workingState);
     }

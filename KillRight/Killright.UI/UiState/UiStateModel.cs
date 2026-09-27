@@ -59,6 +59,29 @@ public sealed record IgnoreListEntry
     public string Name { get; init; } = string.Empty;
 }
 
+public sealed record UserDefaultSnapshot
+{
+    public double WindowLeft { get; init; }
+
+    public double WindowTop { get; init; }
+
+    public double WindowWidth { get; init; } = UiStateDefaults.WindowWidth;
+
+    public double WindowHeight { get; init; } = UiStateDefaults.WindowHeight;
+
+    public bool AlwaysOnTop { get; init; } = UiStateDefaults.AlwaysOnTop;
+
+    public AppTheme Theme { get; init; } = UiStateDefaults.Theme;
+
+    public GridFontTier GridFontTier { get; init; } = UiStateDefaults.DefaultGridFontTier;
+
+    public IReadOnlyList<ColumnState> Columns { get; init; } = UiStateDefaults.DefaultColumns;
+
+    public string PilotHighlightColorHex { get; init; } = UiStateDefaults.PilotHighlightColorHex;
+
+    public string RelatedHighlightColorHex { get; init; } = UiStateDefaults.RelatedHighlightColorHex;
+}
+
 public sealed record UiStateModel
 {
     public int Version { get; init; } = UiStateDefaults.CurrentVersion;
@@ -86,6 +109,8 @@ public sealed record UiStateModel
     public string RelatedHighlightColorHex { get; init; } = UiStateDefaults.RelatedHighlightColorHex;
 
     public IReadOnlyList<IgnoreListEntry> IgnoreListEntries { get; init; } = Array.Empty<IgnoreListEntry>();
+
+    public UserDefaultSnapshot? UserDefault { get; init; }
 }
 
 public static class UiStateDefaults

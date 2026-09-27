@@ -293,4 +293,70 @@ public class UiStateLoaderTests
             File.Delete(path);
         }
     }
+
+    [Fact]
+    public void SaveThenLoad_RoundTripsUserDefault()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"ui-state-{Guid.NewGuid():N}.json");
+
+        try
+        {
+            var state = new UiStateModel
+            {
+                UserDefault = new UserDefaultSnapshot
+                {
+                    WindowLeft = 10,
+                    WindowTop = 20,
+                    WindowWidth = 900,
+                    WindowHeight = 500,
+                    AlwaysOnTop = false,
+                    Theme = AppTheme.Dark,
+                    GridFontTier = GridFontTier.Small,
+                    PilotHighlightColorHex = "#FF112233",
+                    RelatedHighlightColorHex = "#FF445566"
+                }
+            };
+
+            UiStateLoader.Save(state, path);
+            var result = UiStateLoader.LoadOrDefault(path);
+
+            Assert.False(result.WasCorrupt);
+            Assert.NotNull(result.State.UserDefault);
+            Assert.Equal(10, result.State.UserDefault!.WindowLeft);
+            Assert.Equal(AppTheme.Dark, result.State.UserDefault!.Theme);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void LoadOrDefault_PreUserDefaultSchemaFile_DefaultsUserDefaultToNull()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"ui-state-{Guid.NewGuid():N}.json");
+
+        try
+        {
+            File.WriteAllText(path, """
+                {
+                  "version": 2,
+                  "windowLeft": 10,
+                  "windowTop": 20,
+                  "windowWidth": 900,
+                  "windowHeight": 500,
+                  "alwaysOnTop": true
+                }
+                """);
+
+            var result = UiStateLoader.LoadOrDefault(path);
+
+            Assert.False(result.WasCorrupt);
+            Assert.Null(result.State.UserDefault);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
 }
