@@ -92,7 +92,7 @@ public sealed class zKillClientTests
             .OnUriContaining("api/characterID/95465499/pastSeconds", HttpStatusCode.OK, """
                 [{"killmail_id":123456,"killmail_time":"2026-09-20T10:00:00Z","solar_system_id":30000142,
                   "victim":{"character_id":999,"ship_type_id":587},
-                  "attackers":[{"character_id":95465499,"corporation_id":98000001,"alliance_id":99000001,"ship_type_id":11567}],
+                  "attackers":[{"character_id":95465499,"corporation_id":98000001,"alliance_id":99000001,"ship_type_id":11567,"weapon_type_id":3074}],
                   "zkb":{"hash":"abc123","locationID":40000001,"solo":true,"npc":false}}]
                 """);
 
@@ -112,6 +112,7 @@ public sealed class zKillClientTests
         Assert.Equal(95465499, raw.Attackers[0].CharacterId);
         Assert.Equal(98000001, raw.Attackers[0].CorporationId);
         Assert.Equal(99000001, raw.Attackers[0].AllianceId);
+        Assert.Equal(3074, raw.Attackers[0].WeaponTypeId);
     }
 
     [Fact]

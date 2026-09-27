@@ -177,13 +177,15 @@ public sealed class DuckDbKillmailStore : IKillmailStore
                 character_id,
                 corporation_id,
                 alliance_id,
-                ship_type_id
+                ship_type_id,
+                weapon_type_id
             ) VALUES (
                 {killmailId},
                 {characterId},
                 {SqlValueFormatter.Long(attacker.CorporationId)},
                 {SqlValueFormatter.Long(attacker.AllianceId)},
-                {SqlValueFormatter.Long(attacker.ShipTypeId)}
+                {SqlValueFormatter.Long(attacker.ShipTypeId)},
+                {SqlValueFormatter.Long(attacker.WeaponTypeId)}
             );
             """;
         insertCommand.ExecuteNonQuery();

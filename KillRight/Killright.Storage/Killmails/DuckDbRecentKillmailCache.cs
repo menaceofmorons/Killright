@@ -143,6 +143,46 @@ public sealed class DuckDbRecentKillmailCache : IRecentKillmailCache
 
         using var transaction = connection.BeginTransaction();
 
+        using (var buildProtectedFloor = connection.CreateCommand())
+        {
+            buildProtectedFloor.Transaction = transaction;
+            buildProtectedFloor.CommandText = """
+                                CREATE TEMP TABLE protected_killmail_ids AS
+                                WITH scanned_pilots AS (
+                                    SELECT character_id
+                                    FROM main.zkill_activity_cache
+                                ),
+                                pilot_kill_times AS (
+                                    SELECT victim_character_id AS character_id, kill_time_utc
+                                    FROM main.zkill_killmails
+                                    WHERE victim_character_id IN (SELECT character_id FROM scanned_pilots)
+                                    UNION ALL
+                                    SELECT a.character_id, k.kill_time_utc
+                                    FROM main.zkill_killmail_attackers a
+                                    JOIN main.zkill_killmails k ON k.killmail_id = a.killmail_id
+                                    WHERE a.character_id IN (SELECT character_id FROM scanned_pilots)
+                                ),
+                                pilot_floor AS (
+                                    SELECT character_id, MAX(kill_time_utc) AS floor_kill_time_utc
+                                    FROM pilot_kill_times
+                                    GROUP BY character_id
+                                )
+                                SELECT k.killmail_id
+                                FROM main.zkill_killmails k
+                                JOIN pilot_floor pf
+                                  ON k.victim_character_id = pf.character_id
+                                 AND k.kill_time_utc = pf.floor_kill_time_utc
+                                UNION
+                                SELECT k.killmail_id
+                                FROM main.zkill_killmail_attackers a
+                                JOIN main.zkill_killmails k ON k.killmail_id = a.killmail_id
+                                JOIN pilot_floor pf
+                                  ON a.character_id = pf.character_id
+                                 AND k.kill_time_utc = pf.floor_kill_time_utc;
+                                """;
+            buildProtectedFloor.ExecuteNonQuery();
+        }
+
         using (var deleteAttackers = connection.CreateCommand())
         {
             deleteAttackers.Transaction = transaction;
@@ -153,6 +193,7 @@ public sealed class DuckDbRecentKillmailCache : IRecentKillmailCache
                                     FROM main.zkill_killmails
                                     WHERE is_qualifying = FALSE
                                       AND kill_time_utc < {SqlValueFormatter.Date(cutoffUtc)}
+                                      AND killmail_id NOT IN (SELECT killmail_id FROM protected_killmail_ids)
                                 );
                                 """;
             deleteAttackers.ExecuteNonQuery();
@@ -164,7 +205,8 @@ public sealed class DuckDbRecentKillmailCache : IRecentKillmailCache
             deleteKillmails.CommandText = $"""
                                 DELETE FROM main.zkill_killmails
                                 WHERE is_qualifying = FALSE
-                                  AND kill_time_utc < {SqlValueFormatter.Date(cutoffUtc)};
+                                  AND kill_time_utc < {SqlValueFormatter.Date(cutoffUtc)}
+                                  AND killmail_id NOT IN (SELECT killmail_id FROM protected_killmail_ids);
                                 """;
             deleteKillmails.ExecuteNonQuery();
         }

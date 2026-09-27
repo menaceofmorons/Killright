@@ -96,6 +96,17 @@ public partial class DiagnosticsView : UserControl
             LIMIT 100;
             """,
 
+        ["Attacker Weapon Type Check"] = """
+            SELECT killmail_id,
+                   character_id,
+                   ship_type_id,
+                   weapon_type_id
+            FROM main.zkill_killmail_attackers
+            WHERE weapon_type_id IS NOT NULL
+            ORDER BY killmail_id DESC
+            LIMIT 100;
+            """,
+
         ["zKill Statistics Cache Rows"] = """
             SELECT *
             FROM main.zkill_statistics_cache

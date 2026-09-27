@@ -54,6 +54,51 @@ public sealed class DuckDbRecentKillmailCacheTests
     }
 
     [Fact]
+    public async Task RemoveExpiredAsync_NonQualifyingKillmailIsScannedPilotsOnlyLinkedKillmail_IsRetained()
+    {
+        var (database, cache) = CreateCache(recentWindowDays: 14);
+
+        InsertActivityCache(database, ScannedCharacterId);
+        InsertKillmail(database, 700011, DateTimeOffset.UtcNow.AddDays(-20), isQualifying: false);
+        InsertAttacker(database, 700011, ScannedCharacterId);
+
+        await cache.RemoveExpiredAsync();
+
+        Assert.True(KillmailExists(database, 700011));
+        Assert.Equal(1, CountAttackers(database, 700011));
+    }
+
+    [Fact]
+    public async Task RemoveExpiredAsync_NonQualifyingKillmailSupersededByNewerLinkedKillmail_IsPurged()
+    {
+        var (database, cache) = CreateCache(recentWindowDays: 14);
+
+        InsertActivityCache(database, ScannedCharacterId);
+        InsertKillmail(database, 700012, DateTimeOffset.UtcNow.AddDays(-25), isQualifying: false);
+        InsertAttacker(database, 700012, ScannedCharacterId);
+        InsertKillmail(database, 700013, DateTimeOffset.UtcNow.AddDays(-20), isQualifying: false);
+        InsertAttacker(database, 700013, ScannedCharacterId);
+
+        await cache.RemoveExpiredAsync();
+
+        Assert.False(KillmailExists(database, 700012));
+        Assert.True(KillmailExists(database, 700013));
+    }
+
+    [Fact]
+    public async Task RemoveExpiredAsync_NonQualifyingKillmailForNeverScannedPilot_IsPurgedDespiteBeingMostRecent()
+    {
+        var (database, cache) = CreateCache(recentWindowDays: 14);
+
+        InsertKillmail(database, 700014, DateTimeOffset.UtcNow.AddDays(-20), isQualifying: false);
+        InsertAttacker(database, 700014, OtherCharacterId);
+
+        await cache.RemoveExpiredAsync();
+
+        Assert.False(KillmailExists(database, 700014));
+    }
+
+    [Fact]
     public async Task GetDerivedActivityAsync_CountsKillsAndLossesAcrossAttackerAndVictimRows()
     {
         var (database, cache) = CreateCache(recentWindowDays: 14);
@@ -136,6 +181,26 @@ public sealed class DuckDbRecentKillmailCacheTests
         var database = new KillRightDatabase(new KillRightDatabaseOptions { DatabasePath = path });
         database.EnsureCreated();
         return (database, new DuckDbRecentKillmailCache(database, recentWindowDays));
+    }
+
+    private static void InsertActivityCache(KillRightDatabase database, long characterId)
+    {
+        using var connection = new DuckDBConnection(database.ConnectionString);
+        connection.Open();
+
+        using var command = connection.CreateCommand();
+        command.CommandText = $"""
+                              INSERT INTO main.zkill_activity_cache (
+                                  character_id,
+                                  has_public_activity_data,
+                                  checked_at_utc
+                              ) VALUES (
+                                  {characterId},
+                                  TRUE,
+                                  '{DateTimeOffset.UtcNow.UtcDateTime:O}'
+                              );
+                              """;
+        command.ExecuteNonQuery();
     }
 
     private static void InsertKillmail(

@@ -188,6 +188,10 @@ public sealed class KillRightDatabase
                               );
                               """;
         attackersCommand.ExecuteNonQuery();
+
+        using var addWeaponTypeId = connection.CreateCommand();
+        addWeaponTypeId.CommandText = "ALTER TABLE main.zkill_killmail_attackers ADD COLUMN IF NOT EXISTS weapon_type_id BIGINT;";
+        addWeaponTypeId.ExecuteNonQuery();
     }
 
     private static void CreateSdeTables(DuckDBConnection connection)

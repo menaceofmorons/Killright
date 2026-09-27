@@ -16,4 +16,5 @@ public sealed record KillmailAttacker(
     long? CharacterId,
     long? CorporationId,
     long? AllianceId,
-    long? ShipTypeId);
+    long? ShipTypeId,
+    long? WeaponTypeId = null);

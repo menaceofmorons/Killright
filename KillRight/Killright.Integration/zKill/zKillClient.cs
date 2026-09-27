@@ -117,7 +117,8 @@ public sealed class zKillClient : IzKillClient
                     attacker.character_id,
                     attacker.corporation_id,
                     attacker.alliance_id,
-                    attacker.ship_type_id))
+                    attacker.ship_type_id,
+                    attacker.weapon_type_id))
                 .ToList();
 
             raw.Add(new RawKillmail(
@@ -158,6 +159,7 @@ public sealed class zKillClient : IzKillClient
         public long? corporation_id { get; set; }
         public long? alliance_id { get; set; }
         public long? ship_type_id { get; set; }
+        public long? weapon_type_id { get; set; }
     }
 
     private sealed class zKillMetadataDto

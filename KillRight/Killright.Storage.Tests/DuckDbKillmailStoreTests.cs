@@ -177,6 +177,32 @@ public sealed class DuckDbKillmailStoreTests
     }
 
     [Fact]
+    public async Task UpsertAsync_AttackerWithWeaponTypeId_WritesWeaponTypeIdColumn()
+    {
+        var (database, store) = CreateStore();
+
+        var killmail = new RawKillmail(
+            623456,
+            "pqr678",
+            new DateTimeOffset(2026, 9, 20, 10, 0, 0, TimeSpan.Zero),
+            30000142,
+            40000001,
+            999,
+            587,
+            false,
+            false,
+            [
+                new KillmailAttacker(ScannedCharacterId, 98000001, null, 11567, 3074),
+                new KillmailAttacker(91321792, 98000002, 99000001, 17738)
+            ]);
+
+        await store.UpsertAsync(ScannedCharacterId, [killmail]);
+
+        Assert.Equal(3074, ReadAttackerWeaponTypeId(database, 623456, ScannedCharacterId));
+        Assert.Null(ReadAttackerWeaponTypeId(database, 623456, 91321792));
+    }
+
+    [Fact]
     public async Task UpsertAsync_EmptyList_NoOp()
     {
         var (_, store) = CreateStore();
@@ -223,6 +249,23 @@ public sealed class DuckDbKillmailStoreTests
                               """;
 
         return Convert.ToInt32(command.ExecuteScalar());
+    }
+
+    private static long? ReadAttackerWeaponTypeId(KillRightDatabase database, long killmailId, long characterId)
+    {
+        using var connection = new DuckDBConnection(database.ConnectionString);
+        connection.Open();
+
+        using var command = connection.CreateCommand();
+        command.CommandText = $"""
+                              SELECT weapon_type_id
+                              FROM main.zkill_killmail_attackers
+                              WHERE killmail_id = {killmailId} AND character_id = {characterId};
+                              """;
+
+        var value = command.ExecuteScalar();
+
+        return value is null || value is DBNull ? null : Convert.ToInt64(value);
     }
 
     private static List<string> ReadDistinctCachedAtUtc(KillRightDatabase database, long killmailId)
