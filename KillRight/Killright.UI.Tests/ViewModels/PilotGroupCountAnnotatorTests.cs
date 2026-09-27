@@ -1,3 +1,4 @@
+using Killright.UI.Analysis;
 using Killright.UI.ViewModels;
 using Xunit;
 
@@ -6,6 +7,54 @@ namespace Killright.UI.Tests.ViewModels;
 public sealed class PilotGroupCountAnnotatorTests
 {
     private const long NpcThreshold = 1_005_000;
+
+    private static PilotRelationship Relationship(RelationshipLinkType linkType) =>
+        new(1, 2, linkType, 50, 50, null, null, null);
+
+    [Fact]
+    public void Annotate_DirectAndChainRelationships_FormatsAsDirectSlashChain()
+    {
+        var rows = new[]
+        {
+            new PilotReportRow
+            {
+                GroupRelationships = new[]
+                {
+                    Relationship(RelationshipLinkType.Direct),
+                    Relationship(RelationshipLinkType.Direct),
+                    Relationship(RelationshipLinkType.Direct),
+                    Relationship(RelationshipLinkType.Chain)
+                }
+            }
+        };
+
+        PilotGroupCountAnnotator.Annotate(rows, NpcThreshold);
+
+        Assert.Equal("3/1", rows[0].Group);
+    }
+
+    [Fact]
+    public void Annotate_ZeroRelationshipsOnASide_ShowsDashPerZeroDisplayRule()
+    {
+        var rows = new[]
+        {
+            new PilotReportRow { GroupRelationships = new[] { Relationship(RelationshipLinkType.Chain) } }
+        };
+
+        PilotGroupCountAnnotator.Annotate(rows, NpcThreshold);
+
+        Assert.Equal("-/1", rows[0].Group);
+    }
+
+    [Fact]
+    public void Annotate_NoGroupRelationships_ShowsDashDash()
+    {
+        var rows = new[] { new PilotReportRow() };
+
+        PilotGroupCountAnnotator.Annotate(rows, NpcThreshold);
+
+        Assert.Equal("-/-", rows[0].Group);
+    }
 
     [Fact]
     public void Annotate_TwoPilotsSameCorporation_AppendsCountToBoth()

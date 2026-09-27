@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -176,6 +177,24 @@ public partial class MainWindow : Window
         {
             OpenInfoSheet(row, PointToScreen(e.GetPosition(this)));
         }
+    }
+
+    private void PilotGrid_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ClickCount != 2)
+            return;
+
+        if (FindAncestor<DataGridCell>(e.OriginalSource as DependencyObject) is not { Column: var cellColumn } cell
+            || cellColumn != ColumnPilot
+            || FindAncestor<DataGridRow>(cell) is not { Item: PilotReportRow row })
+            return;
+
+        e.Handled = true;
+
+        if (row.CharacterId is null)
+            return;
+
+        Process.Start(new ProcessStartInfo($"https://zkillboard.com/character/{row.CharacterId.Value}/") { UseShellExecute = true });
     }
 
     private void OpenInfoSheet(PilotReportRow row, Point screenPosition)

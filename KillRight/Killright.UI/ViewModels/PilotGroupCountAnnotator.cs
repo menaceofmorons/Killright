@@ -1,3 +1,5 @@
+using Killright.UI.Analysis;
+
 namespace Killright.UI.ViewModels;
 
 public static class PilotGroupCountAnnotator
@@ -6,7 +8,21 @@ public static class PilotGroupCountAnnotator
     {
         AnnotateAlliance(rows);
         AnnotateCorporation(rows, npcCorporationIdThreshold);
+        AnnotateGroupCell(rows);
     }
+
+    private static void AnnotateGroupCell(IReadOnlyList<PilotReportRow> rows)
+    {
+        foreach (var row in rows)
+        {
+            var directCount = row.GroupRelationships.Count(relationship => relationship.LinkType == RelationshipLinkType.Direct);
+            var chainCount = row.GroupRelationships.Count(relationship => relationship.LinkType == RelationshipLinkType.Chain);
+
+            row.Group = $"{FormatGroupCount(directCount)}/{FormatGroupCount(chainCount)}";
+        }
+    }
+
+    private static string FormatGroupCount(int count) => count == 0 ? "-" : count.ToString();
 
     private static void AnnotateAlliance(IReadOnlyList<PilotReportRow> rows)
     {

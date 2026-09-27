@@ -111,6 +111,7 @@
                       FontSize="{DynamicResource GridFontSize}"
                       ColumnDisplayIndexChanged="PilotGrid_ColumnDisplayIndexChanged"
                       PreviewMouseRightButtonUp="PilotGrid_PreviewMouseRightButtonUp"
+                      PreviewMouseLeftButtonDown="PilotGrid_PreviewMouseLeftButtonDown"
                       ColumnHeaderStyle="{StaticResource ColumnHeaderStyle}"
                       CellStyle="{StaticResource CellStyle}">
                 <DataGrid.Resources>

@@ -111,6 +111,18 @@ public class UiStateDefaultsTests
     }
 
     [Fact]
+    public void DefaultColumns_Group_VisibleAndPlacedImmediatelyAfterWeek()
+    {
+        var week = UiStateDefaults.DefaultColumns.Single(column => column.Id == ColumnIds.Week);
+        var group = UiStateDefaults.DefaultColumns.Single(column => column.Id == ColumnIds.Group);
+        var corporation = UiStateDefaults.DefaultColumns.Single(column => column.Id == ColumnIds.Corporation);
+
+        Assert.True(group.Visible);
+        Assert.Equal(week.DisplayIndex + 1, group.DisplayIndex);
+        Assert.Equal(group.DisplayIndex + 1, corporation.DisplayIndex);
+    }
+
+    [Fact]
     public void IsEffectivelyVisible_DeveloperGatedColumnWithDeveloperTabHidden_ReturnsFalseEvenWhenVisibleFlagTrue()
     {
         var notes = new ColumnState { Id = ColumnIds.Notes, DisplayIndex = 0, Width = 260, Visible = true };

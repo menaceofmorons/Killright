@@ -88,12 +88,12 @@ public static class UiStateDefaults
         (ColumnIds.Style, 60d, "Style", false, true),
         (ColumnIds.SecurityStatus, 70d, "Sec", false, true),
         (ColumnIds.Week, 60d, "Week", false, true),
+        (ColumnIds.Group, 90d, "Group", false, true),
         (ColumnIds.Corporation, 210d, "Corporation", false, true),
         (ColumnIds.Alliance, 210d, "Alliance", false, true),
         (ColumnIds.LastActive, 90d, "Last Kill", false, true),
         (ColumnIds.Notes, 260d, "Notes", true, false),
-        (ColumnIds.Verify, 70d, "Verify", true, false),
-        (ColumnIds.Group, 90d, "Group", false, false)
+        (ColumnIds.Verify, 70d, "Verify", true, false)
     };
 
     private static readonly IReadOnlyList<(string FirstRetiredId, string SecondRetiredId, string MergedId)> RetiredColumnMigrations = new[]

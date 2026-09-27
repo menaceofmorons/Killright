@@ -42,7 +42,7 @@ public static class PilotReportRowFactory
             Style = $"{StyleLetterCodeFormatter.FormatGeneral(generalStyle)}/{StyleLetterCodeFormatter.FormatRecent(recentStyle)}",
             GeneralStyle = StyleDisplayFormatter.Format(generalStyle),
             RecentStyle = StyleDisplayFormatter.Format(recentStyle),
-            Week = $"{FormatActivityValue(activity?.HasPublicActivityData, activity?.KillsWeek)}/{FormatActivityValue(activity?.HasPublicActivityData, activity?.SoloWeek)}",
+            Week = $"{FormatWeekSideValue(activity?.HasPublicActivityData, activity?.KillsWeek)}/{FormatWeekSideValue(activity?.HasPublicActivityData, activity?.SoloWeek)}",
             Kills = FormatActivityValue(activity?.HasPublicActivityData, activity?.KillsWeek),
             Solos = FormatActivityValue(activity?.HasPublicActivityData, activity?.SoloWeek),
             LastKill = FormatLastKill(activity),
@@ -82,6 +82,12 @@ public static class PilotReportRowFactory
             return "-";
 
         return value?.ToString() ?? "-";
+    }
+
+    private static string FormatWeekSideValue(bool? hasPublicActivityData, int? value)
+    {
+        var formatted = FormatActivityValue(hasPublicActivityData, value);
+        return formatted == "0" ? "-" : formatted;
     }
 
     private static string FormatLastKill(zKillActivity? activity)

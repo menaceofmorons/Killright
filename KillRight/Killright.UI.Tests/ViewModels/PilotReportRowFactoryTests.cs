@@ -37,6 +37,18 @@ public sealed class PilotReportRowFactoryTests
     }
 
     [Fact]
+    public void FromPilot_WeekSideIsZero_DisplaysDashPerZeroDisplayRule()
+    {
+        var activity = new zKillActivity(95465499, true, 0, 2, null, null, DateTimeOffset.UtcNow);
+
+        var row = PilotReportRowFactory.FromPilot(
+            CreatePilot(), activity, null, StyleClassification.Solo, "Low", false, false, null, null, null);
+
+        Assert.Equal("-/2", row.Week);
+        Assert.Equal("0", row.Kills);
+    }
+
+    [Fact]
     public void FromPilot_StyleClassifications_ExposedAsFullWords()
     {
         var row = PilotReportRowFactory.FromPilot(
