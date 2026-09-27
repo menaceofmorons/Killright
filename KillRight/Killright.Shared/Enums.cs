@@ -36,3 +36,10 @@ public enum AnalysisMode
     Deep = 2,
     Forensic = 3
 }
+
+public enum IgnoreEntryType
+{
+    Pilot = 0,
+    Corporation = 1,
+    Alliance = 2
+}

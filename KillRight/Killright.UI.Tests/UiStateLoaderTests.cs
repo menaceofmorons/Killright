@@ -1,3 +1,4 @@
+using Killright.Shared;
 using Killright.UI.UiState;
 using Xunit;
 
@@ -197,6 +198,66 @@ public class UiStateLoaderTests
             Assert.Equal(0, verify.DisplayIndex);
             Assert.Equal(80, verify.Width);
             Assert.False(verify.Visible);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void SaveThenLoad_RoundTripsIgnoreListEntries()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"ui-state-{Guid.NewGuid():N}.json");
+
+        try
+        {
+            var state = new UiStateModel
+            {
+                IgnoreListEntries = new[]
+                {
+                    new IgnoreListEntry { Id = 95465499, Type = IgnoreEntryType.Pilot, Name = "T'ral Vsengne" },
+                    new IgnoreListEntry { Id = 98765, Type = IgnoreEntryType.Corporation, Name = "Test Corp" }
+                }
+            };
+
+            UiStateLoader.Save(state, path);
+            var result = UiStateLoader.LoadOrDefault(path);
+
+            Assert.False(result.WasCorrupt);
+            Assert.Equal(2, result.State.IgnoreListEntries.Count);
+            var pilotEntry = result.State.IgnoreListEntries.Single(entry => entry.Type == IgnoreEntryType.Pilot);
+            Assert.Equal(95465499, pilotEntry.Id);
+            Assert.Equal("T'ral Vsengne", pilotEntry.Name);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void LoadOrDefault_PreIgnoreListSchemaFile_DefaultsIgnoreListEntries()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"ui-state-{Guid.NewGuid():N}.json");
+
+        try
+        {
+            File.WriteAllText(path, """
+                {
+                  "version": 2,
+                  "windowLeft": 10,
+                  "windowTop": 20,
+                  "windowWidth": 900,
+                  "windowHeight": 500,
+                  "alwaysOnTop": true
+                }
+                """);
+
+            var result = UiStateLoader.LoadOrDefault(path);
+
+            Assert.False(result.WasCorrupt);
+            Assert.Empty(result.State.IgnoreListEntries);
         }
         finally
         {

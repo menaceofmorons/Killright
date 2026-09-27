@@ -164,4 +164,74 @@ public sealed class EsiClientTests
         Assert.Equal(2, pilots.Count);
         Assert.All(pilots, p => Assert.Equal(VerifyStatus.Failed, p.VerifyStatus));
     }
+
+    [Fact]
+    public async Task ResolveEntityByExactNameAsync_Corporation_ReturnsIdAndName()
+    {
+        var handler = new ScriptedHttpMessageHandler()
+            .OnUriContaining("universe/ids", HttpStatusCode.OK, """{"corporations":[{"id":98765,"name":"Test Corp"}]}""");
+
+        var client = new EsiClient(new HttpClient(handler));
+
+        var resolved = await client.ResolveEntityByExactNameAsync("Test Corp", IgnoreEntryType.Corporation);
+
+        Assert.NotNull(resolved);
+        Assert.Equal(98765, resolved!.Id);
+        Assert.Equal("Test Corp", resolved.Name);
+    }
+
+    [Fact]
+    public async Task ResolveEntityByExactNameAsync_Alliance_ReturnsIdAndName()
+    {
+        var handler = new ScriptedHttpMessageHandler()
+            .OnUriContaining("universe/ids", HttpStatusCode.OK, """{"alliances":[{"id":99001,"name":"Test Alliance"}]}""");
+
+        var client = new EsiClient(new HttpClient(handler));
+
+        var resolved = await client.ResolveEntityByExactNameAsync("Test Alliance", IgnoreEntryType.Alliance);
+
+        Assert.NotNull(resolved);
+        Assert.Equal(99001, resolved!.Id);
+        Assert.Equal("Test Alliance", resolved.Name);
+    }
+
+    [Fact]
+    public async Task ResolveEntityByExactNameAsync_Pilot_ReturnsIdAndName()
+    {
+        var handler = new ScriptedHttpMessageHandler()
+            .OnUriContaining("universe/ids", HttpStatusCode.OK, """{"characters":[{"id":95465499,"name":"T'ral Vsengne"}]}""");
+
+        var client = new EsiClient(new HttpClient(handler));
+
+        var resolved = await client.ResolveEntityByExactNameAsync("T'ral Vsengne", IgnoreEntryType.Pilot);
+
+        Assert.NotNull(resolved);
+        Assert.Equal(95465499, resolved!.Id);
+    }
+
+    [Fact]
+    public async Task ResolveEntityByExactNameAsync_NoMatch_ReturnsNull()
+    {
+        var handler = new ScriptedHttpMessageHandler()
+            .OnUriContaining("universe/ids", HttpStatusCode.OK, """{"corporations":[]}""");
+
+        var client = new EsiClient(new HttpClient(handler));
+
+        var resolved = await client.ResolveEntityByExactNameAsync("Nonexistent Corp", IgnoreEntryType.Corporation);
+
+        Assert.Null(resolved);
+    }
+
+    [Fact]
+    public async Task ResolveEntityByExactNameAsync_EsiUnreachable_ReturnsNull()
+    {
+        var handler = new ScriptedHttpMessageHandler()
+            .OnUriContaining("universe/ids", HttpStatusCode.InternalServerError);
+
+        var client = new EsiClient(new HttpClient(handler));
+
+        var resolved = await client.ResolveEntityByExactNameAsync("Test Alliance", IgnoreEntryType.Alliance);
+
+        Assert.Null(resolved);
+    }
 }

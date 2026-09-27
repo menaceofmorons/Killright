@@ -6,6 +6,12 @@ internal sealed record EsiUniverseIdsResponse
 {
     [JsonPropertyName("characters")]
     public List<EsiResolvedEntity>? Characters { get; init; }
+
+    [JsonPropertyName("corporations")]
+    public List<EsiResolvedEntity>? Corporations { get; init; }
+
+    [JsonPropertyName("alliances")]
+    public List<EsiResolvedEntity>? Alliances { get; init; }
 }
 
 internal sealed record EsiResolvedEntity

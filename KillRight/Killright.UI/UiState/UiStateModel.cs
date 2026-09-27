@@ -1,4 +1,5 @@
 using System.Linq;
+using Killright.Shared;
 
 namespace Killright.UI.UiState;
 
@@ -49,6 +50,15 @@ public sealed record ColumnState
     public bool Visible { get; init; } = true;
 }
 
+public sealed record IgnoreListEntry
+{
+    public long Id { get; init; }
+
+    public IgnoreEntryType Type { get; init; }
+
+    public string Name { get; init; } = string.Empty;
+}
+
 public sealed record UiStateModel
 {
     public int Version { get; init; } = UiStateDefaults.CurrentVersion;
@@ -74,6 +84,8 @@ public sealed record UiStateModel
     public string PilotHighlightColorHex { get; init; } = UiStateDefaults.PilotHighlightColorHex;
 
     public string RelatedHighlightColorHex { get; init; } = UiStateDefaults.RelatedHighlightColorHex;
+
+    public IReadOnlyList<IgnoreListEntry> IgnoreListEntries { get; init; } = Array.Empty<IgnoreListEntry>();
 }
 
 public static class UiStateDefaults

@@ -102,6 +102,72 @@
                     </ListBox>
                 </StackPanel>
             </TabItem>
+            <TabItem x:Name="IgnoreListTabItem"
+                     Header="Ignore List">
+                <Grid Margin="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <DockPanel Grid.Column="0">
+                        <TextBlock DockPanel.Dock="Top" Text="Ignore List" FontWeight="Bold" Margin="0,0,0,4" />
+                        <DataGrid x:Name="IgnoreListDataGrid"
+                                  IsReadOnly="True"
+                                  AutoGenerateColumns="False"
+                                  CanUserAddRows="False"
+                                  HeadersVisibility="Column"
+                                  GridLinesVisibility="None">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*" />
+                                <DataGridTextColumn Header="Type" Binding="{Binding TypeLabel}" Width="70" />
+                                <DataGridTemplateColumn Header="" Width="32">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <Button Content="x" Click="RemoveIgnoreEntry_Click" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+                    <DockPanel Grid.Column="2">
+                        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,4">
+                            <TextBox x:Name="IgnoreEntryTextBox"
+                                     Width="140"
+                                     Margin="0,0,6,0"
+                                     TextChanged="IgnoreEntryTextBox_TextChanged" />
+                            <ComboBox x:Name="IgnoreTypeComboBox"
+                                      Width="80"
+                                      Margin="0,0,6,0"
+                                      SelectionChanged="IgnoreTypeComboBox_SelectionChanged">
+                                <ComboBoxItem Content="Pilot" Tag="Pilot" />
+                                <ComboBoxItem Content="Corp" Tag="Corporation" />
+                                <ComboBoxItem Content="Alliance" Tag="Alliance" />
+                            </ComboBox>
+                            <Button Content="Add" Click="AddIgnoreEntry_Click" />
+                        </StackPanel>
+                        <TextBlock x:Name="IgnoreListMessageTextBlock"
+                                   DockPanel.Dock="Top"
+                                   Foreground="Red"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,4" />
+                        <TextBlock DockPanel.Dock="Top" Text="List from Grid" FontWeight="Bold" Margin="0,4,0,4" />
+                        <DataGrid x:Name="PilotsFromGridDataGrid"
+                                  IsReadOnly="True"
+                                  AutoGenerateColumns="False"
+                                  CanUserAddRows="False"
+                                  SelectionUnit="Cell"
+                                  PreviewMouseLeftButtonUp="PilotsFromGridDataGrid_PreviewMouseLeftButtonUp">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn x:Name="ListFromGridPilotColumn" Header="Pilot" Binding="{Binding Pilot}" Width="*" />
+                                <DataGridTextColumn x:Name="ListFromGridCorpColumn" Header="Corp" Binding="{Binding Corporation}" Width="*" />
+                                <DataGridTextColumn x:Name="ListFromGridAllianceColumn" Header="Alliance" Binding="{Binding Alliance}" Width="*" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+                </Grid>
+            </TabItem>
             <TabItem x:Name="DeveloperTabItem"
                      Header="Developer"
                      Visibility="Collapsed">

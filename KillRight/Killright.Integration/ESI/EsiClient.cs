@@ -33,7 +33,7 @@ public sealed class EsiClient : IEsiClient
 
     public async Task<Pilot> ResolvePilotAsync(string exactPilotName, CancellationToken cancellationToken = default)
     {
-        var lookup = await ResolveCharacterIdByExactNameAsync(exactPilotName, cancellationToken);
+        var lookup = await ResolveIdByExactNameAsync(exactPilotName, EsiUniverseIdsCategory.Characters, cancellationToken);
         if (!lookup.Succeeded)
         {
             return new Pilot
@@ -43,7 +43,7 @@ public sealed class EsiClient : IEsiClient
             };
         }
 
-        if (lookup.Character is null)
+        if (lookup.Entity is null)
         {
             return new Pilot
             {
@@ -52,7 +52,7 @@ public sealed class EsiClient : IEsiClient
             };
         }
 
-        var character = lookup.Character;
+        var character = lookup.Entity;
         var characterInfo = await GetCharacterAsync(character.Id, cancellationToken);
         if (characterInfo is null)
         {
@@ -88,29 +88,58 @@ public sealed class EsiClient : IEsiClient
         };
     }
 
-    private async Task<CharacterLookupResult> ResolveCharacterIdByExactNameAsync(string exactPilotName, CancellationToken cancellationToken)
+    public async Task<EsiResolvedIdentity?> ResolveEntityByExactNameAsync(string exactName, IgnoreEntryType type, CancellationToken cancellationToken = default)
+    {
+        var category = type switch
+        {
+            IgnoreEntryType.Corporation => EsiUniverseIdsCategory.Corporations,
+            IgnoreEntryType.Alliance => EsiUniverseIdsCategory.Alliances,
+            _ => EsiUniverseIdsCategory.Characters
+        };
+
+        var lookup = await ResolveIdByExactNameAsync(exactName, category, cancellationToken);
+
+        if (!lookup.Succeeded || lookup.Entity is null)
+            return null;
+
+        return new EsiResolvedIdentity { Id = lookup.Entity.Id, Name = lookup.Entity.Name };
+    }
+
+    private static class EsiUniverseIdsCategory
+    {
+        public const string Characters = "characters";
+        public const string Corporations = "corporations";
+        public const string Alliances = "alliances";
+    }
+
+    private async Task<EntityLookupResult> ResolveIdByExactNameAsync(string exactName, string category, CancellationToken cancellationToken)
     {
         try
         {
             var requestUri = $"universe/ids/?datasource={_options.DataSource}&language={_options.Language}";
-            var names = new[] { exactPilotName };
+            var names = new[] { exactName };
             using var response = await _http.PostAsJsonAsync(requestUri, names, JsonOptions, cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
-                return new CharacterLookupResult(false, null);
+                return new EntityLookupResult(false, null);
             }
 
             var result = await response.Content.ReadFromJsonAsync<EsiUniverseIdsResponse>(JsonOptions, cancellationToken);
-            var match = result?.Characters?.FirstOrDefault();
-            return new CharacterLookupResult(true, match);
+            var match = category switch
+            {
+                EsiUniverseIdsCategory.Corporations => result?.Corporations?.FirstOrDefault(),
+                EsiUniverseIdsCategory.Alliances => result?.Alliances?.FirstOrDefault(),
+                _ => result?.Characters?.FirstOrDefault()
+            };
+            return new EntityLookupResult(true, match);
         }
         catch
         {
-            return new CharacterLookupResult(false, null);
+            return new EntityLookupResult(false, null);
         }
     }
 
-    private readonly record struct CharacterLookupResult(bool Succeeded, EsiResolvedEntity? Character);
+    private readonly record struct EntityLookupResult(bool Succeeded, EsiResolvedEntity? Entity);
 
     private async Task<EsiCharacterResponse?> GetCharacterAsync(long characterId, CancellationToken cancellationToken)
     {

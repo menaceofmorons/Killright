@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Windows;
@@ -439,9 +440,12 @@ public partial class MainWindow : Window
         await ResolvePilotsAsync(pilotNames);
     }
 
+    internal ObservableCollection<PilotReportRow> Pilots => _viewModel.Pilots;
+
     private async Task ResolvePilotsAsync(IReadOnlyList<string> pilotNames)
     {
         var rows = new List<PilotReportRow>();
+        var ignoreList = App.UiState.Current.IgnoreListEntries;
 
         foreach (var pilotName in pilotNames)
         {
@@ -458,6 +462,9 @@ public partial class MainWindow : Window
             }
 
             if (pilot.VerifyStatus is VerifyStatus.NoMatch or VerifyStatus.Failed)
+                continue;
+
+            if (IgnoreListFilter.IsIgnored(pilot, ignoreList))
                 continue;
 
             zKillActivity? activity = null;
