@@ -301,6 +301,9 @@ public partial class MenuModalWindow : Window
         if (_initializing)
             return;
 
+        if (!ReferenceEquals(e.OriginalSource, MenuTabControl))
+            return;
+
         var selectedDeveloperTab = MenuTabControl.SelectedItem == DeveloperTabItem;
 
         if (selectedDeveloperTab)

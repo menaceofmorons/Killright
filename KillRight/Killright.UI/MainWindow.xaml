@@ -101,7 +101,6 @@
                       CanUserSortColumns="True"
                       GridLinesVisibility="Horizontal"
                       HeadersVisibility="Column"
-                      MinWidth="1120"
                       BorderThickness="0"
                       Background="{DynamicResource Brush.Grid.Background}"
                       RowBackground="{DynamicResource Brush.Grid.Background}"
@@ -114,6 +113,43 @@
                       PreviewMouseRightButtonUp="PilotGrid_PreviewMouseRightButtonUp"
                       ColumnHeaderStyle="{StaticResource ColumnHeaderStyle}"
                       CellStyle="{StaticResource CellStyle}">
+                <DataGrid.Resources>
+                    <Style TargetType="ScrollBar">
+                        <Setter Property="Background" Value="Transparent" />
+                        <Setter Property="MinWidth" Value="0" />
+                        <Setter Property="Width" Value="10" />
+                        <Style.Triggers>
+                            <Trigger Property="Orientation" Value="Vertical">
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="ScrollBar">
+                                            <Track x:Name="PART_Track"
+                                                   Orientation="Vertical"
+                                                   IsDirectionReversed="True"
+                                                   Minimum="{TemplateBinding Minimum}"
+                                                   Maximum="{TemplateBinding Maximum}"
+                                                   Value="{TemplateBinding Value}"
+                                                   ViewportSize="{TemplateBinding ViewportSize}">
+                                                <Track.Thumb>
+                                                    <Thumb shell:WindowChrome.IsHitTestVisibleInChrome="True">
+                                                        <Thumb.Template>
+                                                            <ControlTemplate TargetType="Thumb">
+                                                                <Border Background="{DynamicResource Brush.Border}"
+                                                                        Width="3"
+                                                                        HorizontalAlignment="Center"
+                                                                        CornerRadius="1.5" />
+                                                            </ControlTemplate>
+                                                        </Thumb.Template>
+                                                    </Thumb>
+                                                </Track.Thumb>
+                                            </Track>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </DataGrid.Resources>
                 <DataGrid.RowStyle>
                     <Style TargetType="DataGridRow">
                         <Style.Triggers>
