@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http;
 using System.Windows;
 using Killright.Integration.Esi;
+using Killright.Integration.Sde;
 using Killright.Integration.zKill;
 using Killright.Shared.Killmails;
 using Killright.Storage.Database;
@@ -12,6 +13,7 @@ using Killright.Storage.GroupHistory;
 #endif
 using Killright.Storage.Identity;
 using Killright.Storage.Killmails;
+using Killright.Storage.Sde;
 using Killright.Storage.zKill;
 using Killright.UI.Analysis;
 using Killright.UI.Configuration;
@@ -31,6 +33,7 @@ public partial class App : Application
     public static IRecentKillmailCache RecentKillmailCache { get; private set; } = null!;
     public static IKillmailStore KillmailStore { get; private set; } = null!;
     public static IzKillStatisticsCache zKillStatisticsCache { get; private set; } = null!;
+    public static ISdeReferenceDataStore SdeReferenceDataStore { get; private set; } = null!;
     public static RustRecentStyleClient RecentStyleClient { get; private set; } = null!;
     public static IKillrightEngineRuntime EngineRuntime { get; private set; } = null!;
     public static KillRightDatabase Database { get; private set; } = null!;
@@ -143,6 +146,8 @@ public partial class App : Application
             new DuckDbKillmailStore(database);
         zKillStatisticsCache =
             new DuckDbzKillStatisticsCache(database);
+        SdeReferenceDataStore =
+            new DuckDbSdeReferenceDataStore(database);
 
         var dllPath = Path.Combine(
             AppContext.BaseDirectory,
@@ -188,6 +193,29 @@ public partial class App : Application
         zKillClient =
             new zKillClient(
                 zKillHttpClient);
+
+        var sdeHttpClient =
+            new HttpClient
+            {
+                Timeout = TimeSpan.FromSeconds(SdeClientOptions.RequestTimeoutSeconds)
+            };
+
+        var sdeClient =
+            new SdeClient(
+                sdeHttpClient,
+                new SdeClientOptions
+                {
+                    ManifestUrl = Settings.Sde.ManifestUrl,
+                    DatasetZipUrl = Settings.Sde.DatasetZipUrl
+                });
+
+        var sdeIngestionService =
+            new SdeIngestionService(
+                sdeClient,
+                SdeReferenceDataStore,
+                Settings.Sde.CheckIntervalHours);
+
+        _ = Task.Run(() => sdeIngestionService.RunCheckAsync());
 
         var mainWindow = new MainWindow();
         MainWindow = mainWindow;

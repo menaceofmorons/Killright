@@ -62,11 +62,12 @@ pub fn diagnose_direct_relationships(
     evidence: &[KillmailAttackerEvidence],
     current_identities: &[PilotIdentitySnapshot],
     configuration: &GroupDetectionConfiguration,
+    npc_corporation_ids: &HashSet<i64>,
 ) -> Vec<DirectRelationshipDiagnostic> {
     let current_identity_by_character = build_current_identity_index(current_identities);
     let attackers_by_killmail = group_attackers_by_killmail(evidence);
     let shared_events_by_pair =
-        build_shared_events_by_pair(&attackers_by_killmail, configuration.npc_corporation_id_threshold);
+        build_shared_events_by_pair(&attackers_by_killmail, npc_corporation_ids);
 
     let mut diagnostics: Vec<DirectRelationshipDiagnostic> = shared_events_by_pair
         .into_iter()
@@ -79,7 +80,7 @@ pub fn diagnose_direct_relationships(
                 &current_identity_by_character,
                 pilot_a,
                 pilot_b,
-                configuration.npc_corporation_id_threshold,
+                npc_corporation_ids,
             );
 
             let (counted_events, split_bonus_applied) = apply_after_split_rule(&events);
@@ -189,13 +190,14 @@ pub fn diagnose_chained_relationships(
     evidence: &[KillmailAttackerEvidence],
     current_identities: &[PilotIdentitySnapshot],
     configuration: &GroupDetectionConfiguration,
+    npc_corporation_ids: &HashSet<i64>,
     recent_window_days: i64,
     now: DateTime<Utc>,
 ) -> Vec<ChainedRelationshipDiagnostic> {
     let base_chains = analyze_chained_relationships(
         evidence,
         current_identities,
-        configuration.npc_corporation_id_threshold,
+        npc_corporation_ids,
         configuration.minimum_shared_events,
         recent_window_days,
         now,
@@ -365,16 +367,24 @@ pub fn run_group_detection_diagnostics(
     chain_evidence: &[KillmailAttackerEvidence],
     current_identities: &[PilotIdentitySnapshot],
     configuration: &GroupDetectionConfiguration,
+    npc_corporation_ids: &HashSet<i64>,
     recent_window_days: i64,
     now: DateTime<Utc>,
 ) -> GroupDetectionDiagnostics {
     let direct_started_at = Instant::now();
-    let direct_relationships = diagnose_direct_relationships(direct_evidence, current_identities, configuration);
+    let direct_relationships =
+        diagnose_direct_relationships(direct_evidence, current_identities, configuration, npc_corporation_ids);
     let direct_analysis_duration_ms = direct_started_at.elapsed().as_millis() as i64;
 
     let chain_started_at = Instant::now();
-    let chains =
-        diagnose_chained_relationships(chain_evidence, current_identities, configuration, recent_window_days, now);
+    let chains = diagnose_chained_relationships(
+        chain_evidence,
+        current_identities,
+        configuration,
+        npc_corporation_ids,
+        recent_window_days,
+        now,
+    );
     let chain_analysis_duration_ms = chain_started_at.elapsed().as_millis() as i64;
 
     let hubs = summarize_intermediary_hubs(&chains);
@@ -396,16 +406,17 @@ mod tests {
     };
     use chrono::TimeZone;
 
-    const NPC_THRESHOLD: i64 = 1_005_000;
     const MINIMUM_SHARED_EVENTS: i64 = 2;
     const GATE_CORP: i64 = 5_000_005;
     const DEFAULT_GANG_SIZE: i64 = 2;
 
+    fn npc_corporation_ids() -> HashSet<i64> {
+        HashSet::new()
+    }
+
     fn configuration() -> GroupDetectionConfiguration {
         GroupDetectionConfiguration {
             minimum_shared_events: MINIMUM_SHARED_EVENTS,
-            npc_corporation_id_threshold: NPC_THRESHOLD,
-            generic_npc_corporation_ids: None,
             strength_step: 10,
             gang_size_weights: vec![
                 GangSizeWeight { maximum_gang_size: 3, weight: 1.0 },
@@ -467,7 +478,8 @@ mod tests {
         ];
         let identities = vec![identity(100, Some(GATE_CORP)), identity(200, Some(GATE_CORP))];
 
-        let diagnostics = diagnose_direct_relationships(&evidence_rows, &identities, &configuration());
+        let diagnostics =
+            diagnose_direct_relationships(&evidence_rows, &identities, &configuration(), &npc_corporation_ids());
 
         assert_eq!(diagnostics.len(), 1);
         assert!(diagnostics[0].gated_by_current_membership);
@@ -484,7 +496,8 @@ mod tests {
         ];
         let identities = vec![identity(100, Some(1)), identity(200, Some(2))];
 
-        let diagnostics = diagnose_direct_relationships(&evidence_rows, &identities, &configuration());
+        let diagnostics =
+            diagnose_direct_relationships(&evidence_rows, &identities, &configuration(), &npc_corporation_ids());
 
         assert_eq!(diagnostics.len(), 1);
         assert!(!diagnostics[0].gated_by_current_membership);
@@ -502,7 +515,8 @@ mod tests {
         ];
         let identities = vec![identity(100, Some(1)), identity(200, Some(2))];
 
-        let diagnostics = diagnose_direct_relationships(&evidence_rows, &identities, &configuration());
+        let diagnostics =
+            diagnose_direct_relationships(&evidence_rows, &identities, &configuration(), &npc_corporation_ids());
 
         assert_eq!(diagnostics.len(), 1);
         let relationship = &diagnostics[0];
@@ -526,7 +540,14 @@ mod tests {
         ];
         let identities = vec![identity(100, None), identity(300, None)];
 
-        let diagnostics = diagnose_chained_relationships(&evidence_rows, &identities, &configuration(), 14, now());
+        let diagnostics = diagnose_chained_relationships(
+            &evidence_rows,
+            &identities,
+            &configuration(),
+            &npc_corporation_ids(),
+            14,
+            now(),
+        );
 
         assert_eq!(diagnostics.len(), 1);
         assert!(diagnostics[0].is_strongest_intermediary_for_pair);

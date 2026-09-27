@@ -12,4 +12,8 @@ public sealed class DiagnosticsSummary
     public int OffsetDays { get; init; }
     public int SchemaVersion { get; init; }
     public bool AlphaReleaseSchemaLocked { get; init; }
+    public long? SdeBuildNumber { get; init; }
+    public DateTimeOffset? SdeLastCheckedUtc { get; init; }
+    public DateTimeOffset? SdeLastUpdatedUtc { get; init; }
+    public string? SdeLastCheckResult { get; init; }
 }

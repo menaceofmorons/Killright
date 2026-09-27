@@ -23,6 +23,7 @@ use kr_engine::repositories::activity_cache_repository::ActivityCacheRepository;
 use kr_engine::repositories::killmail_relationship_repository::KillmailRelationshipRepository;
 use kr_engine::repositories::pilot_identity_repository::PilotIdentityRepository;
 use kr_engine::repositories::recent_killmail_repository::{RecentKillmailRepository, RecentKillmailSnapshot};
+use kr_engine::repositories::sde_npc_corporation_repository::SdeNpcCorporationRepository;
 use kr_engine::repositories::zkill_statistics_repository::ZKillStatisticsRepository;
 use kr_engine::shared::database_path::get_database_path;
 use kr_engine::shared::recent_window_configuration::{
@@ -190,7 +191,8 @@ fn analyze_group_detection(
     group_detection_configuration: &GroupDetectionConfiguration,
 ) -> *mut c_char {
     let killmail_relationship_repository = KillmailRelationshipRepository::new(database_path.clone());
-    let pilot_identity_repository = PilotIdentityRepository::new(database_path);
+    let pilot_identity_repository = PilotIdentityRepository::new(database_path.clone());
+    let sde_npc_corporation_repository = SdeNpcCorporationRepository::new(database_path);
 
     let direct_evidence = match killmail_relationship_repository.get_attacker_evidence_for_scan_set(scanned_character_ids) {
         Ok(value) => value,
@@ -206,17 +208,21 @@ fn analyze_group_detection(
         Ok(value) => value,
         Err(_) => return failure_response(character_id, "repository_read_error:identity"),
     };
+    let npc_corporation_ids = match sde_npc_corporation_repository.get_all_ids() {
+        Ok(value) => value,
+        Err(_) => return failure_response(character_id, "repository_read_error:npc_corporations"),
+    };
 
     let direct_relationships = analyze_direct_relationships(
         &direct_evidence,
         &current_identities,
-        group_detection_configuration.npc_corporation_id_threshold,
+        &npc_corporation_ids,
         group_detection_configuration.minimum_shared_events,
     );
     let chained_relationships = analyze_chained_relationships(
         &chain_evidence,
         &current_identities,
-        group_detection_configuration.npc_corporation_id_threshold,
+        &npc_corporation_ids,
         group_detection_configuration.minimum_shared_events,
         recent_window_configuration.recent_window_days,
         Utc::now(),
@@ -265,7 +271,8 @@ pub extern "C" fn pintel_diagnose_group_detection(request_json: *const c_char) -
         };
 
         let killmail_relationship_repository = KillmailRelationshipRepository::new(database_path.clone());
-        let pilot_identity_repository = PilotIdentityRepository::new(database_path);
+        let pilot_identity_repository = PilotIdentityRepository::new(database_path.clone());
+        let sde_npc_corporation_repository = SdeNpcCorporationRepository::new(database_path);
 
         let direct_evidence = match killmail_relationship_repository.get_attacker_evidence_for_scan_set(scanned_character_ids) {
             Ok(value) => value,
@@ -281,12 +288,17 @@ pub extern "C" fn pintel_diagnose_group_detection(request_json: *const c_char) -
             Ok(value) => value,
             Err(_) => return group_detection_diagnostics_failure(request.character_id, "repository_read_error:identity"),
         };
+        let npc_corporation_ids = match sde_npc_corporation_repository.get_all_ids() {
+            Ok(value) => value,
+            Err(_) => return group_detection_diagnostics_failure(request.character_id, "repository_read_error:npc_corporations"),
+        };
 
         let diagnostics = run_group_detection_diagnostics(
             &direct_evidence,
             &chain_evidence,
             &current_identities,
             &group_detection_configuration,
+            &npc_corporation_ids,
             recent_window_configuration.recent_window_days,
             Utc::now(),
         );

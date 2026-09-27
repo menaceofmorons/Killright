@@ -16,5 +16,8 @@ pub mod recent_killmail_repository;
 #[path = "repository_error.rs"]
 pub mod repository_error;
 
+#[path = "sde_npc_corporation_repository.rs"]
+pub mod sde_npc_corporation_repository;
+
 #[path = "zkill_statistics_repository.rs"]
 pub mod zkill_statistics_repository;

@@ -1,7 +1,5 @@
 {
     "minimumSharedEvents": 2,
-    "npcCorporationIdThreshold": 1005000,
-    "genericNpcCorporationIds": null,
     "strengthStep": 10,
     "gangSizeWeights": [
         { "maximumGangSize": 3, "weight": 1.0 },

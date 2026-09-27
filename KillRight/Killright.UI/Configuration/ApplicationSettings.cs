@@ -21,6 +21,8 @@ public sealed class ApplicationSettings
 
     public long NpcCorporationIdThreshold { get; init; } = 1_005_000;
 
+    public SdeApplicationSettings Sde { get; init; } = new();
+
 #if HISTORIC_RELATIONSHIPS
     public GroupHistoryApplicationSettings GroupHistory { get; init; } = new();
 #endif
@@ -61,6 +63,15 @@ public sealed class ThreatBandSetting
 
         return expectedMinimum == 101 ? ordered : Defaults;
     }
+}
+
+public sealed class SdeApplicationSettings
+{
+    public string ManifestUrl { get; init; } = "https://developers.eveonline.com/static-data/tranquility/latest.jsonl";
+
+    public string DatasetZipUrl { get; init; } = "https://developers.eveonline.com/static-data/eve-online-static-data-latest-jsonl.zip";
+
+    public int CheckIntervalHours { get; init; } = 24;
 }
 
 #if HISTORIC_RELATIONSHIPS

@@ -1,5 +1,6 @@
 using System.Data;
 using DuckDB.NET.Data;
+using Killright.Shared.Data;
 using Killright.Shared.Time;
 using Killright.Storage.Database;
 
@@ -16,8 +17,14 @@ public sealed class DiagnosticsDataService
 
     public DiagnosticsSummary LoadSummary()
     {
+        var sdeMetadata = LoadSdeMetadata();
+
         return new DiagnosticsSummary
         {
+            SdeBuildNumber = sdeMetadata.buildNumber,
+            SdeLastCheckedUtc = sdeMetadata.lastCheckedUtc,
+            SdeLastUpdatedUtc = sdeMetadata.lastUpdatedUtc,
+            SdeLastCheckResult = sdeMetadata.lastCheckResult,
             IdentityCacheRows = ExecuteScalarInt("SELECT COUNT(*) FROM main.pilot_identity_cache;"),
             ActivityCacheRows = ExecuteScalarInt("SELECT COUNT(*) FROM main.zkill_activity_cache;"),
             RecentKillmailRows = ExecuteScalarInt("SELECT COUNT(*) FROM main.zkill_killmails;"),
@@ -68,6 +75,30 @@ public sealed class DiagnosticsDataService
         using var command = connection.CreateCommand();
         command.CommandText = sql;
         command.ExecuteNonQuery();
+    }
+
+    private (long? buildNumber, DateTimeOffset? lastCheckedUtc, DateTimeOffset? lastUpdatedUtc, string? lastCheckResult) LoadSdeMetadata()
+    {
+        using var connection = new DuckDBConnection(_database.ConnectionString);
+        connection.Open();
+
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT build_number, last_checked_utc, last_updated_utc, last_check_result
+            FROM main.sde_metadata
+            LIMIT 1;
+            """;
+
+        using var reader = command.ExecuteReader();
+
+        if (!reader.Read())
+            return (null, null, null, null);
+
+        return (
+            reader.GetNullableInt64(0),
+            reader.GetNullableDateTimeOffset(1),
+            reader.GetNullableDateTimeOffset(2),
+            reader.GetNullableString(3));
     }
 
     private int ExecuteScalarInt(string sql)

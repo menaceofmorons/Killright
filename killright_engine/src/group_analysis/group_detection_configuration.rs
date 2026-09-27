@@ -8,10 +8,6 @@ use serde::Deserialize;
 pub struct GroupDetectionConfiguration {
     #[serde(rename = "minimumSharedEvents")]
     pub minimum_shared_events: i64,
-    #[serde(rename = "npcCorporationIdThreshold")]
-    pub npc_corporation_id_threshold: i64,
-    #[serde(rename = "genericNpcCorporationIds")]
-    pub generic_npc_corporation_ids: Option<Vec<i64>>,
     #[serde(rename = "strengthStep")]
     pub strength_step: i32,
     #[serde(rename = "gangSizeWeights")]
@@ -100,26 +96,8 @@ fn configuration_candidates() -> Vec<PathBuf> {
 }
 
 fn validate_group_detection_configuration(configuration: &GroupDetectionConfiguration) -> Result<(), String> {
-    validate_npc_corporation_configuration(configuration)?;
     validate_weights_and_factors(configuration)?;
     validate_steps_and_saturation(configuration)?;
-
-    Ok(())
-}
-
-fn validate_npc_corporation_configuration(configuration: &GroupDetectionConfiguration) -> Result<(), String> {
-    if configuration.npc_corporation_id_threshold <= 0 {
-        return Err(format!(
-            "npcCorporationIdThreshold must be positive; actual value was {}",
-            configuration.npc_corporation_id_threshold
-        ));
-    }
-
-    if let Some(generic_ids) = &configuration.generic_npc_corporation_ids {
-        if generic_ids.iter().any(|id| *id <= 0) {
-            return Err("genericNpcCorporationIds cannot contain a non-positive corporation id".to_string());
-        }
-    }
 
     Ok(())
 }
@@ -199,8 +177,6 @@ mod tests {
     fn valid_configuration_json() -> &'static str {
         r#"{
             "minimumSharedEvents": 2,
-            "npcCorporationIdThreshold": 1005000,
-            "genericNpcCorporationIds": null,
             "strengthStep": 10,
             "gangSizeWeights": [
                 {"maximumGangSize": 3, "weight": 1.0},
@@ -231,18 +207,6 @@ mod tests {
     fn load_group_detection_configuration_rejects_weight_outside_zero_one() {
         let path = std::env::temp_dir().join(format!("group-detection-invalid-weight-{}.json", unique_suffix()));
         let json = valid_configuration_json().replace("\"weight\": 1.0", "\"weight\": 1.5");
-        fs::write(&path, json).unwrap();
-
-        let result = load_group_detection_configuration(&path);
-
-        fs::remove_file(&path).unwrap();
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn load_group_detection_configuration_rejects_non_positive_npc_threshold() {
-        let path = std::env::temp_dir().join(format!("group-detection-invalid-npc-{}.json", unique_suffix()));
-        let json = valid_configuration_json().replace("\"npcCorporationIdThreshold\": 1005000", "\"npcCorporationIdThreshold\": 0");
         fs::write(&path, json).unwrap();
 
         let result = load_group_detection_configuration(&path);

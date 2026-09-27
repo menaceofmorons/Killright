@@ -29,6 +29,8 @@ public sealed class KillRightDatabase
         CreatezKillActivityCache(connection);
         CreatezKillStatisticsCache(connection);
         CreateZkillKillmailsTables(connection);
+        CreateSdeTables(connection);
+        CreateSdeMetadata(connection);
         CreateSchemaMetadata(connection);
     }
 
@@ -186,6 +188,67 @@ public sealed class KillRightDatabase
                               );
                               """;
         attackersCommand.ExecuteNonQuery();
+    }
+
+    private static void CreateSdeTables(DuckDBConnection connection)
+    {
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = """
+                                  CREATE TABLE IF NOT EXISTS main.sde_types (
+                                      type_id BIGINT PRIMARY KEY,
+                                      name TEXT NOT NULL
+                                  );
+                                  """;
+            command.ExecuteNonQuery();
+        }
+
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = """
+                                  CREATE TABLE IF NOT EXISTS main.sde_solar_systems (
+                                      system_id BIGINT PRIMARY KEY,
+                                      name TEXT NOT NULL
+                                  );
+                                  """;
+            command.ExecuteNonQuery();
+        }
+
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = """
+                                  CREATE TABLE IF NOT EXISTS main.sde_npc_corporations (
+                                      corporation_id BIGINT PRIMARY KEY
+                                  );
+                                  """;
+            command.ExecuteNonQuery();
+        }
+    }
+
+    private static void CreateSdeMetadata(DuckDBConnection connection)
+    {
+        using (var createTable = connection.CreateCommand())
+        {
+            createTable.CommandText = """
+                                  CREATE TABLE IF NOT EXISTS main.sde_metadata (
+                                      build_number BIGINT,
+                                      last_checked_utc TEXT,
+                                      last_updated_utc TEXT,
+                                      last_check_result TEXT
+                                  );
+                                  """;
+            createTable.ExecuteNonQuery();
+        }
+
+        using (var insertIfAbsent = connection.CreateCommand())
+        {
+            insertIfAbsent.CommandText = """
+                                  INSERT INTO main.sde_metadata (build_number, last_checked_utc, last_updated_utc, last_check_result)
+                                  SELECT NULL, NULL, NULL, NULL
+                                  WHERE NOT EXISTS (SELECT 1 FROM main.sde_metadata);
+                                  """;
+            insertIfAbsent.ExecuteNonQuery();
+        }
     }
 
     private static void CreateSchemaMetadata(DuckDBConnection connection)

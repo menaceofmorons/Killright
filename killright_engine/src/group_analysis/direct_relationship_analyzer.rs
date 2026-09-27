@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::group_analysis::shared_relationship_evidence::{
     apply_after_split_rule, build_current_identity_index, build_shared_events_by_pair,
     group_attackers_by_killmail, is_currently_same_corporation_or_alliance,
@@ -5,7 +7,6 @@ use crate::group_analysis::shared_relationship_evidence::{
 use crate::repositories::killmail_relationship_repository::KillmailAttackerEvidence;
 use crate::repositories::pilot_identity_repository::PilotIdentitySnapshot;
 
-pub const PROVISIONAL_NPC_CORPORATION_ID_THRESHOLD: i64 = 1_005_000;
 pub const PROVISIONAL_MINIMUM_SHARED_EVENTS: i64 = 2;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -21,13 +22,13 @@ pub struct DirectRelationship {
 pub fn analyze_direct_relationships(
     evidence: &[KillmailAttackerEvidence],
     current_identities: &[PilotIdentitySnapshot],
-    npc_corporation_id_threshold: i64,
+    npc_corporation_ids: &HashSet<i64>,
     minimum_shared_events: i64,
 ) -> Vec<DirectRelationship> {
     let current_identity_by_character = build_current_identity_index(current_identities);
     let attackers_by_killmail = group_attackers_by_killmail(evidence);
     let shared_events_by_pair =
-        build_shared_events_by_pair(&attackers_by_killmail, npc_corporation_id_threshold);
+        build_shared_events_by_pair(&attackers_by_killmail, npc_corporation_ids);
 
     let mut relationships = Vec::new();
 
@@ -36,7 +37,7 @@ pub fn analyze_direct_relationships(
             &current_identity_by_character,
             pilot_a,
             pilot_b,
-            npc_corporation_id_threshold,
+            npc_corporation_ids,
         ) {
             continue;
         }
@@ -77,7 +78,10 @@ pub fn analyze_direct_relationships(
 mod tests {
     use super::*;
 
-    const NPC_THRESHOLD: i64 = 1_005_000;
+    fn npc_corporation_ids() -> HashSet<i64> {
+        HashSet::from([1000])
+    }
+
     const MINIMUM_SHARED_EVENTS: i64 = 2;
     const SHARED_CORP: i64 = 5_000_009;
     const GATE_CORP: i64 = 5_000_005;
@@ -131,7 +135,7 @@ mod tests {
         let relationships = analyze_direct_relationships(
             &evidence_rows,
             &identities,
-            NPC_THRESHOLD,
+            &npc_corporation_ids(),
             MINIMUM_SHARED_EVENTS,
         );
 
@@ -152,7 +156,7 @@ mod tests {
         let relationships = analyze_direct_relationships(
             &evidence_rows,
             &identities,
-            NPC_THRESHOLD,
+            &npc_corporation_ids(),
             MINIMUM_SHARED_EVENTS,
         );
 
@@ -174,7 +178,7 @@ mod tests {
         let relationships = analyze_direct_relationships(
             &evidence_rows,
             &identities,
-            NPC_THRESHOLD,
+            &npc_corporation_ids(),
             MINIMUM_SHARED_EVENTS,
         );
 
@@ -198,7 +202,7 @@ mod tests {
         let relationships = analyze_direct_relationships(
             &evidence_rows,
             &identities,
-            NPC_THRESHOLD,
+            &npc_corporation_ids(),
             MINIMUM_SHARED_EVENTS,
         );
 
@@ -220,7 +224,7 @@ mod tests {
         let relationships = analyze_direct_relationships(
             &evidence_rows,
             &identities,
-            NPC_THRESHOLD,
+            &npc_corporation_ids(),
             MINIMUM_SHARED_EVENTS,
         );
 
@@ -240,7 +244,7 @@ mod tests {
         let relationships = analyze_direct_relationships(
             &evidence_rows,
             &identities,
-            NPC_THRESHOLD,
+            &npc_corporation_ids(),
             MINIMUM_SHARED_EVENTS,
         );
 
@@ -259,7 +263,7 @@ mod tests {
         let relationships = analyze_direct_relationships(
             &evidence_rows,
             &identities,
-            NPC_THRESHOLD,
+            &npc_corporation_ids(),
             MINIMUM_SHARED_EVENTS,
         );
 
@@ -277,7 +281,7 @@ mod tests {
         let relationships = analyze_direct_relationships(
             &evidence_rows,
             &identities,
-            NPC_THRESHOLD,
+            &npc_corporation_ids(),
             MINIMUM_SHARED_EVENTS,
         );
 

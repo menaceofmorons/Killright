@@ -37,7 +37,7 @@ struct LinkEvidence {
 pub fn analyze_chained_relationships(
     evidence: &[KillmailAttackerEvidence],
     current_identities: &[PilotIdentitySnapshot],
-    npc_corporation_id_threshold: i64,
+    npc_corporation_ids: &HashSet<i64>,
     minimum_shared_events: i64,
     recent_window_days: i64,
     now: DateTime<Utc>,
@@ -45,7 +45,7 @@ pub fn analyze_chained_relationships(
     let current_identity_by_character = build_current_identity_index(current_identities);
     let scanned_character_ids: HashSet<i64> = current_identity_by_character.keys().copied().collect();
     let attackers_by_killmail = group_attackers_by_killmail(evidence);
-    let shared_events_by_pair = build_shared_events_by_pair(&attackers_by_killmail, npc_corporation_id_threshold);
+    let shared_events_by_pair = build_shared_events_by_pair(&attackers_by_killmail, npc_corporation_ids);
     let window_cutoff = now - Duration::days(recent_window_days);
 
     let candidates = find_candidate_intermediaries(&attackers_by_killmail, &scanned_character_ids, window_cutoff);
@@ -63,7 +63,7 @@ pub fn analyze_chained_relationships(
                     &current_identity_by_character,
                     pair_key.0,
                     pair_key.1,
-                    npc_corporation_id_threshold,
+                    npc_corporation_ids,
                 ) {
                     continue;
                 }
@@ -210,7 +210,10 @@ mod tests {
     use super::*;
     use chrono::TimeZone;
 
-    const NPC_THRESHOLD: i64 = 1_005_000;
+    fn npc_corporation_ids() -> HashSet<i64> {
+        HashSet::new()
+    }
+
     const MINIMUM_SHARED_EVENTS: i64 = 2;
     const RECENT_WINDOW_DAYS: i64 = 14;
     const SHARED_CORP: i64 = 5_000_009;
@@ -273,7 +276,7 @@ mod tests {
         let relationships = analyze_chained_relationships(
             &evidence_rows,
             &identities,
-            NPC_THRESHOLD,
+            &npc_corporation_ids(),
             MINIMUM_SHARED_EVENTS,
             RECENT_WINDOW_DAYS,
             now(),
@@ -308,7 +311,7 @@ mod tests {
         let relationships = analyze_chained_relationships(
             &evidence_rows,
             &identities,
-            NPC_THRESHOLD,
+            &npc_corporation_ids(),
             MINIMUM_SHARED_EVENTS,
             RECENT_WINDOW_DAYS,
             now(),
@@ -332,7 +335,7 @@ mod tests {
         let relationships = analyze_chained_relationships(
             &evidence_rows,
             &identities,
-            NPC_THRESHOLD,
+            &npc_corporation_ids(),
             MINIMUM_SHARED_EVENTS,
             RECENT_WINDOW_DAYS,
             now(),
@@ -358,7 +361,7 @@ mod tests {
         let relationships = analyze_chained_relationships(
             &evidence_rows,
             &identities,
-            NPC_THRESHOLD,
+            &npc_corporation_ids(),
             MINIMUM_SHARED_EVENTS,
             RECENT_WINDOW_DAYS,
             now(),
@@ -392,7 +395,7 @@ mod tests {
         let relationships = analyze_chained_relationships(
             &evidence_rows,
             &identities,
-            NPC_THRESHOLD,
+            &npc_corporation_ids(),
             MINIMUM_SHARED_EVENTS,
             RECENT_WINDOW_DAYS,
             now(),
@@ -441,7 +444,7 @@ mod tests {
         let relationships = analyze_chained_relationships(
             &evidence_rows,
             &identities,
-            NPC_THRESHOLD,
+            &npc_corporation_ids(),
             MINIMUM_SHARED_EVENTS,
             RECENT_WINDOW_DAYS,
             now(),

@@ -291,7 +291,11 @@ public partial class DiagnosticsView : UserControl
             $"Duplicate Killmail Rows:  {summary.DuplicateKillmailRows}\n" +
             $"Expired Killmail Rows:    {summary.ExpiredKillmailRows}\n" +
             $"Schema Version:           {summary.SchemaVersion}\n" +
-            $"Alpha Release Locked:     {summary.AlphaReleaseSchemaLocked}";
+            $"Alpha Release Locked:     {summary.AlphaReleaseSchemaLocked}\n" +
+            $"SDE Build Number:         {summary.SdeBuildNumber?.ToString() ?? "(none)"}\n" +
+            $"SDE Last Checked UTC:     {summary.SdeLastCheckedUtc:yyyy-MM-dd HH:mm:ss} UTC\n" +
+            $"SDE Last Updated UTC:     {summary.SdeLastUpdatedUtc:yyyy-MM-dd HH:mm:ss} UTC\n" +
+            $"SDE Last Check Result:    {summary.SdeLastCheckResult ?? "(none)"}";
 
         IdentityGrid.ItemsSource = _service.LoadRows("""
             SELECT *
@@ -331,6 +335,11 @@ public partial class DiagnosticsView : UserControl
                Expired Killmail Rows:    {summary.ExpiredKillmailRows}
                Schema Version:           {summary.SchemaVersion}
                Alpha Release Locked:     {summary.AlphaReleaseSchemaLocked}
+
+               SDE Build Number:         {summary.SdeBuildNumber?.ToString() ?? "(none)"}
+               SDE Last Checked UTC:     {summary.SdeLastCheckedUtc:yyyy-MM-dd HH:mm:ss} UTC
+               SDE Last Updated UTC:     {summary.SdeLastUpdatedUtc:yyyy-MM-dd HH:mm:ss} UTC
+               SDE Last Check Result:    {summary.SdeLastCheckResult ?? "(none)"}
                """;
     }
 

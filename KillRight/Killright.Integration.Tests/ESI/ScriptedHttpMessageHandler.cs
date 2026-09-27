@@ -16,6 +16,15 @@ internal sealed class ScriptedHttpMessageHandler : HttpMessageHandler
         return this;
     }
 
+    public ScriptedHttpMessageHandler OnUriContainingBytes(string uriContains, HttpStatusCode statusCode, byte[] body)
+    {
+        _routes.Add((uriContains, () => new HttpResponseMessage(statusCode)
+        {
+            Content = new ByteArrayContent(body)
+        }));
+        return this;
+    }
+
     public ScriptedHttpMessageHandler ThrowOnUriContaining(string uriContains, Exception exception)
     {
         _throwRoutes.Add((uriContains, exception));

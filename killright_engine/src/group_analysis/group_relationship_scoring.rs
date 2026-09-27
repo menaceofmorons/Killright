@@ -294,8 +294,6 @@ mod tests {
     fn configuration() -> GroupDetectionConfiguration {
         GroupDetectionConfiguration {
             minimum_shared_events: 2,
-            npc_corporation_id_threshold: 1_005_000,
-            generic_npc_corporation_ids: None,
             strength_step: 10,
             gang_size_weights: vec![
                 GangSizeWeight { maximum_gang_size: 3, weight: 1.0 },

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::repositories::killmail_relationship_repository::KillmailAttackerEvidence;
 use crate::repositories::pilot_identity_repository::PilotIdentitySnapshot;
@@ -25,7 +25,7 @@ pub(crate) fn group_attackers_by_killmail(
 
 pub(crate) fn build_shared_events_by_pair(
     attackers_by_killmail: &HashMap<i64, Vec<&KillmailAttackerEvidence>>,
-    npc_corporation_id_threshold: i64,
+    npc_corporation_ids: &HashSet<i64>,
 ) -> HashMap<(i64, i64), Vec<SharedKillEvent>> {
     let mut shared_events: HashMap<(i64, i64), Vec<SharedKillEvent>> = HashMap::new();
 
@@ -42,7 +42,7 @@ pub(crate) fn build_shared_events_by_pair(
                     first.alliance_id,
                     second.corporation_id,
                     second.alliance_id,
-                    npc_corporation_id_threshold,
+                    npc_corporation_ids,
                 );
 
                 shared_events
@@ -92,7 +92,7 @@ pub(crate) fn is_same_corporation_or_alliance(
     alliance_a: Option<i64>,
     corporation_b: Option<i64>,
     alliance_b: Option<i64>,
-    npc_corporation_id_threshold: i64,
+    npc_corporation_ids: &HashSet<i64>,
 ) -> bool {
     if let (Some(alliance_a), Some(alliance_b)) = (alliance_a, alliance_b) {
         if alliance_a == alliance_b {
@@ -101,7 +101,7 @@ pub(crate) fn is_same_corporation_or_alliance(
     }
 
     if let (Some(corporation_a), Some(corporation_b)) = (corporation_a, corporation_b) {
-        if corporation_a == corporation_b && corporation_a >= npc_corporation_id_threshold {
+        if corporation_a == corporation_b && !npc_corporation_ids.contains(&corporation_a) {
             return true;
         }
     }
@@ -127,7 +127,7 @@ pub(crate) fn is_currently_same_corporation_or_alliance(
     current_identity_by_character: &HashMap<i64, &PilotIdentitySnapshot>,
     pilot_a: i64,
     pilot_b: i64,
-    npc_corporation_id_threshold: i64,
+    npc_corporation_ids: &HashSet<i64>,
 ) -> bool {
     let (Some(identity_a), Some(identity_b)) = (
         current_identity_by_character.get(&pilot_a),
@@ -141,7 +141,7 @@ pub(crate) fn is_currently_same_corporation_or_alliance(
         identity_a.alliance_id,
         identity_b.corporation_id,
         identity_b.alliance_id,
-        npc_corporation_id_threshold,
+        npc_corporation_ids,
     )
 }
 
