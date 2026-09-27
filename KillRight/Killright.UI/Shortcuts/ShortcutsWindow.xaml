@@ -184,6 +184,30 @@
                     </ListBoxItem>
                 </ListBox>
             </TabItem>
+            <TabItem Header="Relationship">
+                <ListBox BorderThickness="0"
+                         Background="Transparent"
+                         Margin="0,8,0,0">
+                    <ListBoxItem>
+                        <StackPanel Orientation="Horizontal">
+                            <controls:ConfidenceGlyph Confidence="Low" Margin="0,0,10,0" />
+                            <TextBlock Text="Low" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </ListBoxItem>
+                    <ListBoxItem>
+                        <StackPanel Orientation="Horizontal">
+                            <controls:ConfidenceGlyph Confidence="Medium" Margin="0,0,10,0" />
+                            <TextBlock Text="Medium" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </ListBoxItem>
+                    <ListBoxItem>
+                        <StackPanel Orientation="Horizontal">
+                            <controls:ConfidenceGlyph Confidence="High" Margin="0,0,10,0" />
+                            <TextBlock Text="High" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </ListBoxItem>
+                </ListBox>
+            </TabItem>
         </TabControl>
     </DockPanel>
 </Window>

@@ -7,6 +7,7 @@ using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Threading;
 using Killright.Core.Activity;
 using Killright.Core.Style;
 using Killright.Integration.zKill;
@@ -16,6 +17,7 @@ using Killright.Shared.Time;
 using Killright.Shared.zKill;
 using Killright.Storage.Killmails;
 using Killright.UI.ClipboardMonitoring;
+using Killright.UI.Configuration;
 using Killright.UI.InfoSheet;
 using Killright.UI.Interop;
 using Killright.UI.MenuModal;
@@ -27,17 +29,26 @@ namespace Killright.UI;
 
 public partial class MainWindow : Window
 {
+    private const int HoverDelayMilliseconds = 150;
+
     private readonly MainWindowViewModel _viewModel;
     private readonly Dictionary<string, DataGridColumn> _columnsById;
+    private readonly DispatcherTimer _hoverTimer;
+    private readonly IReadOnlyList<RelationshipConfidenceBandSetting> _relationshipConfidenceBands;
     private ClipboardMonitor? _clipboardMonitor;
     private bool _menuModalOpen;
     private InfoSheetWindow? _infoSheet;
+    private PilotReportRow? _pendingHoverRow;
 
     public MainWindow()
     {
         InitializeComponent();
         _viewModel = new MainWindowViewModel();
         DataContext = _viewModel;
+
+        _relationshipConfidenceBands = RelationshipConfidenceBandSetting.ValidateOrDefault(App.Settings.RelationshipConfidenceBands);
+        _hoverTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(HoverDelayMilliseconds) };
+        _hoverTimer.Tick += HoverTimer_Tick;
 
         var initial = App.UiState.Current;
         Topmost = initial.AlwaysOnTop;
@@ -64,6 +75,7 @@ public partial class MainWindow : Window
         _columnsById = new Dictionary<string, DataGridColumn>
         {
             [ColumnIds.Pilot] = ColumnPilot,
+            [ColumnIds.Relationship] = ColumnRelationship,
             [ColumnIds.Verify] = ColumnVerify,
             [ColumnIds.Threat] = ColumnThreat,
             [ColumnIds.SecurityStatus] = ColumnSecurityStatus,
@@ -195,6 +207,52 @@ public partial class MainWindow : Window
             return;
 
         Process.Start(new ProcessStartInfo($"https://zkillboard.com/character/{row.CharacterId.Value}/") { UseShellExecute = true });
+    }
+
+    private void PilotCell_MouseEnter(object sender, MouseEventArgs e)
+    {
+        if (sender is not DataGridCell { DataContext: PilotReportRow row })
+            return;
+
+        _pendingHoverRow = row;
+        _hoverTimer.Stop();
+        _hoverTimer.Start();
+    }
+
+    private void PilotCell_MouseLeave(object sender, MouseEventArgs e)
+    {
+        _hoverTimer.Stop();
+        _pendingHoverRow = null;
+        RelationshipHighlightCalculator.Clear(_viewModel.Pilots);
+    }
+
+    private void HoverTimer_Tick(object? sender, EventArgs e)
+    {
+        _hoverTimer.Stop();
+
+        var pilotColor = ParseColor(App.UiState.Current.PilotHighlightColorHex, UiStateDefaults.PilotHighlightColorHex);
+        var relatedColor = ParseColor(App.UiState.Current.RelatedHighlightColorHex, UiStateDefaults.RelatedHighlightColorHex);
+
+        RelationshipHighlightCalculator.Apply(
+            _viewModel.Pilots,
+            _pendingHoverRow,
+            App.SdeReferenceDataStore.IsNpcCorporation,
+            _relationshipConfidenceBands,
+            pilotColor,
+            relatedColor,
+            App.Settings.HighlightOpacity);
+    }
+
+    private static Color ParseColor(string hex, string fallbackHex)
+    {
+        try
+        {
+            return (Color)ColorConverter.ConvertFromString(hex)!;
+        }
+        catch
+        {
+            return (Color)ColorConverter.ConvertFromString(fallbackHex)!;
+        }
     }
 
     private void OpenInfoSheet(PilotReportRow row, Point screenPosition)
@@ -474,6 +532,9 @@ public partial class MainWindow : Window
 
         await AttachGroupRelationshipsAsync(rows);
         PilotGroupCountAnnotator.Annotate(rows, App.Settings.NpcCorporationIdThreshold);
+
+        _hoverTimer.Stop();
+        _pendingHoverRow = null;
 
         _viewModel.Pilots.Clear();
 

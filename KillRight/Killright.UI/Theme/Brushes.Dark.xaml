@@ -10,4 +10,5 @@
     <SolidColorBrush x:Key="Brush.Threat.Yellow" Color="#FFE6C300" />
     <SolidColorBrush x:Key="Brush.Threat.Amber" Color="#FFE68A00" />
     <SolidColorBrush x:Key="Brush.Threat.Red" Color="#FFD32F2F" />
+    <SolidColorBrush x:Key="Brush.Confidence.Fill" Color="#FF808080" />
 </ResourceDictionary>

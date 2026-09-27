@@ -53,13 +53,18 @@
                     </ComboBox>
                     <TextBlock Text="Grid Font Size" />
                     <ComboBox x:Name="FontTierComboBox"
-                              Margin="0,4,0,0"
+                              Margin="0,4,0,12"
                               SelectionChanged="FontTier_Changed">
                         <ComboBoxItem Content="Large" Tag="Large" />
                         <ComboBoxItem Content="Medium" Tag="Medium" />
                         <ComboBoxItem Content="Small" Tag="Small" />
                         <ComboBoxItem Content="Tiny" Tag="Tiny" />
                     </ComboBox>
+                    <TextBlock Text="Highlight Colours" />
+                    <TextBlock Text="Pilot" Margin="0,8,0,2" />
+                    <WrapPanel x:Name="PilotSwatchPanel" Orientation="Horizontal" />
+                    <TextBlock Text="Related" Margin="0,8,0,2" />
+                    <WrapPanel x:Name="RelatedSwatchPanel" Orientation="Horizontal" />
                 </StackPanel>
             </TabItem>
             <TabItem Header="Columns">

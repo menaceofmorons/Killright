@@ -123,6 +123,16 @@ public class UiStateDefaultsTests
     }
 
     [Fact]
+    public void DefaultColumns_Relationship_VisibleAndPlacedImmediatelyAfterPilot()
+    {
+        var pilot = UiStateDefaults.DefaultColumns.Single(column => column.Id == ColumnIds.Pilot);
+        var relationship = UiStateDefaults.DefaultColumns.Single(column => column.Id == ColumnIds.Relationship);
+
+        Assert.True(relationship.Visible);
+        Assert.Equal(pilot.DisplayIndex + 1, relationship.DisplayIndex);
+    }
+
+    [Fact]
     public void IsEffectivelyVisible_DeveloperGatedColumnWithDeveloperTabHidden_ReturnsFalseEvenWhenVisibleFlagTrue()
     {
         var notes = new ColumnState { Id = ColumnIds.Notes, DisplayIndex = 0, Width = 260, Visible = true };

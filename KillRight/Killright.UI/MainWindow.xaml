@@ -42,6 +42,10 @@
         <Style x:Key="CellStyleCentered" TargetType="DataGridCell" BasedOn="{StaticResource CellStyle}">
             <Setter Property="HorizontalContentAlignment" Value="Center" />
         </Style>
+        <Style x:Key="PilotCellStyle" TargetType="DataGridCell" BasedOn="{StaticResource CellStyle}">
+            <EventSetter Event="MouseEnter" Handler="PilotCell_MouseEnter" />
+            <EventSetter Event="MouseLeave" Handler="PilotCell_MouseLeave" />
+        </Style>
     </Window.Resources>
     <Grid Margin="2,0,0,0">
         <ScrollViewer HorizontalScrollBarVisibility="Auto"
@@ -103,8 +107,6 @@
                       HeadersVisibility="Column"
                       BorderThickness="0"
                       Background="{DynamicResource Brush.Grid.Background}"
-                      RowBackground="{DynamicResource Brush.Grid.Background}"
-                      AlternatingRowBackground="{DynamicResource Brush.Grid.Background}"
                       HorizontalGridLinesBrush="{DynamicResource Brush.Border}"
                       Foreground="{DynamicResource Brush.Text.Primary}"
                       RowHeight="{DynamicResource GridRowHeight}"
@@ -153,10 +155,11 @@
                 </DataGrid.Resources>
                 <DataGrid.RowStyle>
                     <Style TargetType="DataGridRow">
+                        <Setter Property="Background" Value="{DynamicResource Brush.Grid.Background}" />
                         <Style.Triggers>
-                            <Trigger Property="IsSelected" Value="True">
-                                <Setter Property="Background" Value="{DynamicResource Brush.Row.Highlight}" />
-                            </Trigger>
+                            <DataTrigger Binding="{Binding HasHighlight}" Value="True">
+                                <Setter Property="Background" Value="{Binding HighlightBrush}" />
+                            </DataTrigger>
                         </Style.Triggers>
                     </Style>
                 </DataGrid.RowStyle>
@@ -168,7 +171,7 @@
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
-                    <DataGridTextColumn x:Name="ColumnPilot" Header="Pilot" Binding="{Binding Pilot}" Width="170">
+                    <DataGridTextColumn x:Name="ColumnPilot" Header="Pilot" Binding="{Binding Pilot}" Width="170" CellStyle="{StaticResource PilotCellStyle}">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">
                                 <Style.Triggers>
@@ -179,6 +182,16 @@
                             </Style>
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
+                    <DataGridTemplateColumn x:Name="ColumnRelationship" Header="R" Width="60" CanUserSort="False" HeaderStyle="{StaticResource ColumnHeaderStyleCentered}" CellStyle="{StaticResource CellStyleCentered}">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                    <TextBlock Text="{Binding RelationshipStrengthDisplay}" VerticalAlignment="Center" Margin="0,0,4,0" />
+                                    <controls:ConfidenceGlyph Confidence="{Binding RelationshipConfidenceBand}" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
                     <DataGridTextColumn x:Name="ColumnStyle" Header="Style" Binding="{Binding Style}" Width="60" HeaderStyle="{StaticResource ColumnHeaderStyleCentered}">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">

@@ -20,6 +20,7 @@ public enum GridFontTier
 public static class ColumnIds
 {
     public const string Pilot = "Pilot";
+    public const string Relationship = "Relationship";
     public const string Verify = "Verify";
     public const string Threat = "Threat";
     public const string SecurityStatus = "SecurityStatus";
@@ -69,6 +70,10 @@ public sealed record UiStateModel
     public IReadOnlyList<ColumnState> Columns { get; init; } = UiStateDefaults.DefaultColumns;
 
     public bool DeveloperTabRevealed { get; init; } = UiStateDefaults.DeveloperTabRevealed;
+
+    public string PilotHighlightColorHex { get; init; } = UiStateDefaults.PilotHighlightColorHex;
+
+    public string RelatedHighlightColorHex { get; init; } = UiStateDefaults.RelatedHighlightColorHex;
 }
 
 public static class UiStateDefaults
@@ -80,11 +85,14 @@ public static class UiStateDefaults
     public const AppTheme Theme = AppTheme.FollowWindows;
     public const GridFontTier DefaultGridFontTier = GridFontTier.Medium;
     public const bool DeveloperTabRevealed = false;
+    public const string PilotHighlightColorHex = "#FFADD8E6";
+    public const string RelatedHighlightColorHex = "#FF90EE90";
 
     public static readonly IReadOnlyList<(string Id, double Width, string Label, bool RequiresDeveloperMode, bool DefaultVisible)> ColumnCatalog = new[]
     {
         (ColumnIds.Threat, 50d, "Threat", false, true),
         (ColumnIds.Pilot, 170d, "Pilot", false, true),
+        (ColumnIds.Relationship, 60d, "Relationship", false, true),
         (ColumnIds.Style, 60d, "Style", false, true),
         (ColumnIds.SecurityStatus, 70d, "Sec", false, true),
         (ColumnIds.Week, 60d, "Week", false, true),

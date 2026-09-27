@@ -9,6 +9,12 @@
     { "name": "Very High", "minimumScore": 61, "maximumScore": 80 },
     { "name": "Extreme", "minimumScore": 81, "maximumScore": 100 }
   ],
+  "relationshipConfidenceBands": [
+    { "name": "Low", "minimumScore": 1, "maximumScore": 25 },
+    { "name": "Medium", "minimumScore": 26, "maximumScore": 75 },
+    { "name": "High", "minimumScore": 76, "maximumScore": 100 }
+  ],
+  "highlightOpacity": 0.2,
   "groupHistory": {
     "importBatchSize": 150,
     "parallelDownloadWorkers": 20,

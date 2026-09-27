@@ -33,6 +33,8 @@ public partial class MenuModalWindow : Window
         SelectComboBoxItem(ThemeComboBox, _workingState.Theme.ToString());
         SelectComboBoxItem(FontTierComboBox, _workingState.GridFontTier.ToString());
         RefreshColumnsList();
+        RefreshPilotSwatches();
+        RefreshRelatedSwatches();
         DeveloperTabItem.Visibility = _workingState.DeveloperTabRevealed ? Visibility.Visible : Visibility.Collapsed;
         MenuTabControl.SelectedIndex = 0;
         _initializing = false;
@@ -69,6 +71,48 @@ public partial class MenuModalWindow : Window
         var tier = Enum.Parse<GridFontTier>((string)item.Tag);
         _workingState = _workingState with { GridFontTier = tier };
         AppearanceManager.ApplyFontTier(tier);
+    }
+
+    private void RefreshPilotSwatches()
+    {
+        BuildSwatchPanel(PilotSwatchPanel, _workingState.PilotHighlightColorHex, hex =>
+        {
+            _workingState = _workingState with { PilotHighlightColorHex = hex };
+            RefreshPilotSwatches();
+        });
+    }
+
+    private void RefreshRelatedSwatches()
+    {
+        BuildSwatchPanel(RelatedSwatchPanel, _workingState.RelatedHighlightColorHex, hex =>
+        {
+            _workingState = _workingState with { RelatedHighlightColorHex = hex };
+            RefreshRelatedSwatches();
+        });
+    }
+
+    private static void BuildSwatchPanel(WrapPanel panel, string selectedHex, Action<string> onSelect)
+    {
+        panel.Children.Clear();
+
+        foreach (var (name, hex) in HighlightSwatchPalette.Swatches)
+        {
+            var border = new Border
+            {
+                Width = 22,
+                Height = 22,
+                Margin = new Thickness(0, 0, 6, 6),
+                Background = (Brush)new BrushConverter().ConvertFromString(hex)!,
+                BorderBrush = string.Equals(hex, selectedHex, StringComparison.OrdinalIgnoreCase) ? Brushes.Black : Brushes.Transparent,
+                BorderThickness = new Thickness(2),
+                Cursor = Cursors.Hand,
+                ToolTip = name,
+                Tag = hex
+            };
+
+            border.MouseLeftButtonDown += (_, _) => onSelect(hex);
+            panel.Children.Add(border);
+        }
     }
 
     private void ColumnVisibility_Changed(object sender, RoutedEventArgs e)
@@ -246,13 +290,17 @@ public partial class MenuModalWindow : Window
             Theme = UiStateDefaults.Theme,
             GridFontTier = UiStateDefaults.DefaultGridFontTier,
             Columns = UiStateDefaults.DefaultColumns,
-            DeveloperTabRevealed = UiStateDefaults.DeveloperTabRevealed
+            DeveloperTabRevealed = UiStateDefaults.DeveloperTabRevealed,
+            PilotHighlightColorHex = UiStateDefaults.PilotHighlightColorHex,
+            RelatedHighlightColorHex = UiStateDefaults.RelatedHighlightColorHex
         };
 
         AlwaysOnTopCheckBox.IsChecked = _workingState.AlwaysOnTop;
         SelectComboBoxItem(ThemeComboBox, _workingState.Theme.ToString());
         SelectComboBoxItem(FontTierComboBox, _workingState.GridFontTier.ToString());
         RefreshColumnsList();
+        RefreshPilotSwatches();
+        RefreshRelatedSwatches();
         DeveloperTabItem.Visibility = Visibility.Collapsed;
         if (MenuTabControl.SelectedItem == DeveloperTabItem)
             MenuTabControl.SelectedIndex = 0;

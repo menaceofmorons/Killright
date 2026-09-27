@@ -1,8 +1,11 @@
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
+using System.Windows.Media;
 using Killright.UI.Analysis;
 
 namespace Killright.UI.ViewModels;
 
-public class PilotReportRow
+public class PilotReportRow : INotifyPropertyChanged
 {
     public long? CharacterId { get; set; }
     public IReadOnlyList<PilotRelationship> GroupRelationships { get; set; } = Array.Empty<PilotRelationship>();
@@ -27,4 +30,41 @@ public class PilotReportRow
     public string Birthday { get; set; } = string.Empty;
     public string? StatsFailureSource { get; set; }
     public PilotLastActivitySummary? LastActivity { get; set; }
+
+    private Brush? _highlightBrush;
+    public Brush? HighlightBrush
+    {
+        get => _highlightBrush;
+        set => SetField(ref _highlightBrush, value, nameof(HasHighlight));
+    }
+
+    public bool HasHighlight => _highlightBrush is not null;
+
+    private string _relationshipStrengthDisplay = "-";
+    public string RelationshipStrengthDisplay
+    {
+        get => _relationshipStrengthDisplay;
+        set => SetField(ref _relationshipStrengthDisplay, value);
+    }
+
+    private string? _relationshipConfidenceBand;
+    public string? RelationshipConfidenceBand
+    {
+        get => _relationshipConfidenceBand;
+        set => SetField(ref _relationshipConfidenceBand, value);
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    private void SetField<T>(ref T field, T value, string? alsoNotify = null, [CallerMemberName] string? propertyName = null)
+    {
+        if (EqualityComparer<T>.Default.Equals(field, value))
+            return;
+
+        field = value;
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+
+        if (alsoNotify is not null)
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(alsoNotify));
+    }
 }

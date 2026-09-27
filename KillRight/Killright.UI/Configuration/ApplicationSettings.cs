@@ -19,6 +19,10 @@ public sealed class ApplicationSettings
 
     public IReadOnlyList<ThreatBandSetting> ThreatBands { get; init; } = ThreatBandSetting.Defaults;
 
+    public IReadOnlyList<RelationshipConfidenceBandSetting> RelationshipConfidenceBands { get; init; } = RelationshipConfidenceBandSetting.Defaults;
+
+    public double HighlightOpacity { get; init; } = 0.20;
+
     public long NpcCorporationIdThreshold { get; init; } = 1_005_000;
 
     public SdeApplicationSettings Sde { get; init; } = new();
@@ -46,6 +50,41 @@ public sealed class ThreatBandSetting
     };
 
     public static IReadOnlyList<ThreatBandSetting> ValidateOrDefault(IReadOnlyList<ThreatBandSetting>? bands)
+    {
+        if (bands is null || bands.Count == 0)
+            return Defaults;
+
+        var ordered = bands.OrderBy(band => band.MinimumScore).ToList();
+        var expectedMinimum = 1;
+
+        foreach (var band in ordered)
+        {
+            if (band.MinimumScore != expectedMinimum || band.MaximumScore < band.MinimumScore)
+                return Defaults;
+
+            expectedMinimum = band.MaximumScore + 1;
+        }
+
+        return expectedMinimum == 101 ? ordered : Defaults;
+    }
+}
+
+public sealed class RelationshipConfidenceBandSetting
+{
+    public string Name { get; init; } = string.Empty;
+
+    public int MinimumScore { get; init; }
+
+    public int MaximumScore { get; init; }
+
+    public static IReadOnlyList<RelationshipConfidenceBandSetting> Defaults { get; } = new[]
+    {
+        new RelationshipConfidenceBandSetting { Name = "Low", MinimumScore = 1, MaximumScore = 25 },
+        new RelationshipConfidenceBandSetting { Name = "Medium", MinimumScore = 26, MaximumScore = 75 },
+        new RelationshipConfidenceBandSetting { Name = "High", MinimumScore = 76, MaximumScore = 100 }
+    };
+
+    public static IReadOnlyList<RelationshipConfidenceBandSetting> ValidateOrDefault(IReadOnlyList<RelationshipConfidenceBandSetting>? bands)
     {
         if (bands is null || bands.Count == 0)
             return Defaults;
