@@ -76,6 +76,59 @@ public sealed class PilotReportRowFactoryTests
         Assert.Equal("unk", row.Birthday);
     }
 
+    [Fact]
+    public void FromPilot_NoAllianceId_AllianceDisplayIsBlank()
+    {
+        var row = PilotReportRowFactory.FromPilot(
+            CreatePilot(), null, null, StyleClassification.Unknown, "Unk", false, false, null, null, null);
+
+        Assert.Equal(string.Empty, row.Alliance);
+        Assert.Equal(string.Empty, row.AlliancePlain);
+    }
+
+    [Fact]
+    public void FromPilot_AllianceLookupFailed_AllianceDisplayIsBlank()
+    {
+        var pilot = CreatePilot() with { AllianceId = 99000001 };
+
+        var row = PilotReportRowFactory.FromPilot(
+            pilot, null, null, StyleClassification.Unknown, "Unk", false, false, null, null, null);
+
+        Assert.Equal(string.Empty, row.Alliance);
+        Assert.Equal(string.Empty, row.AlliancePlain);
+    }
+
+    [Fact]
+    public void FromPilot_AlliancePresent_AllianceAndPlainMatchName()
+    {
+        var pilot = CreatePilot() with
+        {
+            Alliance = new Alliance { AllianceId = 99000001, Name = "Federation" },
+            AllianceId = 99000001
+        };
+
+        var row = PilotReportRowFactory.FromPilot(
+            pilot, null, null, StyleClassification.Unknown, "Unk", false, false, null, null, null);
+
+        Assert.Equal("Federation", row.Alliance);
+        Assert.Equal("Federation", row.AlliancePlain);
+    }
+
+    [Fact]
+    public void FromPilot_CorporationPresent_PlainMatchesCorporationBeforeAnnotation()
+    {
+        var pilot = CreatePilot() with
+        {
+            Corporation = new Corporation { CorporationId = 2000001, Name = "Acme" }
+        };
+
+        var row = PilotReportRowFactory.FromPilot(
+            pilot, null, null, StyleClassification.Unknown, "Unk", false, false, null, null, null);
+
+        Assert.Equal("Acme", row.Corporation);
+        Assert.Equal("Acme", row.CorporationPlain);
+    }
+
     [Theory]
     [InlineData(true, false, false, "killright_engine")]
     [InlineData(false, true, false, "zKill statistics")]

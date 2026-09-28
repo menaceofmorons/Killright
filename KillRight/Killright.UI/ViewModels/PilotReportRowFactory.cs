@@ -37,8 +37,10 @@ public static class PilotReportRowFactory
             Group = "unk",
             CorporationId = pilot.Corporation?.CorporationId,
             Corporation = pilot.Corporation?.Name ?? "unk",
+            CorporationPlain = pilot.Corporation?.Name ?? "unk",
             AllianceId = pilot.Alliance?.AllianceId,
             Alliance = GetAllianceDisplay(pilot),
+            AlliancePlain = GetAllianceDisplay(pilot),
             Style = $"{StyleLetterCodeFormatter.FormatGeneral(generalStyle)}/{StyleLetterCodeFormatter.FormatRecent(recentStyle)}",
             GeneralStyle = StyleDisplayFormatter.Format(generalStyle),
             RecentStyle = StyleDisplayFormatter.Format(recentStyle),
@@ -73,7 +75,7 @@ public static class PilotReportRowFactory
         if (pilot.Alliance is not null)
             return pilot.Alliance.Name;
 
-        return pilot.AllianceId is null ? "None" : "unk";
+        return string.Empty;
     }
 
     private static string FormatActivityValue(bool? hasPublicActivityData, int? value)

@@ -312,12 +312,12 @@ public partial class MenuModalWindow : Window
         else if (ReferenceEquals(cell.Column, ListFromGridCorpColumn))
         {
             if (row.CorporationId is { } corporationId)
-                SetIgnoreEntryFromGrid(row.Corporation, IgnoreEntryType.Corporation, corporationId);
+                SetIgnoreEntryFromGrid(row.CorporationPlain, IgnoreEntryType.Corporation, corporationId);
         }
         else if (ReferenceEquals(cell.Column, ListFromGridAllianceColumn))
         {
             if (row.AllianceId is { } allianceId)
-                SetIgnoreEntryFromGrid(row.Alliance, IgnoreEntryType.Alliance, allianceId);
+                SetIgnoreEntryFromGrid(row.AlliancePlain, IgnoreEntryType.Alliance, allianceId);
         }
     }
 

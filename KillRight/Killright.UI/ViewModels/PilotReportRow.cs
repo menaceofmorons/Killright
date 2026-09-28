@@ -17,8 +17,10 @@ public class PilotReportRow : INotifyPropertyChanged
     public string Group { get; set; } = string.Empty;
     public long? CorporationId { get; set; }
     public string Corporation { get; set; } = string.Empty;
+    public string CorporationPlain { get; set; } = string.Empty;
     public long? AllianceId { get; set; }
     public string Alliance { get; set; } = string.Empty;
+    public string AlliancePlain { get; set; } = string.Empty;
     public string Style { get; set; } = string.Empty;
     public string GeneralStyle { get; set; } = string.Empty;
     public string RecentStyle { get; set; } = string.Empty;
