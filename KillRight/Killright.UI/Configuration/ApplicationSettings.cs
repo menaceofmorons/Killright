@@ -23,8 +23,6 @@ public sealed class ApplicationSettings
 
     public double HighlightOpacity { get; init; } = 0.20;
 
-    public long NpcCorporationIdThreshold { get; init; } = 1_005_000;
-
     public int QualificationFleetThreshold { get; init; } = 11;
 
     public SdeApplicationSettings Sde { get; init; } = new();

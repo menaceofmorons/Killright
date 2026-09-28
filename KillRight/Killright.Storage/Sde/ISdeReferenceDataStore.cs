@@ -10,6 +10,8 @@ public interface ISdeReferenceDataStore
 
     bool IsNpcCorporation(long corporationId);
 
+    IReadOnlySet<long> GetNpcCorporationIds();
+
     Task<SdeMetadata> GetMetadataAsync(
         CancellationToken cancellationToken = default);
 

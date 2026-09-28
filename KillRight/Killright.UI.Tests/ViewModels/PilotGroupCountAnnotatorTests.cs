@@ -6,7 +6,7 @@ namespace Killright.UI.Tests.ViewModels;
 
 public sealed class PilotGroupCountAnnotatorTests
 {
-    private const long NpcThreshold = 1_005_000;
+    private static readonly IReadOnlySet<long> NpcCorporationIds = new HashSet<long> { 1000001 };
 
     private static PilotRelationship Relationship(RelationshipLinkType linkType) =>
         new(1, 2, linkType, 50, 50, null, null, null);
@@ -28,7 +28,7 @@ public sealed class PilotGroupCountAnnotatorTests
             }
         };
 
-        PilotGroupCountAnnotator.Annotate(rows, NpcThreshold);
+        PilotGroupCountAnnotator.Annotate(rows, NpcCorporationIds);
 
         Assert.Equal("3/1", rows[0].Group);
     }
@@ -41,7 +41,7 @@ public sealed class PilotGroupCountAnnotatorTests
             new PilotReportRow { GroupRelationships = new[] { Relationship(RelationshipLinkType.Chain) } }
         };
 
-        PilotGroupCountAnnotator.Annotate(rows, NpcThreshold);
+        PilotGroupCountAnnotator.Annotate(rows, NpcCorporationIds);
 
         Assert.Equal("-/1", rows[0].Group);
     }
@@ -51,7 +51,7 @@ public sealed class PilotGroupCountAnnotatorTests
     {
         var rows = new[] { new PilotReportRow() };
 
-        PilotGroupCountAnnotator.Annotate(rows, NpcThreshold);
+        PilotGroupCountAnnotator.Annotate(rows, NpcCorporationIds);
 
         Assert.Equal("-/-", rows[0].Group);
     }
@@ -65,7 +65,7 @@ public sealed class PilotGroupCountAnnotatorTests
             new PilotReportRow { CorporationId = 2000001, Corporation = "Acme" }
         };
 
-        PilotGroupCountAnnotator.Annotate(rows, NpcThreshold);
+        PilotGroupCountAnnotator.Annotate(rows, NpcCorporationIds);
 
         Assert.All(rows, row => Assert.Equal("Acme [2]", row.Corporation));
     }
@@ -75,7 +75,7 @@ public sealed class PilotGroupCountAnnotatorTests
     {
         var rows = new[] { new PilotReportRow { CorporationId = 2000001, Corporation = "Acme" } };
 
-        PilotGroupCountAnnotator.Annotate(rows, NpcThreshold);
+        PilotGroupCountAnnotator.Annotate(rows, NpcCorporationIds);
 
         Assert.Equal("Acme", rows[0].Corporation);
     }
@@ -89,7 +89,7 @@ public sealed class PilotGroupCountAnnotatorTests
             new PilotReportRow { CorporationId = null, Corporation = "unk" }
         };
 
-        PilotGroupCountAnnotator.Annotate(rows, NpcThreshold);
+        PilotGroupCountAnnotator.Annotate(rows, NpcCorporationIds);
 
         Assert.All(rows, row => Assert.Equal("unk", row.Corporation));
     }
@@ -103,7 +103,7 @@ public sealed class PilotGroupCountAnnotatorTests
             new PilotReportRow { CorporationId = 1000001, Corporation = "NPC Corp" }
         };
 
-        PilotGroupCountAnnotator.Annotate(rows, NpcThreshold);
+        PilotGroupCountAnnotator.Annotate(rows, NpcCorporationIds);
 
         Assert.All(rows, row => Assert.Equal("NPC Corp", row.Corporation));
     }
@@ -117,7 +117,7 @@ public sealed class PilotGroupCountAnnotatorTests
             new PilotReportRow { AllianceId = null, Alliance = "None" }
         };
 
-        PilotGroupCountAnnotator.Annotate(rows, NpcThreshold);
+        PilotGroupCountAnnotator.Annotate(rows, NpcCorporationIds);
 
         Assert.All(rows, row => Assert.Equal("None", row.Alliance));
     }
@@ -132,7 +132,7 @@ public sealed class PilotGroupCountAnnotatorTests
             new PilotReportRow { AllianceId = 99000001, Alliance = "Federation" }
         };
 
-        PilotGroupCountAnnotator.Annotate(rows, NpcThreshold);
+        PilotGroupCountAnnotator.Annotate(rows, NpcCorporationIds);
 
         Assert.All(rows, row => Assert.Equal("Federation [3]", row.Alliance));
     }

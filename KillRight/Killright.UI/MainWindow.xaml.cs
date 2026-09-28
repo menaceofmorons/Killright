@@ -538,7 +538,8 @@ public partial class MainWindow : Window
             return;
 
         await AttachGroupRelationshipsAsync(rows);
-        PilotGroupCountAnnotator.Annotate(rows, App.Settings.NpcCorporationIdThreshold);
+        var npcCorporationIds = App.SdeReferenceDataStore.GetNpcCorporationIds();
+        PilotGroupCountAnnotator.Annotate(rows, npcCorporationIds);
 
         _hoverTimer.Stop();
         _pendingHoverRow = null;

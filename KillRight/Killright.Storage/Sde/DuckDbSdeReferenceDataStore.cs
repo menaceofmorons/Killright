@@ -2,6 +2,7 @@ using DuckDB.NET.Data;
 using Killright.Shared.Data;
 using Killright.Shared.Sde;
 using Killright.Storage.Database;
+using Killright.Storage.Diagnostics;
 
 namespace Killright.Storage.Sde;
 
@@ -47,6 +48,31 @@ public sealed class DuckDbSdeReferenceDataStore : ISdeReferenceDataStore
         command.CommandText = $"SELECT 1 FROM main.sde_npc_corporations WHERE corporation_id = {corporationId} LIMIT 1;";
 
         return command.ExecuteScalar() is not null;
+    }
+
+    public IReadOnlySet<long> GetNpcCorporationIds()
+    {
+        try
+        {
+            using var connection = new DuckDBConnection(_database.ConnectionString);
+            connection.Open();
+
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT corporation_id FROM main.sde_npc_corporations;";
+
+            using var reader = command.ExecuteReader();
+            var ids = new HashSet<long>();
+
+            while (reader.Read())
+                ids.Add(reader.GetInt64(0));
+
+            return ids;
+        }
+        catch (Exception exception)
+        {
+            EngineFailureLog.Record($"SDE NPC corporation lookup failed, same-group count treating no corporation as NPC: {exception.Message}");
+            return new HashSet<long>();
+        }
     }
 
     public Task<SdeMetadata> GetMetadataAsync(CancellationToken cancellationToken = default)

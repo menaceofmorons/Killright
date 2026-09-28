@@ -4,10 +4,10 @@ namespace Killright.UI.ViewModels;
 
 public static class PilotGroupCountAnnotator
 {
-    public static void Annotate(IReadOnlyList<PilotReportRow> rows, long npcCorporationIdThreshold)
+    public static void Annotate(IReadOnlyList<PilotReportRow> rows, IReadOnlySet<long> npcCorporationIds)
     {
         AnnotateAlliance(rows);
-        AnnotateCorporation(rows, npcCorporationIdThreshold);
+        AnnotateCorporation(rows, npcCorporationIds);
         AnnotateGroupCell(rows);
     }
 
@@ -40,17 +40,17 @@ public static class PilotGroupCountAnnotator
         }
     }
 
-    private static void AnnotateCorporation(IReadOnlyList<PilotReportRow> rows, long npcCorporationIdThreshold)
+    private static void AnnotateCorporation(IReadOnlyList<PilotReportRow> rows, IReadOnlySet<long> npcCorporationIds)
     {
         var counts = rows
-            .Where(row => row.CorporationId is not null && row.CorporationId.Value >= npcCorporationIdThreshold)
+            .Where(row => row.CorporationId is not null && !npcCorporationIds.Contains(row.CorporationId.Value))
             .GroupBy(row => row.CorporationId!.Value)
             .ToDictionary(group => group.Key, group => group.Count());
 
         foreach (var row in rows)
         {
             if (row.CorporationId is null
-                || row.CorporationId.Value < npcCorporationIdThreshold
+                || npcCorporationIds.Contains(row.CorporationId.Value)
                 || !counts.TryGetValue(row.CorporationId.Value, out var count)
                 || count < 2)
                 continue;

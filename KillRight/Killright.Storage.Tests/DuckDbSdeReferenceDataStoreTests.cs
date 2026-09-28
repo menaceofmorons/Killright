@@ -1,3 +1,4 @@
+using DuckDB.NET.Data;
 using Killright.Shared.Sde;
 using Killright.Storage.Database;
 using Killright.Storage.Sde;
@@ -28,6 +29,42 @@ public sealed class DuckDbSdeReferenceDataStoreTests
         Assert.Null(store.GetTypeName(587));
         Assert.Null(store.GetSolarSystemName(30000142));
         Assert.False(store.IsNpcCorporation(1000001));
+        Assert.Empty(store.GetNpcCorporationIds());
+    }
+
+    [Fact]
+    public async Task ReplaceTablesAsync_ThenGetNpcCorporationIds_ReturnsExactSet()
+    {
+        var (_, store) = CreateStore();
+
+        await store.ReplaceTablesAsync(new SdeReplacementData(
+            Types: [],
+            SolarSystems: [],
+            NpcCorporationIds: [1000001, 1000132],
+            BuildNumber: 1,
+            UpdatedUtc: DateTimeOffset.UtcNow));
+
+        var ids = store.GetNpcCorporationIds();
+
+        Assert.Equal(new HashSet<long> { 1000001, 1000132 }, ids);
+    }
+
+    [Fact]
+    public void NpcCorporationsTableUnreadable_GetNpcCorporationIdsReturnsEmptySetWithoutThrowing()
+    {
+        var (database, store) = CreateStore();
+
+        using (var connection = new DuckDBConnection(database.ConnectionString))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = "DROP TABLE main.sde_npc_corporations;";
+            command.ExecuteNonQuery();
+        }
+
+        var ids = store.GetNpcCorporationIds();
+
+        Assert.Empty(ids);
     }
 
     [Fact]
