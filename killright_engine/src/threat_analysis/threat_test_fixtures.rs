@@ -119,11 +119,5 @@ pub(crate) const THREAT_CONFIGURATION_JSON: &str = r#"{
       { "minimumSecurityStatus": -5.0, "score": 3 },
       { "minimumSecurityStatus": -10.0, "score": 5 }
     ]
-  },
-
-  "confidence": {
-    "killWeight": 0.9,
-    "killCap": 100.0,
-    "recentActivityBonus": 10.0
   }
 }"#;

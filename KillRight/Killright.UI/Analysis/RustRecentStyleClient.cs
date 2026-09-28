@@ -144,7 +144,6 @@ public sealed class RustRecentStyleClient
     private sealed class ThreatAnalysisResponse
     {
         public int score { get; set; }
-        public int confidence { get; set; }
     }
 
     private sealed class GroupDetectionResponse

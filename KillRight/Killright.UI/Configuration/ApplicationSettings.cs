@@ -145,8 +145,6 @@ public sealed class ThreatSettings
     public ThreatRecentActivitySettings RecentActivity { get; init; } = new();
 
     public ThreatSecurityStatusSettings SecurityStatus { get; init; } = new();
-
-    public ThreatConfidenceSettings Confidence { get; init; } = new();
 }
 
 public sealed class ThreatComponentWeightsSettings
@@ -277,15 +275,6 @@ public sealed class ThreatSecurityStatusBandSetting
     public double MinimumSecurityStatus { get; init; }
 
     public int Score { get; init; }
-}
-
-public sealed class ThreatConfidenceSettings
-{
-    public double KillWeight { get; init; }
-
-    public double KillCap { get; init; }
-
-    public double RecentActivityBonus { get; init; }
 }
 
 public sealed class GroupDetectionSettings

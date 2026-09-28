@@ -15,10 +15,8 @@ pub fn analyze_intrinsic_threat(
     now: DateTime<Utc>,
     recent_window_days: i64,
 ) -> ThreatAnalysisResponse {
-    let confidence = calculate_confidence(&configuration.confidence, statistics, recent_killmails);
-
     if is_threat_none(statistics, recent_killmails) {
-        return ThreatAnalysisResponse { score: 0, confidence };
+        return ThreatAnalysisResponse { score: 0 };
     }
 
     let historical_capability =
@@ -46,7 +44,7 @@ pub fn analyze_intrinsic_threat(
 
     let score = raw_score.round().clamp(0.0, 100.0) as i32;
 
-    ThreatAnalysisResponse { score, confidence }
+    ThreatAnalysisResponse { score }
 }
 
 pub(crate) fn is_threat_none(
@@ -296,31 +294,6 @@ pub(crate) fn calculate_security_modifier(
         .unwrap_or(0)
 }
 
-pub(crate) fn calculate_confidence(
-    configuration: &ConfidenceConfiguration,
-    statistics: Option<&ZKillStatisticsSnapshot>,
-    recent_killmails: &[RecentKillmailSnapshot],
-) -> i32 {
-    let Some(statistics) = statistics else {
-        return 0;
-    };
-
-    if statistics.no_history_marker || statistics.ships_destroyed <= 0 {
-        return 100;
-    }
-
-    let recent_bonus = if recent_killmails.is_empty() {
-        0.0
-    } else {
-        configuration.recent_activity_bonus
-    };
-
-    let value = configuration.kill_weight * (statistics.ships_destroyed as f64).min(configuration.kill_cap)
-        + recent_bonus;
-
-    value.round().clamp(0.0, 100.0) as i32
-}
-
 fn style_matches(actual: &str, expected: &str) -> bool {
     actual
         .trim()
@@ -380,61 +353,38 @@ mod tests {
     }
 
     #[test]
-    fn no_statistics_and_no_killmails_returns_none_score_and_zero_confidence() {
+    fn no_statistics_and_no_killmails_returns_none_score() {
         let result = analyze_intrinsic_threat(&configuration(), None, &[], None, None, now(), 14);
 
         assert_eq!(result.score, 0);
-        assert_eq!(result.confidence, 0);
     }
 
     #[test]
-    fn no_history_marker_returns_none_score_with_maximum_confidence() {
+    fn no_history_marker_returns_none_score() {
         let stats = statistics(0, 0, true);
         let killmails = vec![killmail(false)];
 
         let result = analyze_intrinsic_threat(&configuration(), Some(&stats), &killmails, None, None, now(), 14);
 
         assert_eq!(result.score, 0);
-        assert_eq!(result.confidence, 100);
     }
 
     #[test]
-    fn zero_kills_in_statistics_returns_none_score_with_maximum_confidence_regardless_of_losses() {
+    fn zero_kills_in_statistics_returns_none_score_regardless_of_losses() {
         let stats = statistics(0, 5, false);
 
         let result = analyze_intrinsic_threat(&configuration(), Some(&stats), &[], None, None, now(), 14);
 
         assert_eq!(result.score, 0);
-        assert_eq!(result.confidence, 100);
     }
 
     #[test]
-    fn real_kill_history_returns_scored_result_with_formula_confidence() {
+    fn real_kill_history_returns_scored_result() {
         let stats = statistics(500, 50, false);
 
         let result = analyze_intrinsic_threat(&configuration(), Some(&stats), &[], None, None, now(), 14);
 
         assert!(result.score > 0);
-        assert_eq!(result.confidence, 90);
-    }
-
-    #[test]
-    fn confidence_uses_kills_only_ignoring_losses_and_caps_at_hundred() {
-        let stats = statistics(150, 999, false);
-
-        let result = analyze_intrinsic_threat(&configuration(), Some(&stats), &[], None, None, now(), 14);
-
-        assert_eq!(result.confidence, 90);
-    }
-
-    #[test]
-    fn confidence_adds_recent_activity_bonus_when_a_recent_killmail_exists() {
-        let stats = statistics(10, 0, false);
-        let killmails = vec![killmail(false)];
-
-        let result = analyze_intrinsic_threat(&configuration(), Some(&stats), &killmails, None, None, now(), 14);
-
-        assert_eq!(result.confidence, 19);
     }
 
     #[test]
@@ -457,7 +407,6 @@ mod tests {
         );
 
         assert_eq!(result.score, 2);
-        assert_eq!(result.confidence, 0);
     }
 
     #[test]

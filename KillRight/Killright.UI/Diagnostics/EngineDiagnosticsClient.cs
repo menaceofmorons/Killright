@@ -62,7 +62,6 @@ public sealed class EngineDiagnosticsClient
         table.Rows.Add("Recent Activity Modifier", diagnostics.recent_activity_modifier.ToString("0.###"));
         table.Rows.Add("Security Modifier", diagnostics.security_modifier.ToString());
         table.Rows.Add("Score", diagnostics.score.ToString());
-        table.Rows.Add("Confidence", diagnostics.confidence.ToString());
         table.Rows.Add("Coverage Start Present", diagnostics.coverage_start_present.ToString());
         table.Rows.Add("Observed Days", diagnostics.observed_days.ToString("0.###"));
         table.Rows.Add("Counted Kills", diagnostics.counted_kills.ToString());
@@ -260,7 +259,6 @@ public sealed class EngineDiagnosticsClient
         public double recent_activity_modifier { get; set; }
         public int security_modifier { get; set; }
         public int score { get; set; }
-        public int confidence { get; set; }
         public bool coverage_start_present { get; set; }
         public double observed_days { get; set; }
         public long counted_kills { get; set; }

@@ -4,7 +4,7 @@ use crate::repositories::pilot_identity_repository::PilotIdentitySnapshot;
 use crate::repositories::recent_killmail_repository::RecentKillmailSnapshot;
 use crate::repositories::zkill_statistics_repository::ZKillStatisticsSnapshot;
 use crate::threat_analysis::threat_analyzer::{
-    calculate_confidence, calculate_historical_capability_score, calculate_loss_quality_score,
+    calculate_historical_capability_score, calculate_loss_quality_score,
     calculate_recent_activity_diagnostics, calculate_security_modifier, calculate_survivability_score,
     is_threat_none,
 };
@@ -18,7 +18,6 @@ pub struct ThreatDiagnostics {
     pub recent_activity_modifier: f64,
     pub security_modifier: i32,
     pub score: i32,
-    pub confidence: i32,
     pub coverage_start_present: bool,
     pub observed_days: f64,
     pub counted_kills: i64,
@@ -34,8 +33,6 @@ pub fn analyze_intrinsic_threat_diagnostics(
     now: DateTime<Utc>,
     recent_window_days: i64,
 ) -> ThreatDiagnostics {
-    let confidence = calculate_confidence(&configuration.confidence, statistics, recent_killmails);
-
     let recent_activity = calculate_recent_activity_diagnostics(
         &configuration.recent_activity,
         recent_killmails,
@@ -52,7 +49,6 @@ pub fn analyze_intrinsic_threat_diagnostics(
             recent_activity_modifier: 0.0,
             security_modifier: 0,
             score: 0,
-            confidence,
             coverage_start_present: recent_activity.coverage_start_present,
             observed_days: recent_activity.observed_days,
             counted_kills: recent_activity.counted_kills,
@@ -81,7 +77,6 @@ pub fn analyze_intrinsic_threat_diagnostics(
         recent_activity_modifier: recent_activity.score,
         security_modifier,
         score,
-        confidence,
         coverage_start_present: recent_activity.coverage_start_present,
         observed_days: recent_activity.observed_days,
         counted_kills: recent_activity.counted_kills,
@@ -137,7 +132,7 @@ mod tests {
     }
 
     #[test]
-    fn none_pilot_returns_zeroed_components_with_formula_confidence() {
+    fn none_pilot_returns_zeroed_components() {
         let stats = statistics(0, 0, true);
 
         let diagnostics = analyze_intrinsic_threat_diagnostics(&configuration(), Some(&stats), &[], None, None, now(), 14);
@@ -147,7 +142,6 @@ mod tests {
         assert_eq!(diagnostics.survivability, 0);
         assert_eq!(diagnostics.loss_quality, 0);
         assert_eq!(diagnostics.security_modifier, 0);
-        assert_eq!(diagnostics.confidence, 100);
     }
 
     #[test]
@@ -165,7 +159,6 @@ mod tests {
             .clamp(0.0, 100.0) as i32;
 
         assert_eq!(diagnostics.score, expected_score);
-        assert_eq!(diagnostics.confidence, 90);
     }
 
     #[test]

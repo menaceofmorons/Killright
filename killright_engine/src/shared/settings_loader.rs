@@ -144,8 +144,7 @@ mod tests {
                     "noLossesWithKillsScore": 15
                 },
                 "recentActivity": {"points": [{"dailyRate": 0.0, "score": 0.0}, {"dailyRate": 1.0, "score": 10.0}]},
-                "securityStatus": {"bands": [{"minimumSecurityStatus": 0.0, "score": 0}]},
-                "confidence": {"killWeight": 0.9, "killCap": 100.0, "recentActivityBonus": 10.0}
+                "securityStatus": {"bands": [{"minimumSecurityStatus": 0.0, "score": 0}]}
             },
             "groupDetection": {
                 "minimumSharedEvents": 2,

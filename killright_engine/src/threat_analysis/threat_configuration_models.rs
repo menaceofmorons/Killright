@@ -16,7 +16,6 @@ pub struct ThreatConfiguration {
     pub recent_activity: RecentActivityConfiguration,
     #[serde(rename = "securityStatus")]
     pub security_status: SecurityStatusConfiguration,
-    pub confidence: ConfidenceConfiguration,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -147,14 +146,4 @@ pub struct SecurityStatusBand {
     #[serde(rename = "minimumSecurityStatus")]
     pub minimum_security_status: f64,
     pub score: i32,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct ConfidenceConfiguration {
-    #[serde(rename = "killWeight")]
-    pub kill_weight: f64,
-    #[serde(rename = "killCap")]
-    pub kill_cap: f64,
-    #[serde(rename = "recentActivityBonus")]
-    pub recent_activity_bonus: f64,
 }
