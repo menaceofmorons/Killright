@@ -22,28 +22,28 @@ public sealed class KillrightEngineRuntime : IKillrightEngineRuntime
         string settingsPath)
     {
         Environment.SetEnvironmentVariable(
-            "PILOTINTEL_DB_PATH",
+            "KILLRIGHT_DB_PATH",
             databasePath);
 
         _libraryHandle = NativeLibrary.Load(dllPath);
 
         _initialize = GetExport<InitializeDelegate>(
-            "pintel_initialize");
+            "killright_initialize");
 
         _analyzePilot = GetExport<JsonExportDelegate>(
-            "pintel_analyze_pilot");
+            "killright_analyze_pilot");
 
         _diagnoseGroupDetection = GetExport<JsonExportDelegate>(
-            "pintel_diagnose_group_detection");
+            "killright_diagnose_group_detection");
 
         _diagnoseThreat = GetExport<JsonExportDelegate>(
-            "pintel_diagnose_threat");
+            "killright_diagnose_threat");
 
         _shutdown = GetExport<ShutdownDelegate>(
-            "pintel_shutdown");
+            "killright_shutdown");
 
         _freeString = GetExport<FreeStringDelegate>(
-            "pintel_free_string");
+            "killright_free_string");
 
         Environment.SetEnvironmentVariable(
             "KILLRIGHT_SETTINGS_PATH",

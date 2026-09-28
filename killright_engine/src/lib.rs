@@ -38,7 +38,7 @@ struct RuntimeState {
 }
 static RUNTIME: OnceLock<Mutex<Option<RuntimeState>>> = OnceLock::new();
 #[no_mangle]
-pub extern "C" fn pintel_initialize() -> i32 {
+pub extern "C" fn killright_initialize() -> i32 {
     let result = panic::catch_unwind(|| {
         let database_path = match get_database_path() {
             Ok(value) => value,
@@ -68,7 +68,7 @@ pub extern "C" fn pintel_initialize() -> i32 {
     result.unwrap_or(0)
 }
 #[no_mangle]
-pub extern "C" fn pintel_analyze_pilot(request_json: *const c_char) -> *mut c_char {
+pub extern "C" fn killright_analyze_pilot(request_json: *const c_char) -> *mut c_char {
     let result = panic::catch_unwind(|| {
         if request_json.is_null() {
             return failure_response(0, "unreadable_request");
@@ -238,7 +238,7 @@ fn analyze_group_detection(
     })
 }
 #[no_mangle]
-pub extern "C" fn pintel_diagnose_group_detection(request_json: *const c_char) -> *mut c_char {
+pub extern "C" fn killright_diagnose_group_detection(request_json: *const c_char) -> *mut c_char {
     let result = panic::catch_unwind(|| {
         if request_json.is_null() {
             return group_detection_diagnostics_failure(0, "unreadable_request");
@@ -309,7 +309,7 @@ pub extern "C" fn pintel_diagnose_group_detection(request_json: *const c_char) -
 }
 
 #[no_mangle]
-pub extern "C" fn pintel_diagnose_threat(request_json: *const c_char) -> *mut c_char {
+pub extern "C" fn killright_diagnose_threat(request_json: *const c_char) -> *mut c_char {
     let result = panic::catch_unwind(|| {
         if request_json.is_null() {
             return threat_diagnostics_failure(0, "unreadable_request");
@@ -422,7 +422,7 @@ fn threat_diagnostics_json(envelope: ThreatDiagnosticsEnvelope) -> *mut c_char {
 }
 
 #[no_mangle]
-pub extern "C" fn pintel_shutdown() {
+pub extern "C" fn killright_shutdown() {
     let _ = panic::catch_unwind(|| {
         if let Some(cell) = RUNTIME.get() {
             if let Ok(mut guard) = cell.lock() {
@@ -432,7 +432,7 @@ pub extern "C" fn pintel_shutdown() {
     });
 }
 #[no_mangle]
-pub extern "C" fn pintel_free_string(value: *mut c_char) {
+pub extern "C" fn killright_free_string(value: *mut c_char) {
     if value.is_null() {
         return;
     }

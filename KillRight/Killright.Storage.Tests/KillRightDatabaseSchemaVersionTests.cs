@@ -3,7 +3,7 @@ using Xunit;
 
 namespace Killright.Storage.Tests;
 
-public sealed class PilotIntelDatabaseSchemaVersionTests
+public sealed class KillRightDatabaseSchemaVersionTests
 {
     [Fact]
     public void EnsureCreated_NewDatabase_StoresCurrentSchemaVersion()

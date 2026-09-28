@@ -1,7 +1,7 @@
 use std::env;
 use std::path::PathBuf;
 
-pub const DATABASE_PATH_ENVIRONMENT_VARIABLE: &str = "PILOTINTEL_DB_PATH";
+pub const DATABASE_PATH_ENVIRONMENT_VARIABLE: &str = "KILLRIGHT_DB_PATH";
 
 pub fn get_database_path() -> Result<PathBuf, String> {
     match env::var_os(DATABASE_PATH_ENVIRONMENT_VARIABLE) {

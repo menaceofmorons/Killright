@@ -229,7 +229,7 @@ public partial class App : Application
                 settingsPath);
 
         if (!EngineRuntime.IsAvailable)
-            EngineFailureLog.Record("killright_engine failed to initialize (pintel_initialize did not return success).");
+            EngineFailureLog.Record("killright_engine failed to initialize (killright_initialize did not return success).");
 
         RecentStyleClient =
             new RustRecentStyleClient(

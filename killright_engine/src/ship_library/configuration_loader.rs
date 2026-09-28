@@ -31,14 +31,5 @@ pub fn load_configuration(path: &Path) -> Result<ShipClassificationConfiguration
 fn configuration_candidates() -> Vec<PathBuf> {
     let current_directory = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
 
-    vec![
-        current_directory
-            .join("config")
-            .join("ship-classifications.json"),
-        current_directory
-            .join("engine")
-            .join("PIntelEngine")
-            .join("config")
-            .join("ship-classifications.json"),
-    ]
+    vec![current_directory.join("config").join("ship-classifications.json")]
 }
