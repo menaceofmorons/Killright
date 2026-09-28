@@ -1,6 +1,9 @@
 #[path = "database_path.rs"]
 pub mod database_path;
 
+#[path = "pod_kill.rs"]
+pub mod pod_kill;
+
 #[path = "recent_style_contract.rs"]
 pub mod recent_style_contract;
 

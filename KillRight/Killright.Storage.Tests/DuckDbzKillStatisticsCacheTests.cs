@@ -37,6 +37,43 @@ public sealed class DuckDbzKillStatisticsCacheTests
     }
 
     [Fact]
+    public async Task UpsertThenGet_RoundTripsPodKills()
+    {
+        var (_, cache) = CreateCache();
+
+        var statistics = new zKillStatistics
+        {
+            shipsDestroyed = 12,
+            soloKills = 3,
+            soloRatio = 40.0,
+            avgGangSize = 4.5,
+            shipsLost = 2,
+            soloLosses = 1,
+            podKills = 6
+        };
+
+        await cache.UpsertAsync(95465499, statistics, "Gang", noHistory: false);
+
+        var cached = await cache.GetAsync(95465499, TimeSpan.FromDays(30));
+
+        Assert.NotNull(cached);
+        Assert.Equal(6, cached!.podKills);
+    }
+
+    [Fact]
+    public async Task GetAsync_RowWithoutPodKillsColumnValue_TreatsPodKillsAsZero()
+    {
+        var (database, cache) = CreateCache();
+
+        InsertRowWithoutPodKills(database, 91321792);
+
+        var cached = await cache.GetAsync(91321792, TimeSpan.FromDays(30));
+
+        Assert.NotNull(cached);
+        Assert.Equal(0, cached!.podKills);
+    }
+
+    [Fact]
     public async Task UpsertThenGet_NoHistoryPilot_IsCached()
     {
         var (_, cache) = CreateCache();
@@ -90,6 +127,23 @@ public sealed class DuckDbzKillStatisticsCacheTests
                 ships_lost, solo_losses, general_style, checked_at_utc
             ) VALUES (
                 {characterId}, 1, 0, 0.0, 0.0, 0, 0, 'Solo', now()
+            );
+            """;
+        command.ExecuteNonQuery();
+    }
+
+    private static void InsertRowWithoutPodKills(KillRightDatabase database, long characterId)
+    {
+        using var connection = new DuckDBConnection(database.ConnectionString);
+        connection.Open();
+
+        using var command = connection.CreateCommand();
+        command.CommandText = $"""
+            INSERT INTO main.zkill_statistics_cache (
+                character_id, ships_destroyed, solo_kills, solo_ratio, avg_gang_size,
+                ships_lost, solo_losses, general_style, months_processed, no_history_marker, checked_at_utc
+            ) VALUES (
+                {characterId}, 40, 10, 60.0, 3.0, 5, 2, 'Solo', TRUE, FALSE, now()
             );
             """;
         command.ExecuteNonQuery();

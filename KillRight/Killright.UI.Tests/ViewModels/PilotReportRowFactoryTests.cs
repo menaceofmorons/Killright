@@ -29,7 +29,7 @@ public sealed class PilotReportRowFactoryTests
         var activity = new zKillActivity(95465499, true, 4, 2, null, null, DateTimeOffset.UtcNow);
 
         var row = PilotReportRowFactory.FromPilot(
-            CreatePilot(), activity, null, StyleClassification.Solo, "Low", false, false, null, null, null);
+            CreatePilot(), activity, null, StyleClassification.Solo, false, "Low", false, false, null, null, null);
 
         Assert.Equal("4/2", row.Week);
         Assert.Equal("4", row.Kills);
@@ -42,7 +42,7 @@ public sealed class PilotReportRowFactoryTests
         var activity = new zKillActivity(95465499, true, 0, 2, null, null, DateTimeOffset.UtcNow);
 
         var row = PilotReportRowFactory.FromPilot(
-            CreatePilot(), activity, null, StyleClassification.Solo, "Low", false, false, null, null, null);
+            CreatePilot(), activity, null, StyleClassification.Solo, false, "Low", false, false, null, null, null);
 
         Assert.Equal("-/2", row.Week);
         Assert.Equal("0", row.Kills);
@@ -52,17 +52,37 @@ public sealed class PilotReportRowFactoryTests
     public void FromPilot_StyleClassifications_ExposedAsFullWords()
     {
         var row = PilotReportRowFactory.FromPilot(
-            CreatePilot(), null, null, StyleClassification.GangBeginner, "Unk", false, false, null, null, null);
+            CreatePilot(), null, null, StyleClassification.GangBeginner, false, "Unk", false, false, null, null, null);
 
         Assert.Equal("Gang(b)", row.RecentStyle);
         Assert.Equal("Unk", row.GeneralStyle);
     }
 
     [Fact]
+    public void FromPilot_RecentIsPodder_AppendsSuffixToLetterCodeAndFullWord()
+    {
+        var row = PilotReportRowFactory.FromPilot(
+            CreatePilot(), null, null, StyleClassification.Solo, true, "Unk", false, false, null, null, null);
+
+        Assert.Equal("U/Sx", row.Style);
+        Assert.Equal("Solo (podder)", row.RecentStyle);
+    }
+
+    [Fact]
+    public void FromPilot_RecentIsPodderButFleetStyle_NoSuffixApplied()
+    {
+        var row = PilotReportRowFactory.FromPilot(
+            CreatePilot(), null, null, StyleClassification.Fleet, true, "Unk", false, false, null, null, null);
+
+        Assert.Equal("U/F", row.Style);
+        Assert.Equal("Fleet", row.RecentStyle);
+    }
+
+    [Fact]
     public void FromPilot_BirthdayPresent_FormatsAsIsoDate()
     {
         var row = PilotReportRowFactory.FromPilot(
-            CreatePilot(new DateOnly(2015, 6, 12)), null, null, StyleClassification.Unknown, "Unk", false, false, null, new DateOnly(2015, 6, 12), null);
+            CreatePilot(new DateOnly(2015, 6, 12)), null, null, StyleClassification.Unknown, false, "Unk", false, false, null, new DateOnly(2015, 6, 12), null);
 
         Assert.Equal("2015-06-12", row.Birthday);
     }
@@ -71,7 +91,7 @@ public sealed class PilotReportRowFactoryTests
     public void FromPilot_BirthdayAbsent_FormatsAsUnk()
     {
         var row = PilotReportRowFactory.FromPilot(
-            CreatePilot(), null, null, StyleClassification.Unknown, "Unk", false, false, null, null, null);
+            CreatePilot(), null, null, StyleClassification.Unknown, false, "Unk", false, false, null, null, null);
 
         Assert.Equal("unk", row.Birthday);
     }
@@ -80,7 +100,7 @@ public sealed class PilotReportRowFactoryTests
     public void FromPilot_NoAllianceId_AllianceDisplayIsBlank()
     {
         var row = PilotReportRowFactory.FromPilot(
-            CreatePilot(), null, null, StyleClassification.Unknown, "Unk", false, false, null, null, null);
+            CreatePilot(), null, null, StyleClassification.Unknown, false, "Unk", false, false, null, null, null);
 
         Assert.Equal(string.Empty, row.Alliance);
         Assert.Equal(string.Empty, row.AlliancePlain);
@@ -92,7 +112,7 @@ public sealed class PilotReportRowFactoryTests
         var pilot = CreatePilot() with { AllianceId = 99000001 };
 
         var row = PilotReportRowFactory.FromPilot(
-            pilot, null, null, StyleClassification.Unknown, "Unk", false, false, null, null, null);
+            pilot, null, null, StyleClassification.Unknown, false, "Unk", false, false, null, null, null);
 
         Assert.Equal(string.Empty, row.Alliance);
         Assert.Equal(string.Empty, row.AlliancePlain);
@@ -108,7 +128,7 @@ public sealed class PilotReportRowFactoryTests
         };
 
         var row = PilotReportRowFactory.FromPilot(
-            pilot, null, null, StyleClassification.Unknown, "Unk", false, false, null, null, null);
+            pilot, null, null, StyleClassification.Unknown, false, "Unk", false, false, null, null, null);
 
         Assert.Equal("Federation", row.Alliance);
         Assert.Equal("Federation", row.AlliancePlain);
@@ -123,7 +143,7 @@ public sealed class PilotReportRowFactoryTests
         };
 
         var row = PilotReportRowFactory.FromPilot(
-            pilot, null, null, StyleClassification.Unknown, "Unk", false, false, null, null, null);
+            pilot, null, null, StyleClassification.Unknown, false, "Unk", false, false, null, null, null);
 
         Assert.Equal("Acme", row.Corporation);
         Assert.Equal("Acme", row.CorporationPlain);
@@ -142,6 +162,7 @@ public sealed class PilotReportRowFactoryTests
             activity,
             null,
             StyleClassification.Unknown,
+            false,
             "Unk",
             statisticsCallFailed,
             recentCallFailed,
@@ -158,7 +179,7 @@ public sealed class PilotReportRowFactoryTests
         var activity = new zKillActivity(95465499, true, 1, 0, null, null, DateTimeOffset.UtcNow);
 
         var row = PilotReportRowFactory.FromPilot(
-            CreatePilot(), activity, null, StyleClassification.Unknown, "Unk", false, false, null, null, null);
+            CreatePilot(), activity, null, StyleClassification.Unknown, false, "Unk", false, false, null, null, null);
 
         Assert.Null(row.StatsFailureSource);
     }
@@ -170,7 +191,7 @@ public sealed class PilotReportRowFactoryTests
             DateTimeOffset.Parse("2026-01-02T03:04:00Z"), zKillActivityType.Kill, 30000142, 11567, 587, 3);
 
         var row = PilotReportRowFactory.FromPilot(
-            CreatePilot(), null, null, StyleClassification.Unknown, "Unk", false, false, null, null, lastActivity);
+            CreatePilot(), null, null, StyleClassification.Unknown, false, "Unk", false, false, null, null, lastActivity);
 
         Assert.NotNull(row.LastActivity);
         Assert.True(row.LastActivity!.IsKill);
@@ -189,7 +210,7 @@ public sealed class PilotReportRowFactoryTests
             DateTimeOffset.Parse("2026-01-02T03:04:00Z"), zKillActivityType.Loss, 30000142, 587, null, null);
 
         var row = PilotReportRowFactory.FromPilot(
-            CreatePilot(), null, null, StyleClassification.Unknown, "Unk", false, false, null, null, lastActivity);
+            CreatePilot(), null, null, StyleClassification.Unknown, false, "Unk", false, false, null, null, lastActivity);
 
         Assert.NotNull(row.LastActivity);
         Assert.False(row.LastActivity!.IsKill);
@@ -201,7 +222,7 @@ public sealed class PilotReportRowFactoryTests
     public void FromPilot_NoLastActivity_LeavesLastActivityNull()
     {
         var row = PilotReportRowFactory.FromPilot(
-            CreatePilot(), null, null, StyleClassification.Unknown, "Unk", false, false, null, null, null);
+            CreatePilot(), null, null, StyleClassification.Unknown, false, "Unk", false, false, null, null, null);
 
         Assert.Null(row.LastActivity);
     }

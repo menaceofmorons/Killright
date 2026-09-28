@@ -11,6 +11,9 @@ pub struct PilotAnalysisResponse {
     pub recent_style: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_recent_podder: Option<bool>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub threat: Option<ThreatAnalysisResponse>,
 
     #[serde(skip_serializing_if = "Option::is_none")]

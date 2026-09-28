@@ -15,6 +15,7 @@ public static class PilotReportRowFactory
         zKillActivity? activity,
         zKillStatistics? statistics,
         StyleClassification recentStyle,
+        bool recentIsPodder,
         string threatBand,
         bool statisticsCallFailed,
         bool recentCallFailed,
@@ -22,7 +23,7 @@ public static class PilotReportRowFactory
         DateOnly? birthday,
         PilotRecentKillmail? lastActivity)
     {
-        var generalStyle = GeneralStyleClassifier.Classify(statistics);
+        var generalResult = GeneralStyleClassifier.Classify(statistics);
 
         return new PilotReportRow
         {
@@ -41,9 +42,9 @@ public static class PilotReportRowFactory
             AllianceId = pilot.Alliance?.AllianceId,
             Alliance = GetAllianceDisplay(pilot),
             AlliancePlain = GetAllianceDisplay(pilot),
-            Style = $"{StyleLetterCodeFormatter.FormatGeneral(generalStyle)}/{StyleLetterCodeFormatter.FormatRecent(recentStyle)}",
-            GeneralStyle = StyleDisplayFormatter.Format(generalStyle),
-            RecentStyle = StyleDisplayFormatter.Format(recentStyle),
+            Style = $"{StyleLetterCodeFormatter.FormatGeneral(generalResult.Classification, generalResult.IsPodder)}/{StyleLetterCodeFormatter.FormatRecent(recentStyle, recentIsPodder)}",
+            GeneralStyle = StyleDisplayFormatter.Format(generalResult.Classification, generalResult.IsPodder),
+            RecentStyle = StyleDisplayFormatter.Format(recentStyle, recentIsPodder),
             Week = $"{FormatWeekSideValue(activity?.HasPublicActivityData, activity?.KillsWeek)}/{FormatWeekSideValue(activity?.HasPublicActivityData, activity?.SoloWeek)}",
             Kills = FormatActivityValue(activity?.HasPublicActivityData, activity?.KillsWeek),
             Solos = FormatActivityValue(activity?.HasPublicActivityData, activity?.SoloWeek),

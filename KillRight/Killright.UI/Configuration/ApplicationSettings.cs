@@ -122,6 +122,10 @@ public sealed class StyleSettings
     public double BlobMinimumAverageAttackers { get; init; } = 5;
 
     public double FleetMinimumAverageAttackers { get; init; } = 11;
+
+    public double PodderMinimumSharePercent { get; init; } = 35;
+
+    public int PodderMinimumKillCount { get; init; } = 5;
 }
 
 public sealed class ThreatSettings

@@ -1,6 +1,7 @@
 using DuckDB.NET.Data;
 using Killright.Integration.zKill;
 using Killright.Shared.Data;
+using Killright.Shared.Killmails;
 using Killright.Shared.Time;
 using Killright.Shared.zKill;
 using Killright.Storage.Database;
@@ -31,13 +32,15 @@ public sealed class DuckDbRecentKillmailCache : IRecentKillmailCache
         command.CommandText = $"""
                               SELECT kill_time_utc,
                                      TRUE AS is_loss,
-                                     is_solo
+                                     is_solo,
+                                     CAST(NULL AS BIGINT) AS victim_ship_type_id
                               FROM main.zkill_killmails
                               WHERE victim_character_id = {characterId}
                               UNION ALL
                               SELECT k.kill_time_utc,
                                      FALSE AS is_loss,
-                                     k.is_solo
+                                     k.is_solo,
+                                     k.victim_ship_type_id
                               FROM main.zkill_killmail_attackers a
                               JOIN main.zkill_killmails k ON k.killmail_id = a.killmail_id
                               WHERE a.character_id = {characterId}
@@ -56,19 +59,22 @@ public sealed class DuckDbRecentKillmailCache : IRecentKillmailCache
             var killTimeUtc = reader.GetDateTimeOffset(0);
             var isLoss = reader.GetBoolean(1);
             var isSolo = reader.GetBoolean(2);
+            var victimShipTypeId = reader.GetNullableInt64(3);
 
             if (killTimeUtc < cutoffUtc)
                 continue;
 
             hasPublicActivityData = true;
 
-            if (lastActiveUtc is null)
+            var isPodKill = !isLoss && KillmailQualification.IsPodKill(victimShipTypeId);
+
+            if (lastActiveUtc is null && !isPodKill)
             {
                 lastActiveUtc = killTimeUtc;
                 lastActivityType = isLoss ? zKillActivityType.Loss : zKillActivityType.Kill;
             }
 
-            if (!isLoss)
+            if (!isLoss && !isPodKill)
             {
                 killsWeek++;
 
@@ -114,6 +120,10 @@ public sealed class DuckDbRecentKillmailCache : IRecentKillmailCache
                               FROM main.zkill_killmail_attackers a
                               JOIN main.zkill_killmails k ON k.killmail_id = a.killmail_id
                               WHERE a.character_id = {characterId}
+                                AND (k.victim_ship_type_id IS NULL OR k.victim_ship_type_id NOT IN (
+                                    {KillmailQualification.CapsuleShipTypeId},
+                                    {KillmailQualification.CapsuleGenolutionShipTypeId}
+                                ))
                               ORDER BY kill_time_utc DESC
                               LIMIT 1;
                               """;

@@ -146,14 +146,13 @@ pub extern "C" fn killright_analyze_pilot(request_json: *const c_char) -> *mut c
                 ship_type_id: row.ship_type_id,
             })
             .collect::<Vec<_>>();
-        let recent_style = analyze_recent_style(
+        let recent_style_result = analyze_recent_style(
             RecentStyleRequest {
                 character_id: request.character_id,
                 killmails,
             },
             &style_configuration,
-        )
-        .recent_style;
+        );
         let threat = analyze_intrinsic_threat(
             &threat_configuration,
             statistics.as_ref(),
@@ -165,7 +164,8 @@ pub extern "C" fn killright_analyze_pilot(request_json: *const c_char) -> *mut c
         );
         response_json(PilotAnalysisResponse {
             character_id: request.character_id,
-            recent_style: Some(recent_style),
+            recent_style: Some(recent_style_result.recent_style),
+            is_recent_podder: Some(recent_style_result.is_podder),
             threat: Some(threat),
             group_detection: None,
             failure: None,
@@ -232,6 +232,7 @@ fn analyze_group_detection(
     response_json(PilotAnalysisResponse {
         character_id,
         recent_style: None,
+        is_recent_podder: None,
         threat: None,
         group_detection: Some(GroupDetectionResponse { relationships }),
         failure: None,
@@ -480,6 +481,7 @@ fn failure_response(character_id: i64, reason: &str) -> *mut c_char {
     response_json(PilotAnalysisResponse {
         character_id,
         recent_style: None,
+        is_recent_podder: None,
         threat: None,
         group_detection: None,
         failure: Some(reason.to_string()),

@@ -8,4 +8,5 @@ pub struct RecentStyleResult {
     pub kills: usize,
     pub losses: usize,
     pub solo_losses: usize,
+    pub is_podder: bool,
 }

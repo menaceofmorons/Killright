@@ -4,7 +4,7 @@
         xmlns:controls="clr-namespace:Killright.UI.Controls"
         Title="KillRight — Help"
         Width="420"
-        Height="440"
+        Height="480"
         ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False">
@@ -64,6 +64,60 @@
                          Margin="0,8,0,0">
                     <ListBoxItem>
                         <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="B" FontWeight="Bold" Width="24" />
+                            <TextBlock Text="Blob" />
+                        </StackPanel>
+                    </ListBoxItem>
+                    <ListBoxItem>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="E" FontWeight="Bold" Width="24" />
+                            <TextBlock Text="Explorer" />
+                        </StackPanel>
+                    </ListBoxItem>
+                    <ListBoxItem>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="F" FontWeight="Bold" Width="24" />
+                            <TextBlock Text="Fleet" />
+                        </StackPanel>
+                    </ListBoxItem>
+                    <ListBoxItem>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="G" FontWeight="Bold" Width="24" />
+                            <TextBlock Text="Gang" />
+                        </StackPanel>
+                    </ListBoxItem>
+                    <ListBoxItem>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="H" FontWeight="Bold" Width="24" />
+                            <TextBlock Text="Hauler" />
+                        </StackPanel>
+                    </ListBoxItem>
+                    <ListBoxItem>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="I" FontWeight="Bold" Width="24" />
+                            <TextBlock Text="Inactive" />
+                        </StackPanel>
+                    </ListBoxItem>
+                    <ListBoxItem>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="M" FontWeight="Bold" Width="24" />
+                            <TextBlock Text="Miner" />
+                        </StackPanel>
+                    </ListBoxItem>
+                    <ListBoxItem>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="P" FontWeight="Bold" Width="24" />
+                            <TextBlock Text="PI" />
+                        </StackPanel>
+                    </ListBoxItem>
+                    <ListBoxItem>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="S" FontWeight="Bold" Width="24" />
+                            <TextBlock Text="Solo" />
+                        </StackPanel>
+                    </ListBoxItem>
+                    <ListBoxItem>
+                        <StackPanel Orientation="Horizontal">
                             <TextBlock Text="U" FontWeight="Bold" Width="24" />
                             <TextBlock Text="Unknown" />
                         </StackPanel>
@@ -75,63 +129,26 @@
                         </StackPanel>
                     </ListBoxItem>
                     <ListBoxItem>
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="S" FontWeight="Bold" Width="24" />
-                            <TextBlock Text="Solo" />
-                        </StackPanel>
+                        <Border Height="12" />
                     </ListBoxItem>
                     <ListBoxItem>
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="G" FontWeight="Bold" Width="24" />
-                            <TextBlock Text="Gang" />
-                        </StackPanel>
-                    </ListBoxItem>
-                    <ListBoxItem>
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="B" FontWeight="Bold" Width="24" />
-                            <TextBlock Text="Blob" />
-                        </StackPanel>
-                    </ListBoxItem>
-                    <ListBoxItem>
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="F" FontWeight="Bold" Width="24" />
-                            <TextBlock Text="Fleet" />
-                        </StackPanel>
-                    </ListBoxItem>
-                    <ListBoxItem>
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="M" FontWeight="Bold" Width="24" />
-                            <TextBlock Text="Miner" />
-                        </StackPanel>
-                    </ListBoxItem>
-                    <ListBoxItem>
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="E" FontWeight="Bold" Width="24" />
-                            <TextBlock Text="Explorer" />
-                        </StackPanel>
-                    </ListBoxItem>
-                    <ListBoxItem>
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="H" FontWeight="Bold" Width="24" />
-                            <TextBlock Text="Hauler" />
-                        </StackPanel>
-                    </ListBoxItem>
-                    <ListBoxItem>
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="P" FontWeight="Bold" Width="24" />
-                            <TextBlock Text="PI" />
-                        </StackPanel>
-                    </ListBoxItem>
-                    <ListBoxItem>
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="I" FontWeight="Bold" Width="24" />
-                            <TextBlock Text="Inactive" />
-                        </StackPanel>
+                        <Rectangle Height="1"
+                                   Width="160"
+                                   HorizontalAlignment="Left"
+                                   Stroke="Gray"
+                                   StrokeThickness="1"
+                                   StrokeDashArray="2,2" />
                     </ListBoxItem>
                     <ListBoxItem>
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="b" FontWeight="Bold" Width="24" />
                             <TextBlock Text="Suffix, indicates a Beginner in the main Style (e.g. Sb means Solo Beginner)." TextWrapping="Wrap" Width="320" />
+                        </StackPanel>
+                    </ListBoxItem>
+                    <ListBoxItem>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="x" FontWeight="Bold" Width="24" />
+                            <TextBlock Text="Suffix, indicates a podder (e.g. Sx means Solo podder)." TextWrapping="Wrap" Width="320" />
                         </StackPanel>
                     </ListBoxItem>
                 </ListBox>

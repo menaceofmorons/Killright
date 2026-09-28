@@ -2,9 +2,9 @@ namespace Killright.Core.Style;
 
 public static class StyleDisplayFormatter
 {
-    public static string Format(StyleClassification style)
+    public static string Format(StyleClassification style, bool isPodder = false)
     {
-        return style switch
+        var word = style switch
         {
             StyleClassification.Inactive => "Inactive",
             StyleClassification.Victim => "Vict",
@@ -20,5 +20,13 @@ public static class StyleDisplayFormatter
             StyleClassification.PI => "PI",
             _ => "Unk"
         };
+
+        if (!isPodder || style is not (StyleClassification.Solo or StyleClassification.SoloBeginner
+            or StyleClassification.Gang or StyleClassification.GangBeginner or StyleClassification.Blob))
+        {
+            return word;
+        }
+
+        return $"{word} (podder)";
     }
 }

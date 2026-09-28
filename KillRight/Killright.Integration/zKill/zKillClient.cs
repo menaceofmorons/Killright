@@ -7,6 +7,8 @@ namespace Killright.Integration.zKill;
 
 public sealed class zKillClient : IzKillClient
 {
+    private const string CapsuleShipGroupId = "29";
+
     private readonly HttpClient _http;
     private readonly zKillClientOptions _options;
 
@@ -78,14 +80,24 @@ public sealed class zKillClient : IzKillClient
 
             var statistics = JsonSerializer.Deserialize<zKillStatistics>(json);
 
-            return statistics is null
-                ? new zKillStatisticsResult(zKillStatisticsOutcome.Failure, null)
-                : new zKillStatisticsResult(zKillStatisticsOutcome.Success, statistics);
+            if (statistics is null)
+                return new zKillStatisticsResult(zKillStatisticsOutcome.Failure, null);
+
+            statistics.podKills = ExtractPodKills(statistics);
+
+            return new zKillStatisticsResult(zKillStatisticsOutcome.Success, statistics);
         }
         catch
         {
             return new zKillStatisticsResult(zKillStatisticsOutcome.Failure, null);
         }
+    }
+
+    private static int ExtractPodKills(zKillStatistics statistics)
+    {
+        return statistics.groups is not null && statistics.groups.TryGetValue(CapsuleShipGroupId, out var group)
+            ? group.shipsDestroyed
+            : 0;
     }
 
     private static bool IsNoHistoryResponse(string json)

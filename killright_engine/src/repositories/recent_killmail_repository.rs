@@ -42,7 +42,7 @@ impl RecentKillmailRepository {
              WHERE victim_character_id = {character_id} \
              UNION ALL \
              SELECT k.killmail_id, k.killmail_hash, {character_id} AS character_id, k.kill_time_utc, \
-             FALSE AS is_loss, k.unique_attacker_count, k.is_solo, NULL AS ship_type_id, k.system_id, \
+             FALSE AS is_loss, k.unique_attacker_count, k.is_solo, k.victim_ship_type_id, k.system_id, \
              k.location_id, k.is_npc, k.cached_at_utc \
              FROM main.zkill_killmail_attackers a \
              JOIN main.zkill_killmails k ON k.killmail_id = a.killmail_id \
@@ -142,5 +142,29 @@ mod tests {
         assert_eq!(rows.len(), 2);
         assert!(rows.iter().any(|row| row.killmail_id == 1 && !row.is_loss));
         assert!(rows.iter().any(|row| row.killmail_id == 2 && row.is_loss));
+    }
+
+    #[test]
+    fn get_for_character_kill_row_carries_victim_ship_type_id() {
+        let path = std::env::temp_dir().join(format!("recent-killmail-repo-{}.duckdb", unique_suffix()));
+        let connection = Connection::open(&path).unwrap();
+        create_schema(&connection);
+
+        connection.execute_batch(
+            "INSERT INTO zkill_killmails VALUES
+                (1, 'hash1', '2026-09-20T00:00:00+00:00', 30000142, 40000001, 91321792, 670, 2, FALSE, FALSE, TRUE, '2026-09-20T00:00:00+00:00');
+            INSERT INTO zkill_killmail_attackers VALUES
+                (1, 95465499, 98000001, NULL, 11567);",
+        )
+        .unwrap();
+        drop(connection);
+
+        let repository = RecentKillmailRepository::new(path.clone());
+        let rows = repository.get_for_character(95465499).unwrap();
+
+        std::fs::remove_file(&path).unwrap();
+
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].ship_type_id, Some(670));
     }
 }

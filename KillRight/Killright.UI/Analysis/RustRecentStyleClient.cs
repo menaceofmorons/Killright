@@ -37,6 +37,7 @@ public sealed class RustRecentStyleClient
 
             return new PilotEngineAnalysisResult(
                 MapRecentStyle(response?.recent_style),
+                response?.is_recent_podder ?? false,
                 MapThreatScore(response?.threat?.score),
                 FailureReason: null);
         }
@@ -136,6 +137,7 @@ public sealed class RustRecentStyleClient
     {
         public long character_id { get; set; }
         public string? recent_style { get; set; }
+        public bool? is_recent_podder { get; set; }
         public ThreatAnalysisResponse? threat { get; set; }
         public GroupDetectionResponse? group_detection { get; set; }
         public string? failure { get; set; }
@@ -191,11 +193,13 @@ public sealed record PilotGroupDetectionResult(IReadOnlyList<PilotRelationship> 
 
 public sealed record PilotEngineAnalysisResult(
     StyleClassification RecentStyle,
+    bool IsRecentPodder,
     string ThreatBand,
     string? FailureReason)
 {
     public static PilotEngineAnalysisResult Failed(string reason) => new(
         StyleClassification.Unknown,
+        false,
         ThreatBandMapper.Unknown,
         reason);
 }

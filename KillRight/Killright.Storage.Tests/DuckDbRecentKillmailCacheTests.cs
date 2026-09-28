@@ -130,6 +130,71 @@ public sealed class DuckDbRecentKillmailCacheTests
     }
 
     [Fact]
+    public async Task GetDerivedActivityAsync_PodKillByScannedPilot_IsExcludedFromKillsAndSoloWeek()
+    {
+        var (database, cache) = CreateCache(recentWindowDays: 14);
+
+        InsertKillmail(database, 700015, DateTimeOffset.UtcNow.AddDays(-1), isQualifying: true, isSolo: true, victimCharacterId: OtherCharacterId, victimShipTypeId: 670);
+        InsertAttacker(database, 700015, ScannedCharacterId);
+
+        var activity = await cache.GetDerivedActivityAsync(ScannedCharacterId);
+
+        Assert.True(activity.HasPublicActivityData);
+        Assert.Equal(0, activity.KillsWeek);
+        Assert.Equal(0, activity.SoloWeek);
+    }
+
+    [Fact]
+    public async Task GetDerivedActivityAsync_OnlyRecentActivityIsPodKill_LastActiveNotSetFromIt()
+    {
+        var (database, cache) = CreateCache(recentWindowDays: 14);
+
+        InsertKillmail(database, 700016, DateTimeOffset.UtcNow.AddDays(-1), isQualifying: true, victimCharacterId: OtherCharacterId, victimShipTypeId: 670);
+        InsertAttacker(database, 700016, ScannedCharacterId);
+
+        var activity = await cache.GetDerivedActivityAsync(ScannedCharacterId);
+
+        Assert.True(activity.HasPublicActivityData);
+        Assert.Null(activity.LastActiveUtc);
+        Assert.Null(activity.LastActivityType);
+    }
+
+    [Fact]
+    public async Task GetDerivedActivityAsync_PodKillMoreRecentThanShipKill_LastActiveComesFromShipKill()
+    {
+        var (database, cache) = CreateCache(recentWindowDays: 14);
+
+        InsertKillmail(database, 700017, DateTimeOffset.UtcNow.AddDays(-3), isQualifying: true, victimCharacterId: OtherCharacterId, victimShipTypeId: 587);
+        InsertAttacker(database, 700017, ScannedCharacterId);
+
+        InsertKillmail(database, 700018, DateTimeOffset.UtcNow.AddDays(-1), isQualifying: true, victimCharacterId: OtherCharacterId, victimShipTypeId: 670);
+        InsertAttacker(database, 700018, ScannedCharacterId);
+
+        var activity = await cache.GetDerivedActivityAsync(ScannedCharacterId);
+
+        Assert.Equal(zKillActivityType.Kill, activity.LastActivityType);
+        Assert.NotNull(activity.LastActiveUtc);
+    }
+
+    [Fact]
+    public async Task GetMostRecentKillmailAsync_MostRecentIsPodKillByScannedPilot_SkipsToPriorShipKill()
+    {
+        var (database, cache) = CreateCache(recentWindowDays: 14);
+
+        InsertKillmail(database, 700019, DateTimeOffset.UtcNow.AddDays(-3), isQualifying: true, victimCharacterId: OtherCharacterId, victimShipTypeId: 587);
+        InsertAttacker(database, 700019, ScannedCharacterId);
+
+        InsertKillmail(database, 700020, DateTimeOffset.UtcNow.AddDays(-1), isQualifying: true, victimCharacterId: OtherCharacterId, victimShipTypeId: 670);
+        InsertAttacker(database, 700020, ScannedCharacterId);
+
+        var result = await cache.GetMostRecentKillmailAsync(ScannedCharacterId);
+
+        Assert.NotNull(result);
+        Assert.Equal(zKillActivityType.Kill, result!.ActivityType);
+        Assert.Equal(587, result.VictimShipTypeId);
+    }
+
+    [Fact]
     public async Task GetMostRecentKillmailAsync_MostRecentIsALoss_ReturnsLossDetail()
     {
         var (database, cache) = CreateCache(recentWindowDays: 14);
@@ -209,7 +274,8 @@ public sealed class DuckDbRecentKillmailCacheTests
         DateTimeOffset killTimeUtc,
         bool isQualifying,
         bool isSolo = false,
-        long? victimCharacterId = null)
+        long? victimCharacterId = null,
+        long victimShipTypeId = 587)
     {
         using var connection = new DuckDBConnection(database.ConnectionString);
         connection.Open();
@@ -236,7 +302,7 @@ public sealed class DuckDbRecentKillmailCacheTests
                                   30000142,
                                   40000001,
                                   {(victimCharacterId?.ToString() ?? "NULL")},
-                                  587,
+                                  {victimShipTypeId},
                                   2,
                                   {(isSolo ? "TRUE" : "FALSE")},
                                   FALSE,

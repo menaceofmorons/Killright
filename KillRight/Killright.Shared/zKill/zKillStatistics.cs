@@ -25,6 +25,12 @@ public sealed class zKillStatistics
     [JsonPropertyName("months")]
     public Dictionary<string, zKillStatisticsMonth>? months { get; set; }
 
+    [JsonPropertyName("groups")]
+    public Dictionary<string, zKillStatisticsGroupBreakdown>? groups { get; set; }
+
+    [JsonIgnore]
+    public int podKills { get; set; }
+
     [JsonIgnore]
     public bool NoHistory { get; set; }
 }

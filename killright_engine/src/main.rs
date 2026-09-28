@@ -18,6 +18,8 @@ fn main() {
     let style_configuration = StyleConfiguration {
         blob_minimum_average_attackers: 5.0,
         fleet_minimum_average_attackers: 11.0,
+        podder_minimum_share_percent: 35.0,
+        podder_minimum_kill_count: 5,
     };
     let result = analyze_recent_style(request, &style_configuration);
     let output = serde_json::to_string(&result).expect("failed to serialize analysis result");

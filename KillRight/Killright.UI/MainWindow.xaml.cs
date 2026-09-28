@@ -470,6 +470,7 @@ public partial class MainWindow : Window
             zKillActivity? activity = null;
             zKillStatistics? statistics = null;
             var recentStyle = StyleClassification.Unknown;
+            var recentIsPodder = false;
             var threatBand = "Unk";
             var statisticsCallFailed = false;
             var recentCallFailed = false;
@@ -508,13 +509,17 @@ public partial class MainWindow : Window
 
                 var analysisResult = await App.RecentStyleClient.AnalyzeAsync(characterId);
                 recentStyle = analysisResult.RecentStyle;
+                recentIsPodder = analysisResult.IsRecentPodder;
                 threatBand = analysisResult.ThreatBand;
                 engineFailureReason = analysisResult.FailureReason;
 
                 if (engineFailureReason is null)
                 {
                     if (recentCallFailed && killmailDerivedActivity?.HasPublicActivityData != true)
+                    {
                         recentStyle = StyleClassification.Unknown;
+                        recentIsPodder = false;
+                    }
 
                     if (statisticsCallFailed)
                         threatBand = "Unk";
@@ -526,6 +531,7 @@ public partial class MainWindow : Window
                 activity,
                 statistics,
                 recentStyle,
+                recentIsPodder,
                 threatBand,
                 statisticsCallFailed,
                 recentCallFailed,
@@ -649,7 +655,7 @@ public partial class MainWindow : Window
 
         try
         {
-            var style = StyleDisplayFormatter.Format(GeneralStyleClassifier.Classify(statistics));
+            var style = StyleDisplayFormatter.Format(GeneralStyleClassifier.Classify(statistics).Classification);
             await App.zKillStatisticsCache.UpsertAsync(
                 characterId.Value,
                 statistics,

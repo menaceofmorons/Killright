@@ -30,6 +30,39 @@ public sealed class zKillClientTests
     }
 
     [Fact]
+    public async Task GetStatisticsAsync_SuccessWithCapsuleGroup_ExtractsPodKills()
+    {
+        var handler = new ScriptedHttpMessageHandler()
+            .OnUriContaining("api/stats/characterID/95465499", HttpStatusCode.OK, """
+                {"shipsDestroyed":42,"soloKills":10,"soloRatio":55.5,"avgGangSize":3.2,"shipsLost":8,"soloLosses":1,
+                 "groups":{"29":{"groupID":29,"shipsLost":13,"pointsLost":13,"iskLost":182779801,"shipsDestroyed":39,"pointsDestroyed":39,"iskDestroyed":1127784}}}
+                """);
+
+        var client = new zKillClient(new HttpClient(handler));
+
+        var result = await client.GetStatisticsAsync(95465499);
+
+        Assert.Equal(zKillStatisticsOutcome.Success, result.Outcome);
+        Assert.NotNull(result.Statistics);
+        Assert.Equal(39, result.Statistics!.podKills);
+    }
+
+    [Fact]
+    public async Task GetStatisticsAsync_SuccessWithoutCapsuleGroup_PodKillsIsZero()
+    {
+        var handler = new ScriptedHttpMessageHandler()
+            .OnUriContaining("api/stats/characterID/91321792", HttpStatusCode.OK, """{"shipsDestroyed":5,"soloKills":1,"soloRatio":20,"avgGangSize":2,"shipsLost":0,"soloLosses":0}""");
+
+        var client = new zKillClient(new HttpClient(handler));
+
+        var result = await client.GetStatisticsAsync(91321792);
+
+        Assert.Equal(zKillStatisticsOutcome.Success, result.Outcome);
+        Assert.NotNull(result.Statistics);
+        Assert.Equal(0, result.Statistics!.podKills);
+    }
+
+    [Fact]
     public async Task GetStatisticsAsync_SuccessWithoutMonths_ReturnsSuccessWithNullMonths()
     {
         var handler = new ScriptedHttpMessageHandler()

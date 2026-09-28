@@ -71,7 +71,9 @@ public partial class App : Application
 
         GeneralStyleClassifier.Configure(
             Settings.Style.BlobMinimumAverageAttackers,
-            Settings.Style.FleetMinimumAverageAttackers);
+            Settings.Style.FleetMinimumAverageAttackers,
+            Settings.Style.PodderMinimumSharePercent,
+            Settings.Style.PodderMinimumKillCount);
 
         UiState = new UiStateStore();
 

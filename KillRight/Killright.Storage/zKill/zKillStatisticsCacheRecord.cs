@@ -11,6 +11,7 @@ public sealed class zKillStatisticsCacheRecord
     public required double AvgGangSize { get; init; }
     public required int ShipsLost { get; init; }
     public required int SoloLosses { get; init; }
+    public required int PodKills { get; init; }
     public required string GeneralStyle { get; init; }
     public required bool NoHistory { get; init; }
     public required DateTimeOffset CheckedAtUtc { get; init; }
@@ -25,6 +26,7 @@ public sealed class zKillStatisticsCacheRecord
             avgGangSize = AvgGangSize,
             shipsLost = ShipsLost,
             soloLosses = SoloLosses,
+            podKills = PodKills,
             NoHistory = NoHistory
         };
     }
@@ -45,6 +47,7 @@ public sealed class zKillStatisticsCacheRecord
             AvgGangSize = statistics.avgGangSize,
             ShipsLost = statistics.shipsLost,
             SoloLosses = statistics.soloLosses,
+            PodKills = statistics.podKills,
             GeneralStyle = generalStyle,
             NoHistory = noHistory,
             CheckedAtUtc = checkedAtUtc

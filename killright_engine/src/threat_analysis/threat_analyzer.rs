@@ -3,6 +3,7 @@ use chrono::{DateTime, Utc};
 use crate::repositories::pilot_identity_repository::PilotIdentitySnapshot;
 use crate::repositories::recent_killmail_repository::RecentKillmailSnapshot;
 use crate::repositories::zkill_statistics_repository::ZKillStatisticsSnapshot;
+use crate::shared::pod_kill::is_pod_kill;
 use crate::threat_analysis::threat_analysis_response::ThreatAnalysisResponse;
 use crate::threat_analysis::threat_configuration_models::*;
 
@@ -222,6 +223,7 @@ pub(crate) fn calculate_recent_activity_diagnostics(
         .iter()
         .filter(|killmail| {
             !killmail.is_loss
+                && !is_pod_kill(killmail.ship_type_id)
                 && DateTime::parse_from_rfc3339(&killmail.kill_time_utc)
                     .map(|value| value.with_timezone(&Utc) >= coverage_start_utc)
                     .unwrap_or(false)
@@ -449,5 +451,43 @@ mod tests {
         );
 
         assert_eq!(result.score, 1);
+    }
+
+    #[test]
+    fn recent_activity_modifier_excludes_pod_kills() {
+        let coverage_start = now() - chrono::Duration::days(1);
+
+        fn pod_killmail_at(kill_time_utc: &str) -> RecentKillmailSnapshot {
+            RecentKillmailSnapshot {
+                killmail_id: 1,
+                killmail_hash: None,
+                character_id: 1,
+                kill_time_utc: kill_time_utc.to_string(),
+                is_loss: false,
+                attacker_count: 1,
+                is_solo: true,
+                ship_type_id: Some(670),
+                system_id: None,
+                location_id: None,
+                is_npc: false,
+                cached_at_utc: "2026-09-22T00:00:00Z".to_string(),
+            }
+        }
+
+        let killmails: Vec<RecentKillmailSnapshot> = (0..20)
+            .map(|_| pod_killmail_at("2026-09-21T12:00:00Z"))
+            .collect();
+
+        let result = analyze_intrinsic_threat(
+            &configuration(),
+            None,
+            &killmails,
+            None,
+            Some(coverage_start),
+            now(),
+            14,
+        );
+
+        assert_eq!(result.score, 0);
     }
 }

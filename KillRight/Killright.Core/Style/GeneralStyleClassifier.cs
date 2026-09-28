@@ -7,50 +7,81 @@ public static class GeneralStyleClassifier
 {
     private static double _blobMinimumAverageAttackers = 5;
     private static double _fleetMinimumAverageAttackers = 11;
+    private static double _podderMinimumSharePercent = 35;
+    private static int _podderMinimumKillCount = 5;
 
-    public static void Configure(double blobMinimumAverageAttackers, double fleetMinimumAverageAttackers)
+    public static void Configure(
+        double blobMinimumAverageAttackers,
+        double fleetMinimumAverageAttackers,
+        double podderMinimumSharePercent,
+        int podderMinimumKillCount)
     {
         _blobMinimumAverageAttackers = blobMinimumAverageAttackers;
         _fleetMinimumAverageAttackers = fleetMinimumAverageAttackers;
+        _podderMinimumSharePercent = podderMinimumSharePercent;
+        _podderMinimumKillCount = podderMinimumKillCount;
     }
 
-    public static StyleClassification Classify(zKillStatistics? statistics)
+    public static GeneralStyleResult Classify(zKillStatistics? statistics)
     {
         if (statistics is null)
-            return StyleClassification.Unknown;
+            return new GeneralStyleResult(StyleClassification.Unknown, false);
 
-        if (statistics.shipsDestroyed == 0 && statistics.shipsLost > 0)
-            return StyleClassification.Victim;
+        var shipsDestroyed = Math.Max(0, statistics.shipsDestroyed - statistics.podKills);
 
-        if (statistics.shipsDestroyed > 0 && statistics.shipsLost > 0)
+        if (shipsDestroyed == 0 && statistics.shipsLost > 0)
+            return new GeneralStyleResult(StyleClassification.Victim, false);
+
+        if (shipsDestroyed > 0 && statistics.shipsLost > 0)
         {
-            var destroyedToLostRatio = statistics.shipsDestroyed / (double)statistics.shipsLost;
-            var soloLossesToDestroyedRatio = statistics.soloLosses / (double)statistics.shipsDestroyed;
+            var destroyedToLostRatio = shipsDestroyed / (double)statistics.shipsLost;
+            var soloLossesToDestroyedRatio = statistics.soloLosses / (double)shipsDestroyed;
 
             if (destroyedToLostRatio <= 0.2 && soloLossesToDestroyedRatio >= 0.7)
-                return StyleClassification.Victim;
+                return new GeneralStyleResult(StyleClassification.Victim, false);
         }
+
+        StyleClassification classification;
 
         if (statistics.soloRatio >= 60)
         {
-            return statistics.soloKills < 25
+            classification = statistics.soloKills < 25
                 ? StyleClassification.SoloBeginner
                 : StyleClassification.Solo;
         }
-
-        if (statistics.soloRatio < 60 && statistics.avgGangSize < _blobMinimumAverageAttackers)
+        else if (statistics.avgGangSize < _blobMinimumAverageAttackers)
         {
-            return statistics.shipsDestroyed < 50
+            classification = shipsDestroyed < 50
                 ? StyleClassification.GangBeginner
                 : StyleClassification.Gang;
         }
+        else if (statistics.avgGangSize < _fleetMinimumAverageAttackers)
+        {
+            classification = StyleClassification.Blob;
+        }
+        else
+        {
+            classification = StyleClassification.Fleet;
+        }
 
-        if (statistics.avgGangSize >= _blobMinimumAverageAttackers && statistics.avgGangSize < _fleetMinimumAverageAttackers)
-            return StyleClassification.Blob;
+        var isPodder = IsPodder(classification, statistics.podKills, shipsDestroyed);
 
-        if (statistics.avgGangSize >= _fleetMinimumAverageAttackers)
-            return StyleClassification.Fleet;
+        return new GeneralStyleResult(classification, isPodder);
+    }
 
-        return StyleClassification.Unknown;
+    private static bool IsPodder(StyleClassification classification, int podKills, int shipsDestroyedExcludingPods)
+    {
+        if (classification is not (StyleClassification.Solo or StyleClassification.SoloBeginner
+            or StyleClassification.Gang or StyleClassification.GangBeginner or StyleClassification.Blob))
+        {
+            return false;
+        }
+
+        if (shipsDestroyedExcludingPods == 0 || podKills < _podderMinimumKillCount)
+            return false;
+
+        var sharePercent = podKills / (double)shipsDestroyedExcludingPods * 100;
+
+        return sharePercent >= _podderMinimumSharePercent;
     }
 }

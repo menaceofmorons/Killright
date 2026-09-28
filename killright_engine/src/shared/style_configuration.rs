@@ -6,6 +6,10 @@ pub struct StyleConfiguration {
     pub blob_minimum_average_attackers: f64,
     #[serde(rename = "fleetMinimumAverageAttackers")]
     pub fleet_minimum_average_attackers: f64,
+    #[serde(rename = "podderMinimumSharePercent")]
+    pub podder_minimum_share_percent: f64,
+    #[serde(rename = "podderMinimumKillCount")]
+    pub podder_minimum_kill_count: i64,
 }
 
 pub(crate) fn validate_style_configuration(configuration: &StyleConfiguration) -> Result<(), String> {
@@ -35,6 +39,8 @@ mod tests {
         let configuration = StyleConfiguration {
             blob_minimum_average_attackers: 5.0,
             fleet_minimum_average_attackers: 11.0,
+            podder_minimum_share_percent: 20.0,
+            podder_minimum_kill_count: 5,
         };
 
         assert!(validate_style_configuration(&configuration).is_ok());
@@ -45,6 +51,8 @@ mod tests {
         let configuration = StyleConfiguration {
             blob_minimum_average_attackers: 0.0,
             fleet_minimum_average_attackers: 11.0,
+            podder_minimum_share_percent: 20.0,
+            podder_minimum_kill_count: 5,
         };
 
         assert!(validate_style_configuration(&configuration).is_err());
@@ -55,6 +63,8 @@ mod tests {
         let configuration = StyleConfiguration {
             blob_minimum_average_attackers: 11.0,
             fleet_minimum_average_attackers: 11.0,
+            podder_minimum_share_percent: 20.0,
+            podder_minimum_kill_count: 5,
         };
 
         assert!(validate_style_configuration(&configuration).is_err());

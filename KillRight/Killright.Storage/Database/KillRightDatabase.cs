@@ -228,6 +228,10 @@ public sealed class KillRightDatabase
         using var addNoHistoryMarker = connection.CreateCommand();
         addNoHistoryMarker.CommandText = "ALTER TABLE main.zkill_statistics_cache ADD COLUMN IF NOT EXISTS no_history_marker BOOLEAN;";
         addNoHistoryMarker.ExecuteNonQuery();
+
+        using var addPodKills = connection.CreateCommand();
+        addPodKills.CommandText = "ALTER TABLE main.zkill_statistics_cache ADD COLUMN IF NOT EXISTS pod_kills INTEGER;";
+        addPodKills.ExecuteNonQuery();
     }
 
     private static void CreateZkillKillmailsTables(DuckDBConnection connection)
