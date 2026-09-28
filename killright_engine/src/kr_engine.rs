@@ -1,9 +1,6 @@
 #[path = "contracts/mod_contracts.rs"]
 pub mod contracts;
 
-#[path = "fleet_analysis/mod_fleet_analysis.rs"]
-pub mod fleet_analysis;
-
 #[path = "group_analysis/mod_group_analysis.rs"]
 pub mod group_analysis;
 

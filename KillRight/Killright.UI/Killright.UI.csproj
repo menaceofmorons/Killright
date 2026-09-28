@@ -26,15 +26,6 @@
               CopyToOutputDirectory="PreserveNewest" />
         <None Include="config\settings.json"
               CopyToOutputDirectory="PreserveNewest" />
-        <None Include="..\..\killright_engine\config\recent-window.json"
-              Link="config\recent-window.json"
-              CopyToOutputDirectory="PreserveNewest" />
-        <None Include="..\..\killright_engine\config\group-detection.json"
-              Link="config\group-detection.json"
-              CopyToOutputDirectory="PreserveNewest" />
-        <None Include="..\..\killright_engine\src\config\threat-analysis.json"
-              Link="config\threat-analysis.json"
-              CopyToOutputDirectory="PreserveNewest" />
         <None Include="..\..\killright_engine\target\debug\killright_engine.dll"
               Link="killright_engine.dll"
               CopyToOutputDirectory="PreserveNewest" />

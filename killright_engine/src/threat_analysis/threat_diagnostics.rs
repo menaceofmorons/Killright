@@ -96,9 +96,8 @@ mod tests {
     use chrono::TimeZone;
 
     fn configuration() -> ThreatConfiguration {
-        let text = include_str!("../config/threat-analysis.json").trim_start_matches('\u{feff}');
-
-        serde_json::from_str(text).expect("test threat configuration must parse")
+        serde_json::from_str(crate::threat_analysis::threat_test_fixtures::THREAT_CONFIGURATION_JSON)
+            .expect("test threat configuration must parse")
     }
 
     fn now() -> DateTime<Utc> {

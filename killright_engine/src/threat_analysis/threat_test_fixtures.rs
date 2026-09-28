@@ -1,4 +1,4 @@
-﻿{
+pub(crate) const THREAT_CONFIGURATION_JSON: &str = r#"{
   "version": "2.0",
   "lastUpdated": "2026-09-24",
 
@@ -126,4 +126,4 @@
     "killCap": 100.0,
     "recentActivityBonus": 10.0
   }
-}
+}"#;

@@ -1,6 +1,5 @@
-use std::env;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use serde::Deserialize;
 
@@ -44,16 +43,6 @@ pub struct IntermediaryBonusConfiguration {
     pub maximum: i32,
 }
 
-pub fn load_default_group_detection_configuration() -> Result<GroupDetectionConfiguration, String> {
-    for candidate in configuration_candidates() {
-        if candidate.exists() {
-            return load_group_detection_configuration(&candidate);
-        }
-    }
-
-    Err("group-detection.json was not found".to_string())
-}
-
 pub fn load_group_detection_configuration(path: &Path) -> Result<GroupDetectionConfiguration, String> {
     let text = fs::read_to_string(path)
         .map_err(|error| format!("failed to read {}: {}", path.display(), error))?;
@@ -74,28 +63,7 @@ pub fn load_group_detection_configuration(path: &Path) -> Result<GroupDetectionC
     Ok(configuration)
 }
 
-fn configuration_candidates() -> Vec<PathBuf> {
-    let current_directory = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-
-    let mut candidates = vec![
-        current_directory.join("config").join("group-detection.json"),
-        current_directory
-            .join("engine")
-            .join("PIntelEngine")
-            .join("config")
-            .join("group-detection.json"),
-    ];
-
-    if let Ok(exe_path) = env::current_exe() {
-        if let Some(exe_directory) = exe_path.parent() {
-            candidates.push(exe_directory.join("config").join("group-detection.json"));
-        }
-    }
-
-    candidates
-}
-
-fn validate_group_detection_configuration(configuration: &GroupDetectionConfiguration) -> Result<(), String> {
+pub(crate) fn validate_group_detection_configuration(configuration: &GroupDetectionConfiguration) -> Result<(), String> {
     validate_weights_and_factors(configuration)?;
     validate_steps_and_saturation(configuration)?;
 

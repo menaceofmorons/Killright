@@ -1,7 +1,8 @@
 use crate::recent_style::RecentKillmailInput;
 use crate::shared::recent_style_contract::*;
+use crate::shared::style_configuration::StyleConfiguration;
 
-pub fn classify_kill_style(kills: &[RecentKillmailInput]) -> String {
+pub fn classify_kill_style(kills: &[RecentKillmailInput], style_configuration: &StyleConfiguration) -> String {
     if kills.is_empty() {
         return STYLE_UNKNOWN.to_string();
     }
@@ -23,9 +24,9 @@ pub fn classify_kill_style(kills: &[RecentKillmailInput]) -> String {
         .sum::<f64>()
         / kills.len() as f64;
 
-    if average_attackers < 5.0 {
+    if average_attackers < style_configuration.blob_minimum_average_attackers {
         STYLE_GANG.to_string()
-    } else if average_attackers < 11.0 {
+    } else if average_attackers < style_configuration.fleet_minimum_average_attackers {
         STYLE_BLOB.to_string()
     } else {
         STYLE_FLEET.to_string()
@@ -35,6 +36,13 @@ pub fn classify_kill_style(kills: &[RecentKillmailInput]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn style_configuration() -> StyleConfiguration {
+        StyleConfiguration {
+            blob_minimum_average_attackers: 5.0,
+            fleet_minimum_average_attackers: 11.0,
+        }
+    }
 
     fn kill(attacker_count: i32, is_solo: bool) -> RecentKillmailInput {
         RecentKillmailInput {
@@ -48,29 +56,41 @@ mod tests {
 
     #[test]
     fn solo_heavy_kills_return_solo() {
-        let result = classify_kill_style(&[kill(1, true), kill(1, true), kill(3, false)]);
+        let result = classify_kill_style(&[kill(1, true), kill(1, true), kill(3, false)], &style_configuration());
 
         assert_eq!(result, STYLE_SOLO);
     }
 
     #[test]
     fn small_average_gang_returns_gang() {
-        let result = classify_kill_style(&[kill(2, false), kill(3, false)]);
+        let result = classify_kill_style(&[kill(2, false), kill(3, false)], &style_configuration());
 
         assert_eq!(result, STYLE_GANG);
     }
 
     #[test]
     fn medium_average_gang_returns_blob() {
-        let result = classify_kill_style(&[kill(6, false), kill(8, false)]);
+        let result = classify_kill_style(&[kill(6, false), kill(8, false)], &style_configuration());
 
         assert_eq!(result, STYLE_BLOB);
     }
 
     #[test]
     fn large_average_gang_returns_fleet() {
-        let result = classify_kill_style(&[kill(12, false), kill(20, false)]);
+        let result = classify_kill_style(&[kill(12, false), kill(20, false)], &style_configuration());
 
         assert_eq!(result, STYLE_FLEET);
+    }
+
+    #[test]
+    fn respects_configured_boundaries_over_literals() {
+        let configured = StyleConfiguration {
+            blob_minimum_average_attackers: 3.0,
+            fleet_minimum_average_attackers: 6.0,
+        };
+
+        let result = classify_kill_style(&[kill(4, false), kill(4, false)], &configured);
+
+        assert_eq!(result, STYLE_BLOB);
     }
 }

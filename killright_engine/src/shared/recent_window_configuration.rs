@@ -1,6 +1,5 @@
-use std::env;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use serde::Deserialize;
 
@@ -8,16 +7,6 @@ use serde::Deserialize;
 pub struct RecentWindowConfiguration {
     #[serde(rename = "recentWindowDays")]
     pub recent_window_days: i64,
-}
-
-pub fn load_default_recent_window_configuration() -> Result<RecentWindowConfiguration, String> {
-    for candidate in configuration_candidates() {
-        if candidate.exists() {
-            return load_recent_window_configuration(&candidate);
-        }
-    }
-
-    Err("recent-window.json was not found".to_string())
 }
 
 pub fn load_recent_window_configuration(path: &Path) -> Result<RecentWindowConfiguration, String> {
@@ -40,28 +29,7 @@ pub fn load_recent_window_configuration(path: &Path) -> Result<RecentWindowConfi
     Ok(configuration)
 }
 
-fn configuration_candidates() -> Vec<PathBuf> {
-    let current_directory = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-
-    let mut candidates = vec![
-        current_directory.join("config").join("recent-window.json"),
-        current_directory
-            .join("engine")
-            .join("PIntelEngine")
-            .join("config")
-            .join("recent-window.json"),
-    ];
-
-    if let Ok(exe_path) = env::current_exe() {
-        if let Some(exe_directory) = exe_path.parent() {
-            candidates.push(exe_directory.join("config").join("recent-window.json"));
-        }
-    }
-
-    candidates
-}
-
-fn validate_recent_window_configuration(configuration: &RecentWindowConfiguration) -> Result<(), String> {
+pub(crate) fn validate_recent_window_configuration(configuration: &RecentWindowConfiguration) -> Result<(), String> {
     if configuration.recent_window_days <= 0 {
         return Err(format!(
             "recentWindowDays must be positive; actual value was {}",

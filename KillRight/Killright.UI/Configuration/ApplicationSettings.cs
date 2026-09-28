@@ -27,6 +27,12 @@ public sealed class ApplicationSettings
 
     public SdeApplicationSettings Sde { get; init; } = new();
 
+    public ThreatSettings Threat { get; init; } = new();
+
+    public GroupDetectionSettings GroupDetection { get; init; } = new();
+
+    public StyleSettings Style { get; init; } = new();
+
 #if HISTORIC_RELATIONSHIPS
     public GroupHistoryApplicationSettings GroupHistory { get; init; } = new();
 #endif
@@ -111,6 +117,213 @@ public sealed class SdeApplicationSettings
     public string DatasetZipUrl { get; init; } = "https://developers.eveonline.com/static-data/eve-online-static-data-latest-jsonl.zip";
 
     public int CheckIntervalHours { get; init; } = 24;
+}
+
+public sealed class StyleSettings
+{
+    public double BlobMinimumAverageAttackers { get; init; } = 5;
+
+    public double FleetMinimumAverageAttackers { get; init; } = 11;
+}
+
+public sealed class ThreatSettings
+{
+    public string Version { get; init; } = "2.0";
+
+    public string LastUpdated { get; init; } = string.Empty;
+
+    public ThreatComponentWeightsSettings ComponentWeights { get; init; } = new();
+
+    public ThreatHistoricalCapabilitySettings HistoricalCapability { get; init; } = new();
+
+    public ThreatSurvivabilitySettings Survivability { get; init; } = new();
+
+    public ThreatLossQualitySettings LossQuality { get; init; } = new();
+
+    public ThreatRecentActivitySettings RecentActivity { get; init; } = new();
+
+    public ThreatSecurityStatusSettings SecurityStatus { get; init; } = new();
+
+    public ThreatConfidenceSettings Confidence { get; init; } = new();
+}
+
+public sealed class ThreatComponentWeightsSettings
+{
+    public ThreatComponentWeightSetting HistoricalCapability { get; init; } = new() { MaximumScore = 40 };
+
+    public ThreatComponentWeightSetting Survivability { get; init; } = new() { MaximumScore = 25 };
+
+    public ThreatComponentWeightSetting LossQuality { get; init; } = new() { MaximumScore = 20 };
+
+    public ThreatComponentWeightSetting RecentActivity { get; init; } = new() { MaximumScore = 10 };
+
+    public ThreatComponentWeightSetting SecurityStatus { get; init; } = new() { MaximumScore = 5 };
+}
+
+public sealed class ThreatComponentWeightSetting
+{
+    public int MaximumScore { get; init; }
+}
+
+public sealed class ThreatHistoricalCapabilitySettings
+{
+    public IReadOnlyList<ThreatKillVolumeBandSetting> KillVolumeBands { get; init; } = Array.Empty<ThreatKillVolumeBandSetting>();
+
+    public IReadOnlyList<ThreatSoloKillBandSetting> SoloKillBands { get; init; } = Array.Empty<ThreatSoloKillBandSetting>();
+
+    public ThreatSoloRatioRuleSetting SoloRatio { get; init; } = new();
+
+    public IReadOnlyList<ThreatStyleModifierSetting> StyleModifiers { get; init; } = Array.Empty<ThreatStyleModifierSetting>();
+}
+
+public sealed class ThreatKillVolumeBandSetting
+{
+    public int MaximumKills { get; init; }
+
+    public int Score { get; init; }
+}
+
+public sealed class ThreatSoloKillBandSetting
+{
+    public int MaximumSoloKills { get; init; }
+
+    public int Score { get; init; }
+}
+
+public sealed class ThreatSoloRatioRuleSetting
+{
+    public double MinimumRatio { get; init; }
+
+    public int Score { get; init; }
+}
+
+public sealed class ThreatStyleModifierSetting
+{
+    public string Style { get; init; } = string.Empty;
+
+    public int Score { get; init; }
+}
+
+public sealed class ThreatSurvivabilitySettings
+{
+    public IReadOnlyList<ThreatRatioBandSetting> Ratios { get; init; } = Array.Empty<ThreatRatioBandSetting>();
+
+    public IReadOnlyList<ThreatNoLossBandSetting> NoLossBands { get; init; } = Array.Empty<ThreatNoLossBandSetting>();
+}
+
+public sealed class ThreatRatioBandSetting
+{
+    public double MaximumRatio { get; init; }
+
+    public int Score { get; init; }
+}
+
+public sealed class ThreatNoLossBandSetting
+{
+    public int MinimumKills { get; init; }
+
+    public int Score { get; init; }
+}
+
+public sealed class ThreatLossQualitySettings
+{
+    public IReadOnlyList<ThreatLossQualityStyleSetting> Styles { get; init; } = Array.Empty<ThreatLossQualityStyleSetting>();
+
+    public ThreatLossQualityDefaultStyleSetting DefaultStyle { get; init; } = new();
+
+    public int NoLossesWithKillsScore { get; init; }
+}
+
+public sealed class ThreatLossQualityStyleSetting
+{
+    public string Style { get; init; } = string.Empty;
+
+    public IReadOnlyList<ThreatLossQualityBandSetting> Bands { get; init; } = Array.Empty<ThreatLossQualityBandSetting>();
+}
+
+public sealed class ThreatLossQualityDefaultStyleSetting
+{
+    public IReadOnlyList<ThreatLossQualityBandSetting> Bands { get; init; } = Array.Empty<ThreatLossQualityBandSetting>();
+}
+
+public sealed class ThreatLossQualityBandSetting
+{
+    public double MinimumSoloLossRatio { get; init; }
+
+    public int Score { get; init; }
+}
+
+public sealed class ThreatRecentActivitySettings
+{
+    public IReadOnlyList<ThreatRecentActivityPointSetting> Points { get; init; } = Array.Empty<ThreatRecentActivityPointSetting>();
+}
+
+public sealed class ThreatRecentActivityPointSetting
+{
+    public double DailyRate { get; init; }
+
+    public double Score { get; init; }
+}
+
+public sealed class ThreatSecurityStatusSettings
+{
+    public IReadOnlyList<ThreatSecurityStatusBandSetting> Bands { get; init; } = Array.Empty<ThreatSecurityStatusBandSetting>();
+}
+
+public sealed class ThreatSecurityStatusBandSetting
+{
+    public double MinimumSecurityStatus { get; init; }
+
+    public int Score { get; init; }
+}
+
+public sealed class ThreatConfidenceSettings
+{
+    public double KillWeight { get; init; }
+
+    public double KillCap { get; init; }
+
+    public double RecentActivityBonus { get; init; }
+}
+
+public sealed class GroupDetectionSettings
+{
+    public long MinimumSharedEvents { get; init; }
+
+    public int StrengthStep { get; init; }
+
+    public IReadOnlyList<GroupDetectionGangSizeWeightSetting> GangSizeWeights { get; init; } = Array.Empty<GroupDetectionGangSizeWeightSetting>();
+
+    public GroupDetectionSampleFactorSetting SampleFactor { get; init; } = new();
+
+    public int SplitBonus { get; init; }
+
+    public double ChainDiscount { get; init; }
+
+    public GroupDetectionIntermediaryBonusSetting IntermediaryBonus { get; init; } = new();
+}
+
+public sealed class GroupDetectionGangSizeWeightSetting
+{
+    public long MaximumGangSize { get; init; }
+
+    public double Weight { get; init; }
+}
+
+public sealed class GroupDetectionSampleFactorSetting
+{
+    public double Minimum { get; init; }
+
+    public double Maximum { get; init; }
+
+    public long SaturatesAtCountedSharedKills { get; init; }
+}
+
+public sealed class GroupDetectionIntermediaryBonusSetting
+{
+    public int PerAdditional { get; init; }
+
+    public int Maximum { get; init; }
 }
 
 #if HISTORIC_RELATIONSHIPS

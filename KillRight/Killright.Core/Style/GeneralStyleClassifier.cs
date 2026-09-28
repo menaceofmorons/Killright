@@ -5,6 +5,15 @@ namespace Killright.Core.Style;
 
 public static class GeneralStyleClassifier
 {
+    private static double _blobMinimumAverageAttackers = 5;
+    private static double _fleetMinimumAverageAttackers = 11;
+
+    public static void Configure(double blobMinimumAverageAttackers, double fleetMinimumAverageAttackers)
+    {
+        _blobMinimumAverageAttackers = blobMinimumAverageAttackers;
+        _fleetMinimumAverageAttackers = fleetMinimumAverageAttackers;
+    }
+
     public static StyleClassification Classify(zKillStatistics? statistics)
     {
         if (statistics is null)
@@ -29,17 +38,17 @@ public static class GeneralStyleClassifier
                 : StyleClassification.Solo;
         }
 
-        if (statistics.soloRatio < 60 && statistics.avgGangSize < 5)
+        if (statistics.soloRatio < 60 && statistics.avgGangSize < _blobMinimumAverageAttackers)
         {
             return statistics.shipsDestroyed < 50
                 ? StyleClassification.GangBeginner
                 : StyleClassification.Gang;
         }
 
-        if (statistics.avgGangSize >= 5 && statistics.avgGangSize < 11)
+        if (statistics.avgGangSize >= _blobMinimumAverageAttackers && statistics.avgGangSize < _fleetMinimumAverageAttackers)
             return StyleClassification.Blob;
 
-        if (statistics.avgGangSize >= 11)
+        if (statistics.avgGangSize >= _fleetMinimumAverageAttackers)
             return StyleClassification.Fleet;
 
         return StyleClassification.Unknown;

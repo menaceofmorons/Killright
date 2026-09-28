@@ -44,6 +44,18 @@ public static class ApplicationSettingsLoader
 
         return new ApplicationSettings
         {
+            RecentWindowDays = settings.RecentWindowDays,
+            BackupFolder = settings.BackupFolder,
+            BackupRotationCount = settings.BackupRotationCount,
+            AlphaReleaseSchemaLocked = settings.AlphaReleaseSchemaLocked,
+            ThreatBands = settings.ThreatBands,
+            RelationshipConfidenceBands = settings.RelationshipConfidenceBands,
+            HighlightOpacity = settings.HighlightOpacity,
+            NpcCorporationIdThreshold = settings.NpcCorporationIdThreshold,
+            Sde = settings.Sde,
+            Threat = settings.Threat,
+            GroupDetection = settings.GroupDetection,
+            Style = settings.Style,
             GroupHistory = new GroupHistoryApplicationSettings
             {
                 ImportBatchSize = batchOptions.EvidenceInsertBatchSize,

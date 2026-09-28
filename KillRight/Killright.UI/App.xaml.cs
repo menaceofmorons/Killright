@@ -15,6 +15,7 @@ using Killright.Storage.Identity;
 using Killright.Storage.Killmails;
 using Killright.Storage.Sde;
 using Killright.Storage.zKill;
+using Killright.Core.Style;
 using Killright.UI.Analysis;
 using Killright.UI.Configuration;
 using Killright.UI.Theme;
@@ -56,7 +57,12 @@ public partial class App : Application
         DispatcherUnhandledException += OnDispatcherUnhandledException;
         AppDomain.CurrentDomain.UnhandledException += OnAppDomainUnhandledException;
 
-        Settings = ApplicationSettingsLoader.LoadOrDefault();
+        var settingsPath = ApplicationSettingsLoader.GetDefaultSettingsPath();
+        Settings = ApplicationSettingsLoader.LoadOrDefault(settingsPath);
+
+        GeneralStyleClassifier.Configure(
+            Settings.Style.BlobMinimumAverageAttackers,
+            Settings.Style.FleetMinimumAverageAttackers);
 
         UiState = new UiStateStore();
 
@@ -156,7 +162,8 @@ public partial class App : Application
         EngineRuntime =
             new KillrightEngineRuntime(
                 dllPath,
-                databasePath);
+                databasePath,
+                settingsPath);
 
         if (!EngineRuntime.IsAvailable)
             EngineFailureLog.Record("killright_engine failed to initialize (pintel_initialize did not return success).");

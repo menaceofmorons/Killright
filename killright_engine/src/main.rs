@@ -2,7 +2,8 @@ use std::io::{self, Read};
 #[path = "kr_engine.rs"]
 mod kr_engine;
 use kr_engine::recent_style::recent_style_analyzer::analyze_recent_style;
-use kr_engine::recent_style::{RecentKillmailInput, RecentStyleRequest};
+use kr_engine::recent_style::RecentStyleRequest;
+use kr_engine::shared::style_configuration::StyleConfiguration;
 pub use kr_engine::*;
 fn main() {
     let mut input = String::new();
@@ -14,7 +15,11 @@ fn main() {
     }
     let request: RecentStyleRequest =
         serde_json::from_str(&input).expect("failed to parse analysis request");
-    let result = analyze_recent_style(request);
+    let style_configuration = StyleConfiguration {
+        blob_minimum_average_attackers: 5.0,
+        fleet_minimum_average_attackers: 11.0,
+    };
+    let result = analyze_recent_style(request, &style_configuration);
     let output = serde_json::to_string(&result).expect("failed to serialize analysis result");
     println!("{}", output);
 }

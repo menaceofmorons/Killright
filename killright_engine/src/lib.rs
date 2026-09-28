@@ -12,9 +12,7 @@ use kr_engine::contracts::{
 };
 use kr_engine::group_analysis::chained_relationship_analyzer::analyze_chained_relationships;
 use kr_engine::group_analysis::direct_relationship_analyzer::analyze_direct_relationships;
-use kr_engine::group_analysis::group_detection_configuration::{
-    load_default_group_detection_configuration, GroupDetectionConfiguration,
-};
+use kr_engine::group_analysis::group_detection_configuration::GroupDetectionConfiguration;
 use kr_engine::group_analysis::group_detection_diagnostics::run_group_detection_diagnostics;
 use kr_engine::group_analysis::group_relationship_scoring::score_and_select_relationships;
 use kr_engine::recent_style::recent_style_analyzer::analyze_recent_style;
@@ -26,19 +24,17 @@ use kr_engine::repositories::recent_killmail_repository::{RecentKillmailReposito
 use kr_engine::repositories::sde_npc_corporation_repository::SdeNpcCorporationRepository;
 use kr_engine::repositories::zkill_statistics_repository::ZKillStatisticsRepository;
 use kr_engine::shared::database_path::get_database_path;
-use kr_engine::shared::recent_window_configuration::{
-    load_default_recent_window_configuration, RecentWindowConfiguration,
-};
-use kr_engine::threat_analysis::{
-    analyze_intrinsic_threat, analyze_intrinsic_threat_diagnostics, load_default_threat_configuration,
-    ThreatConfiguration,
-};
+use kr_engine::shared::recent_window_configuration::RecentWindowConfiguration;
+use kr_engine::shared::settings_loader::load_engine_settings;
+use kr_engine::shared::style_configuration::StyleConfiguration;
+use kr_engine::threat_analysis::{analyze_intrinsic_threat, analyze_intrinsic_threat_diagnostics, ThreatConfiguration};
 pub use kr_engine::*;
 struct RuntimeState {
     database_path: PathBuf,
     threat_configuration: ThreatConfiguration,
     recent_window_configuration: RecentWindowConfiguration,
     group_detection_configuration: GroupDetectionConfiguration,
+    style_configuration: StyleConfiguration,
 }
 static RUNTIME: OnceLock<Mutex<Option<RuntimeState>>> = OnceLock::new();
 #[no_mangle]
@@ -48,21 +44,7 @@ pub extern "C" fn pintel_initialize() -> i32 {
             Ok(value) => value,
             Err(_) => return 0,
         };
-        let threat_configuration = match load_default_threat_configuration() {
-            Ok(value) => value,
-            Err(error) => {
-                eprintln!("{}", error);
-                return 0;
-            }
-        };
-        let recent_window_configuration = match load_default_recent_window_configuration() {
-            Ok(value) => value,
-            Err(error) => {
-                eprintln!("{}", error);
-                return 0;
-            }
-        };
-        let group_detection_configuration = match load_default_group_detection_configuration() {
+        let engine_settings = match load_engine_settings() {
             Ok(value) => value,
             Err(error) => {
                 eprintln!("{}", error);
@@ -76,9 +58,10 @@ pub extern "C" fn pintel_initialize() -> i32 {
         };
         *guard = Some(RuntimeState {
             database_path,
-            threat_configuration,
-            recent_window_configuration,
-            group_detection_configuration,
+            threat_configuration: engine_settings.threat,
+            recent_window_configuration: engine_settings.recent_window,
+            group_detection_configuration: engine_settings.group_detection,
+            style_configuration: engine_settings.style,
         });
         1
     });
@@ -99,8 +82,13 @@ pub extern "C" fn pintel_analyze_pilot(request_json: *const c_char) -> *mut c_ch
             Ok(value) => value,
             Err(_) => return failure_response(0, "unreadable_request"),
         };
-        let Some((database_path, threat_configuration, recent_window_configuration, group_detection_configuration)) =
-            get_runtime_state()
+        let Some((
+            database_path,
+            threat_configuration,
+            recent_window_configuration,
+            group_detection_configuration,
+            style_configuration,
+        )) = get_runtime_state()
         else {
             return failure_response(request.character_id, "missing_runtime");
         };
@@ -158,10 +146,13 @@ pub extern "C" fn pintel_analyze_pilot(request_json: *const c_char) -> *mut c_ch
                 ship_type_id: row.ship_type_id,
             })
             .collect::<Vec<_>>();
-        let recent_style = analyze_recent_style(RecentStyleRequest {
-            character_id: request.character_id,
-            killmails,
-        })
+        let recent_style = analyze_recent_style(
+            RecentStyleRequest {
+                character_id: request.character_id,
+                killmails,
+            },
+            &style_configuration,
+        )
         .recent_style;
         let threat = analyze_intrinsic_threat(
             &threat_configuration,
@@ -261,8 +252,13 @@ pub extern "C" fn pintel_diagnose_group_detection(request_json: *const c_char) -
             Ok(value) => value,
             Err(_) => return group_detection_diagnostics_failure(0, "unreadable_request"),
         };
-        let Some((database_path, _threat_configuration, recent_window_configuration, group_detection_configuration)) =
-            get_runtime_state()
+        let Some((
+            database_path,
+            _threat_configuration,
+            recent_window_configuration,
+            group_detection_configuration,
+            _style_configuration,
+        )) = get_runtime_state()
         else {
             return group_detection_diagnostics_failure(request.character_id, "missing_runtime");
         };
@@ -327,8 +323,13 @@ pub extern "C" fn pintel_diagnose_threat(request_json: *const c_char) -> *mut c_
             Ok(value) => value,
             Err(_) => return threat_diagnostics_failure(0, "unreadable_request"),
         };
-        let Some((database_path, threat_configuration, recent_window_configuration, _group_detection_configuration)) =
-            get_runtime_state()
+        let Some((
+            database_path,
+            threat_configuration,
+            recent_window_configuration,
+            _group_detection_configuration,
+            _style_configuration,
+        )) = get_runtime_state()
         else {
             return threat_diagnostics_failure(request.character_id, "missing_runtime");
         };
@@ -439,8 +440,13 @@ pub extern "C" fn pintel_free_string(value: *mut c_char) {
         let _ = CString::from_raw(value);
     }
 }
-fn get_runtime_state(
-) -> Option<(PathBuf, ThreatConfiguration, RecentWindowConfiguration, GroupDetectionConfiguration)> {
+fn get_runtime_state() -> Option<(
+    PathBuf,
+    ThreatConfiguration,
+    RecentWindowConfiguration,
+    GroupDetectionConfiguration,
+    StyleConfiguration,
+)> {
     let cell = RUNTIME.get()?;
     let guard = cell.lock().ok()?;
     let runtime = guard.as_ref()?;
@@ -449,6 +455,7 @@ fn get_runtime_state(
         runtime.threat_configuration.clone(),
         runtime.recent_window_configuration.clone(),
         runtime.group_detection_configuration.clone(),
+        runtime.style_configuration.clone(),
     ))
 }
 

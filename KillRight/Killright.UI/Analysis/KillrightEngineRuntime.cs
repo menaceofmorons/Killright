@@ -18,7 +18,8 @@ public sealed class KillrightEngineRuntime : IKillrightEngineRuntime
 
     public KillrightEngineRuntime(
         string dllPath,
-        string databasePath)
+        string databasePath,
+        string settingsPath)
     {
         Environment.SetEnvironmentVariable(
             "PILOTINTEL_DB_PATH",
@@ -43,6 +44,10 @@ public sealed class KillrightEngineRuntime : IKillrightEngineRuntime
 
         _freeString = GetExport<FreeStringDelegate>(
             "pintel_free_string");
+
+        Environment.SetEnvironmentVariable(
+            "KILLRIGHT_SETTINGS_PATH",
+            settingsPath);
 
         IsAvailable = _initialize() == 1;
     }

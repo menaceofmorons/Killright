@@ -2,8 +2,9 @@ use crate::recent_style::kill_style_classifier::classify_kill_style;
 use crate::recent_style::victim_style_classifier::classify_victim_style;
 use crate::recent_style::{RecentKillmailInput, RecentStyleRequest, RecentStyleResult};
 use crate::shared::recent_style_contract::*;
+use crate::shared::style_configuration::StyleConfiguration;
 
-pub fn analyze_recent_style(request: RecentStyleRequest) -> RecentStyleResult {
+pub fn analyze_recent_style(request: RecentStyleRequest, style_configuration: &StyleConfiguration) -> RecentStyleResult {
     let analyzed_killmails = request.killmails.len();
 
     let kills: Vec<RecentKillmailInput> = request
@@ -33,7 +34,7 @@ pub fn analyze_recent_style(request: RecentStyleRequest) -> RecentStyleResult {
     } else if is_recent_victim(kill_count, loss_count, solo_losses) {
         classify_victim_style(&losses)
     } else if kill_count > 0 {
-        classify_kill_style(&kills)
+        classify_kill_style(&kills, style_configuration)
     } else {
         STYLE_VICTIM.to_string()
     };
@@ -62,6 +63,13 @@ fn is_recent_victim(kill_count: usize, loss_count: usize, solo_losses: usize) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn style_configuration() -> StyleConfiguration {
+        StyleConfiguration {
+            blob_minimum_average_attackers: 5.0,
+            fleet_minimum_average_attackers: 11.0,
+        }
+    }
 
     fn request(killmails: Vec<RecentKillmailInput>) -> RecentStyleRequest {
         RecentStyleRequest {
@@ -102,7 +110,7 @@ mod tests {
 
     #[test]
     fn empty_request_returns_inactive_contract_value() {
-        let result = analyze_recent_style(request(vec![]));
+        let result = analyze_recent_style(request(vec![]), &style_configuration());
 
         assert_eq!(result.recent_style, STYLE_INACTIVE);
         assert_eq!(result.analyzed_killmails, 0);
@@ -110,7 +118,7 @@ mod tests {
 
     #[test]
     fn solo_kill_returns_solo_contract_value() {
-        let result = analyze_recent_style(request(vec![kill(1, 1, true, Some(33468))]));
+        let result = analyze_recent_style(request(vec![kill(1, 1, true, Some(33468))]), &style_configuration());
 
         assert_eq!(result.recent_style, STYLE_SOLO);
         assert_eq!(result.kills, 1);
@@ -119,11 +127,14 @@ mod tests {
 
     #[test]
     fn victim_ratio_with_unknown_ship_returns_victim_contract_value() {
-        let result = analyze_recent_style(request(vec![
-            loss(1, 1, true, Some(999999)),
-            loss(2, 1, true, Some(999999)),
-            loss(3, 1, true, Some(999999)),
-        ]));
+        let result = analyze_recent_style(
+            request(vec![
+                loss(1, 1, true, Some(999999)),
+                loss(2, 1, true, Some(999999)),
+                loss(3, 1, true, Some(999999)),
+            ]),
+            &style_configuration(),
+        );
 
         assert_eq!(result.recent_style, STYLE_VICTIM);
         assert_eq!(result.losses, 3);
@@ -132,11 +143,14 @@ mod tests {
 
     #[test]
     fn victim_ratio_requires_low_kill_loss_ratio() {
-        let result = analyze_recent_style(request(vec![
-            kill(1, 1, true, None),
-            loss(2, 1, true, Some(999999)),
-            loss(3, 1, true, Some(999999)),
-        ]));
+        let result = analyze_recent_style(
+            request(vec![
+                kill(1, 1, true, None),
+                loss(2, 1, true, Some(999999)),
+                loss(3, 1, true, Some(999999)),
+            ]),
+            &style_configuration(),
+        );
 
         assert_ne!(result.recent_style, STYLE_VICTIM);
     }
