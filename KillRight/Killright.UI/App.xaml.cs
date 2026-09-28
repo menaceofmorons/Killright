@@ -42,6 +42,12 @@ public partial class App : Application
     public static IKillmailBackupService KillmailBackupService { get; private set; } = null!;
     public static bool SkipBackupOnClose { get; set; }
 
+#if ALPHA_RELEASE
+    private const bool IsAlphaRelease = true;
+#else
+    private const bool IsAlphaRelease = false;
+#endif
+
 #if HISTORIC_RELATIONSHIPS
     // Step 19.00.59: exposed for the not-yet-designed Historic Analysis
     // consumer (Section 6.9.5) to resolve the active historic database path
@@ -143,6 +149,26 @@ public partial class App : Application
 
             if (restored)
                 EngineFailureLog.Record("Restored killmail and attacker tables from the latest backup.");
+        }
+
+        var schemaCheckResult = SchemaVersionGate.CheckOnStartup(database, IsAlphaRelease);
+
+        if (schemaCheckResult.Outcome != SchemaVersionCheckOutcome.Ok)
+        {
+            var message = schemaCheckResult.Outcome == SchemaVersionCheckOutcome.RefusedDowngrade
+                ? $"This database's schema version ({schemaCheckResult.StoredVersion}) is newer than this build supports ({schemaCheckResult.CurrentVersion}). Install a newer version of KillRight to continue."
+                : $"This database's schema version ({schemaCheckResult.StoredVersion}) has no migration path to the version this build requires ({schemaCheckResult.CurrentVersion}).";
+
+            EngineFailureLog.Record($"Startup refused: {message}");
+
+            MessageBox.Show(
+                message,
+                "KillRight - Schema Version",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+
+            Shutdown();
+            return;
         }
 
         KillmailQualificationRequalifier.RequalifyOnStartup(database, Settings.QualificationFleetThreshold);

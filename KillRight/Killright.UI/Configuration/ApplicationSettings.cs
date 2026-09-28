@@ -15,8 +15,6 @@ public sealed class ApplicationSettings
 
     public int BackupRotationCount { get; init; } = KillmailBackupDefaults.DefaultRotationCount;
 
-    public bool AlphaReleaseSchemaLocked { get; init; }
-
     public IReadOnlyList<ThreatBandSetting> ThreatBands { get; init; } = ThreatBandSetting.Defaults;
 
     public IReadOnlyList<RelationshipConfidenceBandSetting> RelationshipConfidenceBands { get; init; } = RelationshipConfidenceBandSetting.Defaults;

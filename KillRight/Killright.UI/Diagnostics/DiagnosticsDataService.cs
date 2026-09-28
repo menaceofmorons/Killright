@@ -47,7 +47,7 @@ public sealed class DiagnosticsDataService
             EffectiveUtc = ApplicationClock.UtcNow,
             OffsetDays = ApplicationClock.OffsetDays,
             SchemaVersion = _database.GetSchemaVersion(),
-            AlphaReleaseSchemaLocked = App.Settings.AlphaReleaseSchemaLocked,
+            AlphaReleaseSchemaLocked = _database.GetAlphaLock(),
             QualificationFleetThresholdConfigured = App.Settings.QualificationFleetThreshold,
             QualificationFleetThresholdStored = _database.GetLastAppliedQualificationFleetThreshold()
         };

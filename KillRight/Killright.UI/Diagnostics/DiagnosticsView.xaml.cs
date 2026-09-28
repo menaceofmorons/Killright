@@ -272,6 +272,7 @@ public partial class DiagnosticsView : UserControl
     private readonly DiagnosticsDataService _service;
     private readonly EngineDiagnosticsClient _engineDiagnosticsClient;
     private DataTable _lastQueryRows = new();
+    private bool _alphaReleaseSchemaLocked;
 
     public DiagnosticsView()
     {
@@ -289,6 +290,9 @@ public partial class DiagnosticsView : UserControl
     private void RefreshAll()
     {
         var summary = _service.LoadSummary();
+
+        _alphaReleaseSchemaLocked = summary.AlphaReleaseSchemaLocked;
+        ClearKillmailButton.IsEnabled = !_alphaReleaseSchemaLocked;
 
         ClockText.Text =
             $"Current UTC:   {summary.CurrentUtc:yyyy-MM-dd HH:mm:ss} UTC\n" +
@@ -552,6 +556,9 @@ public partial class DiagnosticsView : UserControl
 
     private void ClearKillmail_Click(object sender, RoutedEventArgs e)
     {
+        if (_alphaReleaseSchemaLocked)
+            return;
+
         if (!Confirm("Clear Recent Killmail Cache?\n\nThis will force recent killmail retrieval and reset the last recent-call time. Retained qualifying killmails are not deleted."))
             return;
 
@@ -572,12 +579,19 @@ public partial class DiagnosticsView : UserControl
 
     private void ClearAll_Click(object sender, RoutedEventArgs e)
     {
-        if (!Confirm("Clear All Caches?\n\nThis will clear the identity, activity, recent killmail and statistics caches, and reset the last recent-call time. Retained qualifying killmails are not deleted."))
+        var message = _alphaReleaseSchemaLocked
+            ? "Clear All Caches?\n\nThis will clear the identity, activity and statistics caches. The killmail cache is locked and will not be cleared."
+            : "Clear All Caches?\n\nThis will clear the identity, activity, recent killmail and statistics caches, and reset the last recent-call time. Retained qualifying killmails are not deleted.";
+
+        if (!Confirm(message))
             return;
 
         ClearIdentityCache();
         ClearActivityCache();
-        ClearKillmailCache();
+
+        if (!_alphaReleaseSchemaLocked)
+            ClearKillmailCache();
+
         ClearStatisticsCache();
         RefreshAll();
         RunSelectedQuery();

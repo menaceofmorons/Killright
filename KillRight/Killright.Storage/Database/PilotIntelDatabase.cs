@@ -5,7 +5,7 @@ namespace Killright.Storage.Database;
 
 public sealed class KillRightDatabase
 {
-    public const int CurrentSchemaVersion = 1;
+    public const int CurrentSchemaVersion = 2;
 
     private readonly KillRightDatabaseOptions _options;
 
@@ -83,6 +83,57 @@ public sealed class KillRightDatabase
         using var command = connection.CreateCommand();
         command.CommandText = $"UPDATE main.schema_metadata SET last_qualification_fleet_threshold = {threshold};";
         command.ExecuteNonQuery();
+    }
+
+    public bool GetAlphaLock()
+    {
+        using var connection = new DuckDBConnection(ConnectionString);
+        connection.Open();
+
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT alpha_lock FROM main.schema_metadata LIMIT 1;";
+
+        return Convert.ToBoolean(command.ExecuteScalar());
+    }
+
+    public void SetAlphaLock()
+    {
+        using var connection = new DuckDBConnection(ConnectionString);
+        connection.Open();
+
+        using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE main.schema_metadata SET alpha_lock = TRUE;";
+        command.ExecuteNonQuery();
+    }
+
+    public void SetSchemaVersion(int version)
+    {
+        using var connection = new DuckDBConnection(ConnectionString);
+        connection.Open();
+
+        using var command = connection.CreateCommand();
+        command.CommandText = $"UPDATE main.schema_metadata SET schema_version = {version};";
+        command.ExecuteNonQuery();
+    }
+
+    public void RebuildKillmailAndAttackerTables()
+    {
+        using var connection = new DuckDBConnection(ConnectionString);
+        connection.Open();
+
+        using (var dropAttackers = connection.CreateCommand())
+        {
+            dropAttackers.CommandText = "DROP TABLE IF EXISTS main.zkill_killmail_attackers;";
+            dropAttackers.ExecuteNonQuery();
+        }
+
+        using (var dropKillmails = connection.CreateCommand())
+        {
+            dropKillmails.CommandText = "DROP TABLE IF EXISTS main.zkill_killmails;";
+            dropKillmails.ExecuteNonQuery();
+        }
+
+        CreateZkillKillmailsTables(connection);
     }
 
     private void QuarantineExistingDatabaseFiles()
@@ -298,6 +349,10 @@ public sealed class KillRightDatabase
         using var addLastQualificationFleetThreshold = connection.CreateCommand();
         addLastQualificationFleetThreshold.CommandText = "ALTER TABLE main.schema_metadata ADD COLUMN IF NOT EXISTS last_qualification_fleet_threshold INTEGER;";
         addLastQualificationFleetThreshold.ExecuteNonQuery();
+
+        using var addAlphaLock = connection.CreateCommand();
+        addAlphaLock.CommandText = "ALTER TABLE main.schema_metadata ADD COLUMN IF NOT EXISTS alpha_lock BOOLEAN DEFAULT FALSE;";
+        addAlphaLock.ExecuteNonQuery();
 
         using var insertIfAbsent = connection.CreateCommand();
         insertIfAbsent.CommandText = $"""

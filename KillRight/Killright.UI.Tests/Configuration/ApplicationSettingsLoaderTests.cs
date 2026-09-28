@@ -44,7 +44,6 @@ public sealed class ApplicationSettingsLoaderTests
         {
           "recentWindowDays": 21,
           "backupRotationCount": 7,
-          "alphaReleaseSchemaLocked": true,
           "highlightOpacity": 0.35,
           "groupHistory": { "importBatchSize": 200, "parallelDownloadWorkers": 12, "zkillDocumentedMaxRequestsPerSecond": 8 },
           "style": { "blobMinimumAverageAttackers": 5, "fleetMinimumAverageAttackers": 11 }
@@ -57,7 +56,6 @@ public sealed class ApplicationSettingsLoaderTests
 
             Assert.Equal(21, settings.RecentWindowDays);
             Assert.Equal(7, settings.BackupRotationCount);
-            Assert.True(settings.AlphaReleaseSchemaLocked);
             Assert.Equal(0.35, settings.HighlightOpacity);
             Assert.Equal(200, settings.GroupHistory.ImportBatchSize);
         }
