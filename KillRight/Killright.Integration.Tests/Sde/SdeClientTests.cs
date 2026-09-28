@@ -106,6 +106,45 @@ public sealed class SdeClientTests
         Assert.False(File.Exists(destinationPath));
     }
 
+    [Fact]
+    public async Task DownloadDatasetZipAsync_ReportsProgress_WhenContentLengthKnown()
+    {
+        var body = new byte[200_000];
+        var handler = new ScriptedHttpMessageHandler()
+            .OnUriContainingBytes("eve-online-static-data-latest-jsonl.zip", HttpStatusCode.OK, body);
+
+        var client = new SdeClient(new HttpClient(handler), Options());
+        var destinationPath = Path.Combine(Path.GetTempPath(), $"sde-download-{Guid.NewGuid():N}.zip");
+        var reportedFractions = new List<double>();
+        var progress = new SynchronousProgress<double>(reportedFractions.Add);
+
+        try
+        {
+            var result = await client.DownloadDatasetZipAsync(destinationPath, progress);
+
+            Assert.Equal(SdeDatasetDownloadOutcome.Success, result.Outcome);
+            Assert.NotEmpty(reportedFractions);
+            Assert.Equal(1.0, reportedFractions[^1], precision: 5);
+        }
+        finally
+        {
+            if (File.Exists(destinationPath))
+                File.Delete(destinationPath);
+        }
+    }
+
+    private sealed class SynchronousProgress<T> : IProgress<T>
+    {
+        private readonly Action<T> _callback;
+
+        public SynchronousProgress(Action<T> callback)
+        {
+            _callback = callback;
+        }
+
+        public void Report(T value) => _callback(value);
+    }
+
     private static SdeClientOptions Options()
     {
         return new SdeClientOptions

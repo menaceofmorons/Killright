@@ -18,6 +18,7 @@ public sealed class DuckDbSdeReferenceDataStoreTests
         Assert.Null(metadata.BuildNumber);
         Assert.Null(metadata.LastCheckedUtc);
         Assert.Null(metadata.LastUpdatedUtc);
+        Assert.Null(metadata.LastAttemptUtc);
         Assert.Null(metadata.LastCheckResult);
     }
 
@@ -30,6 +31,29 @@ public sealed class DuckDbSdeReferenceDataStoreTests
         Assert.Null(store.GetSolarSystemName(30000142));
         Assert.False(store.IsNpcCorporation(1000001));
         Assert.Empty(store.GetNpcCorporationIds());
+    }
+
+    [Fact]
+    public async Task HasReferenceDataAsync_FreshDatabase_ReturnsFalse()
+    {
+        var (_, store) = CreateStore();
+
+        Assert.False(await store.HasReferenceDataAsync());
+    }
+
+    [Fact]
+    public async Task HasReferenceDataAsync_AfterReplaceTablesAsync_ReturnsTrue()
+    {
+        var (_, store) = CreateStore();
+
+        await store.ReplaceTablesAsync(new SdeReplacementData(
+            Types: [],
+            SolarSystems: [],
+            NpcCorporationIds: [1000001],
+            BuildNumber: 1,
+            UpdatedUtc: DateTimeOffset.UtcNow));
+
+        Assert.True(await store.HasReferenceDataAsync());
     }
 
     [Fact]
@@ -95,6 +119,7 @@ public sealed class DuckDbSdeReferenceDataStoreTests
         Assert.Equal(3542233, metadata.BuildNumber);
         Assert.Equal(updatedUtc, metadata.LastCheckedUtc);
         Assert.Equal(updatedUtc, metadata.LastUpdatedUtc);
+        Assert.Equal(updatedUtc, metadata.LastAttemptUtc);
         Assert.Equal("Replaced", metadata.LastCheckResult);
     }
 
@@ -144,13 +169,28 @@ public sealed class DuckDbSdeReferenceDataStoreTests
             UpdatedUtc: replacedUtc));
 
         var checkedUtc = replacedUtc.AddHours(1);
-        await store.RecordCheckAsync(checkedUtc, "UpToDate");
+        await store.RecordCheckAsync(checkedUtc, "UpToDate", succeeded: true);
 
         var metadata = await store.GetMetadataAsync();
         Assert.Equal(3542233, metadata.BuildNumber);
         Assert.Equal(checkedUtc, metadata.LastCheckedUtc);
         Assert.Equal(replacedUtc, metadata.LastUpdatedUtc);
+        Assert.Equal(checkedUtc, metadata.LastAttemptUtc);
         Assert.Equal("UpToDate", metadata.LastCheckResult);
+    }
+
+    [Fact]
+    public async Task RecordCheckAsync_Failed_UpdatesAttemptTimeOnly_LeavesCheckedTimeUntouched()
+    {
+        var (_, store) = CreateStore();
+        var attemptedUtc = new DateTimeOffset(2026, 9, 24, 12, 0, 0, TimeSpan.Zero);
+
+        await store.RecordCheckAsync(attemptedUtc, "ManifestFailure", succeeded: false);
+
+        var metadata = await store.GetMetadataAsync();
+        Assert.Null(metadata.LastCheckedUtc);
+        Assert.Equal(attemptedUtc, metadata.LastAttemptUtc);
+        Assert.Equal("ManifestFailure", metadata.LastCheckResult);
     }
 
     private static (KillRightDatabase Database, DuckDbSdeReferenceDataStore Store) CreateStore()

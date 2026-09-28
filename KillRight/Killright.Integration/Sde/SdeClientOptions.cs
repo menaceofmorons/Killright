@@ -2,7 +2,7 @@ namespace Killright.Integration.Sde;
 
 public sealed record SdeClientOptions
 {
-    public const int RequestTimeoutSeconds = 120;
+    public const int RequestTimeoutSeconds = 300;
 
     public string UserAgent { get; init; } = "KillRight/1.0 (Developer: T'ral Vsengne)";
 

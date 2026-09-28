@@ -16,8 +16,9 @@ public sealed class SdeIngestionServiceTests
         var (_, store) = CreateStore();
         var client = new FakeSdeClient(manifestBuildNumber: 3542233, zipContentsFactory: BuildValidZip);
 
-        await new SdeIngestionService(client, store, checkIntervalHours: 24).RunCheckAsync();
+        var outcome = await new SdeIngestionService(client, store, checkIntervalHours: 24).RunCheckAsync();
 
+        Assert.Equal(SdeCheckOutcome.Replaced, outcome);
         Assert.Equal(1, client.ManifestCallCount);
         Assert.Equal(1, client.DownloadCallCount);
 
@@ -42,8 +43,9 @@ public sealed class SdeIngestionServiceTests
 
         var client = new FakeSdeClient(manifestBuildNumber: 3542233, zipContentsFactory: BuildValidZip);
 
-        await new SdeIngestionService(client, store, checkIntervalHours: 24).RunCheckAsync();
+        var outcome = await new SdeIngestionService(client, store, checkIntervalHours: 24).RunCheckAsync();
 
+        Assert.Equal(SdeCheckOutcome.UpToDate, outcome);
         Assert.Equal(1, client.ManifestCallCount);
         Assert.Equal(0, client.DownloadCallCount);
 
@@ -56,43 +58,96 @@ public sealed class SdeIngestionServiceTests
     public async Task RunCheckAsync_CalledAgainWithinCheckInterval_SkipsManifestCallEntirely()
     {
         var (_, store) = CreateStore();
-        await store.RecordCheckAsync(DateTimeOffset.UtcNow, "UpToDate");
+        await store.RecordCheckAsync(DateTimeOffset.UtcNow, "UpToDate", succeeded: true);
 
         var client = new FakeSdeClient(manifestBuildNumber: 3542233, zipContentsFactory: BuildValidZip);
 
-        await new SdeIngestionService(client, store, checkIntervalHours: 24).RunCheckAsync();
+        var outcome = await new SdeIngestionService(client, store, checkIntervalHours: 24).RunCheckAsync();
 
+        Assert.Equal(SdeCheckOutcome.Skipped, outcome);
         Assert.Equal(0, client.ManifestCallCount);
         Assert.Equal(0, client.DownloadCallCount);
     }
 
     [Fact]
-    public async Task RunCheckAsync_ManifestFailure_RecordsFailureAndLeavesTablesUntouched()
+    public async Task RunCheckAsync_ManifestFailure_RecordsAttemptOnly_LeavesLastCheckedUtcUntouched()
     {
         var (_, store) = CreateStore();
         var client = new FakeSdeClient(manifestBuildNumber: null, zipContentsFactory: BuildValidZip);
 
-        await new SdeIngestionService(client, store, checkIntervalHours: 24).RunCheckAsync();
+        var outcome = await new SdeIngestionService(client, store, checkIntervalHours: 24).RunCheckAsync();
 
+        Assert.Equal(SdeCheckOutcome.ManifestFailure, outcome);
         Assert.Equal(0, client.DownloadCallCount);
 
         var metadata = await store.GetMetadataAsync();
         Assert.Equal("ManifestFailure", metadata.LastCheckResult);
         Assert.Null(metadata.BuildNumber);
+        Assert.Null(metadata.LastCheckedUtc);
+        Assert.NotNull(metadata.LastAttemptUtc);
     }
 
     [Fact]
-    public async Task RunCheckAsync_DownloadFailure_RecordsFailureAndLeavesTablesUntouched()
+    public async Task RunCheckAsync_DownloadFailure_RecordsAttemptOnly_LeavesLastCheckedUtcUntouched()
     {
         var (_, store) = CreateStore();
         var client = new FakeSdeClient(manifestBuildNumber: 3542233, zipContentsFactory: null);
 
-        await new SdeIngestionService(client, store, checkIntervalHours: 24).RunCheckAsync();
+        var outcome = await new SdeIngestionService(client, store, checkIntervalHours: 24).RunCheckAsync();
+
+        Assert.Equal(SdeCheckOutcome.DownloadFailure, outcome);
 
         var metadata = await store.GetMetadataAsync();
         Assert.Equal("DownloadFailure", metadata.LastCheckResult);
         Assert.Null(metadata.BuildNumber);
+        Assert.Null(metadata.LastCheckedUtc);
+        Assert.NotNull(metadata.LastAttemptUtc);
         Assert.Null(store.GetTypeName(587));
+    }
+
+    [Fact]
+    public async Task RunCheckWithRetryAsync_ManifestFailsTwiceThenSucceeds_RetriesUntilSuccess()
+    {
+        var (_, store) = CreateStore();
+        var client = new FakeSdeClient(new Queue<long?>(new long?[] { null, null, 3542233 }), BuildValidZip);
+        var service = new SdeIngestionService(
+            client,
+            store,
+            checkIntervalHours: 24,
+            initialRetryDelay: TimeSpan.FromMilliseconds(5),
+            maximumRetryDelay: TimeSpan.FromMilliseconds(20));
+
+        await service.RunCheckWithRetryAsync();
+
+        Assert.Equal(3, client.ManifestCallCount);
+
+        var metadata = await store.GetMetadataAsync();
+        Assert.Equal(3542233, metadata.BuildNumber);
+        Assert.Equal("Replaced", metadata.LastCheckResult);
+    }
+
+    [Fact]
+    public async Task RunCheckWithRetryAsync_PersistentManifestFailure_StopsWhenCancelled()
+    {
+        var (_, store) = CreateStore();
+        var client = new FakeSdeClient(manifestBuildNumber: null, zipContentsFactory: BuildValidZip);
+        var service = new SdeIngestionService(
+            client,
+            store,
+            checkIntervalHours: 24,
+            initialRetryDelay: TimeSpan.FromMilliseconds(5),
+            maximumRetryDelay: TimeSpan.FromMilliseconds(20));
+
+        using var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromMilliseconds(500));
+
+        await service.RunCheckWithRetryAsync(cancellationTokenSource.Token);
+
+        Assert.True(client.ManifestCallCount > 1);
+
+        var metadata = await store.GetMetadataAsync();
+        Assert.Equal("ManifestFailure", metadata.LastCheckResult);
+        Assert.Null(metadata.LastCheckedUtc);
+        Assert.NotNull(metadata.LastAttemptUtc);
     }
 
     private static byte[] BuildValidZip()
@@ -127,12 +182,17 @@ public sealed class SdeIngestionServiceTests
 
     private sealed class FakeSdeClient : ISdeClient
     {
-        private readonly long? _manifestBuildNumber;
+        private readonly Queue<long?> _manifestBuildNumbers;
         private readonly Func<byte[]>? _zipContentsFactory;
 
         public FakeSdeClient(long? manifestBuildNumber, Func<byte[]>? zipContentsFactory)
+            : this(new Queue<long?>(new[] { manifestBuildNumber }), zipContentsFactory)
         {
-            _manifestBuildNumber = manifestBuildNumber;
+        }
+
+        public FakeSdeClient(Queue<long?> manifestBuildNumbers, Func<byte[]>? zipContentsFactory)
+        {
+            _manifestBuildNumbers = manifestBuildNumbers;
             _zipContentsFactory = zipContentsFactory;
         }
 
@@ -144,13 +204,18 @@ public sealed class SdeIngestionServiceTests
         {
             ManifestCallCount++;
 
-            return Task.FromResult(_manifestBuildNumber is null
+            var buildNumber = _manifestBuildNumbers.Count > 1
+                ? _manifestBuildNumbers.Dequeue()
+                : _manifestBuildNumbers.Peek();
+
+            return Task.FromResult(buildNumber is null
                 ? new SdeManifestResult(SdeManifestOutcome.Failure, null)
-                : new SdeManifestResult(SdeManifestOutcome.Success, _manifestBuildNumber));
+                : new SdeManifestResult(SdeManifestOutcome.Success, buildNumber));
         }
 
         public Task<SdeDatasetDownloadResult> DownloadDatasetZipAsync(
             string destinationZipPath,
+            IProgress<double>? progress = null,
             CancellationToken cancellationToken = default)
         {
             DownloadCallCount++;

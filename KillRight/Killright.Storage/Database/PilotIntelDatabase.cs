@@ -268,6 +268,12 @@ public sealed class KillRightDatabase
             createTable.ExecuteNonQuery();
         }
 
+        using (var addLastAttemptUtc = connection.CreateCommand())
+        {
+            addLastAttemptUtc.CommandText = "ALTER TABLE main.sde_metadata ADD COLUMN IF NOT EXISTS last_attempt_utc TEXT;";
+            addLastAttemptUtc.ExecuteNonQuery();
+        }
+
         using (var insertIfAbsent = connection.CreateCommand())
         {
             insertIfAbsent.CommandText = """

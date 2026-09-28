@@ -18,6 +18,7 @@ using Killright.Storage.zKill;
 using Killright.Core.Style;
 using Killright.UI.Analysis;
 using Killright.UI.Configuration;
+using Killright.UI.Sde;
 using Killright.UI.Theme;
 using Killright.UI.UiState;
 
@@ -53,6 +54,8 @@ public partial class App : Application
         StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
         DispatcherUnhandledException += OnDispatcherUnhandledException;
         AppDomain.CurrentDomain.UnhandledException += OnAppDomainUnhandledException;
@@ -157,6 +160,38 @@ public partial class App : Application
         SdeReferenceDataStore =
             new DuckDbSdeReferenceDataStore(database);
 
+        var sdeHttpClient =
+            new HttpClient
+            {
+                Timeout = TimeSpan.FromSeconds(SdeClientOptions.RequestTimeoutSeconds)
+            };
+
+        var sdeClient =
+            new SdeClient(
+                sdeHttpClient,
+                new SdeClientOptions
+                {
+                    ManifestUrl = Settings.Sde.ManifestUrl,
+                    DatasetZipUrl = Settings.Sde.DatasetZipUrl
+                });
+
+        var sdeIngestionService =
+            new SdeIngestionService(
+                sdeClient,
+                SdeReferenceDataStore,
+                Settings.Sde.CheckIntervalHours);
+
+        var hasSdeReferenceData = SdeReferenceDataStore.HasReferenceDataAsync().GetAwaiter().GetResult();
+
+        if (!hasSdeReferenceData)
+        {
+            new SdeFirstRunLoadWindow(sdeIngestionService).ShowDialog();
+        }
+        else
+        {
+            _ = Task.Run(() => sdeIngestionService.RunCheckWithRetryAsync());
+        }
+
         var dllPath = Path.Combine(
             AppContext.BaseDirectory,
             "killright_engine.dll");
@@ -203,31 +238,9 @@ public partial class App : Application
             new zKillClient(
                 zKillHttpClient);
 
-        var sdeHttpClient =
-            new HttpClient
-            {
-                Timeout = TimeSpan.FromSeconds(SdeClientOptions.RequestTimeoutSeconds)
-            };
-
-        var sdeClient =
-            new SdeClient(
-                sdeHttpClient,
-                new SdeClientOptions
-                {
-                    ManifestUrl = Settings.Sde.ManifestUrl,
-                    DatasetZipUrl = Settings.Sde.DatasetZipUrl
-                });
-
-        var sdeIngestionService =
-            new SdeIngestionService(
-                sdeClient,
-                SdeReferenceDataStore,
-                Settings.Sde.CheckIntervalHours);
-
-        _ = Task.Run(() => sdeIngestionService.RunCheckAsync());
-
         var mainWindow = new MainWindow();
         MainWindow = mainWindow;
+        ShutdownMode = ShutdownMode.OnMainWindowClose;
         mainWindow.Show();
     }
 

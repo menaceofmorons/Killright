@@ -75,6 +75,21 @@ public sealed class DuckDbSdeReferenceDataStore : ISdeReferenceDataStore
         }
     }
 
+    public Task<bool> HasReferenceDataAsync(CancellationToken cancellationToken = default)
+    {
+        using var connection = new DuckDBConnection(_database.ConnectionString);
+        connection.Open();
+
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+                              SELECT EXISTS (SELECT 1 FROM main.sde_types)
+                                  OR EXISTS (SELECT 1 FROM main.sde_solar_systems)
+                                  OR EXISTS (SELECT 1 FROM main.sde_npc_corporations);
+                              """;
+
+        return Task.FromResult(Convert.ToBoolean(command.ExecuteScalar()));
+    }
+
     public Task<SdeMetadata> GetMetadataAsync(CancellationToken cancellationToken = default)
     {
         using var connection = new DuckDBConnection(_database.ConnectionString);
@@ -82,7 +97,7 @@ public sealed class DuckDbSdeReferenceDataStore : ISdeReferenceDataStore
 
         using var command = connection.CreateCommand();
         command.CommandText = """
-                              SELECT build_number, last_checked_utc, last_updated_utc, last_check_result
+                              SELECT build_number, last_checked_utc, last_updated_utc, last_attempt_utc, last_check_result
                               FROM main.sde_metadata
                               LIMIT 1;
                               """;
@@ -90,13 +105,14 @@ public sealed class DuckDbSdeReferenceDataStore : ISdeReferenceDataStore
         using var reader = command.ExecuteReader();
 
         if (!reader.Read())
-            return Task.FromResult(new SdeMetadata(null, null, null, null));
+            return Task.FromResult(new SdeMetadata(null, null, null, null, null));
 
         return Task.FromResult(new SdeMetadata(
             reader.GetNullableInt64(0),
             reader.GetNullableDateTimeOffset(1),
             reader.GetNullableDateTimeOffset(2),
-            reader.GetNullableString(3)));
+            reader.GetNullableDateTimeOffset(3),
+            reader.GetNullableString(4)));
     }
 
     public Task ReplaceTablesAsync(SdeReplacementData data, CancellationToken cancellationToken = default)
@@ -127,6 +143,7 @@ public sealed class DuckDbSdeReferenceDataStore : ISdeReferenceDataStore
                                 SET build_number = {data.BuildNumber},
                                     last_checked_utc = {SqlValueFormatter.Date(data.UpdatedUtc)},
                                     last_updated_utc = {SqlValueFormatter.Date(data.UpdatedUtc)},
+                                    last_attempt_utc = {SqlValueFormatter.Date(data.UpdatedUtc)},
                                     last_check_result = 'Replaced';
                                 """;
             updateMetadata.ExecuteNonQuery();
@@ -137,17 +154,24 @@ public sealed class DuckDbSdeReferenceDataStore : ISdeReferenceDataStore
         return Task.CompletedTask;
     }
 
-    public Task RecordCheckAsync(DateTimeOffset checkedUtc, string checkResult, CancellationToken cancellationToken = default)
+    public Task RecordCheckAsync(DateTimeOffset attemptedUtc, string checkResult, bool succeeded, CancellationToken cancellationToken = default)
     {
         using var connection = new DuckDBConnection(_database.ConnectionString);
         connection.Open();
 
         using var command = connection.CreateCommand();
-        command.CommandText = $"""
-                              UPDATE main.sde_metadata
-                              SET last_checked_utc = {SqlValueFormatter.Date(checkedUtc)},
-                                  last_check_result = {SqlValueFormatter.String(checkResult)};
-                              """;
+        command.CommandText = succeeded
+            ? $"""
+              UPDATE main.sde_metadata
+              SET last_checked_utc = {SqlValueFormatter.Date(attemptedUtc)},
+                  last_attempt_utc = {SqlValueFormatter.Date(attemptedUtc)},
+                  last_check_result = {SqlValueFormatter.String(checkResult)};
+              """
+            : $"""
+              UPDATE main.sde_metadata
+              SET last_attempt_utc = {SqlValueFormatter.Date(attemptedUtc)},
+                  last_check_result = {SqlValueFormatter.String(checkResult)};
+              """;
         command.ExecuteNonQuery();
 
         return Task.CompletedTask;

@@ -57,6 +57,7 @@ public sealed class SdeClient : ISdeClient
 
     public async Task<SdeDatasetDownloadResult> DownloadDatasetZipAsync(
         string destinationZipPath,
+        IProgress<double>? progress = null,
         CancellationToken cancellationToken = default)
     {
         try
@@ -69,10 +70,23 @@ public sealed class SdeClient : ISdeClient
             if (!response.IsSuccessStatusCode)
                 return new SdeDatasetDownloadResult(SdeDatasetDownloadOutcome.Failure);
 
+            var totalBytes = response.Content.Headers.ContentLength;
+
             await using var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken);
             await using var fileStream = File.Create(destinationZipPath);
 
-            await responseStream.CopyToAsync(fileStream, cancellationToken);
+            var buffer = new byte[81920];
+            long totalBytesRead = 0;
+            int bytesRead;
+
+            while ((bytesRead = await responseStream.ReadAsync(buffer, cancellationToken)) > 0)
+            {
+                await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken);
+                totalBytesRead += bytesRead;
+
+                if (progress is not null && totalBytes is > 0)
+                    progress.Report((double)totalBytesRead / totalBytes.Value);
+            }
 
             return new SdeDatasetDownloadResult(SdeDatasetDownloadOutcome.Success);
         }

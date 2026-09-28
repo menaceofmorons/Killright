@@ -9,5 +9,6 @@ public interface ISdeClient
 
     Task<SdeDatasetDownloadResult> DownloadDatasetZipAsync(
         string destinationZipPath,
+        IProgress<double>? progress = null,
         CancellationToken cancellationToken = default);
 }

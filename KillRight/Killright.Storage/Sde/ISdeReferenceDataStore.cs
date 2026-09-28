@@ -12,6 +12,9 @@ public interface ISdeReferenceDataStore
 
     IReadOnlySet<long> GetNpcCorporationIds();
 
+    Task<bool> HasReferenceDataAsync(
+        CancellationToken cancellationToken = default);
+
     Task<SdeMetadata> GetMetadataAsync(
         CancellationToken cancellationToken = default);
 
@@ -20,7 +23,8 @@ public interface ISdeReferenceDataStore
         CancellationToken cancellationToken = default);
 
     Task RecordCheckAsync(
-        DateTimeOffset checkedUtc,
+        DateTimeOffset attemptedUtc,
         string checkResult,
+        bool succeeded,
         CancellationToken cancellationToken = default);
 }
