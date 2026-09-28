@@ -1,5 +1,6 @@
 using System.Linq;
 using Killright.Shared;
+using Killright.UI.Resources;
 
 namespace Killright.UI.UiState;
 
@@ -127,18 +128,18 @@ public static class UiStateDefaults
 
     public static readonly IReadOnlyList<(string Id, double Width, string Label, bool RequiresDeveloperMode, bool DefaultVisible)> ColumnCatalog = new[]
     {
-        (ColumnIds.Threat, 50d, "Threat", false, true),
-        (ColumnIds.Pilot, 170d, "Pilot", false, true),
-        (ColumnIds.Relationship, 60d, "Relationship", false, true),
-        (ColumnIds.Style, 60d, "Style", false, true),
-        (ColumnIds.SecurityStatus, 70d, "Sec", false, true),
-        (ColumnIds.Week, 60d, "Week", false, true),
-        (ColumnIds.Group, 90d, "Group", false, true),
-        (ColumnIds.Corporation, 210d, "Corporation", false, true),
-        (ColumnIds.Alliance, 210d, "Alliance", false, true),
-        (ColumnIds.LastActive, 90d, "Last Kill", false, true),
-        (ColumnIds.Notes, 260d, "Notes", true, false),
-        (ColumnIds.Verify, 70d, "Verify", true, false)
+        (ColumnIds.Threat, 50d, UiText.ColumnsLabelThreat, false, true),
+        (ColumnIds.Pilot, 170d, UiText.ColumnsLabelPilot, false, true),
+        (ColumnIds.Relationship, 60d, UiText.ColumnsLabelRelationship, false, true),
+        (ColumnIds.Style, 60d, UiText.ColumnsLabelStyle, false, true),
+        (ColumnIds.SecurityStatus, 70d, UiText.ColumnsLabelSec, false, true),
+        (ColumnIds.Week, 60d, UiText.ColumnsLabelWeek, false, true),
+        (ColumnIds.Group, 90d, UiText.ColumnsLabelGroup, false, true),
+        (ColumnIds.Corporation, 210d, UiText.ColumnsLabelCorporation, false, true),
+        (ColumnIds.Alliance, 210d, UiText.ColumnsLabelAlliance, false, true),
+        (ColumnIds.LastActive, 90d, UiText.ColumnsLabelLastKill, false, true),
+        (ColumnIds.Notes, 260d, UiText.ColumnsLabelNotes, true, false),
+        (ColumnIds.Verify, 70d, UiText.ColumnsLabelVerify, true, false)
     };
 
     private static readonly IReadOnlyList<(string FirstRetiredId, string SecondRetiredId, string MergedId)> RetiredColumnMigrations = new[]

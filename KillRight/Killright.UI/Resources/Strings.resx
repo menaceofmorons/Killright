@@ -1,0 +1,223 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+
+  <data name="Window.Title.Main" xml:space="preserve"><value>KillRight</value></data>
+  <data name="Grid.ColumnHeader.Threat" xml:space="preserve"><value>T</value></data>
+  <data name="Grid.ColumnHeader.Pilot" xml:space="preserve"><value>Pilot</value></data>
+  <data name="Grid.ColumnHeader.Relationship" xml:space="preserve"><value>R</value></data>
+  <data name="Grid.ColumnHeader.Style" xml:space="preserve"><value>Style</value></data>
+  <data name="Grid.ColumnHeader.Sec" xml:space="preserve"><value>Sec</value></data>
+  <data name="Grid.ColumnHeader.Week" xml:space="preserve"><value>Week</value></data>
+  <data name="Grid.ColumnHeader.Corporation" xml:space="preserve"><value>Corporation</value></data>
+  <data name="Grid.ColumnHeader.Alliance" xml:space="preserve"><value>Alliance</value></data>
+  <data name="Grid.ColumnHeader.LastKill" xml:space="preserve"><value>Last Kill</value></data>
+  <data name="Grid.ColumnHeader.Notes" xml:space="preserve"><value>Notes</value></data>
+  <data name="Grid.ColumnHeader.Verify" xml:space="preserve"><value>Verify</value></data>
+  <data name="Grid.ColumnHeader.Group" xml:space="preserve"><value>Group</value></data>
+  <data name="Grid.ContextMenu.Hide" xml:space="preserve"><value>Hide</value></data>
+
+  <data name="Columns.Label.Threat" xml:space="preserve"><value>Threat</value></data>
+  <data name="Columns.Label.Pilot" xml:space="preserve"><value>Pilot</value></data>
+  <data name="Columns.Label.Relationship" xml:space="preserve"><value>Relationship</value></data>
+  <data name="Columns.Label.Style" xml:space="preserve"><value>Style</value></data>
+  <data name="Columns.Label.Sec" xml:space="preserve"><value>Sec</value></data>
+  <data name="Columns.Label.Week" xml:space="preserve"><value>Week</value></data>
+  <data name="Columns.Label.Group" xml:space="preserve"><value>Group</value></data>
+  <data name="Columns.Label.Corporation" xml:space="preserve"><value>Corporation</value></data>
+  <data name="Columns.Label.Alliance" xml:space="preserve"><value>Alliance</value></data>
+  <data name="Columns.Label.LastKill" xml:space="preserve"><value>Last Kill</value></data>
+  <data name="Columns.Label.Notes" xml:space="preserve"><value>Notes</value></data>
+  <data name="Columns.Label.Verify" xml:space="preserve"><value>Verify</value></data>
+
+  <data name="Window.Title.Menu" xml:space="preserve"><value>KillRight — Menu</value></data>
+  <data name="Menu.Button.Ok" xml:space="preserve"><value>OK</value></data>
+  <data name="Menu.Button.Cancel" xml:space="preserve"><value>Cancel</value></data>
+  <data name="Menu.Tab.Config" xml:space="preserve"><value>Config</value></data>
+  <data name="Menu.Config.AlwaysOnTop" xml:space="preserve"><value>Always on top</value></data>
+  <data name="Menu.Config.SkipBackupOnClose" xml:space="preserve"><value>Skip Backup on Close</value></data>
+  <data name="Menu.Config.DefaultSectionTitle" xml:space="preserve"><value>Default</value></data>
+  <data name="Menu.Config.Save" xml:space="preserve"><value>Save</value></data>
+  <data name="Menu.Config.ResetMine" xml:space="preserve"><value>Reset Mine</value></data>
+  <data name="Menu.Config.ResetSystem" xml:space="preserve"><value>Reset System</value></data>
+  <data name="Menu.Tab.Appearance" xml:space="preserve"><value>Appearance</value></data>
+  <data name="Menu.Appearance.Theme" xml:space="preserve"><value>Theme</value></data>
+  <data name="Menu.Appearance.ThemeLight" xml:space="preserve"><value>Light</value></data>
+  <data name="Menu.Appearance.ThemeDark" xml:space="preserve"><value>Dark</value></data>
+  <data name="Menu.Appearance.ThemeFollowWindows" xml:space="preserve"><value>Follow Windows</value></data>
+  <data name="Menu.Appearance.GridFontSize" xml:space="preserve"><value>Grid Font Size</value></data>
+  <data name="Menu.Appearance.FontSizeLarge" xml:space="preserve"><value>Large</value></data>
+  <data name="Menu.Appearance.FontSizeMedium" xml:space="preserve"><value>Medium</value></data>
+  <data name="Menu.Appearance.FontSizeSmall" xml:space="preserve"><value>Small</value></data>
+  <data name="Menu.Appearance.FontSizeTiny" xml:space="preserve"><value>Tiny</value></data>
+  <data name="Menu.Appearance.HighlightColours" xml:space="preserve"><value>Highlight Colours</value></data>
+  <data name="Menu.Appearance.HighlightPilot" xml:space="preserve"><value>Pilot</value></data>
+  <data name="Menu.Appearance.HighlightRelated" xml:space="preserve"><value>Related</value></data>
+  <data name="Menu.Tab.Columns" xml:space="preserve"><value>Columns</value></data>
+  <data name="Menu.Tab.IgnoreList" xml:space="preserve"><value>Ignore List</value></data>
+  <data name="Menu.IgnoreList.SectionTitle" xml:space="preserve"><value>Ignore List</value></data>
+  <data name="Menu.IgnoreList.ColumnName" xml:space="preserve"><value>Name</value></data>
+  <data name="Menu.IgnoreList.ColumnType" xml:space="preserve"><value>Type</value></data>
+  <data name="Menu.IgnoreList.RemoveButton" xml:space="preserve"><value>x</value></data>
+  <data name="Menu.IgnoreList.TypePilot" xml:space="preserve"><value>Pilot</value></data>
+  <data name="Menu.IgnoreList.TypeCorp" xml:space="preserve"><value>Corp</value></data>
+  <data name="Menu.IgnoreList.TypeAlliance" xml:space="preserve"><value>Alliance</value></data>
+  <data name="Menu.IgnoreList.AddButton" xml:space="preserve"><value>Add</value></data>
+  <data name="Menu.IgnoreList.ListFromGridTitle" xml:space="preserve"><value>List from Grid</value></data>
+  <data name="Menu.IgnoreList.GridColumnPilot" xml:space="preserve"><value>Pilot</value></data>
+  <data name="Menu.IgnoreList.GridColumnCorp" xml:space="preserve"><value>Corp</value></data>
+  <data name="Menu.IgnoreList.GridColumnAlliance" xml:space="preserve"><value>Alliance</value></data>
+  <data name="Menu.IgnoreList.Message.EsiUnresolved" xml:space="preserve"><value>ESI could not resolve "{0}" as a {1}.</value></data>
+  <data name="Menu.IgnoreList.Message.AlreadyListed" xml:space="preserve"><value>{0} is already on the Ignore List.</value></data>
+  <data name="Menu.Warning.Caption" xml:space="preserve"><value>KillRight</value></data>
+  <data name="Menu.Warning.SkipBackupOnClose" xml:space="preserve"><value>Skip Backup on Close is a one-off setting for this session only. Backup will run normally the next time KillRight starts.</value></data>
+  <data name="Menu.Warning.DeveloperTabReveal" xml:space="preserve"><value>The Developer tab exposes internal diagnostics and cache-clearing tools not intended for general use.</value></data>
+
+  <data name="Window.Title.Shortcuts" xml:space="preserve"><value>KillRight — Help</value></data>
+  <data name="Shortcuts.Button.Close" xml:space="preserve"><value>Close</value></data>
+  <data name="Shortcuts.Tab.Shortcuts" xml:space="preserve"><value>Shortcuts</value></data>
+  <data name="Shortcuts.Key.OpenMenu" xml:space="preserve"><value>Ctrl+M</value></data>
+  <data name="Shortcuts.Action.OpenMenu" xml:space="preserve"><value>Open menu</value></data>
+  <data name="Shortcuts.Key.Quit" xml:space="preserve"><value>Ctrl+Q</value></data>
+  <data name="Shortcuts.Action.Quit" xml:space="preserve"><value>Quit</value></data>
+  <data name="Shortcuts.Key.Help" xml:space="preserve"><value>F1</value></data>
+  <data name="Shortcuts.Action.Help" xml:space="preserve"><value>Show this help</value></data>
+  <data name="Shortcuts.Key.RevealDeveloperTab" xml:space="preserve"><value>Ctrl+Shift+D</value></data>
+  <data name="Shortcuts.Action.RevealDeveloperTab" xml:space="preserve"><value>Reveal/hide Developer tab (inside menu)</value></data>
+  <data name="Shortcuts.Key.MoveWindow" xml:space="preserve"><value>Alt + drag</value></data>
+  <data name="Shortcuts.Action.MoveWindow" xml:space="preserve"><value>Move window</value></data>
+  <data name="Shortcuts.Key.MinimizeWindow" xml:space="preserve"><value>Win+Down</value></data>
+  <data name="Shortcuts.Action.MinimizeWindow" xml:space="preserve"><value>Minimize window</value></data>
+  <data name="Shortcuts.Tab.Style" xml:space="preserve"><value>Style</value></data>
+  <data name="Shortcuts.StyleCode.Blob" xml:space="preserve"><value>B</value></data>
+  <data name="Shortcuts.StyleWord.Blob" xml:space="preserve"><value>Blob</value></data>
+  <data name="Shortcuts.StyleCode.Explorer" xml:space="preserve"><value>E</value></data>
+  <data name="Shortcuts.StyleWord.Explorer" xml:space="preserve"><value>Explorer</value></data>
+  <data name="Shortcuts.StyleCode.Fleet" xml:space="preserve"><value>F</value></data>
+  <data name="Shortcuts.StyleWord.Fleet" xml:space="preserve"><value>Fleet</value></data>
+  <data name="Shortcuts.StyleCode.Gang" xml:space="preserve"><value>G</value></data>
+  <data name="Shortcuts.StyleWord.Gang" xml:space="preserve"><value>Gang</value></data>
+  <data name="Shortcuts.StyleCode.Hauler" xml:space="preserve"><value>H</value></data>
+  <data name="Shortcuts.StyleWord.Hauler" xml:space="preserve"><value>Hauler</value></data>
+  <data name="Shortcuts.StyleCode.Inactive" xml:space="preserve"><value>I</value></data>
+  <data name="Shortcuts.StyleWord.Inactive" xml:space="preserve"><value>Inactive</value></data>
+  <data name="Shortcuts.StyleCode.Miner" xml:space="preserve"><value>M</value></data>
+  <data name="Shortcuts.StyleWord.Miner" xml:space="preserve"><value>Miner</value></data>
+  <data name="Shortcuts.StyleCode.Pi" xml:space="preserve"><value>P</value></data>
+  <data name="Shortcuts.StyleWord.Pi" xml:space="preserve"><value>PI</value></data>
+  <data name="Shortcuts.StyleCode.Solo" xml:space="preserve"><value>S</value></data>
+  <data name="Shortcuts.StyleWord.Solo" xml:space="preserve"><value>Solo</value></data>
+  <data name="Shortcuts.StyleCode.Unknown" xml:space="preserve"><value>U</value></data>
+  <data name="Shortcuts.StyleWord.Unknown" xml:space="preserve"><value>Unknown</value></data>
+  <data name="Shortcuts.StyleCode.Victim" xml:space="preserve"><value>V</value></data>
+  <data name="Shortcuts.StyleWord.Victim" xml:space="preserve"><value>Victim</value></data>
+  <data name="Shortcuts.Suffix.BeginnerCode" xml:space="preserve"><value>b</value></data>
+  <data name="Shortcuts.Suffix.BeginnerDescription" xml:space="preserve"><value>Suffix, indicates a Beginner in the main Style (e.g. Sb means Solo Beginner).</value></data>
+  <data name="Shortcuts.Suffix.PodderCode" xml:space="preserve"><value>x</value></data>
+  <data name="Shortcuts.Suffix.PodderDescription" xml:space="preserve"><value>Suffix, indicates a podder (e.g. Sx means Solo podder).</value></data>
+  <data name="Shortcuts.Tab.Threat" xml:space="preserve"><value>Threat</value></data>
+  <data name="Shortcuts.Tab.Relationship" xml:space="preserve"><value>Relationship</value></data>
+
+  <data name="ThreatBand.None" xml:space="preserve"><value>None</value></data>
+  <data name="ThreatBand.Low" xml:space="preserve"><value>Low</value></data>
+  <data name="ThreatBand.Medium" xml:space="preserve"><value>Medium</value></data>
+  <data name="ThreatBand.High" xml:space="preserve"><value>High</value></data>
+  <data name="ThreatBand.Very High" xml:space="preserve"><value>Very High</value></data>
+  <data name="ThreatBand.Extreme" xml:space="preserve"><value>Extreme</value></data>
+  <data name="ThreatBand.Unk" xml:space="preserve"><value>Unk</value></data>
+
+  <data name="RelationshipBand.Low" xml:space="preserve"><value>Low</value></data>
+  <data name="RelationshipBand.Medium" xml:space="preserve"><value>Medium</value></data>
+  <data name="RelationshipBand.High" xml:space="preserve"><value>High</value></data>
+
+  <data name="InfoSheet.Label.Birthday" xml:space="preserve"><value>Birthday: </value></data>
+  <data name="InfoSheet.Label.Threat" xml:space="preserve"><value>Threat: </value></data>
+  <data name="InfoSheet.Label.Sec" xml:space="preserve"><value>Sec: </value></data>
+  <data name="InfoSheet.Label.Kills" xml:space="preserve"><value>Kills: </value></data>
+  <data name="InfoSheet.Label.Solos" xml:space="preserve"><value>Solos: </value></data>
+  <data name="InfoSheet.Label.General" xml:space="preserve"><value>General: </value></data>
+  <data name="InfoSheet.Label.Recent" xml:space="preserve"><value>Recent: </value></data>
+  <data name="InfoSheet.Label.LastActivityTitle" xml:space="preserve"><value>Last Activity</value></data>
+  <data name="InfoSheet.Label.DateTime" xml:space="preserve"><value>Date/Time: </value></data>
+  <data name="InfoSheet.Label.KillLoss" xml:space="preserve"><value>Kill/Loss: </value></data>
+  <data name="InfoSheet.Label.System" xml:space="preserve"><value>System: </value></data>
+  <data name="InfoSheet.Label.Ship" xml:space="preserve"><value>Ship: </value></data>
+  <data name="InfoSheet.Label.Weapon" xml:space="preserve"><value>Weapon: </value></data>
+  <data name="InfoSheet.Label.Victim" xml:space="preserve"><value>Victim: </value></data>
+  <data name="InfoSheet.Label.Attackers" xml:space="preserve"><value>Attackers: </value></data>
+  <data name="InfoSheet.StatsTitleFormat" xml:space="preserve"><value>Stats for {0}</value></data>
+  <data name="InfoSheet.ErrorLoadingFormat" xml:space="preserve"><value>Error loading {0}</value></data>
+
+  <data name="Window.Title.SdeFirstRunLoad" xml:space="preserve"><value>KillRight — Loading Reference Data</value></data>
+  <data name="Sde.Button.Retry" xml:space="preserve"><value>Retry</value></data>
+  <data name="Sde.Stage.CheckingManifest" xml:space="preserve"><value>Checking manifest...</value></data>
+  <data name="Sde.Stage.Downloading" xml:space="preserve"><value>Downloading reference data...</value></data>
+  <data name="Sde.Stage.Importing" xml:space="preserve"><value>Importing reference data...</value></data>
+  <data name="Sde.LoadFailedTitle" xml:space="preserve"><value>Reference data load failed.</value></data>
+  <data name="Sde.Failure.Manifest" xml:space="preserve"><value>Could not reach the CCP static-data manifest.</value></data>
+  <data name="Sde.Failure.Download" xml:space="preserve"><value>The reference-data download failed.</value></data>
+  <data name="Sde.Failure.Unexpected" xml:space="preserve"><value>An unexpected error occurred.</value></data>
+
+  <data name="Placeholder.Dash" xml:space="preserve"><value>-</value></data>
+
+  <data name="Style.Word.Inactive" xml:space="preserve"><value>Inactive</value></data>
+  <data name="Style.Word.Victim" xml:space="preserve"><value>Vict</value></data>
+  <data name="Style.Word.SoloBeginner" xml:space="preserve"><value>Solo(b)</value></data>
+  <data name="Style.Word.Solo" xml:space="preserve"><value>Solo</value></data>
+  <data name="Style.Word.GangBeginner" xml:space="preserve"><value>Gang(b)</value></data>
+  <data name="Style.Word.Gang" xml:space="preserve"><value>Gang</value></data>
+  <data name="Style.Word.Blob" xml:space="preserve"><value>Blob</value></data>
+  <data name="Style.Word.Fleet" xml:space="preserve"><value>Fleet</value></data>
+  <data name="Style.Word.Miner" xml:space="preserve"><value>Mine</value></data>
+  <data name="Style.Word.Explorer" xml:space="preserve"><value>Explo</value></data>
+  <data name="Style.Word.Hauler" xml:space="preserve"><value>Haul</value></data>
+  <data name="Style.Word.Pi" xml:space="preserve"><value>PI</value></data>
+  <data name="Style.Word.Unknown" xml:space="preserve"><value>Unk</value></data>
+  <data name="Style.PodderSuffixFormat" xml:space="preserve"><value>{0} (podder)</value></data>
+
+  <data name="Style.LetterCode.Victim" xml:space="preserve"><value>V</value></data>
+  <data name="Style.LetterCode.SoloBeginner" xml:space="preserve"><value>Sb</value></data>
+  <data name="Style.LetterCode.Solo" xml:space="preserve"><value>S</value></data>
+  <data name="Style.LetterCode.GangBeginner" xml:space="preserve"><value>Gb</value></data>
+  <data name="Style.LetterCode.Gang" xml:space="preserve"><value>G</value></data>
+  <data name="Style.LetterCode.Blob" xml:space="preserve"><value>B</value></data>
+  <data name="Style.LetterCode.Fleet" xml:space="preserve"><value>F</value></data>
+  <data name="Style.LetterCode.Inactive" xml:space="preserve"><value>I</value></data>
+  <data name="Style.LetterCode.Miner" xml:space="preserve"><value>M</value></data>
+  <data name="Style.LetterCode.Explorer" xml:space="preserve"><value>E</value></data>
+  <data name="Style.LetterCode.Hauler" xml:space="preserve"><value>H</value></data>
+  <data name="Style.LetterCode.Pi" xml:space="preserve"><value>P</value></data>
+  <data name="Style.LetterCode.Unknown" xml:space="preserve"><value>U</value></data>
+  <data name="Style.LetterCode.PodderSuffix" xml:space="preserve"><value>x</value></data>
+</root>

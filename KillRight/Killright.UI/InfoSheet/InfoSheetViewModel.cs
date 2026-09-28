@@ -1,4 +1,5 @@
 using System.Windows;
+using Killright.UI.Resources;
 using Killright.UI.ViewModels;
 
 namespace Killright.UI.InfoSheet;
@@ -29,8 +30,8 @@ public sealed class InfoSheetViewModel
 
     public InfoSheetViewModel(PilotReportRow row, bool developerModeRevealed)
     {
-        StatsTitle = $"Stats for {row.Pilot}";
-        ErrorLine = row.StatsFailureSource is null ? string.Empty : $"Error loading {row.StatsFailureSource}";
+        StatsTitle = UiText.FormatStatsTitle(row.Pilot);
+        ErrorLine = row.StatsFailureSource is null ? string.Empty : UiText.FormatErrorLoading(row.StatsFailureSource);
         ErrorLineVisibility = row.StatsFailureSource is null ? Visibility.Collapsed : Visibility.Visible;
         BirthdayValue = row.Birthday;
         ThreatValue = row.Threat;

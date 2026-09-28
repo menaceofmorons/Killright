@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using Killright.UI.Resources;
 
 namespace Killright.UI.Controls;
 
@@ -45,7 +46,7 @@ public partial class ThreatGlyph : UserControl
         switch (band)
         {
             case "None":
-                TextGlyph.Text = "-";
+                TextGlyph.Text = UiText.PlaceholderDash;
                 RingOutline.Visibility = Visibility.Collapsed;
                 break;
             case "Low":
@@ -79,6 +80,6 @@ public partial class ThreatGlyph : UserControl
                 break;
         }
 
-        ToolTip = string.IsNullOrWhiteSpace(band) ? "Unk" : band;
+        ToolTip = UiText.GetThreatBandDisplay(band);
     }
 }

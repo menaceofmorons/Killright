@@ -2,7 +2,8 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:diagnostics="clr-namespace:Killright.UI.Diagnostics"
-        Title="KillRight — Menu"
+        xmlns:resources="clr-namespace:Killright.UI.Resources"
+        Title="{x:Static resources:UiText.WindowTitleMenu}"
         Width="420"
         Height="380"
         ResizeMode="NoResize"
@@ -14,73 +15,73 @@
                     Orientation="Horizontal"
                     HorizontalAlignment="Right"
                     Margin="0,12,0,0">
-            <Button Content="OK"
+            <Button Content="{x:Static resources:UiText.MenuButtonOk}"
                     Width="80"
                     Margin="0,0,8,0"
                     Click="Ok_Click" />
-            <Button Content="Cancel"
+            <Button Content="{x:Static resources:UiText.MenuButtonCancel}"
                     Width="80"
                     Click="Cancel_Click" />
         </StackPanel>
         <TabControl x:Name="MenuTabControl"
                     SelectionChanged="MenuTabControl_SelectionChanged">
-            <TabItem Header="Config">
+            <TabItem Header="{x:Static resources:UiText.MenuTabConfig}">
                 <StackPanel Margin="12">
                     <CheckBox x:Name="AlwaysOnTopCheckBox"
-                              Content="Always on top"
+                              Content="{x:Static resources:UiText.MenuConfigAlwaysOnTop}"
                               Checked="AlwaysOnTop_Changed"
                               Unchecked="AlwaysOnTop_Changed" />
                     <CheckBox x:Name="SkipBackupOnCloseCheckBox"
-                              Content="Skip Backup on Close"
+                              Content="{x:Static resources:UiText.MenuConfigSkipBackupOnClose}"
                               Margin="0,8,0,0"
                               Checked="SkipBackupOnClose_Changed"
                               Unchecked="SkipBackupOnClose_Changed" />
-                    <TextBlock Text="Default"
+                    <TextBlock Text="{x:Static resources:UiText.MenuConfigDefaultSectionTitle}"
                                FontWeight="Bold"
                                Margin="0,16,0,4" />
                     <StackPanel Orientation="Horizontal">
-                        <Button Content="Save"
+                        <Button Content="{x:Static resources:UiText.MenuConfigSave}"
                                 Width="80"
                                 Click="SaveUserDefault_Click" />
                         <Button x:Name="ResetMineButton"
-                                Content="Reset Mine"
+                                Content="{x:Static resources:UiText.MenuConfigResetMine}"
                                 Width="80"
                                 Margin="8,0,0,0"
                                 Click="ResetMine_Click" />
-                        <Button Content="Reset System"
+                        <Button Content="{x:Static resources:UiText.MenuConfigResetSystem}"
                                 Width="80"
                                 Margin="8,0,0,0"
                                 Click="ResetSystem_Click" />
                     </StackPanel>
                 </StackPanel>
             </TabItem>
-            <TabItem Header="Appearance">
+            <TabItem Header="{x:Static resources:UiText.MenuTabAppearance}">
                 <StackPanel Margin="12">
-                    <TextBlock Text="Theme" />
+                    <TextBlock Text="{x:Static resources:UiText.MenuAppearanceTheme}" />
                     <ComboBox x:Name="ThemeComboBox"
                               Margin="0,4,0,12"
                               SelectionChanged="Theme_Changed">
-                        <ComboBoxItem Content="Light" Tag="Light" />
-                        <ComboBoxItem Content="Dark" Tag="Dark" />
-                        <ComboBoxItem Content="Follow Windows" Tag="FollowWindows" />
+                        <ComboBoxItem Content="{x:Static resources:UiText.MenuAppearanceThemeLight}" Tag="Light" />
+                        <ComboBoxItem Content="{x:Static resources:UiText.MenuAppearanceThemeDark}" Tag="Dark" />
+                        <ComboBoxItem Content="{x:Static resources:UiText.MenuAppearanceThemeFollowWindows}" Tag="FollowWindows" />
                     </ComboBox>
-                    <TextBlock Text="Grid Font Size" />
+                    <TextBlock Text="{x:Static resources:UiText.MenuAppearanceGridFontSize}" />
                     <ComboBox x:Name="FontTierComboBox"
                               Margin="0,4,0,12"
                               SelectionChanged="FontTier_Changed">
-                        <ComboBoxItem Content="Large" Tag="Large" />
-                        <ComboBoxItem Content="Medium" Tag="Medium" />
-                        <ComboBoxItem Content="Small" Tag="Small" />
-                        <ComboBoxItem Content="Tiny" Tag="Tiny" />
+                        <ComboBoxItem Content="{x:Static resources:UiText.MenuAppearanceFontSizeLarge}" Tag="Large" />
+                        <ComboBoxItem Content="{x:Static resources:UiText.MenuAppearanceFontSizeMedium}" Tag="Medium" />
+                        <ComboBoxItem Content="{x:Static resources:UiText.MenuAppearanceFontSizeSmall}" Tag="Small" />
+                        <ComboBoxItem Content="{x:Static resources:UiText.MenuAppearanceFontSizeTiny}" Tag="Tiny" />
                     </ComboBox>
-                    <TextBlock Text="Highlight Colours" />
-                    <TextBlock Text="Pilot" Margin="0,8,0,2" />
+                    <TextBlock Text="{x:Static resources:UiText.MenuAppearanceHighlightColours}" />
+                    <TextBlock Text="{x:Static resources:UiText.MenuAppearanceHighlightPilot}" Margin="0,8,0,2" />
                     <WrapPanel x:Name="PilotSwatchPanel" Orientation="Horizontal" />
-                    <TextBlock Text="Related" Margin="0,8,0,2" />
+                    <TextBlock Text="{x:Static resources:UiText.MenuAppearanceHighlightRelated}" Margin="0,8,0,2" />
                     <WrapPanel x:Name="RelatedSwatchPanel" Orientation="Horizontal" />
                 </StackPanel>
             </TabItem>
-            <TabItem Header="Columns">
+            <TabItem Header="{x:Static resources:UiText.MenuTabColumns}">
                 <StackPanel Margin="12">
                     <ListBox x:Name="ColumnsListBox"
                              MaxHeight="220"
@@ -116,7 +117,7 @@
                 </StackPanel>
             </TabItem>
             <TabItem x:Name="IgnoreListTabItem"
-                     Header="Ignore List">
+                     Header="{x:Static resources:UiText.MenuTabIgnoreList}">
                 <Grid Margin="12">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -124,7 +125,7 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <DockPanel Grid.Column="0">
-                        <TextBlock DockPanel.Dock="Top" Text="Ignore List" FontWeight="Bold" Margin="0,0,0,4" />
+                        <TextBlock DockPanel.Dock="Top" Text="{x:Static resources:UiText.MenuIgnoreListSectionTitle}" FontWeight="Bold" Margin="0,0,0,4" />
                         <DataGrid x:Name="IgnoreListDataGrid"
                                   IsReadOnly="True"
                                   AutoGenerateColumns="False"
@@ -132,12 +133,12 @@
                                   HeadersVisibility="Column"
                                   GridLinesVisibility="None">
                             <DataGrid.Columns>
-                                <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*" />
-                                <DataGridTextColumn Header="Type" Binding="{Binding TypeLabel}" Width="70" />
+                                <DataGridTextColumn Header="{x:Static resources:UiText.MenuIgnoreListColumnName}" Binding="{Binding Name}" Width="*" />
+                                <DataGridTextColumn Header="{x:Static resources:UiText.MenuIgnoreListColumnType}" Binding="{Binding TypeLabel}" Width="70" />
                                 <DataGridTemplateColumn Header="" Width="32">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
-                                            <Button Content="x" Click="RemoveIgnoreEntry_Click" />
+                                            <Button Content="{x:Static resources:UiText.MenuIgnoreListRemoveButton}" Click="RemoveIgnoreEntry_Click" />
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
@@ -154,18 +155,18 @@
                                       Width="80"
                                       Margin="0,0,6,0"
                                       SelectionChanged="IgnoreTypeComboBox_SelectionChanged">
-                                <ComboBoxItem Content="Pilot" Tag="Pilot" />
-                                <ComboBoxItem Content="Corp" Tag="Corporation" />
-                                <ComboBoxItem Content="Alliance" Tag="Alliance" />
+                                <ComboBoxItem Content="{x:Static resources:UiText.MenuIgnoreListTypePilot}" Tag="Pilot" />
+                                <ComboBoxItem Content="{x:Static resources:UiText.MenuIgnoreListTypeCorp}" Tag="Corporation" />
+                                <ComboBoxItem Content="{x:Static resources:UiText.MenuIgnoreListTypeAlliance}" Tag="Alliance" />
                             </ComboBox>
-                            <Button Content="Add" Click="AddIgnoreEntry_Click" />
+                            <Button Content="{x:Static resources:UiText.MenuIgnoreListAddButton}" Click="AddIgnoreEntry_Click" />
                         </StackPanel>
                         <TextBlock x:Name="IgnoreListMessageTextBlock"
                                    DockPanel.Dock="Top"
                                    Foreground="Red"
                                    TextWrapping="Wrap"
                                    Margin="0,0,0,4" />
-                        <TextBlock DockPanel.Dock="Top" Text="List from Grid" FontWeight="Bold" Margin="0,4,0,4" />
+                        <TextBlock DockPanel.Dock="Top" Text="{x:Static resources:UiText.MenuIgnoreListListFromGridTitle}" FontWeight="Bold" Margin="0,4,0,4" />
                         <DataGrid x:Name="PilotsFromGridDataGrid"
                                   IsReadOnly="True"
                                   AutoGenerateColumns="False"
@@ -173,9 +174,9 @@
                                   SelectionUnit="Cell"
                                   PreviewMouseLeftButtonUp="PilotsFromGridDataGrid_PreviewMouseLeftButtonUp">
                             <DataGrid.Columns>
-                                <DataGridTextColumn x:Name="ListFromGridPilotColumn" Header="Pilot" Binding="{Binding Pilot}" Width="*" />
-                                <DataGridTextColumn x:Name="ListFromGridCorpColumn" Header="Corp" Binding="{Binding Corporation}" Width="*" />
-                                <DataGridTextColumn x:Name="ListFromGridAllianceColumn" Header="Alliance" Binding="{Binding Alliance}" Width="*" />
+                                <DataGridTextColumn x:Name="ListFromGridPilotColumn" Header="{x:Static resources:UiText.MenuIgnoreListGridColumnPilot}" Binding="{Binding Pilot}" Width="*" />
+                                <DataGridTextColumn x:Name="ListFromGridCorpColumn" Header="{x:Static resources:UiText.MenuIgnoreListGridColumnCorp}" Binding="{Binding Corporation}" Width="*" />
+                                <DataGridTextColumn x:Name="ListFromGridAllianceColumn" Header="{x:Static resources:UiText.MenuIgnoreListGridColumnAlliance}" Binding="{Binding Alliance}" Width="*" />
                             </DataGrid.Columns>
                         </DataGrid>
                     </DockPanel>

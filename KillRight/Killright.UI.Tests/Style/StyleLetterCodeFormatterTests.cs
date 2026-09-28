@@ -1,7 +1,8 @@
 using Killright.Core.Style;
+using Killright.UI.Style;
 using Xunit;
 
-namespace Killright.Core.Tests.Style;
+namespace Killright.UI.Tests.Style;
 
 public sealed class StyleLetterCodeFormatterTests
 {

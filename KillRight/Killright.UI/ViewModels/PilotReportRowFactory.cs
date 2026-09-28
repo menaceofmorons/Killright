@@ -5,6 +5,8 @@ using Killright.Shared;
 using Killright.Shared.Time;
 using Killright.Shared.zKill;
 using Killright.Storage.Killmails;
+using Killright.UI.Resources;
+using Killright.UI.Style;
 
 namespace Killright.UI.ViewModels;
 
@@ -32,7 +34,7 @@ public static class PilotReportRowFactory
             EngineAnalysisFailed = engineFailureReason is not null,
             Verify = GetVerifyDisplay(pilot.VerifyStatus),
             Threat = string.IsNullOrWhiteSpace(threatBand)
-                ? "Unk"
+                ? UiText.ThreatBandUnk
                 : threatBand,
             SecurityStatus = pilot.SecurityStatus?.ToString("0.00") ?? "unk",
             Group = "unk",
@@ -82,24 +84,24 @@ public static class PilotReportRowFactory
     private static string FormatActivityValue(bool? hasPublicActivityData, int? value)
     {
         if (hasPublicActivityData != true)
-            return "-";
+            return UiText.PlaceholderDash;
 
-        return value?.ToString() ?? "-";
+        return value?.ToString() ?? UiText.PlaceholderDash;
     }
 
     private static string FormatWeekSideValue(bool? hasPublicActivityData, int? value)
     {
         var formatted = FormatActivityValue(hasPublicActivityData, value);
-        return formatted == "0" ? "-" : formatted;
+        return formatted == "0" ? UiText.PlaceholderDash : formatted;
     }
 
     private static string FormatLastKill(zKillActivity? activity)
     {
         if (activity?.HasPublicActivityData != true)
-            return "-";
+            return UiText.PlaceholderDash;
 
         if (activity.LastActivityType != zKillActivityType.Kill || activity.LastActiveUtc is null)
-            return "-";
+            return UiText.PlaceholderDash;
 
         return FormatKillAge(ApplicationClock.UtcNow - activity.LastActiveUtc.Value);
     }

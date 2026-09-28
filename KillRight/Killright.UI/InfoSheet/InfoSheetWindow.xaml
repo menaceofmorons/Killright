@@ -1,6 +1,7 @@
 <Window x:Class="Killright.UI.InfoSheet.InfoSheetWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:resources="clr-namespace:Killright.UI.Resources"
         WindowStyle="None"
         ResizeMode="NoResize"
         ShowInTaskbar="False"
@@ -38,28 +39,28 @@
                 </Grid.RowDefinitions>
 
                 <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Foreground="{DynamicResource Brush.Text.Primary}">
-                    <Run Text="Birthday: " FontWeight="Bold" /><Run Text="{Binding BirthdayValue, Mode=OneWay}" />
+                    <Run Text="{x:Static resources:UiText.InfoSheetLabelBirthday}" FontWeight="Bold" /><Run Text="{Binding BirthdayValue, Mode=OneWay}" />
                 </TextBlock>
 
                 <TextBlock Grid.Row="1" Grid.Column="0" Foreground="{DynamicResource Brush.Text.Primary}">
-                    <Run Text="Threat: " FontWeight="Bold" /><Run Text="{Binding ThreatValue, Mode=OneWay}" />
+                    <Run Text="{x:Static resources:UiText.InfoSheetLabelThreat}" FontWeight="Bold" /><Run Text="{Binding ThreatValue, Mode=OneWay}" />
                 </TextBlock>
                 <TextBlock Grid.Row="1" Grid.Column="1" Foreground="{DynamicResource Brush.Text.Primary}">
-                    <Run Text="Sec: " FontWeight="Bold" /><Run Text="{Binding SecValue, Mode=OneWay}" />
+                    <Run Text="{x:Static resources:UiText.InfoSheetLabelSec}" FontWeight="Bold" /><Run Text="{Binding SecValue, Mode=OneWay}" />
                 </TextBlock>
 
                 <TextBlock Grid.Row="2" Grid.Column="0" Foreground="{DynamicResource Brush.Text.Primary}">
-                    <Run Text="Kills: " FontWeight="Bold" /><Run Text="{Binding KillsValue, Mode=OneWay}" />
+                    <Run Text="{x:Static resources:UiText.InfoSheetLabelKills}" FontWeight="Bold" /><Run Text="{Binding KillsValue, Mode=OneWay}" />
                 </TextBlock>
                 <TextBlock Grid.Row="2" Grid.Column="1" Foreground="{DynamicResource Brush.Text.Primary}">
-                    <Run Text="Solos: " FontWeight="Bold" /><Run Text="{Binding SolosValue, Mode=OneWay}" />
+                    <Run Text="{x:Static resources:UiText.InfoSheetLabelSolos}" FontWeight="Bold" /><Run Text="{Binding SolosValue, Mode=OneWay}" />
                 </TextBlock>
 
                 <TextBlock Grid.Row="3" Grid.Column="0" Foreground="{DynamicResource Brush.Text.Primary}">
-                    <Run Text="General: " FontWeight="Bold" /><Run Text="{Binding GeneralValue, Mode=OneWay}" />
+                    <Run Text="{x:Static resources:UiText.InfoSheetLabelGeneral}" FontWeight="Bold" /><Run Text="{Binding GeneralValue, Mode=OneWay}" />
                 </TextBlock>
                 <TextBlock Grid.Row="3" Grid.Column="1" Foreground="{DynamicResource Brush.Text.Primary}">
-                    <Run Text="Recent: " FontWeight="Bold" /><Run Text="{Binding RecentValue, Mode=OneWay}" />
+                    <Run Text="{x:Static resources:UiText.InfoSheetLabelRecent}" FontWeight="Bold" /><Run Text="{Binding RecentValue, Mode=OneWay}" />
                 </TextBlock>
             </Grid>
 
@@ -73,29 +74,29 @@
             </StackPanel>
 
             <Border Style="{StaticResource SheetTitleStyle}" Margin="0,10,0,0">
-                <TextBlock Text="Last Activity" FontWeight="Bold" HorizontalAlignment="Center" Foreground="{DynamicResource Brush.Text.Primary}" />
+                <TextBlock Text="{x:Static resources:UiText.InfoSheetLabelLastActivityTitle}" FontWeight="Bold" HorizontalAlignment="Center" Foreground="{DynamicResource Brush.Text.Primary}" />
             </Border>
             <StackPanel Margin="0,4,0,0">
                 <TextBlock Foreground="{DynamicResource Brush.Text.Primary}">
-                    <Run Text="Date/Time: " FontWeight="Bold" /><Run Text="{Binding LastActivityDateTimeValue, Mode=OneWay}" />
+                    <Run Text="{x:Static resources:UiText.InfoSheetLabelDateTime}" FontWeight="Bold" /><Run Text="{Binding LastActivityDateTimeValue, Mode=OneWay}" />
                 </TextBlock>
                 <TextBlock Foreground="{DynamicResource Brush.Text.Primary}">
-                    <Run Text="Kill/Loss: " FontWeight="Bold" /><Run Text="{Binding LastActivityKillLossValue, Mode=OneWay}" />
+                    <Run Text="{x:Static resources:UiText.InfoSheetLabelKillLoss}" FontWeight="Bold" /><Run Text="{Binding LastActivityKillLossValue, Mode=OneWay}" />
                 </TextBlock>
                 <TextBlock Foreground="{DynamicResource Brush.Text.Primary}">
-                    <Run Text="System: " FontWeight="Bold" /><Run Text="{Binding LastActivitySystemValue, Mode=OneWay}" />
+                    <Run Text="{x:Static resources:UiText.InfoSheetLabelSystem}" FontWeight="Bold" /><Run Text="{Binding LastActivitySystemValue, Mode=OneWay}" />
                 </TextBlock>
                 <TextBlock Foreground="{DynamicResource Brush.Text.Primary}">
-                    <Run Text="Ship: " FontWeight="Bold" /><Run Text="{Binding LastActivityShipValue, Mode=OneWay}" />
+                    <Run Text="{x:Static resources:UiText.InfoSheetLabelShip}" FontWeight="Bold" /><Run Text="{Binding LastActivityShipValue, Mode=OneWay}" />
                 </TextBlock>
                 <TextBlock Visibility="{Binding LastActivityKillOnlyVisibility}" Foreground="{DynamicResource Brush.Text.Primary}">
-                    <Run Text="Weapon: " FontWeight="Bold" /><Run Text="{Binding LastActivityWeaponValue, Mode=OneWay}" />
+                    <Run Text="{x:Static resources:UiText.InfoSheetLabelWeapon}" FontWeight="Bold" /><Run Text="{Binding LastActivityWeaponValue, Mode=OneWay}" />
                 </TextBlock>
                 <TextBlock Visibility="{Binding LastActivityKillOnlyVisibility}" Foreground="{DynamicResource Brush.Text.Primary}">
-                    <Run Text="Victim: " FontWeight="Bold" /><Run Text="{Binding LastActivityVictimValue, Mode=OneWay}" />
+                    <Run Text="{x:Static resources:UiText.InfoSheetLabelVictim}" FontWeight="Bold" /><Run Text="{Binding LastActivityVictimValue, Mode=OneWay}" />
                 </TextBlock>
                 <TextBlock Visibility="{Binding LastActivityKillOnlyVisibility}" Foreground="{DynamicResource Brush.Text.Primary}">
-                    <Run Text="Attackers: " FontWeight="Bold" /><Run Text="{Binding LastActivityAttackersValue, Mode=OneWay}" />
+                    <Run Text="{x:Static resources:UiText.InfoSheetLabelAttackers}" FontWeight="Bold" /><Run Text="{Binding LastActivityAttackersValue, Mode=OneWay}" />
                 </TextBlock>
             </StackPanel>
         </StackPanel>

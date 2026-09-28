@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using Killright.Shared;
+using Killright.UI.Resources;
 using Killright.UI.Shortcuts;
 using Killright.UI.Theme;
 using Killright.UI.UiState;
@@ -262,7 +263,7 @@ public partial class MenuModalWindow : Window
                 Id = entry.Id,
                 Type = entry.Type,
                 Name = entry.Name,
-                TypeLabel = entry.Type == IgnoreEntryType.Corporation ? "Corp" : entry.Type.ToString()
+                TypeLabel = entry.Type == IgnoreEntryType.Corporation ? UiText.MenuIgnoreListTypeCorp : entry.Type.ToString()
             })
             .ToList();
     }
@@ -356,7 +357,7 @@ public partial class MenuModalWindow : Window
 
             if (resolved is null)
             {
-                ShowIgnoreListMessage($"ESI could not resolve \"{name}\" as a {type}.");
+                ShowIgnoreListMessage(UiText.FormatEsiUnresolved(name, type.ToString()));
                 return;
             }
 
@@ -366,7 +367,7 @@ public partial class MenuModalWindow : Window
 
         if (_workingState.IgnoreListEntries.Any(entry => entry.Id == id && entry.Type == type))
         {
-            ShowIgnoreListMessage($"{resolvedName} is already on the Ignore List.");
+            ShowIgnoreListMessage(UiText.FormatAlreadyListed(resolvedName));
             return;
         }
 
@@ -418,8 +419,8 @@ public partial class MenuModalWindow : Window
             return;
 
         MessageBox.Show(
-            "Skip Backup on Close is a one-off setting for this session only. Backup will run normally the next time KillRight starts.",
-            "KillRight",
+            UiText.MenuWarningSkipBackupOnClose,
+            UiText.MenuWarningCaption,
             MessageBoxButton.OK,
             MessageBoxImage.Warning);
     }
@@ -513,8 +514,8 @@ public partial class MenuModalWindow : Window
         if (revealing)
         {
             MessageBox.Show(
-                "The Developer tab exposes internal diagnostics and cache-clearing tools not intended for general use.",
-                "KillRight",
+                UiText.MenuWarningDeveloperTabReveal,
+                UiText.MenuWarningCaption,
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
         }

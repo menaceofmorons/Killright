@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Windows;
 using Killright.Shared.Sde;
 using Killright.Storage.Sde;
+using Killright.UI.Resources;
 
 namespace Killright.UI.Sde;
 
@@ -32,14 +33,14 @@ public partial class SdeFirstRunLoadWindow : Window
         RetryButton.Visibility = Visibility.Collapsed;
         ErrorTextBlock.Visibility = Visibility.Collapsed;
         DownloadProgressBar.Visibility = Visibility.Collapsed;
-        StageTextBlock.Text = "Checking manifest...";
+        StageTextBlock.Text = UiText.SdeStageCheckingManifest;
 
         var progress = new Progress<SdeCheckProgress>(OnProgress);
         var outcome = await _ingestionService.RunCheckAsync(progress);
 
         if (outcome is SdeCheckOutcome.ManifestFailure or SdeCheckOutcome.DownloadFailure or SdeCheckOutcome.UnexpectedFailure)
         {
-            StageTextBlock.Text = "Reference data load failed.";
+            StageTextBlock.Text = UiText.SdeLoadFailedTitle;
             ErrorTextBlock.Text = DescribeFailure(outcome);
             ErrorTextBlock.Visibility = Visibility.Visible;
             RetryButton.Visibility = Visibility.Visible;
@@ -55,11 +56,11 @@ public partial class SdeFirstRunLoadWindow : Window
         switch (progress.Stage)
         {
             case SdeCheckStage.CheckingManifest:
-                StageTextBlock.Text = "Checking manifest...";
+                StageTextBlock.Text = UiText.SdeStageCheckingManifest;
                 DownloadProgressBar.Visibility = Visibility.Collapsed;
                 break;
             case SdeCheckStage.Downloading:
-                StageTextBlock.Text = "Downloading reference data...";
+                StageTextBlock.Text = UiText.SdeStageDownloading;
                 DownloadProgressBar.Visibility = Visibility.Visible;
 
                 if (progress.DownloadFraction is { } fraction)
@@ -67,7 +68,7 @@ public partial class SdeFirstRunLoadWindow : Window
 
                 break;
             case SdeCheckStage.Importing:
-                StageTextBlock.Text = "Importing reference data...";
+                StageTextBlock.Text = UiText.SdeStageImporting;
                 DownloadProgressBar.Visibility = Visibility.Collapsed;
                 break;
         }
@@ -77,9 +78,9 @@ public partial class SdeFirstRunLoadWindow : Window
     {
         return outcome switch
         {
-            SdeCheckOutcome.ManifestFailure => "Could not reach the CCP static-data manifest.",
-            SdeCheckOutcome.DownloadFailure => "The reference-data download failed.",
-            _ => "An unexpected error occurred."
+            SdeCheckOutcome.ManifestFailure => UiText.SdeFailureManifest,
+            SdeCheckOutcome.DownloadFailure => UiText.SdeFailureDownload,
+            _ => UiText.SdeFailureUnexpected
         };
     }
 

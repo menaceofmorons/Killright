@@ -22,7 +22,9 @@ using Killright.UI.Configuration;
 using Killright.UI.InfoSheet;
 using Killright.UI.Interop;
 using Killright.UI.MenuModal;
+using Killright.UI.Resources;
 using Killright.UI.Shortcuts;
+using Killright.UI.Style;
 using Killright.UI.UiState;
 using Killright.UI.ViewModels;
 
@@ -174,7 +176,7 @@ public partial class MainWindow : Window
             if (columnId is null)
                 return;
 
-            var hideItem = new MenuItem { Header = "Hide", IsEnabled = columnId != ColumnIds.Pilot };
+            var hideItem = new MenuItem { Header = UiText.GridContextMenuHide, IsEnabled = columnId != ColumnIds.Pilot };
             hideItem.Click += (_, _) => HideColumn(columnId);
 
             var contextMenu = new ContextMenu();

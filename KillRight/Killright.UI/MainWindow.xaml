@@ -3,7 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         xmlns:controls="clr-namespace:Killright.UI.Controls"
-        Title="KillRight"
+        xmlns:resources="clr-namespace:Killright.UI.Resources"
+        Title="{x:Static resources:UiText.WindowTitleMain}"
         MinWidth="120"
         MinHeight="60"
         WindowStyle="None"
@@ -164,14 +165,14 @@
                     </Style>
                 </DataGrid.RowStyle>
                 <DataGrid.Columns>
-                    <DataGridTemplateColumn x:Name="ColumnThreat" Header="T" Width="50" SortMemberPath="Threat" HeaderStyle="{StaticResource ColumnHeaderStyleCentered}" CellStyle="{StaticResource CellStyleCentered}">
+                    <DataGridTemplateColumn x:Name="ColumnThreat" Header="{x:Static resources:UiText.GridColumnHeaderThreat}" Width="50" SortMemberPath="Threat" HeaderStyle="{StaticResource ColumnHeaderStyleCentered}" CellStyle="{StaticResource CellStyleCentered}">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <controls:ThreatGlyph Band="{Binding Threat}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
-                    <DataGridTextColumn x:Name="ColumnPilot" Header="Pilot" Binding="{Binding Pilot}" Width="170" CellStyle="{StaticResource PilotCellStyle}">
+                    <DataGridTextColumn x:Name="ColumnPilot" Header="{x:Static resources:UiText.GridColumnHeaderPilot}" Binding="{Binding Pilot}" Width="170" CellStyle="{StaticResource PilotCellStyle}">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">
                                 <Style.Triggers>
@@ -182,7 +183,7 @@
                             </Style>
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
-                    <DataGridTemplateColumn x:Name="ColumnRelationship" Header="R" Width="60" CanUserSort="False" HeaderStyle="{StaticResource ColumnHeaderStyleCentered}" CellStyle="{StaticResource CellStyleCentered}">
+                    <DataGridTemplateColumn x:Name="ColumnRelationship" Header="{x:Static resources:UiText.GridColumnHeaderRelationship}" Width="60" CanUserSort="False" HeaderStyle="{StaticResource ColumnHeaderStyleCentered}" CellStyle="{StaticResource CellStyleCentered}">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
@@ -192,7 +193,7 @@
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
-                    <DataGridTextColumn x:Name="ColumnStyle" Header="Style" Binding="{Binding Style}" Width="60" HeaderStyle="{StaticResource ColumnHeaderStyleCentered}">
+                    <DataGridTextColumn x:Name="ColumnStyle" Header="{x:Static resources:UiText.GridColumnHeaderStyle}" Binding="{Binding Style}" Width="60" HeaderStyle="{StaticResource ColumnHeaderStyleCentered}">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">
                                 <Setter Property="HorizontalAlignment" Value="Stretch" />
@@ -200,7 +201,7 @@
                             </Style>
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
-                    <DataGridTextColumn x:Name="ColumnSecurityStatus" Header="Sec" Binding="{Binding SecurityStatus}" Width="70" HeaderStyle="{StaticResource ColumnHeaderStyleRight}">
+                    <DataGridTextColumn x:Name="ColumnSecurityStatus" Header="{x:Static resources:UiText.GridColumnHeaderSec}" Binding="{Binding SecurityStatus}" Width="70" HeaderStyle="{StaticResource ColumnHeaderStyleRight}">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">
                                 <Setter Property="HorizontalAlignment" Value="Stretch" />
@@ -209,7 +210,7 @@
                             </Style>
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
-                    <DataGridTextColumn x:Name="ColumnWeek" Header="Week" Binding="{Binding Week}" Width="60" HeaderStyle="{StaticResource ColumnHeaderStyleCentered}">
+                    <DataGridTextColumn x:Name="ColumnWeek" Header="{x:Static resources:UiText.GridColumnHeaderWeek}" Binding="{Binding Week}" Width="60" HeaderStyle="{StaticResource ColumnHeaderStyleCentered}">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">
                                 <Setter Property="HorizontalAlignment" Value="Stretch" />
@@ -217,12 +218,12 @@
                             </Style>
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
-                    <DataGridTextColumn x:Name="ColumnCorporation" Header="Corporation" Binding="{Binding Corporation}" Width="210" />
-                    <DataGridTextColumn x:Name="ColumnAlliance" Header="Alliance" Binding="{Binding Alliance}" Width="210" />
-                    <DataGridTextColumn x:Name="ColumnLastActive" Header="Last Kill" Binding="{Binding LastKill}" Width="90" />
-                    <DataGridTextColumn x:Name="ColumnNotes" Header="Notes" Binding="{Binding Notes}" Width="260" />
-                    <DataGridTextColumn x:Name="ColumnVerify" Header="Verify" Binding="{Binding Verify}" Width="70" />
-                    <DataGridTextColumn x:Name="ColumnGroup" Header="Group" Binding="{Binding Group}" Width="90" />
+                    <DataGridTextColumn x:Name="ColumnCorporation" Header="{x:Static resources:UiText.GridColumnHeaderCorporation}" Binding="{Binding Corporation}" Width="210" />
+                    <DataGridTextColumn x:Name="ColumnAlliance" Header="{x:Static resources:UiText.GridColumnHeaderAlliance}" Binding="{Binding Alliance}" Width="210" />
+                    <DataGridTextColumn x:Name="ColumnLastActive" Header="{x:Static resources:UiText.GridColumnHeaderLastKill}" Binding="{Binding LastKill}" Width="90" />
+                    <DataGridTextColumn x:Name="ColumnNotes" Header="{x:Static resources:UiText.GridColumnHeaderNotes}" Binding="{Binding Notes}" Width="260" />
+                    <DataGridTextColumn x:Name="ColumnVerify" Header="{x:Static resources:UiText.GridColumnHeaderVerify}" Binding="{Binding Verify}" Width="70" />
+                    <DataGridTextColumn x:Name="ColumnGroup" Header="{x:Static resources:UiText.GridColumnHeaderGroup}" Binding="{Binding Group}" Width="90" />
                 </DataGrid.Columns>
             </DataGrid>
         </ScrollViewer>
