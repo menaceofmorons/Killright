@@ -25,6 +25,8 @@ public sealed class ApplicationSettings
 
     public long NpcCorporationIdThreshold { get; init; } = 1_005_000;
 
+    public int QualificationFleetThreshold { get; init; } = 11;
+
     public SdeApplicationSettings Sde { get; init; } = new();
 
     public ThreatSettings Threat { get; init; } = new();

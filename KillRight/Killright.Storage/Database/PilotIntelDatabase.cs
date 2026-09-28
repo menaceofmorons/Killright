@@ -1,4 +1,5 @@
 using DuckDB.NET.Data;
+using Killright.Shared.Data;
 
 namespace Killright.Storage.Database;
 
@@ -59,6 +60,29 @@ public sealed class KillRightDatabase
         command.CommandText = "SELECT schema_version FROM main.schema_metadata LIMIT 1;";
 
         return Convert.ToInt32(command.ExecuteScalar());
+    }
+
+    public int? GetLastAppliedQualificationFleetThreshold()
+    {
+        using var connection = new DuckDBConnection(ConnectionString);
+        connection.Open();
+
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT last_qualification_fleet_threshold FROM main.schema_metadata LIMIT 1;";
+
+        using var reader = command.ExecuteReader();
+
+        return reader.Read() ? reader.GetNullableInt32(0) : null;
+    }
+
+    public void SetLastAppliedQualificationFleetThreshold(int threshold)
+    {
+        using var connection = new DuckDBConnection(ConnectionString);
+        connection.Open();
+
+        using var command = connection.CreateCommand();
+        command.CommandText = $"UPDATE main.schema_metadata SET last_qualification_fleet_threshold = {threshold};";
+        command.ExecuteNonQuery();
     }
 
     private void QuarantineExistingDatabaseFiles()
@@ -264,6 +288,10 @@ public sealed class KillRightDatabase
                               );
                               """;
         createTable.ExecuteNonQuery();
+
+        using var addLastQualificationFleetThreshold = connection.CreateCommand();
+        addLastQualificationFleetThreshold.CommandText = "ALTER TABLE main.schema_metadata ADD COLUMN IF NOT EXISTS last_qualification_fleet_threshold INTEGER;";
+        addLastQualificationFleetThreshold.ExecuteNonQuery();
 
         using var insertIfAbsent = connection.CreateCommand();
         insertIfAbsent.CommandText = $"""

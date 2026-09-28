@@ -303,6 +303,8 @@ public partial class DiagnosticsView : UserControl
             $"Expired Killmail Rows:    {summary.ExpiredKillmailRows}\n" +
             $"Schema Version:           {summary.SchemaVersion}\n" +
             $"Alpha Release Locked:     {summary.AlphaReleaseSchemaLocked}\n" +
+            $"Qualification Threshold (Configured): {summary.QualificationFleetThresholdConfigured}\n" +
+            $"Qualification Threshold (Stored):     {summary.QualificationFleetThresholdStored?.ToString() ?? "(none)"}\n" +
             $"SDE Build Number:         {summary.SdeBuildNumber?.ToString() ?? "(none)"}\n" +
             $"SDE Last Checked UTC:     {summary.SdeLastCheckedUtc:yyyy-MM-dd HH:mm:ss} UTC\n" +
             $"SDE Last Updated UTC:     {summary.SdeLastUpdatedUtc:yyyy-MM-dd HH:mm:ss} UTC\n" +
@@ -346,6 +348,8 @@ public partial class DiagnosticsView : UserControl
                Expired Killmail Rows:    {summary.ExpiredKillmailRows}
                Schema Version:           {summary.SchemaVersion}
                Alpha Release Locked:     {summary.AlphaReleaseSchemaLocked}
+               Qualification Threshold (Configured): {summary.QualificationFleetThresholdConfigured}
+               Qualification Threshold (Stored):     {summary.QualificationFleetThresholdStored?.ToString() ?? "(none)"}
 
                SDE Build Number:         {summary.SdeBuildNumber?.ToString() ?? "(none)"}
                SDE Last Checked UTC:     {summary.SdeLastCheckedUtc:yyyy-MM-dd HH:mm:ss} UTC

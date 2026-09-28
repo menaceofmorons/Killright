@@ -210,12 +210,42 @@ public sealed class DuckDbKillmailStoreTests
         await store.UpsertAsync(ScannedCharacterId, []);
     }
 
+    [Fact]
+    public async Task UpsertAsync_ConfiguredThresholdBelowDefault_AppliesConfiguredThreshold()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"killmailStore.{Guid.NewGuid():N}.duckdb");
+        var database = new KillRightDatabase(new KillRightDatabaseOptions { DatabasePath = path });
+        database.EnsureCreated();
+        var store = new DuckDbKillmailStore(database, qualificationFleetThreshold: 3);
+
+        var killmail = new RawKillmail(
+            723456,
+            "stu901",
+            new DateTimeOffset(2026, 9, 20, 10, 0, 0, TimeSpan.Zero),
+            30000142,
+            40000001,
+            999,
+            587,
+            false,
+            false,
+            [
+                new KillmailAttacker(ScannedCharacterId, 98000001, null, 11567),
+                new KillmailAttacker(91321792, 98000002, 99000001, 17738),
+                new KillmailAttacker(90000003, 98000003, null, 670)
+            ]);
+
+        await store.UpsertAsync(ScannedCharacterId, [killmail]);
+
+        var (_, isQualifying) = ReadKillmail(database, 723456);
+        Assert.False(isQualifying);
+    }
+
     private static (KillRightDatabase Database, DuckDbKillmailStore Store) CreateStore()
     {
         var path = Path.Combine(Path.GetTempPath(), $"killmailStore.{Guid.NewGuid():N}.duckdb");
         var database = new KillRightDatabase(new KillRightDatabaseOptions { DatabasePath = path });
         database.EnsureCreated();
-        return (database, new DuckDbKillmailStore(database));
+        return (database, new DuckDbKillmailStore(database, qualificationFleetThreshold: 11));
     }
 
     private static (int UniqueAttackerCount, bool IsQualifying) ReadKillmail(KillRightDatabase database, long killmailId)

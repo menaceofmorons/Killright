@@ -2,7 +2,6 @@ namespace Killright.Shared.Killmails;
 
 public static class KillmailQualification
 {
-    public const int FleetThreshold = 11;
     public const long CapsuleShipTypeId = 670;
     public const long CapsuleGenolutionShipTypeId = 33328;
 
@@ -26,8 +25,8 @@ public static class KillmailQualification
         return victimShipTypeId is long shipTypeId && PodShipTypeIds.Contains(shipTypeId);
     }
 
-    public static bool IsQualifying(int uniqueAttackerCount, bool isPodKill)
+    public static bool IsQualifying(int uniqueAttackerCount, bool isPodKill, int fleetThreshold)
     {
-        return uniqueAttackerCount >= 2 && uniqueAttackerCount < FleetThreshold && !isPodKill;
+        return uniqueAttackerCount >= 2 && uniqueAttackerCount < fleetThreshold && !isPodKill;
     }
 }

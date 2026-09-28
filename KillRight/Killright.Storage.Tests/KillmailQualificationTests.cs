@@ -45,13 +45,15 @@ public sealed class KillmailQualificationTests
     }
 
     [Theory]
-    [InlineData(1, false, false)]
-    [InlineData(2, false, true)]
-    [InlineData(10, false, true)]
-    [InlineData(11, false, false)]
-    [InlineData(2, true, false)]
-    public void IsQualifying_AppliesAttackerCountAndPodRules(int uniqueAttackerCount, bool isPodKill, bool expected)
+    [InlineData(1, false, 11, false)]
+    [InlineData(2, false, 11, true)]
+    [InlineData(10, false, 11, true)]
+    [InlineData(11, false, 11, false)]
+    [InlineData(2, true, 11, false)]
+    [InlineData(4, false, 5, true)]
+    [InlineData(5, false, 5, false)]
+    public void IsQualifying_AppliesAttackerCountPodRulesAndConfiguredThreshold(int uniqueAttackerCount, bool isPodKill, int fleetThreshold, bool expected)
     {
-        Assert.Equal(expected, KillmailQualification.IsQualifying(uniqueAttackerCount, isPodKill));
+        Assert.Equal(expected, KillmailQualification.IsQualifying(uniqueAttackerCount, isPodKill, fleetThreshold));
     }
 }

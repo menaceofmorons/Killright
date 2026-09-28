@@ -142,6 +142,8 @@ public partial class App : Application
                 EngineFailureLog.Record("Restored killmail and attacker tables from the latest backup.");
         }
 
+        KillmailQualificationRequalifier.RequalifyOnStartup(database, Settings.QualificationFleetThreshold);
+
         PilotIdentityCache =
             new DuckDbPilotIdentityCache(database);
         zKillActivityCache =
@@ -149,7 +151,7 @@ public partial class App : Application
         RecentKillmailCache =
             new DuckDbRecentKillmailCache(database, Settings.RecentWindowDays);
         KillmailStore =
-            new DuckDbKillmailStore(database);
+            new DuckDbKillmailStore(database, Settings.QualificationFleetThreshold);
         zKillStatisticsCache =
             new DuckDbzKillStatisticsCache(database);
         SdeReferenceDataStore =

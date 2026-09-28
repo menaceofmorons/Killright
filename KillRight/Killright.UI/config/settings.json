@@ -2,6 +2,7 @@
   "recentWindowDays": 14,
   "backupRotationCount": 5,
   "alphaReleaseSchemaLocked": false,
+  "qualificationFleetThreshold": 11,
   "threatBands": [
     { "name": "Low", "minimumScore": 1, "maximumScore": 20 },
     { "name": "Medium", "minimumScore": 21, "maximumScore": 40 },

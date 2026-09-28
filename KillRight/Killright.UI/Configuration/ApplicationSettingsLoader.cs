@@ -6,6 +6,9 @@ namespace Killright.UI.Configuration;
 
 public static class ApplicationSettingsLoader
 {
+    private const int MinimumQualificationFleetThreshold = 3;
+    private const int DefaultQualificationFleetThreshold = 11;
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -38,6 +41,10 @@ public static class ApplicationSettingsLoader
 
     private static ApplicationSettings Normalize(ApplicationSettings settings)
     {
+        var qualificationFleetThreshold = settings.QualificationFleetThreshold >= MinimumQualificationFleetThreshold
+            ? settings.QualificationFleetThreshold
+            : DefaultQualificationFleetThreshold;
+
 #if HISTORIC_RELATIONSHIPS
         var batchOptions = settings.GroupHistory.ToBatchOptions();
         var parallelOptions = settings.GroupHistory.ToParallelDownloadOptions();
@@ -52,6 +59,7 @@ public static class ApplicationSettingsLoader
             RelationshipConfidenceBands = settings.RelationshipConfidenceBands,
             HighlightOpacity = settings.HighlightOpacity,
             NpcCorporationIdThreshold = settings.NpcCorporationIdThreshold,
+            QualificationFleetThreshold = qualificationFleetThreshold,
             Sde = settings.Sde,
             Threat = settings.Threat,
             GroupDetection = settings.GroupDetection,
@@ -64,7 +72,24 @@ public static class ApplicationSettingsLoader
             }
         };
 #else
-        return settings;
+        return qualificationFleetThreshold == settings.QualificationFleetThreshold
+            ? settings
+            : new ApplicationSettings
+            {
+                RecentWindowDays = settings.RecentWindowDays,
+                BackupFolder = settings.BackupFolder,
+                BackupRotationCount = settings.BackupRotationCount,
+                AlphaReleaseSchemaLocked = settings.AlphaReleaseSchemaLocked,
+                ThreatBands = settings.ThreatBands,
+                RelationshipConfidenceBands = settings.RelationshipConfidenceBands,
+                HighlightOpacity = settings.HighlightOpacity,
+                NpcCorporationIdThreshold = settings.NpcCorporationIdThreshold,
+                QualificationFleetThreshold = qualificationFleetThreshold,
+                Sde = settings.Sde,
+                Threat = settings.Threat,
+                GroupDetection = settings.GroupDetection,
+                Style = settings.Style
+            };
 #endif
     }
 }

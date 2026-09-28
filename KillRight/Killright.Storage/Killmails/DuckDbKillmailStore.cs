@@ -9,10 +9,12 @@ namespace Killright.Storage.Killmails;
 public sealed class DuckDbKillmailStore : IKillmailStore
 {
     private readonly KillRightDatabase _database;
+    private readonly int _qualificationFleetThreshold;
 
-    public DuckDbKillmailStore(KillRightDatabase database)
+    public DuckDbKillmailStore(KillRightDatabase database, int qualificationFleetThreshold)
     {
         _database = database;
+        _qualificationFleetThreshold = qualificationFleetThreshold;
     }
 
     public Task UpsertAsync(
@@ -34,7 +36,7 @@ public sealed class DuckDbKillmailStore : IKillmailStore
         {
             var uniqueAttackerCount = KillmailQualification.CountUniqueAttackers(killmail.Attackers);
             var isPodKill = KillmailQualification.IsPodKill(killmail.VictimShipTypeId);
-            var isQualifying = KillmailQualification.IsQualifying(uniqueAttackerCount, isPodKill);
+            var isQualifying = KillmailQualification.IsQualifying(uniqueAttackerCount, isPodKill, _qualificationFleetThreshold);
 
             var existingQualifying = GetExistingQualifyingFlag(connection, transaction, killmail.KillmailId);
 
