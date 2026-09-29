@@ -23,6 +23,46 @@ public sealed class ApplicationSettingsLoaderTests
     }
 
     [Fact]
+    public void LoadOrDefault_RealSettingsFile_TimingIsDisabled()
+    {
+        var settings = ApplicationSettingsLoader.LoadOrDefault(ApplicationSettingsLoader.GetDefaultSettingsPath());
+
+        Assert.False(settings.Timing.Enabled);
+    }
+
+    [Fact]
+    public void LoadOrDefault_SectionAbsent_TimingDefaultsToDisabled()
+    {
+        var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"killright-settings-{Guid.NewGuid():N}.json");
+        System.IO.File.WriteAllText(path, "{ \"recentWindowDays\": 14 }");
+
+        try
+        {
+            Assert.False(ApplicationSettingsLoader.LoadOrDefault(path).Timing.Enabled);
+        }
+        finally
+        {
+            System.IO.File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void LoadOrDefault_TimingEnabledTrue_IsRead()
+    {
+        var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"killright-settings-{Guid.NewGuid():N}.json");
+        System.IO.File.WriteAllText(path, "{ \"timing\": { \"enabled\": true }, \"qualificationFleetThreshold\": 1 }");
+
+        try
+        {
+            Assert.True(ApplicationSettingsLoader.LoadOrDefault(path).Timing.Enabled);
+        }
+        finally
+        {
+            System.IO.File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void LoadOrDefault_MissingFile_ReturnsDefaults()
     {
         var settings = ApplicationSettingsLoader.LoadOrDefault(@"C:\does-not-exist\settings.json");

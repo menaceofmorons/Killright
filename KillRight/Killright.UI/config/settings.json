@@ -15,6 +15,9 @@
     { "name": "High", "minimumScore": 76, "maximumScore": 100 }
   ],
   "highlightOpacity": 0.2,
+  "timing": {
+    "enabled": false
+  },
   "groupHistory": {
     "importBatchSize": 150,
     "parallelDownloadWorkers": 20,

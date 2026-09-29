@@ -11,6 +11,7 @@ use crate::shared::recent_window_configuration::{
     validate_recent_window_configuration, RecentWindowConfiguration,
 };
 use crate::shared::style_configuration::{validate_style_configuration, StyleConfiguration};
+use crate::shared::timing_recorder::TimingConfiguration;
 use crate::threat_analysis::threat_configuration_loader::validate_threat_configuration;
 use crate::threat_analysis::threat_configuration_models::ThreatConfiguration;
 
@@ -24,6 +25,8 @@ struct SettingsFile {
     #[serde(rename = "groupDetection")]
     group_detection: GroupDetectionConfiguration,
     style: StyleConfiguration,
+    #[serde(default)]
+    timing: TimingConfiguration,
 }
 
 pub struct EngineSettings {
@@ -31,6 +34,7 @@ pub struct EngineSettings {
     pub threat: ThreatConfiguration,
     pub group_detection: GroupDetectionConfiguration,
     pub style: StyleConfiguration,
+    pub timing: TimingConfiguration,
 }
 
 pub fn get_settings_path() -> Result<PathBuf, String> {
@@ -100,6 +104,7 @@ pub fn load_engine_settings_from_path(path: &Path) -> Result<EngineSettings, Str
         threat: parsed.threat,
         group_detection: parsed.group_detection,
         style: parsed.style,
+        timing: parsed.timing,
     })
 }
 
@@ -171,6 +176,33 @@ mod tests {
         assert_eq!(settings.threat.component_weights.historical_capability.maximum_score, 40);
         assert_eq!(settings.group_detection.minimum_shared_events, 2);
         assert_eq!(settings.style.blob_minimum_average_attackers, 5.0);
+    }
+
+    #[test]
+    fn load_engine_settings_from_path_defaults_timing_to_disabled_when_section_absent() {
+        let path = std::env::temp_dir().join(format!("killright-settings-no-timing-{}.json", unique_suffix()));
+        fs::write(&path, valid_settings_json()).unwrap();
+
+        let settings = load_engine_settings_from_path(&path).unwrap();
+
+        fs::remove_file(&path).unwrap();
+        assert!(!settings.timing.enabled);
+    }
+
+    #[test]
+    fn load_engine_settings_from_path_reads_timing_enabled() {
+        let path = std::env::temp_dir().join(format!("killright-settings-timing-{}.json", unique_suffix()));
+        let json = valid_settings_json().replacen(
+            "\"backupRotationCount\": 5,",
+            "\"backupRotationCount\": 5, \"timing\": {\"enabled\": true},",
+            1,
+        );
+        fs::write(&path, json).unwrap();
+
+        let settings = load_engine_settings_from_path(&path).unwrap();
+
+        fs::remove_file(&path).unwrap();
+        assert!(settings.timing.enabled);
     }
 
     #[test]

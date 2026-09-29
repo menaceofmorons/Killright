@@ -4,6 +4,7 @@ use std::os::raw::c_char;
 use std::panic;
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
+use std::time::Instant;
 #[path = "kr_engine.rs"]
 pub mod kr_engine;
 use kr_engine::contracts::{
@@ -27,6 +28,7 @@ use kr_engine::shared::database_path::get_database_path;
 use kr_engine::shared::recent_window_configuration::RecentWindowConfiguration;
 use kr_engine::shared::settings_loader::load_engine_settings;
 use kr_engine::shared::style_configuration::StyleConfiguration;
+use kr_engine::shared::timing_recorder;
 use kr_engine::threat_analysis::{analyze_intrinsic_threat, analyze_intrinsic_threat_diagnostics, ThreatConfiguration};
 pub use kr_engine::*;
 struct RuntimeState {
@@ -56,6 +58,7 @@ pub extern "C" fn killright_initialize() -> i32 {
             Ok(value) => value,
             Err(_) => return 0,
         };
+        timing_recorder::set_enabled(engine_settings.timing.enabled);
         *guard = Some(RuntimeState {
             database_path,
             threat_configuration: engine_settings.threat,
@@ -82,6 +85,7 @@ pub extern "C" fn killright_analyze_pilot(request_json: *const c_char) -> *mut c
             Ok(value) => value,
             Err(_) => return failure_response(0, "unreadable_request"),
         };
+        let timing_started = timing_recorder::begin();
         let Some((
             database_path,
             threat_configuration,
@@ -100,6 +104,7 @@ pub extern "C" fn killright_analyze_pilot(request_json: *const c_char) -> *mut c
                 database_path,
                 &recent_window_configuration,
                 &group_detection_configuration,
+                timing_started,
             );
         }
 
@@ -108,21 +113,33 @@ pub extern "C" fn killright_analyze_pilot(request_json: *const c_char) -> *mut c
         let pilot_identity_repository = PilotIdentityRepository::new(database_path.clone());
         let activity_cache_repository = ActivityCacheRepository::new(database_path);
 
-        let all_killmails = match recent_killmail_repository.get_for_character(request.character_id) {
-            Ok(value) => value,
-            Err(_) => return failure_response(request.character_id, "repository_read_error:killmails"),
+        let all_killmails = {
+            let _timing = timing_recorder::scope("killmails_query");
+            match recent_killmail_repository.get_for_character(request.character_id) {
+                Ok(value) => value,
+                Err(_) => return failure_response(request.character_id, "repository_read_error:killmails"),
+            }
         };
-        let statistics = match zkill_statistics_repository.get_for_character(request.character_id) {
-            Ok(value) => value,
-            Err(_) => return failure_response(request.character_id, "repository_read_error:statistics"),
+        let statistics = {
+            let _timing = timing_recorder::scope("statistics_query");
+            match zkill_statistics_repository.get_for_character(request.character_id) {
+                Ok(value) => value,
+                Err(_) => return failure_response(request.character_id, "repository_read_error:statistics"),
+            }
         };
-        let identity = match pilot_identity_repository.get_for_character(request.character_id) {
-            Ok(value) => value,
-            Err(_) => return failure_response(request.character_id, "repository_read_error:identity"),
+        let identity = {
+            let _timing = timing_recorder::scope("identity_query");
+            match pilot_identity_repository.get_for_character(request.character_id) {
+                Ok(value) => value,
+                Err(_) => return failure_response(request.character_id, "repository_read_error:identity"),
+            }
         };
-        let coverage_start_text = match activity_cache_repository.get_coverage_start_for_character(request.character_id) {
-            Ok(value) => value,
-            Err(_) => return failure_response(request.character_id, "repository_read_error:activity_cache"),
+        let coverage_start_text = {
+            let _timing = timing_recorder::scope("activity_cache_query");
+            match activity_cache_repository.get_coverage_start_for_character(request.character_id) {
+                Ok(value) => value,
+                Err(_) => return failure_response(request.character_id, "repository_read_error:activity_cache"),
+            }
         };
         let coverage_start_utc = coverage_start_text.and_then(|text| {
             DateTime::parse_from_rfc3339(&text)
@@ -131,11 +148,18 @@ pub extern "C" fn killright_analyze_pilot(request_json: *const c_char) -> *mut c
         });
 
         let now = Utc::now();
-        let recent_window_killmails = filter_recent_window(
-            &all_killmails,
-            recent_window_configuration.recent_window_days,
-            now,
-        );
+        let recent_window_killmails = {
+            let _timing = timing_recorder::scope("recent_window_filter");
+            filter_recent_window(
+                &all_killmails,
+                recent_window_configuration.recent_window_days,
+                now,
+            )
+        };
+        if timing_recorder::is_active() {
+            timing_recorder::add_count("killmail_rows", all_killmails.len() as i64);
+            timing_recorder::add_count("recent_window_killmail_rows", recent_window_killmails.len() as i64);
+        }
         let killmails = recent_window_killmails
             .iter()
             .map(|row| RecentKillmailInput {
@@ -146,30 +170,42 @@ pub extern "C" fn killright_analyze_pilot(request_json: *const c_char) -> *mut c
                 ship_type_id: row.ship_type_id,
             })
             .collect::<Vec<_>>();
-        let recent_style_result = analyze_recent_style(
-            RecentStyleRequest {
+        let recent_style_result = {
+            let _timing = timing_recorder::scope("recent_style");
+            analyze_recent_style(
+                RecentStyleRequest {
+                    character_id: request.character_id,
+                    killmails,
+                },
+                &style_configuration,
+            )
+        };
+        let threat = {
+            let _timing = timing_recorder::scope("threat");
+            analyze_intrinsic_threat(
+                &threat_configuration,
+                statistics.as_ref(),
+                &recent_window_killmails,
+                identity.as_ref(),
+                coverage_start_utc,
+                now,
+                recent_window_configuration.recent_window_days,
+            )
+        };
+        timed_response_json(
+            PilotAnalysisResponse {
                 character_id: request.character_id,
-                killmails,
+                recent_style: Some(recent_style_result.recent_style),
+                is_recent_podder: Some(recent_style_result.is_podder),
+                threat: Some(threat),
+                group_detection: None,
+                failure: None,
+                timings_ms: None,
+                timing_counts: None,
             },
-            &style_configuration,
-        );
-        let threat = analyze_intrinsic_threat(
-            &threat_configuration,
-            statistics.as_ref(),
-            &recent_window_killmails,
-            identity.as_ref(),
-            coverage_start_utc,
-            now,
-            recent_window_configuration.recent_window_days,
-        );
-        response_json(PilotAnalysisResponse {
-            character_id: request.character_id,
-            recent_style: Some(recent_style_result.recent_style),
-            is_recent_podder: Some(recent_style_result.is_podder),
-            threat: Some(threat),
-            group_detection: None,
-            failure: None,
-        })
+            timing_started,
+            "pilot_total",
+        )
     });
     result.unwrap_or_else(|_| failure_response(0, "internal_error"))
 }
@@ -180,63 +216,101 @@ fn analyze_group_detection(
     database_path: PathBuf,
     recent_window_configuration: &RecentWindowConfiguration,
     group_detection_configuration: &GroupDetectionConfiguration,
+    timing_started: Option<Instant>,
 ) -> *mut c_char {
     let killmail_relationship_repository = KillmailRelationshipRepository::new(database_path.clone());
     let pilot_identity_repository = PilotIdentityRepository::new(database_path.clone());
     let sde_npc_corporation_repository = SdeNpcCorporationRepository::new(database_path);
 
-    let direct_evidence = match killmail_relationship_repository.get_attacker_evidence_for_scan_set(scanned_character_ids) {
-        Ok(value) => value,
-        Err(_) => return failure_response(character_id, "repository_read_error:direct_evidence"),
+    let direct_evidence = {
+        let _timing = timing_recorder::scope("direct_evidence_query");
+        match killmail_relationship_repository.get_attacker_evidence_for_scan_set(scanned_character_ids) {
+            Ok(value) => value,
+            Err(_) => return failure_response(character_id, "repository_read_error:direct_evidence"),
+        }
     };
-    let chain_evidence = match killmail_relationship_repository
-        .get_qualifying_attacker_evidence_touching_scan_set(scanned_character_ids)
-    {
-        Ok(value) => value,
-        Err(_) => return failure_response(character_id, "repository_read_error:chain_evidence"),
+    let chain_evidence = {
+        let _timing = timing_recorder::scope("chain_evidence_query");
+        match killmail_relationship_repository.get_qualifying_attacker_evidence_touching_scan_set(scanned_character_ids) {
+            Ok(value) => value,
+            Err(_) => return failure_response(character_id, "repository_read_error:chain_evidence"),
+        }
     };
-    let current_identities = match pilot_identity_repository.get_for_characters(scanned_character_ids) {
-        Ok(value) => value,
-        Err(_) => return failure_response(character_id, "repository_read_error:identity"),
+    let current_identities = {
+        let _timing = timing_recorder::scope("identities_query");
+        match pilot_identity_repository.get_for_characters(scanned_character_ids) {
+            Ok(value) => value,
+            Err(_) => return failure_response(character_id, "repository_read_error:identity"),
+        }
     };
-    let npc_corporation_ids = match sde_npc_corporation_repository.get_all_ids() {
-        Ok(value) => value,
-        Err(_) => return failure_response(character_id, "repository_read_error:npc_corporations"),
+    let npc_corporation_ids = {
+        let _timing = timing_recorder::scope("npc_corporations_query");
+        match sde_npc_corporation_repository.get_all_ids() {
+            Ok(value) => value,
+            Err(_) => return failure_response(character_id, "repository_read_error:npc_corporations"),
+        }
+    };
+    if timing_recorder::is_active() {
+        timing_recorder::add_count("scanned_pilots", scanned_character_ids.len() as i64);
+        timing_recorder::add_count("direct_evidence_rows", direct_evidence.len() as i64);
+        timing_recorder::add_count("chain_evidence_rows", chain_evidence.len() as i64);
+    }
+
+    let direct_relationships = {
+        let _timing = timing_recorder::scope("direct_analysis");
+        analyze_direct_relationships(
+            &direct_evidence,
+            &current_identities,
+            &npc_corporation_ids,
+            group_detection_configuration.minimum_shared_events,
+        )
+    };
+    let chained_relationships = {
+        let _timing = timing_recorder::scope("chain_analysis");
+        analyze_chained_relationships(
+            &chain_evidence,
+            &current_identities,
+            &npc_corporation_ids,
+            group_detection_configuration.minimum_shared_events,
+            recent_window_configuration.recent_window_days,
+            Utc::now(),
+        )
     };
 
-    let direct_relationships = analyze_direct_relationships(
-        &direct_evidence,
-        &current_identities,
-        &npc_corporation_ids,
-        group_detection_configuration.minimum_shared_events,
-    );
-    let chained_relationships = analyze_chained_relationships(
-        &chain_evidence,
-        &current_identities,
-        &npc_corporation_ids,
-        group_detection_configuration.minimum_shared_events,
-        recent_window_configuration.recent_window_days,
-        Utc::now(),
-    );
+    let scored_relationships = {
+        let _timing = timing_recorder::scope("scoring");
+        score_and_select_relationships(
+            &direct_relationships,
+            &chained_relationships,
+            group_detection_configuration,
+            recent_window_configuration.recent_window_days,
+        )
+    };
+    if timing_recorder::is_active() {
+        timing_recorder::add_count("direct_relationships", direct_relationships.len() as i64);
+        timing_recorder::add_count("chain_relationships", chained_relationships.len() as i64);
+        timing_recorder::add_count("scored_relationships", scored_relationships.len() as i64);
+    }
 
-    let scored_relationships = score_and_select_relationships(
-        &direct_relationships,
-        &chained_relationships,
-        group_detection_configuration,
-        recent_window_configuration.recent_window_days,
-    );
+    let relationships: Vec<GroupRelationshipResponse> = {
+        let _timing = timing_recorder::scope("response_build");
+        scored_relationships.into_iter().map(GroupRelationshipResponse::from).collect()
+    };
 
-    let relationships: Vec<GroupRelationshipResponse> =
-        scored_relationships.into_iter().map(GroupRelationshipResponse::from).collect();
-
-    response_json(PilotAnalysisResponse {
-        character_id,
-        recent_style: None,
-        is_recent_podder: None,
-        threat: None,
-        group_detection: Some(GroupDetectionResponse { relationships }),
-        failure: None,
-    })
+    timed_response_json(
+        PilotAnalysisResponse {
+            character_id,
+            recent_style: None,
+            is_recent_podder: None,
+            threat: None,
+            group_detection: Some(GroupDetectionResponse { relationships }),
+            failure: None,
+            timings_ms: None,
+            timing_counts: None,
+        },
+        timing_started,
+        "group_total",
+    )
 }
 #[no_mangle]
 pub extern "C" fn killright_diagnose_group_detection(request_json: *const c_char) -> *mut c_char {
@@ -425,6 +499,7 @@ fn threat_diagnostics_json(envelope: ThreatDiagnosticsEnvelope) -> *mut c_char {
 #[no_mangle]
 pub extern "C" fn killright_shutdown() {
     let _ = panic::catch_unwind(|| {
+        timing_recorder::set_enabled(false);
         if let Some(cell) = RUNTIME.get() {
             if let Ok(mut guard) = cell.lock() {
                 *guard = None;
@@ -478,6 +553,7 @@ fn filter_recent_window(
         .collect()
 }
 fn failure_response(character_id: i64, reason: &str) -> *mut c_char {
+    timing_recorder::clear();
     response_json(PilotAnalysisResponse {
         character_id,
         recent_style: None,
@@ -485,7 +561,26 @@ fn failure_response(character_id: i64, reason: &str) -> *mut c_char {
         threat: None,
         group_detection: None,
         failure: Some(reason.to_string()),
+        timings_ms: None,
+        timing_counts: None,
     })
+}
+fn timed_response_json(
+    mut response: PilotAnalysisResponse,
+    timing_started: Option<Instant>,
+    total_phase: &str,
+) -> *mut c_char {
+    if let Some(started) = timing_started {
+        let serialize_started = Instant::now();
+        let _ = serde_json::to_string(&response);
+        timing_recorder::record_ms("response_build", serialize_started.elapsed().as_secs_f64() * 1000.0);
+        timing_recorder::record_ms(total_phase, started.elapsed().as_secs_f64() * 1000.0);
+        if let Some(snapshot) = timing_recorder::take() {
+            response.timings_ms = Some(snapshot.timings_ms);
+            response.timing_counts = Some(snapshot.timing_counts);
+        }
+    }
+    response_json(response)
 }
 fn response_json(response: PilotAnalysisResponse) -> *mut c_char {
     let json = serde_json::to_string(&response).unwrap_or_else(|_| {

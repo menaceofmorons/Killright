@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Text;
+using Killright.Storage.Diagnostics;
 
 namespace Killright.UI.Analysis;
 
@@ -54,9 +55,11 @@ public sealed class KillrightEngineRuntime : IKillrightEngineRuntime
 
     public Task<string> AnalyzePilotAsync(
         string requestJson,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        ScanTimings? timings = null,
+        long? timingCharacterId = null)
     {
-        return InvokeJsonExport(_analyzePilot, requestJson, cancellationToken);
+        return InvokeJsonExport(_analyzePilot, requestJson, cancellationToken, timings, timingCharacterId);
     }
 
     public Task<string> DiagnoseGroupDetectionAsync(
@@ -76,7 +79,9 @@ public sealed class KillrightEngineRuntime : IKillrightEngineRuntime
     private Task<string> InvokeJsonExport(
         JsonExportDelegate export,
         string requestJson,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        ScanTimings? timings = null,
+        long? timingCharacterId = null)
     {
         if (_disposed || !IsAvailable)
         {
@@ -100,8 +105,12 @@ public sealed class KillrightEngineRuntime : IKillrightEngineRuntime
                 requestPointer,
                 requestBytes.Length);
 
-            var responsePointer =
-                export(requestPointer);
+            nint responsePointer;
+
+            using (timings.Measure(ScanTimings.EngineLevel, "native_call", timingCharacterId))
+            {
+                responsePointer = export(requestPointer);
+            }
 
             if (responsePointer == nint.Zero)
             {

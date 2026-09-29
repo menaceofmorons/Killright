@@ -6,6 +6,7 @@ use crate::group_analysis::shared_relationship_evidence::{
 };
 use crate::repositories::killmail_relationship_repository::KillmailAttackerEvidence;
 use crate::repositories::pilot_identity_repository::PilotIdentitySnapshot;
+use crate::shared::timing_recorder;
 
 pub const PROVISIONAL_MINIMUM_SHARED_EVENTS: i64 = 2;
 
@@ -26,9 +27,20 @@ pub fn analyze_direct_relationships(
     minimum_shared_events: i64,
 ) -> Vec<DirectRelationship> {
     let current_identity_by_character = build_current_identity_index(current_identities);
-    let attackers_by_killmail = group_attackers_by_killmail(evidence);
-    let shared_events_by_pair =
-        build_shared_events_by_pair(&attackers_by_killmail, npc_corporation_ids);
+    let attackers_by_killmail = {
+        let _timing = timing_recorder::scope("direct_group_by_killmail");
+        group_attackers_by_killmail(evidence)
+    };
+    let shared_events_by_pair = {
+        let _timing = timing_recorder::scope("direct_pair_expansion");
+        build_shared_events_by_pair(&attackers_by_killmail, npc_corporation_ids)
+    };
+    if timing_recorder::is_active() {
+        timing_recorder::add_count(
+            "direct_pair_events",
+            shared_events_by_pair.values().map(|events| events.len() as i64).sum(),
+        );
+    }
 
     let mut relationships = Vec::new();
 

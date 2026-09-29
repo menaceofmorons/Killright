@@ -20,14 +20,29 @@ public sealed class RustRecentStyleClient
 
     public async Task<PilotEngineAnalysisResult> AnalyzeAsync(
         long characterId,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        ScanTimings? timings = null)
     {
         try
         {
-            var request = new PilotAnalysisRequest(characterId, null);
-            var requestJson = JsonSerializer.Serialize(request);
-            var responseJson = await _runtime.AnalyzePilotAsync(requestJson, cancellationToken);
-            var response = JsonSerializer.Deserialize<PilotAnalysisResponse>(responseJson);
+            string requestJson;
+
+            using (timings.Measure(ScanTimings.EngineLevel, "json_serialize", characterId))
+            {
+                var request = new PilotAnalysisRequest(characterId, null);
+                requestJson = JsonSerializer.Serialize(request);
+            }
+
+            var responseJson = await _runtime.AnalyzePilotAsync(requestJson, cancellationToken, timings, characterId);
+            PilotAnalysisResponse? response;
+
+            using (timings.Measure(ScanTimings.EngineLevel, "json_deserialize", characterId))
+            {
+                response = JsonSerializer.Deserialize<PilotAnalysisResponse>(responseJson);
+            }
+
+            var engineTimings = MapTimings(response);
+            timings.AddEngine(characterId, engineTimings?.TimingsMs, engineTimings?.TimingCounts);
 
             if (!string.IsNullOrWhiteSpace(response?.failure))
             {
@@ -39,7 +54,8 @@ public sealed class RustRecentStyleClient
                 MapRecentStyle(response?.recent_style),
                 response?.is_recent_podder ?? false,
                 MapThreatScore(response?.threat?.score),
-                FailureReason: null);
+                FailureReason: null,
+                Timings: engineTimings);
         }
         catch (Exception exception)
         {
@@ -50,17 +66,32 @@ public sealed class RustRecentStyleClient
 
     public async Task<PilotGroupDetectionResult> AnalyzeGroupAsync(
         IReadOnlyList<long> scannedCharacterIds,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        ScanTimings? timings = null)
     {
         if (scannedCharacterIds.Count == 0)
             return PilotGroupDetectionResult.Empty;
 
         try
         {
-            var request = new PilotAnalysisRequest(scannedCharacterIds[0], scannedCharacterIds);
-            var requestJson = JsonSerializer.Serialize(request);
-            var responseJson = await _runtime.AnalyzePilotAsync(requestJson, cancellationToken);
-            var response = JsonSerializer.Deserialize<PilotAnalysisResponse>(responseJson);
+            string requestJson;
+
+            using (timings.Measure(ScanTimings.EngineLevel, "json_serialize"))
+            {
+                var request = new PilotAnalysisRequest(scannedCharacterIds[0], scannedCharacterIds);
+                requestJson = JsonSerializer.Serialize(request);
+            }
+
+            var responseJson = await _runtime.AnalyzePilotAsync(requestJson, cancellationToken, timings);
+            PilotAnalysisResponse? response;
+
+            using (timings.Measure(ScanTimings.EngineLevel, "json_deserialize"))
+            {
+                response = JsonSerializer.Deserialize<PilotAnalysisResponse>(responseJson);
+            }
+
+            var engineTimings = MapTimings(response);
+            timings.AddEngine(null, engineTimings?.TimingsMs, engineTimings?.TimingCounts);
 
             if (!string.IsNullOrWhiteSpace(response?.failure) || response?.group_detection is null)
             {
@@ -70,25 +101,40 @@ public sealed class RustRecentStyleClient
                 return PilotGroupDetectionResult.Empty;
             }
 
-            var relationships = response.group_detection.relationships
-                .Select(relationship => new PilotRelationship(
-                    relationship.pilot_a_character_id,
-                    relationship.pilot_b_character_id,
-                    relationship.link_type == "Chain" ? RelationshipLinkType.Chain : RelationshipLinkType.Direct,
-                    relationship.strength,
-                    relationship.confidence,
-                    relationship.total_shared_kills,
-                    relationship.last_shared_kill_time_utc,
-                    relationship.intermediaries_in_scan))
-                .ToList();
+            List<PilotRelationship> relationships;
 
-            return new PilotGroupDetectionResult(relationships);
+            using (timings.Measure(ScanTimings.EngineLevel, "relationship_map"))
+            {
+                relationships = response.group_detection.relationships
+                    .Select(relationship => new PilotRelationship(
+                        relationship.pilot_a_character_id,
+                        relationship.pilot_b_character_id,
+                        relationship.link_type == "Chain" ? RelationshipLinkType.Chain : RelationshipLinkType.Direct,
+                        relationship.strength,
+                        relationship.confidence,
+                        relationship.total_shared_kills,
+                        relationship.last_shared_kill_time_utc,
+                        relationship.intermediaries_in_scan))
+                    .ToList();
+            }
+
+            return new PilotGroupDetectionResult(relationships, engineTimings);
         }
         catch (Exception exception)
         {
             EngineFailureLog.Record($"engine group detection threw: {exception.Message}");
             return PilotGroupDetectionResult.Empty;
         }
+    }
+
+    private static EngineTimings? MapTimings(PilotAnalysisResponse? response)
+    {
+        if (response?.timings_ms is null && response?.timing_counts is null)
+            return null;
+
+        return new EngineTimings(
+            response.timings_ms ?? new Dictionary<string, double>(),
+            response.timing_counts ?? new Dictionary<string, long>());
     }
 
     private static StyleClassification MapRecentStyle(string? value)
@@ -141,6 +187,8 @@ public sealed class RustRecentStyleClient
         public ThreatAnalysisResponse? threat { get; set; }
         public GroupDetectionResponse? group_detection { get; set; }
         public string? failure { get; set; }
+        public Dictionary<string, double>? timings_ms { get; set; }
+        public Dictionary<string, long>? timing_counts { get; set; }
     }
 
     private sealed class ThreatAnalysisResponse
@@ -182,7 +230,13 @@ public sealed record PilotRelationship(
     string? LastSharedKillTimeUtc,
     IReadOnlyList<long>? IntermediariesInScan);
 
-public sealed record PilotGroupDetectionResult(IReadOnlyList<PilotRelationship> Relationships)
+public sealed record EngineTimings(
+    IReadOnlyDictionary<string, double> TimingsMs,
+    IReadOnlyDictionary<string, long> TimingCounts);
+
+public sealed record PilotGroupDetectionResult(
+    IReadOnlyList<PilotRelationship> Relationships,
+    EngineTimings? Timings = null)
 {
     public static readonly PilotGroupDetectionResult Empty = new(Array.Empty<PilotRelationship>());
 
@@ -195,7 +249,8 @@ public sealed record PilotEngineAnalysisResult(
     StyleClassification RecentStyle,
     bool IsRecentPodder,
     string ThreatBand,
-    string? FailureReason)
+    string? FailureReason,
+    EngineTimings? Timings = null)
 {
     public static PilotEngineAnalysisResult Failed(string reason) => new(
         StyleClassification.Unknown,

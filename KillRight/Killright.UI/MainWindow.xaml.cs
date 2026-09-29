@@ -16,9 +16,12 @@ using Killright.Shared;
 using Killright.Shared.Constants;
 using Killright.Shared.Time;
 using Killright.Shared.zKill;
+using Killright.Storage.Diagnostics;
 using Killright.Storage.Killmails;
+using Killright.UI.Analysis;
 using Killright.UI.ClipboardMonitoring;
 using Killright.UI.Configuration;
+using Killright.UI.Diagnostics;
 using Killright.UI.InfoSheet;
 using Killright.UI.Interop;
 using Killright.UI.MenuModal;
@@ -416,6 +419,7 @@ public partial class MainWindow : Window
 
     private async void ClipboardChanged(object? sender, EventArgs e)
     {
+        var timings = App.Settings.Timing.Enabled ? new ScanTimings() : null;
         string text;
 
         try
@@ -423,7 +427,10 @@ public partial class MainWindow : Window
             if (!System.Windows.Clipboard.ContainsText())
                 return;
 
-            text = System.Windows.Clipboard.GetText();
+            using (timings.Measure(ScanTimings.ScanLevel, "clipboard_read"))
+            {
+                text = System.Windows.Clipboard.GetText();
+            }
         }
         catch
         {
@@ -434,34 +441,80 @@ public partial class MainWindow : Window
             return;
         }
 
-        var pilotNames = PilotListParser.ParseIfLikelyPilotList(text);
+        IReadOnlyList<string> pilotNames;
+
+        using (timings.Measure(ScanTimings.ScanLevel, "clipboard_parse"))
+        {
+            pilotNames = PilotListParser.ParseIfLikelyPilotList(text);
+        }
 
         if (pilotNames.Count == 0)
             return;
 
-        await ResolvePilotsAsync(pilotNames);
+        await ResolvePilotsAsync(pilotNames, timings);
     }
 
     internal ObservableCollection<PilotReportRow> Pilots => _viewModel.Pilots;
 
-    private async Task ResolvePilotsAsync(IReadOnlyList<string> pilotNames)
+    private async Task ResolvePilotsAsync(IReadOnlyList<string> pilotNames, ScanTimings? timings = null)
+    {
+        timings ??= App.Settings.Timing.Enabled ? new ScanTimings() : null;
+
+        if (timings is null)
+        {
+            await ResolvePilotsCoreAsync(pilotNames, null);
+            return;
+        }
+
+        timings.PilotCount = pilotNames.Count;
+        timings.Record(ScanTimings.ScanLevel, "on_ui_thread_at_start", Dispatcher.CheckAccess() ? 1 : 0);
+        var stallMonitor = UiStallMonitor.Start(Dispatcher);
+
+        try
+        {
+            await ResolvePilotsCoreAsync(pilotNames, timings);
+        }
+        finally
+        {
+            try
+            {
+                timings.Record(ScanTimings.ScanLevel, "ui_max_stall_ms", stallMonitor.Stop());
+                timings.Record(ScanTimings.ScanLevel, "scan_total", timings.ElapsedMilliseconds);
+                timings.Flush();
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    private async Task ResolvePilotsCoreAsync(IReadOnlyList<string> pilotNames, ScanTimings? timings)
     {
         var rows = new List<PilotReportRow>();
         var ignoreList = App.UiState.Current.IgnoreListEntries;
+        var pilotLoopScope = timings.Measure(ScanTimings.ScanLevel, "pilot_loop_total");
 
         foreach (var pilotName in pilotNames)
         {
+            var identityScope = timings.Measure(ScanTimings.PilotLevel, "identity", null, "cache_hit");
             var pilot = await App.PilotIdentityCache.GetAsync(pilotName, CacheDurations.PilotIdentity);
 
             if (pilot is null)
             {
+                identityScope.Tag = "esi_resolve";
                 pilot = await App.EsiClient.ResolvePilotAsync(pilotName);
 
                 if (pilot is null)
+                {
+                    identityScope.Dispose();
                     continue;
+                }
 
                 await App.PilotIdentityCache.UpsertAsync(pilot);
             }
+
+            identityScope.CharacterId = pilot.CharacterId;
+            identityScope.Dispose();
 
             if (pilot.VerifyStatus is VerifyStatus.NoMatch or VerifyStatus.Failed)
                 continue;
@@ -478,38 +531,73 @@ public partial class MainWindow : Window
             var recentCallFailed = false;
             string? engineFailureReason = null;
             PilotRecentKillmail? lastActivity = null;
-            var birthday = await SafeGetBirthdayAsync(pilotName);
+            DateOnly? birthday;
+
+            using (timings.Measure(ScanTimings.PilotLevel, "birthday", pilot.CharacterId))
+            {
+                birthday = await SafeGetBirthdayAsync(pilotName);
+            }
 
             if (pilot.CharacterId is not null)
             {
                 var characterId = pilot.CharacterId.Value;
 
-                var (loadedStatistics, statisticsFetchedThisScan) = await LoadzKillStatisticsAsync(characterId);
+                var (loadedStatistics, statisticsFetchedThisScan) = await LoadzKillStatisticsAsync(characterId, timings);
                 statistics = loadedStatistics;
                 statisticsCallFailed = statisticsFetchedThisScan && statistics is null;
 
-                var storedActivity = await SafeGetStoredActivityAsync(characterId);
+                zKillActivity? storedActivity;
 
-                var (newLastSuccessfulCallUtc, recentCallDidFail, pastSecondsRequested) = await RefreshRecentKillmailsAsync(
-                    characterId,
-                    storedActivity,
-                    statistics,
-                    statisticsFetchedThisScan);
+                using (timings.Measure(ScanTimings.PilotLevel, "stored_activity", characterId))
+                {
+                    storedActivity = await SafeGetStoredActivityAsync(characterId);
+                }
+
+                (DateTimeOffset? NewLastSuccessfulCallUtc, bool Failed, int? PastSecondsRequested) recentRefresh;
+
+                using (timings.Measure(ScanTimings.PilotLevel, "recent_refresh", characterId))
+                {
+                    recentRefresh = await RefreshRecentKillmailsAsync(
+                        characterId,
+                        storedActivity,
+                        statistics,
+                        statisticsFetchedThisScan,
+                        timings);
+                }
+
+                var (newLastSuccessfulCallUtc, recentCallDidFail, pastSecondsRequested) = recentRefresh;
                 recentCallFailed = recentCallDidFail;
 
-                var killmailDerivedActivity = await LoadDerivedActivityAsync(characterId);
+                zKillActivity? killmailDerivedActivity;
 
-                activity = await ResolveActivityAsync(
-                    characterId,
-                    statistics,
-                    storedActivity,
-                    killmailDerivedActivity,
-                    newLastSuccessfulCallUtc,
-                    pastSecondsRequested);
+                using (timings.Measure(ScanTimings.PilotLevel, "derived_activity", characterId))
+                {
+                    killmailDerivedActivity = await LoadDerivedActivityAsync(characterId);
+                }
 
-                lastActivity = await LoadMostRecentKillmailAsync(characterId);
+                using (timings.Measure(ScanTimings.PilotLevel, "resolve_activity", characterId))
+                {
+                    activity = await ResolveActivityAsync(
+                        characterId,
+                        statistics,
+                        storedActivity,
+                        killmailDerivedActivity,
+                        newLastSuccessfulCallUtc,
+                        pastSecondsRequested);
+                }
 
-                var analysisResult = await App.RecentStyleClient.AnalyzeAsync(characterId);
+                using (timings.Measure(ScanTimings.PilotLevel, "last_activity", characterId))
+                {
+                    lastActivity = await LoadMostRecentKillmailAsync(characterId);
+                }
+
+                PilotEngineAnalysisResult analysisResult;
+
+                using (timings.Measure(ScanTimings.PilotLevel, "engine_analyze", characterId))
+                {
+                    analysisResult = await App.RecentStyleClient.AnalyzeAsync(characterId, timings: timings);
+                }
+
                 recentStyle = analysisResult.RecentStyle;
                 recentIsPodder = analysisResult.IsRecentPodder;
                 threatBand = analysisResult.ThreatBand;
@@ -528,38 +616,70 @@ public partial class MainWindow : Window
                 }
             }
 
-            rows.Add(PilotReportRowFactory.FromPilot(
-                pilot,
-                activity,
-                statistics,
-                recentStyle,
-                recentIsPodder,
-                threatBand,
-                statisticsCallFailed,
-                recentCallFailed,
-                engineFailureReason,
-                birthday,
-                lastActivity,
-                App.SdeReferenceDataStore));
+            using (timings.Measure(ScanTimings.PilotLevel, "row_factory", pilot.CharacterId))
+            {
+                rows.Add(PilotReportRowFactory.FromPilot(
+                    pilot,
+                    activity,
+                    statistics,
+                    recentStyle,
+                    recentIsPodder,
+                    threatBand,
+                    statisticsCallFailed,
+                    recentCallFailed,
+                    engineFailureReason,
+                    birthday,
+                    lastActivity,
+                    App.SdeReferenceDataStore));
+            }
         }
+
+        pilotLoopScope.Dispose();
+
+        if (timings is not null)
+            timings.PilotCount = rows.Count;
 
         if (rows.Count == 0)
             return;
 
-        await AttachGroupRelationshipsAsync(rows);
-        var npcCorporationIds = App.SdeReferenceDataStore.GetNpcCorporationIds();
-        PilotGroupCountAnnotator.Annotate(rows, npcCorporationIds);
+        using (timings.Measure(ScanTimings.ScanLevel, "group_attach_total"))
+        {
+            await AttachGroupRelationshipsAsync(rows, timings);
+        }
+
+        IReadOnlySet<long> npcCorporationIds;
+
+        using (timings.Measure(ScanTimings.ScanLevel, "npc_ids"))
+        {
+            npcCorporationIds = App.SdeReferenceDataStore.GetNpcCorporationIds();
+        }
+
+        using (timings.Measure(ScanTimings.ScanLevel, "annotate"))
+        {
+            PilotGroupCountAnnotator.Annotate(rows, npcCorporationIds);
+        }
 
         _hoverTimer.Stop();
         _pendingHoverRow = null;
 
-        _viewModel.Pilots.Clear();
+        using (timings.Measure(ScanTimings.ScanLevel, "grid_update"))
+        {
+            _viewModel.Pilots.Clear();
 
-        foreach (var row in rows)
-            _viewModel.Pilots.Add(row);
+            foreach (var row in rows)
+                _viewModel.Pilots.Add(row);
+        }
+
+        if (timings is not null)
+        {
+            using (timings.Measure(ScanTimings.ScanLevel, "grid_render"))
+            {
+                await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+            }
+        }
     }
 
-    private static async Task AttachGroupRelationshipsAsync(List<PilotReportRow> rows)
+    private static async Task AttachGroupRelationshipsAsync(List<PilotReportRow> rows, ScanTimings? timings = null)
     {
         var scannedCharacterIds = rows
             .Where(row => row.CharacterId is not null)
@@ -570,14 +690,17 @@ public partial class MainWindow : Window
         if (scannedCharacterIds.Count < 2)
             return;
 
-        var groupResult = await App.RecentStyleClient.AnalyzeGroupAsync(scannedCharacterIds);
+        var groupResult = await App.RecentStyleClient.AnalyzeGroupAsync(scannedCharacterIds, timings: timings);
 
-        foreach (var row in rows)
+        using (timings.Measure(ScanTimings.EngineLevel, "relationship_assign"))
         {
-            if (row.CharacterId is null)
-                continue;
+            foreach (var row in rows)
+            {
+                if (row.CharacterId is null)
+                    continue;
 
-            row.GroupRelationships = groupResult.ForCharacter(row.CharacterId.Value).ToList();
+                row.GroupRelationships = groupResult.ForCharacter(row.CharacterId.Value).ToList();
+            }
         }
     }
 
@@ -625,10 +748,14 @@ public partial class MainWindow : Window
         }
     }
 
-    private static async Task<(zKillStatistics? Statistics, bool FetchedThisScan)> LoadzKillStatisticsAsync(long? characterId)
+    private static async Task<(zKillStatistics? Statistics, bool FetchedThisScan)> LoadzKillStatisticsAsync(
+        long? characterId,
+        ScanTimings? timings = null)
     {
         if (characterId is null)
             return (null, false);
+
+        using var statisticsScope = timings.Measure(ScanTimings.PilotLevel, "zkill_statistics", characterId, "cache_hit");
 
         try
         {
@@ -644,6 +771,7 @@ public partial class MainWindow : Window
             // Cache failures should not prevent live zKill stats lookup.
         }
 
+        statisticsScope.Tag = "live_fetch";
         var result = await App.zKillClient.GetStatisticsAsync(characterId.Value);
 
         var statistics = result.Outcome switch
@@ -759,11 +887,15 @@ public partial class MainWindow : Window
         long characterId,
         zKillActivity? storedActivity,
         zKillStatistics? statistics,
-        bool statisticsFetchedThisScan)
+        bool statisticsFetchedThisScan,
+        ScanTimings? timings = null)
     {
         try
         {
-            await App.RecentKillmailCache.RemoveExpiredAsync();
+            using (timings.Measure(ScanTimings.PilotLevel, "remove_expired", characterId))
+            {
+                await App.RecentKillmailCache.RemoveExpiredAsync();
+            }
 
             var now = ApplicationClock.UtcNow;
             var lastSuccessfulCallUtc = storedActivity?.LastSuccessfulRecentCallUtc;
@@ -781,14 +913,23 @@ public partial class MainWindow : Window
             }
 
             var pastSeconds = RecentCallScheduler.CalculatePastSeconds(lastSuccessfulCallUtc, now);
-            var result = await App.zKillClient.GetRecentKillmailsAsync(characterId, pastSeconds);
+            zKillRecentKillmailResult result;
+
+            using (timings.Measure(ScanTimings.PilotLevel, "zkill_http", characterId))
+            {
+                result = await App.zKillClient.GetRecentKillmailsAsync(characterId, pastSeconds);
+            }
 
             switch (result.Outcome)
             {
                 case zKillRecentKillmailOutcome.Success:
                     if (result.RawKillmails.Count > 0)
                     {
-                        await App.KillmailStore.UpsertAsync(characterId, result.RawKillmails);
+                        using (timings.Measure(ScanTimings.PilotLevel, "killmail_upsert", characterId))
+                        {
+                            await App.KillmailStore.UpsertAsync(characterId, result.RawKillmails);
+                        }
+
                         await App.zKillStatisticsCache.ClearNoHistoryMarkerAsync(characterId);
                     }
 

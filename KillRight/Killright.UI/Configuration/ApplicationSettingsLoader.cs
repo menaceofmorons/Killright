@@ -62,6 +62,7 @@ public static class ApplicationSettingsLoader
             Threat = settings.Threat,
             GroupDetection = settings.GroupDetection,
             Style = settings.Style,
+            Timing = settings.Timing,
             GroupHistory = new GroupHistoryApplicationSettings
             {
                 ImportBatchSize = batchOptions.EvidenceInsertBatchSize,
@@ -84,7 +85,8 @@ public static class ApplicationSettingsLoader
                 Sde = settings.Sde,
                 Threat = settings.Threat,
                 GroupDetection = settings.GroupDetection,
-                Style = settings.Style
+                Style = settings.Style,
+                Timing = settings.Timing
             };
 #endif
     }

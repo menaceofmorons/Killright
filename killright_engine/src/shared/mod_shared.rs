@@ -15,3 +15,6 @@ pub mod settings_loader;
 
 #[path = "style_configuration.rs"]
 pub mod style_configuration;
+
+#[path = "timing_recorder.rs"]
+pub mod timing_recorder;

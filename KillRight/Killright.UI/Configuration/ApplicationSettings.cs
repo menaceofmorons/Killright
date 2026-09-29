@@ -31,6 +31,8 @@ public sealed class ApplicationSettings
 
     public StyleSettings Style { get; init; } = new();
 
+    public TimingSettings Timing { get; init; } = new();
+
 #if HISTORIC_RELATIONSHIPS
     public GroupHistoryApplicationSettings GroupHistory { get; init; } = new();
 #endif
@@ -115,6 +117,11 @@ public sealed class SdeApplicationSettings
     public string DatasetZipUrl { get; init; } = "https://developers.eveonline.com/static-data/eve-online-static-data-latest-jsonl.zip";
 
     public int CheckIntervalHours { get; init; } = 24;
+}
+
+public sealed class TimingSettings
+{
+    public bool Enabled { get; init; }
 }
 
 public sealed class StyleSettings
