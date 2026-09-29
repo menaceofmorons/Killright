@@ -10,6 +10,9 @@ namespace Killright.Storage.Killmails;
 
 public sealed class DuckDbRecentKillmailCache : IRecentKillmailCache
 {
+    private static readonly string PodShipTypeIdList =
+        $"{KillmailQualification.CapsuleShipTypeId}, {KillmailQualification.CapsuleGenolutionShipTypeId}";
+
     private readonly KillRightDatabase _database;
     private readonly int _recentWindowDays;
 
@@ -114,6 +117,7 @@ public sealed class DuckDbRecentKillmailCache : IRecentKillmailCache
                                      CAST(NULL AS BIGINT) AS weapon_type_id
                               FROM main.zkill_killmails
                               WHERE victim_character_id = {characterId}
+                                AND (victim_ship_type_id IS NULL OR victim_ship_type_id NOT IN ({PodShipTypeIdList}))
                               UNION ALL
                               SELECT k.kill_time_utc,
                                      FALSE AS is_loss,
@@ -125,10 +129,7 @@ public sealed class DuckDbRecentKillmailCache : IRecentKillmailCache
                               FROM main.zkill_killmail_attackers a
                               JOIN main.zkill_killmails k ON k.killmail_id = a.killmail_id
                               WHERE a.character_id = {characterId}
-                                AND (k.victim_ship_type_id IS NULL OR k.victim_ship_type_id NOT IN (
-                                    {KillmailQualification.CapsuleShipTypeId},
-                                    {KillmailQualification.CapsuleGenolutionShipTypeId}
-                                ))
+                                AND (k.victim_ship_type_id IS NULL OR k.victim_ship_type_id NOT IN ({PodShipTypeIdList}))
                               ORDER BY kill_time_utc DESC
                               LIMIT 1;
                               """;
@@ -162,7 +163,7 @@ public sealed class DuckDbRecentKillmailCache : IRecentKillmailCache
         using (var buildProtectedFloor = connection.CreateCommand())
         {
             buildProtectedFloor.Transaction = transaction;
-            buildProtectedFloor.CommandText = """
+            buildProtectedFloor.CommandText = $"""
                                 CREATE TEMP TABLE protected_killmail_ids AS
                                 WITH scanned_pilots AS (
                                     SELECT character_id
@@ -172,11 +173,13 @@ public sealed class DuckDbRecentKillmailCache : IRecentKillmailCache
                                     SELECT victim_character_id AS character_id, kill_time_utc
                                     FROM main.zkill_killmails
                                     WHERE victim_character_id IN (SELECT character_id FROM scanned_pilots)
+                                      AND (victim_ship_type_id IS NULL OR victim_ship_type_id NOT IN ({PodShipTypeIdList}))
                                     UNION ALL
                                     SELECT a.character_id, k.kill_time_utc
                                     FROM main.zkill_killmail_attackers a
                                     JOIN main.zkill_killmails k ON k.killmail_id = a.killmail_id
                                     WHERE a.character_id IN (SELECT character_id FROM scanned_pilots)
+                                      AND (k.victim_ship_type_id IS NULL OR k.victim_ship_type_id NOT IN ({PodShipTypeIdList}))
                                 ),
                                 pilot_floor AS (
                                     SELECT character_id, MAX(kill_time_utc) AS floor_kill_time_utc
@@ -188,13 +191,15 @@ public sealed class DuckDbRecentKillmailCache : IRecentKillmailCache
                                 JOIN pilot_floor pf
                                   ON k.victim_character_id = pf.character_id
                                  AND k.kill_time_utc = pf.floor_kill_time_utc
+                                WHERE k.victim_ship_type_id IS NULL OR k.victim_ship_type_id NOT IN ({PodShipTypeIdList})
                                 UNION
                                 SELECT k.killmail_id
                                 FROM main.zkill_killmail_attackers a
                                 JOIN main.zkill_killmails k ON k.killmail_id = a.killmail_id
                                 JOIN pilot_floor pf
                                   ON a.character_id = pf.character_id
-                                 AND k.kill_time_utc = pf.floor_kill_time_utc;
+                                 AND k.kill_time_utc = pf.floor_kill_time_utc
+                                WHERE k.victim_ship_type_id IS NULL OR k.victim_ship_type_id NOT IN ({PodShipTypeIdList});
                                 """;
             buildProtectedFloor.ExecuteNonQuery();
         }

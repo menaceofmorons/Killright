@@ -304,6 +304,83 @@ public sealed class DuckDbRecentKillmailCacheTests
         Assert.True((activity.LastKillUtc!.Value - shipKillTime).Duration() < TimeSpan.FromSeconds(1));
     }
 
+    [Theory]
+    [InlineData(670)]
+    [InlineData(33328)]
+    public async Task GetMostRecentKillmailAsync_MostRecentIsPodLoss_SkipsToPriorShipKill(long podShipTypeId)
+    {
+        var (database, cache) = CreateCache(recentWindowDays: 14);
+
+        InsertKillmail(database, 700028, DateTimeOffset.UtcNow.AddDays(-3), isQualifying: true, victimCharacterId: OtherCharacterId, victimShipTypeId: 587);
+        InsertAttacker(database, 700028, ScannedCharacterId);
+        InsertKillmail(database, 700029, DateTimeOffset.UtcNow.AddDays(-1), isQualifying: true, victimCharacterId: ScannedCharacterId, victimShipTypeId: podShipTypeId);
+
+        var result = await cache.GetMostRecentKillmailAsync(ScannedCharacterId);
+
+        Assert.NotNull(result);
+        Assert.Equal(zKillActivityType.Kill, result!.ActivityType);
+        Assert.Equal(587, result.VictimShipTypeId);
+    }
+
+    [Fact]
+    public async Task GetMostRecentKillmailAsync_MostRecentIsPodLossAfterShipLoss_ReturnsShipLoss()
+    {
+        var (database, cache) = CreateCache(recentWindowDays: 14);
+
+        InsertKillmail(database, 700030, DateTimeOffset.UtcNow.AddDays(-3), isQualifying: true, victimCharacterId: ScannedCharacterId, victimShipTypeId: 11567);
+        InsertKillmail(database, 700031, DateTimeOffset.UtcNow.AddDays(-1), isQualifying: true, victimCharacterId: ScannedCharacterId, victimShipTypeId: 670);
+
+        var result = await cache.GetMostRecentKillmailAsync(ScannedCharacterId);
+
+        Assert.NotNull(result);
+        Assert.Equal(zKillActivityType.Loss, result!.ActivityType);
+        Assert.Equal(11567, result.ShipTypeId);
+    }
+
+    [Fact]
+    public async Task GetMostRecentKillmailAsync_OnlyPodKillAndPodLoss_ReturnsNull()
+    {
+        var (database, cache) = CreateCache(recentWindowDays: 14);
+
+        InsertKillmail(database, 700032, DateTimeOffset.UtcNow.AddDays(-2), isQualifying: true, victimCharacterId: OtherCharacterId, victimShipTypeId: 670);
+        InsertAttacker(database, 700032, ScannedCharacterId);
+        InsertKillmail(database, 700033, DateTimeOffset.UtcNow.AddDays(-1), isQualifying: true, victimCharacterId: ScannedCharacterId, victimShipTypeId: 33328);
+
+        var result = await cache.GetMostRecentKillmailAsync(ScannedCharacterId);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task RemoveExpiredAsync_NewestKillmailIsPod_OlderNonPodKillmailKeptAsFloor()
+    {
+        var (database, cache) = CreateCache(recentWindowDays: 14);
+
+        InsertActivityCache(database, ScannedCharacterId);
+        InsertKillmail(database, 700034, DateTimeOffset.UtcNow.AddDays(-25), isQualifying: false, victimCharacterId: OtherCharacterId, victimShipTypeId: 587);
+        InsertAttacker(database, 700034, ScannedCharacterId);
+        InsertKillmail(database, 700035, DateTimeOffset.UtcNow.AddDays(-20), isQualifying: false, victimCharacterId: ScannedCharacterId, victimShipTypeId: 670);
+
+        await cache.RemoveExpiredAsync();
+
+        Assert.True(KillmailExists(database, 700034));
+        Assert.False(KillmailExists(database, 700035));
+    }
+
+    [Fact]
+    public async Task RemoveExpiredAsync_OnlyPodKillmailsOutsideWindow_ArePurged()
+    {
+        var (database, cache) = CreateCache(recentWindowDays: 14);
+
+        InsertActivityCache(database, ScannedCharacterId);
+        InsertKillmail(database, 700036, DateTimeOffset.UtcNow.AddDays(-25), isQualifying: false, victimCharacterId: OtherCharacterId, victimShipTypeId: 670);
+        InsertAttacker(database, 700036, ScannedCharacterId);
+
+        await cache.RemoveExpiredAsync();
+
+        Assert.False(KillmailExists(database, 700036));
+    }
+
     [Fact]
     public async Task GetMostRecentKillmailAsync_NoRetainedKillmails_ReturnsNull()
     {
