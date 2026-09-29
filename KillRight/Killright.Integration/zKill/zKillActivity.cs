@@ -12,4 +12,5 @@ public sealed record zKillActivity(
     DateTimeOffset CheckedAtUtc,
     string? Error = null,
     DateTimeOffset? LastSuccessfulRecentCallUtc = null,
-    DateTimeOffset? RecentCoverageStartUtc = null);
+    DateTimeOffset? RecentCoverageStartUtc = null,
+    DateTimeOffset? LastKillUtc = null);

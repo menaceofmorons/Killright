@@ -5,6 +5,7 @@ using Killright.Shared;
 using Killright.Shared.Time;
 using Killright.Shared.zKill;
 using Killright.Storage.Killmails;
+using Killright.Storage.Sde;
 using Killright.UI.Resources;
 using Killright.UI.Style;
 
@@ -23,7 +24,8 @@ public static class PilotReportRowFactory
         bool recentCallFailed,
         string? engineFailureReason,
         DateOnly? birthday,
-        PilotRecentKillmail? lastActivity)
+        PilotRecentKillmail? lastActivity,
+        ISdeReferenceDataStore? sdeStore = null)
     {
         var generalResult = GeneralStyleClassifier.Classify(statistics);
 
@@ -54,7 +56,7 @@ public static class PilotReportRowFactory
             Notes = GetNotes(activity, statistics, statisticsCallFailed, recentCallFailed, engineFailureReason),
             Birthday = birthday?.ToString("yyyy-MM-dd") ?? "unk",
             StatsFailureSource = GetStatsFailureSource(statisticsCallFailed, recentCallFailed, activity, engineFailureReason),
-            LastActivity = BuildLastActivitySummary(lastActivity)
+            LastActivity = BuildLastActivitySummary(lastActivity, sdeStore)
         };
     }
 
@@ -100,10 +102,19 @@ public static class PilotReportRowFactory
         if (activity?.HasPublicActivityData != true)
             return UiText.PlaceholderDash;
 
-        if (activity.LastActivityType != zKillActivityType.Kill || activity.LastActiveUtc is null)
+        var lastKillUtc = activity.LastKillUtc;
+
+        if (activity.LastActivityType == zKillActivityType.Kill
+            && activity.LastActiveUtc is not null
+            && (lastKillUtc is null || activity.LastActiveUtc > lastKillUtc))
+        {
+            lastKillUtc = activity.LastActiveUtc;
+        }
+
+        if (lastKillUtc is null)
             return UiText.PlaceholderDash;
 
-        return FormatKillAge(ApplicationClock.UtcNow - activity.LastActiveUtc.Value);
+        return FormatKillAge(ApplicationClock.UtcNow - lastKillUtc.Value);
     }
 
     internal static string FormatKillAge(TimeSpan age)
@@ -167,7 +178,39 @@ public static class PilotReportRowFactory
         return null;
     }
 
-    private static PilotLastActivitySummary? BuildLastActivitySummary(PilotRecentKillmail? lastActivity)
+    private static string ResolveTypeName(ISdeReferenceDataStore? sdeStore, long? typeId)
+    {
+        if (sdeStore is null || typeId is null)
+            return "—";
+
+        try
+        {
+            return sdeStore.GetTypeName(typeId.Value) ?? "—";
+        }
+        catch
+        {
+            return "—";
+        }
+    }
+
+    private static string ResolveSystemName(ISdeReferenceDataStore? sdeStore, long systemId)
+    {
+        if (sdeStore is null)
+            return "—";
+
+        try
+        {
+            return sdeStore.GetSolarSystemName(systemId) ?? "—";
+        }
+        catch
+        {
+            return "—";
+        }
+    }
+
+    private static PilotLastActivitySummary? BuildLastActivitySummary(
+        PilotRecentKillmail? lastActivity,
+        ISdeReferenceDataStore? sdeStore)
     {
         if (lastActivity is null)
             return null;
@@ -178,10 +221,10 @@ public static class PilotReportRowFactory
         {
             DateTime = lastActivity.KillTimeUtc.UtcDateTime.ToString("yyyy-MM-dd HH:mm"),
             KillLoss = isKill ? "Kill" : "Loss",
-            System = "—",
-            Ship = lastActivity.ShipTypeId?.ToString() ?? "—",
-            Weapon = "—",
-            Victim = isKill ? lastActivity.VictimShipTypeId?.ToString() ?? "—" : "—",
+            System = ResolveSystemName(sdeStore, lastActivity.SystemId),
+            Ship = ResolveTypeName(sdeStore, lastActivity.ShipTypeId),
+            Weapon = isKill ? ResolveTypeName(sdeStore, lastActivity.WeaponTypeId) : "—",
+            Victim = isKill ? ResolveTypeName(sdeStore, lastActivity.VictimShipTypeId) : "—",
             Attackers = isKill ? lastActivity.AttackerCount?.ToString() ?? "—" : "—",
             IsKill = isKill
         };

@@ -23,4 +23,5 @@ public sealed record PilotRecentKillmail(
     long SystemId,
     long? ShipTypeId,
     long? VictimShipTypeId,
-    int? AttackerCount);
+    int? AttackerCount,
+    long? WeaponTypeId = null);

@@ -231,6 +231,80 @@ public sealed class DuckDbRecentKillmailCacheTests
     }
 
     [Fact]
+    public async Task GetMostRecentKillmailAsync_MostRecentIsAKill_ReturnsWeaponTypeId()
+    {
+        var (database, cache) = CreateCache(recentWindowDays: 14);
+
+        InsertKillmail(database, 700021, DateTimeOffset.UtcNow.AddDays(-1), isQualifying: true, victimCharacterId: OtherCharacterId);
+        InsertAttacker(database, 700021, ScannedCharacterId, weaponTypeId: 3074);
+
+        var result = await cache.GetMostRecentKillmailAsync(ScannedCharacterId);
+
+        Assert.NotNull(result);
+        Assert.Equal(3074, result!.WeaponTypeId);
+    }
+
+    [Fact]
+    public async Task GetMostRecentKillmailAsync_MostRecentIsALoss_WeaponTypeIdIsNull()
+    {
+        var (database, cache) = CreateCache(recentWindowDays: 14);
+
+        InsertKillmail(database, 700022, DateTimeOffset.UtcNow.AddDays(-1), isQualifying: true, victimCharacterId: ScannedCharacterId);
+
+        var result = await cache.GetMostRecentKillmailAsync(ScannedCharacterId);
+
+        Assert.NotNull(result);
+        Assert.Null(result!.WeaponTypeId);
+    }
+
+    [Fact]
+    public async Task GetDerivedActivityAsync_LatestActivityIsLossAfterKill_LastKillUtcIsTheKillTime()
+    {
+        var (database, cache) = CreateCache(recentWindowDays: 14);
+        var killTime = DateTimeOffset.UtcNow.AddDays(-3);
+
+        InsertKillmail(database, 700023, killTime, isQualifying: true, victimCharacterId: OtherCharacterId);
+        InsertAttacker(database, 700023, ScannedCharacterId);
+        InsertKillmail(database, 700024, DateTimeOffset.UtcNow.AddDays(-1), isQualifying: true, victimCharacterId: ScannedCharacterId);
+
+        var activity = await cache.GetDerivedActivityAsync(ScannedCharacterId);
+
+        Assert.Equal(zKillActivityType.Loss, activity.LastActivityType);
+        Assert.NotNull(activity.LastKillUtc);
+        Assert.True((activity.LastKillUtc!.Value - killTime).Duration() < TimeSpan.FromSeconds(1));
+    }
+
+    [Fact]
+    public async Task GetDerivedActivityAsync_OnlyALossExists_LastKillUtcIsNull()
+    {
+        var (database, cache) = CreateCache(recentWindowDays: 14);
+
+        InsertKillmail(database, 700025, DateTimeOffset.UtcNow.AddDays(-1), isQualifying: true, victimCharacterId: ScannedCharacterId);
+
+        var activity = await cache.GetDerivedActivityAsync(ScannedCharacterId);
+
+        Assert.Equal(zKillActivityType.Loss, activity.LastActivityType);
+        Assert.Null(activity.LastKillUtc);
+    }
+
+    [Fact]
+    public async Task GetDerivedActivityAsync_NewestKillIsPodKill_LastKillUtcSkipsIt()
+    {
+        var (database, cache) = CreateCache(recentWindowDays: 14);
+        var shipKillTime = DateTimeOffset.UtcNow.AddDays(-3);
+
+        InsertKillmail(database, 700026, shipKillTime, isQualifying: true, victimCharacterId: OtherCharacterId, victimShipTypeId: 587);
+        InsertAttacker(database, 700026, ScannedCharacterId);
+        InsertKillmail(database, 700027, DateTimeOffset.UtcNow.AddDays(-1), isQualifying: true, victimCharacterId: OtherCharacterId, victimShipTypeId: 670);
+        InsertAttacker(database, 700027, ScannedCharacterId);
+
+        var activity = await cache.GetDerivedActivityAsync(ScannedCharacterId);
+
+        Assert.NotNull(activity.LastKillUtc);
+        Assert.True((activity.LastKillUtc!.Value - shipKillTime).Duration() < TimeSpan.FromSeconds(1));
+    }
+
+    [Fact]
     public async Task GetMostRecentKillmailAsync_NoRetainedKillmails_ReturnsNull()
     {
         var (_, cache) = CreateCache(recentWindowDays: 14);
@@ -313,7 +387,7 @@ public sealed class DuckDbRecentKillmailCacheTests
         command.ExecuteNonQuery();
     }
 
-    private static void InsertAttacker(KillRightDatabase database, long killmailId, long characterId)
+    private static void InsertAttacker(KillRightDatabase database, long killmailId, long characterId, long? weaponTypeId = null)
     {
         using var connection = new DuckDBConnection(database.ConnectionString);
         connection.Open();
@@ -325,13 +399,15 @@ public sealed class DuckDbRecentKillmailCacheTests
                                   character_id,
                                   corporation_id,
                                   alliance_id,
-                                  ship_type_id
+                                  ship_type_id,
+                                  weapon_type_id
                               ) VALUES (
                                   {killmailId},
                                   {characterId},
                                   98000001,
                                   NULL,
-                                  11567
+                                  11567,
+                                  {(weaponTypeId?.ToString() ?? "NULL")}
                               );
                               """;
         command.ExecuteNonQuery();

@@ -539,7 +539,8 @@ public partial class MainWindow : Window
                 recentCallFailed,
                 engineFailureReason,
                 birthday,
-                lastActivity));
+                lastActivity,
+                App.SdeReferenceDataStore));
         }
 
         if (rows.Count == 0)
@@ -732,7 +733,8 @@ public partial class MainWindow : Window
                 ApplicationClock.UtcNow,
                 killmailDerived?.Error,
                 lastSuccessfulRecentCallUtc,
-                recentCoverageStartUtc);
+                recentCoverageStartUtc,
+                killmailDerived?.LastKillUtc);
 
             await App.zKillActivityCache.UpsertAsync(merged);
 

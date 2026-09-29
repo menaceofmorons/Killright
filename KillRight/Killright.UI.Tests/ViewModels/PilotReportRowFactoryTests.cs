@@ -2,8 +2,10 @@ using Killright.Core.Models;
 using Killright.Core.Style;
 using Killright.Integration.zKill;
 using Killright.Shared;
+using Killright.Shared.Sde;
 using Killright.Shared.zKill;
 using Killright.Storage.Killmails;
+using Killright.Storage.Sde;
 using Killright.UI.ViewModels;
 using Xunit;
 
@@ -188,34 +190,122 @@ public sealed class PilotReportRowFactoryTests
     public void FromPilot_LastActivityIsKill_PopulatesKillOnlyFields()
     {
         var lastActivity = new PilotRecentKillmail(
-            DateTimeOffset.Parse("2026-01-02T03:04:00Z"), zKillActivityType.Kill, 30000142, 11567, 587, 3);
+            DateTimeOffset.Parse("2026-01-02T03:04:00Z"), zKillActivityType.Kill, 30000142, 11567, 587, 3, 3074);
 
         var row = PilotReportRowFactory.FromPilot(
-            CreatePilot(), null, null, StyleClassification.Unknown, false, "Unk", false, false, null, null, lastActivity);
+            CreatePilot(), null, null, StyleClassification.Unknown, false, "Unk", false, false, null, null, lastActivity, new FakeSdeStore());
 
         Assert.NotNull(row.LastActivity);
         Assert.True(row.LastActivity!.IsKill);
         Assert.Equal("Kill", row.LastActivity.KillLoss);
-        Assert.Equal("11567", row.LastActivity.Ship);
-        Assert.Equal("587", row.LastActivity.Victim);
+        Assert.Equal("Crow", row.LastActivity.Ship);
+        Assert.Equal("Rifter", row.LastActivity.Victim);
         Assert.Equal("3", row.LastActivity.Attackers);
-        Assert.Equal("—", row.LastActivity.System);
+        Assert.Equal("Jita", row.LastActivity.System);
+        Assert.Equal("Light Missile Launcher", row.LastActivity.Weapon);
+    }
+
+    [Fact]
+    public void FromPilot_LastActivityIdsUnresolved_UsesDashForNames()
+    {
+        var lastActivity = new PilotRecentKillmail(
+            DateTimeOffset.Parse("2026-01-02T03:04:00Z"), zKillActivityType.Kill, 1, 2, 3, 3, 4);
+
+        var row = PilotReportRowFactory.FromPilot(
+            CreatePilot(), null, null, StyleClassification.Unknown, false, "Unk", false, false, null, null, lastActivity, new FakeSdeStore());
+
+        Assert.Equal("—", row.LastActivity!.System);
+        Assert.Equal("—", row.LastActivity.Ship);
         Assert.Equal("—", row.LastActivity.Weapon);
+        Assert.Equal("—", row.LastActivity.Victim);
+    }
+
+    [Fact]
+    public void FromPilot_LastActivityNullIds_UsesDashForNames()
+    {
+        var lastActivity = new PilotRecentKillmail(
+            DateTimeOffset.Parse("2026-01-02T03:04:00Z"), zKillActivityType.Kill, 30000142, null, null, null, null);
+
+        var row = PilotReportRowFactory.FromPilot(
+            CreatePilot(), null, null, StyleClassification.Unknown, false, "Unk", false, false, null, null, lastActivity, new FakeSdeStore());
+
+        Assert.Equal("Jita", row.LastActivity!.System);
+        Assert.Equal("—", row.LastActivity.Ship);
+        Assert.Equal("—", row.LastActivity.Weapon);
+        Assert.Equal("—", row.LastActivity.Victim);
+    }
+
+    [Fact]
+    public void FromPilot_LastActivityLookupThrows_UsesDashForNames()
+    {
+        var lastActivity = new PilotRecentKillmail(
+            DateTimeOffset.Parse("2026-01-02T03:04:00Z"), zKillActivityType.Kill, 30000142, 11567, 587, 3, 3074);
+
+        var row = PilotReportRowFactory.FromPilot(
+            CreatePilot(), null, null, StyleClassification.Unknown, false, "Unk", false, false, null, null, lastActivity, new FakeSdeStore(throwOnLookup: true));
+
+        Assert.Equal("—", row.LastActivity!.System);
+        Assert.Equal("—", row.LastActivity.Ship);
+        Assert.Equal("—", row.LastActivity.Weapon);
+        Assert.Equal("—", row.LastActivity.Victim);
+    }
+
+    [Fact]
+    public void FromPilot_NoSdeStore_UsesDashForNames()
+    {
+        var lastActivity = new PilotRecentKillmail(
+            DateTimeOffset.Parse("2026-01-02T03:04:00Z"), zKillActivityType.Kill, 30000142, 11567, 587, 3, 3074);
+
+        var row = PilotReportRowFactory.FromPilot(
+            CreatePilot(), null, null, StyleClassification.Unknown, false, "Unk", false, false, null, null, lastActivity);
+
+        Assert.Equal("—", row.LastActivity!.System);
+        Assert.Equal("—", row.LastActivity.Ship);
     }
 
     [Fact]
     public void FromPilot_LastActivityIsLoss_OmitsKillOnlyFields()
     {
         var lastActivity = new PilotRecentKillmail(
-            DateTimeOffset.Parse("2026-01-02T03:04:00Z"), zKillActivityType.Loss, 30000142, 587, null, null);
+            DateTimeOffset.Parse("2026-01-02T03:04:00Z"), zKillActivityType.Loss, 30000142, 587, 11567, 5, 3074);
 
         var row = PilotReportRowFactory.FromPilot(
-            CreatePilot(), null, null, StyleClassification.Unknown, false, "Unk", false, false, null, null, lastActivity);
+            CreatePilot(), null, null, StyleClassification.Unknown, false, "Unk", false, false, null, null, lastActivity, new FakeSdeStore());
 
         Assert.NotNull(row.LastActivity);
         Assert.False(row.LastActivity!.IsKill);
         Assert.Equal("Loss", row.LastActivity.KillLoss);
-        Assert.Equal("587", row.LastActivity.Ship);
+        Assert.Equal("Rifter", row.LastActivity.Ship);
+        Assert.Equal("Jita", row.LastActivity.System);
+        Assert.Equal("—", row.LastActivity.Weapon);
+        Assert.Equal("—", row.LastActivity.Victim);
+        Assert.Equal("—", row.LastActivity.Attackers);
+    }
+
+    [Fact]
+    public void FromPilot_LatestActivityIsLossButRecentKillExists_LastKillShowsKillAge()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var activity = new zKillActivity(
+            95465499, true, 1, 0, now.AddHours(-2), zKillActivityType.Loss, now, LastKillUtc: now.AddDays(-3));
+
+        var row = PilotReportRowFactory.FromPilot(
+            CreatePilot(), activity, null, StyleClassification.Unknown, false, "Unk", false, false, null, null, null);
+
+        Assert.Equal("3d", row.LastKill);
+    }
+
+    [Fact]
+    public void FromPilot_LatestActivityIsLossAndNoKill_LastKillIsDash()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var activity = new zKillActivity(
+            95465499, true, 0, 0, now.AddHours(-2), zKillActivityType.Loss, now);
+
+        var row = PilotReportRowFactory.FromPilot(
+            CreatePilot(), activity, null, StyleClassification.Unknown, false, "Unk", false, false, null, null, null);
+
+        Assert.Equal("-", row.LastKill);
     }
 
     [Fact]
@@ -248,5 +338,62 @@ public sealed class PilotReportRowFactoryTests
     public void FormatKillAge_ThirtyDaysOrOlder_ReturnsOverflowMarker()
     {
         Assert.Equal(">30d", PilotReportRowFactory.FormatKillAge(TimeSpan.FromDays(30)));
+    }
+
+    [Fact]
+    public void FromPilot_LatestActivityIsNewerKill_LastKillUsesLastActiveUtc()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var activity = new zKillActivity(
+            95465499, true, 1, 0, now.AddHours(-4.5), zKillActivityType.Kill, now, LastKillUtc: now.AddDays(-3));
+
+        var row = PilotReportRowFactory.FromPilot(
+            CreatePilot(), activity, null, StyleClassification.Unknown, false, "Unk", false, false, null, null, null);
+
+        Assert.Equal("5h", row.LastKill);
+    }
+
+    private sealed class FakeSdeStore : ISdeReferenceDataStore
+    {
+        private readonly bool _throwOnLookup;
+
+        public FakeSdeStore(bool throwOnLookup = false)
+        {
+            _throwOnLookup = throwOnLookup;
+        }
+
+        public string? GetTypeName(long typeId)
+        {
+            if (_throwOnLookup)
+                throw new InvalidOperationException("SDE table missing");
+
+            return typeId switch
+            {
+                587 => "Rifter",
+                11567 => "Crow",
+                3074 => "Light Missile Launcher",
+                _ => null
+            };
+        }
+
+        public string? GetSolarSystemName(long systemId)
+        {
+            if (_throwOnLookup)
+                throw new InvalidOperationException("SDE table missing");
+
+            return systemId == 30000142 ? "Jita" : null;
+        }
+
+        public bool IsNpcCorporation(long corporationId) => throw new NotSupportedException();
+
+        public IReadOnlySet<long> GetNpcCorporationIds() => throw new NotSupportedException();
+
+        public Task<bool> HasReferenceDataAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<SdeMetadata> GetMetadataAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task ReplaceTablesAsync(SdeReplacementData data, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task RecordCheckAsync(DateTimeOffset attemptedUtc, string checkResult, bool succeeded, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 }

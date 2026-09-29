@@ -53,6 +53,7 @@ public sealed class DuckDbRecentKillmailCache : IRecentKillmailCache
         var soloWeek = 0;
         DateTimeOffset? lastActiveUtc = null;
         zKillActivityType? lastActivityType = null;
+        DateTimeOffset? lastKillUtc = null;
 
         while (reader.Read())
         {
@@ -76,6 +77,7 @@ public sealed class DuckDbRecentKillmailCache : IRecentKillmailCache
 
             if (!isLoss && !isPodKill)
             {
+                lastKillUtc ??= killTimeUtc;
                 killsWeek++;
 
                 if (isSolo)
@@ -90,7 +92,8 @@ public sealed class DuckDbRecentKillmailCache : IRecentKillmailCache
             hasPublicActivityData ? soloWeek : null,
             lastActiveUtc,
             lastActivityType,
-            ApplicationClock.UtcNow));
+            ApplicationClock.UtcNow,
+            LastKillUtc: lastKillUtc));
     }
 
     public Task<PilotRecentKillmail?> GetMostRecentKillmailAsync(
@@ -107,7 +110,8 @@ public sealed class DuckDbRecentKillmailCache : IRecentKillmailCache
                                      system_id,
                                      victim_ship_type_id AS ship_type_id,
                                      CAST(NULL AS BIGINT) AS victim_ship_type_id,
-                                     CAST(NULL AS INTEGER) AS attacker_count
+                                     CAST(NULL AS INTEGER) AS attacker_count,
+                                     CAST(NULL AS BIGINT) AS weapon_type_id
                               FROM main.zkill_killmails
                               WHERE victim_character_id = {characterId}
                               UNION ALL
@@ -116,7 +120,8 @@ public sealed class DuckDbRecentKillmailCache : IRecentKillmailCache
                                      k.system_id,
                                      a.ship_type_id AS ship_type_id,
                                      k.victim_ship_type_id,
-                                     k.unique_attacker_count AS attacker_count
+                                     k.unique_attacker_count AS attacker_count,
+                                     a.weapon_type_id
                               FROM main.zkill_killmail_attackers a
                               JOIN main.zkill_killmails k ON k.killmail_id = a.killmail_id
                               WHERE a.character_id = {characterId}
@@ -141,7 +146,8 @@ public sealed class DuckDbRecentKillmailCache : IRecentKillmailCache
             reader.GetInt64(2),
             reader.GetNullableInt64(3),
             reader.GetNullableInt64(4),
-            reader.GetNullableInt32(5)));
+            reader.GetNullableInt32(5),
+            reader.GetNullableInt64(6)));
     }
 
     public Task RemoveExpiredAsync(CancellationToken cancellationToken = default)
