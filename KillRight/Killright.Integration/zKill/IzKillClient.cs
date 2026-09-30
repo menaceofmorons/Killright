@@ -4,6 +4,8 @@ namespace Killright.Integration.zKill;
 
 public interface IzKillClient
 {
+    long RequestCount { get; }
+
     Task<zKillRecentKillmailResult> GetRecentKillmailsAsync(
         long characterId,
         int pastSeconds,

@@ -45,6 +45,8 @@ public static class ApplicationSettingsLoader
             ? settings.QualificationFleetThreshold
             : DefaultQualificationFleetThreshold;
 
+        var network = settings.Network.Normalized();
+
 #if HISTORIC_RELATIONSHIPS
         var batchOptions = settings.GroupHistory.ToBatchOptions();
         var parallelOptions = settings.GroupHistory.ToParallelDownloadOptions();
@@ -63,6 +65,7 @@ public static class ApplicationSettingsLoader
             GroupDetection = settings.GroupDetection,
             Style = settings.Style,
             Timing = settings.Timing,
+            Network = network,
             GroupHistory = new GroupHistoryApplicationSettings
             {
                 ImportBatchSize = batchOptions.EvidenceInsertBatchSize,
@@ -71,7 +74,7 @@ public static class ApplicationSettingsLoader
             }
         };
 #else
-        return qualificationFleetThreshold == settings.QualificationFleetThreshold
+        return qualificationFleetThreshold == settings.QualificationFleetThreshold && network == settings.Network
             ? settings
             : new ApplicationSettings
             {
@@ -86,7 +89,8 @@ public static class ApplicationSettingsLoader
                 Threat = settings.Threat,
                 GroupDetection = settings.GroupDetection,
                 Style = settings.Style,
-                Timing = settings.Timing
+                Timing = settings.Timing,
+                Network = network
             };
 #endif
     }

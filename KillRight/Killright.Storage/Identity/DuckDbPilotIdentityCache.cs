@@ -95,13 +95,70 @@ public sealed class DuckDbPilotIdentityCache : IPilotIdentityCache
         return Task.FromResult<DateOnly?>(DateOnly.FromDateTime(reader.GetDateTime(0)));
     }
 
+    public Task<PilotIdentityCacheRecord?> GetRecordAsync(string inputName, CancellationToken cancellationToken = default)
+    {
+        var normalizedInputName = PilotIdentityCacheRecord.NormalizeInputName(inputName);
+
+        using var connection = new DuckDBConnection(_database.ConnectionString);
+        connection.Open();
+
+        using var command = connection.CreateCommand();
+        command.CommandText = $"""
+                              SELECT input_name,
+                                     character_id,
+                                     character_name,
+                                     verify_status,
+                                     security_status,
+                                     corporation_id,
+                                     corporation_name,
+                                     corporation_ticker,
+                                     alliance_id,
+                                     alliance_name,
+                                     alliance_ticker,
+                                     cached_at_utc,
+                                     birthday,
+                                     security_status_at_utc
+                              FROM pilot_identity_cache
+                              WHERE input_name = {SqlValueFormatter.String(normalizedInputName)}
+                              LIMIT 1;
+                              """;
+
+        using var reader = command.ExecuteReader();
+
+        if (!reader.Read())
+            return Task.FromResult<PilotIdentityCacheRecord?>(null);
+
+        var record = new PilotIdentityCacheRecord
+        {
+            InputName = reader.GetString(0),
+            CharacterId = reader.GetNullableInt64(1),
+            CharacterName = reader.GetNullableString(2),
+            VerifyStatus = Enum.Parse<VerifyStatus>(reader.GetString(3)),
+            SecurityStatus = reader.GetNullableDouble(4),
+            CorporationId = reader.GetNullableInt64(5),
+            CorporationName = reader.GetNullableString(6),
+            CorporationTicker = reader.GetNullableString(7),
+            AllianceId = reader.GetNullableInt64(8),
+            AllianceName = reader.GetNullableString(9),
+            AllianceTicker = reader.GetNullableString(10),
+            CachedAtUtc = reader.GetDateTime(11),
+            Birthday = reader.IsDBNull(12) ? null : DateOnly.FromDateTime(reader.GetDateTime(12)),
+            SecurityStatusAtUtc = reader.IsDBNull(13) ? null : reader.GetDateTime(13)
+        };
+
+        return Task.FromResult<PilotIdentityCacheRecord?>(record);
+    }
+
     public Task UpsertAsync(Pilot pilot, CancellationToken cancellationToken = default)
     {
         if (!IsDefinitive(pilot))
             return Task.CompletedTask;
 
-        var record = PilotIdentityCacheRecord.FromPilot(pilot);
+        return UpsertRecordAsync(PilotIdentityCacheRecord.FromPilot(pilot), cancellationToken);
+    }
 
+    public Task UpsertRecordAsync(PilotIdentityCacheRecord record, CancellationToken cancellationToken = default)
+    {
         using var connection = new DuckDBConnection(_database.ConnectionString);
         connection.Open();
 
@@ -127,7 +184,8 @@ public sealed class DuckDbPilotIdentityCache : IPilotIdentityCache
                                             alliance_name,
                                             alliance_ticker,
                                             cached_at_utc,
-                                            birthday
+                                            birthday,
+                                            security_status_at_utc
                                         ) VALUES (
                                             {SqlValueFormatter.String(record.InputName)},
                                             {SqlValueFormatter.Long(record.CharacterId)},
@@ -141,7 +199,8 @@ public sealed class DuckDbPilotIdentityCache : IPilotIdentityCache
                                             {SqlValueFormatter.String(record.AllianceName)},
                                             {SqlValueFormatter.String(record.AllianceTicker)},
                                             {SqlValueFormatter.Date(record.CachedAtUtc)},
-                                            {SqlValueFormatter.Date(record.Birthday)}
+                                            {SqlValueFormatter.Date(record.Birthday)},
+                                            {(record.SecurityStatusAtUtc is { } securityStatusAtUtc ? SqlValueFormatter.Date(securityStatusAtUtc) : "NULL")}
                                         );
                                         """;
             insertCommand.ExecuteNonQuery();

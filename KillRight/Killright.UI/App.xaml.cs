@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http;
 using System.Windows;
 using Killright.Integration.Esi;
+using Killright.Integration.RateLimiting;
 using Killright.Integration.Sde;
 using Killright.Integration.zKill;
 using Killright.Shared.Killmails;
@@ -32,6 +33,9 @@ public partial class App : Application
     public static IEsiClient EsiClient { get; private set; } = null!;
     public static IzKillClient zKillClient { get; private set; } = null!;
     public static IPilotIdentityCache PilotIdentityCache { get; private set; } = null!;
+    public static IEsiEntityNameCache EsiEntityNameCache { get; private set; } = null!;
+    public static IRequestStartLimiter zKillRequestLimiter { get; private set; } = null!;
+    public static PilotIdentityResolver IdentityResolver { get; private set; } = null!;
     public static IzKillActivityCache zKillActivityCache { get; private set; } = null!;
     public static IRecentKillmailCache RecentKillmailCache { get; private set; } = null!;
     public static IKillmailStore KillmailStore { get; private set; } = null!;
@@ -179,6 +183,8 @@ public partial class App : Application
 
         PilotIdentityCache =
             new DuckDbPilotIdentityCache(database);
+        EsiEntityNameCache =
+            new DuckDbEsiEntityNameCache(database);
         zKillActivityCache =
             new DuckDbzKillActivityCache(database);
         RecentKillmailCache =
@@ -248,6 +254,12 @@ public partial class App : Application
         EsiClient =
             new EsiClient(
                 esiHttpClient);
+        IdentityResolver =
+            new PilotIdentityResolver(
+                EsiClient,
+                PilotIdentityCache,
+                EsiEntityNameCache,
+                Settings.Network.MaxConcurrency);
 
         var zKillHandler =
             new HttpClientHandler
@@ -264,9 +276,14 @@ public partial class App : Application
                 Timeout = TimeSpan.FromSeconds(zKillClientOptions.RequestTimeoutSeconds)
             };
 
+        zKillRequestLimiter =
+            new RequestStartLimiter(
+                Settings.Network.ZkillRequestsPerSecond);
+
         zKillClient =
             new zKillClient(
-                zKillHttpClient);
+                zKillHttpClient,
+                limiter: zKillRequestLimiter);
 
         PurgeScheduler =
             new KillmailPurgeScheduler(

@@ -27,6 +27,7 @@ public sealed class KillRightDatabase
         connection.Open();
 
         CreatePilotIdentityCache(connection);
+        CreateEsiEntityNameCache(connection);
         CreatezKillActivityCache(connection);
         CreatezKillStatisticsCache(connection);
         CreateZkillKillmailsTables(connection);
@@ -175,6 +176,31 @@ public sealed class KillRightDatabase
         using var addBirthday = connection.CreateCommand();
         addBirthday.CommandText = "ALTER TABLE main.pilot_identity_cache ADD COLUMN IF NOT EXISTS birthday DATE;";
         addBirthday.ExecuteNonQuery();
+
+        using var addSecurityStatusAtUtc = connection.CreateCommand();
+        addSecurityStatusAtUtc.CommandText = "ALTER TABLE main.pilot_identity_cache ADD COLUMN IF NOT EXISTS security_status_at_utc TIMESTAMP;";
+        addSecurityStatusAtUtc.ExecuteNonQuery();
+
+        using var migrateSecurityStatusAtUtc = connection.CreateCommand();
+        migrateSecurityStatusAtUtc.CommandText = """
+                              UPDATE main.pilot_identity_cache
+                              SET security_status_at_utc = cached_at_utc
+                              WHERE security_status_at_utc IS NULL AND security_status IS NOT NULL;
+                              """;
+        migrateSecurityStatusAtUtc.ExecuteNonQuery();
+    }
+
+    private static void CreateEsiEntityNameCache(DuckDBConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+                              CREATE TABLE IF NOT EXISTS main.esi_entity_name_cache (
+                                  entity_id BIGINT PRIMARY KEY,
+                                  entity_type TEXT NOT NULL,
+                                  name TEXT NOT NULL
+                              );
+                              """;
+        command.ExecuteNonQuery();
     }
 
     private static void CreatezKillActivityCache(DuckDBConnection connection)

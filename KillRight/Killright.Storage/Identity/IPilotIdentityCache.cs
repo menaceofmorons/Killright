@@ -7,4 +7,6 @@ public interface IPilotIdentityCache
     Task<Pilot?> GetAsync(string inputName, TimeSpan maximumAge, CancellationToken cancellationToken = default);
     Task UpsertAsync(Pilot pilot, CancellationToken cancellationToken = default);
     Task<DateOnly?> GetBirthdayAsync(string inputName, CancellationToken cancellationToken = default);
+    Task<PilotIdentityCacheRecord?> GetRecordAsync(string inputName, CancellationToken cancellationToken = default);
+    Task UpsertRecordAsync(PilotIdentityCacheRecord record, CancellationToken cancellationToken = default);
 }

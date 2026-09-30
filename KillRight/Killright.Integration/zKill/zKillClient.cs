@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Text.Json;
+using Killright.Integration.RateLimiting;
 using Killright.Shared.Killmails;
 using Killright.Shared.zKill;
 
@@ -11,11 +12,14 @@ public sealed class zKillClient : IzKillClient
 
     private readonly HttpClient _http;
     private readonly zKillClientOptions _options;
+    private readonly IRequestStartLimiter? _limiter;
+    private long _requestCount;
 
-    public zKillClient(HttpClient http, zKillClientOptions? options = null)
+    public zKillClient(HttpClient http, zKillClientOptions? options = null, IRequestStartLimiter? limiter = null)
     {
         _http = http;
         _options = options ?? new zKillClientOptions();
+        _limiter = limiter;
         _http.BaseAddress ??= _options.BaseUri;
 
         if (!_http.DefaultRequestHeaders.UserAgent.Any())
@@ -23,6 +27,16 @@ public sealed class zKillClient : IzKillClient
 
         if (!_http.DefaultRequestHeaders.AcceptEncoding.Any(x => x.Value.Equals("gzip", StringComparison.OrdinalIgnoreCase)))
             _http.DefaultRequestHeaders.AcceptEncoding.Add(new StringWithQualityHeaderValue("gzip"));
+    }
+
+    public long RequestCount => Interlocked.Read(ref _requestCount);
+
+    private async Task StartRequestAsync(CancellationToken cancellationToken)
+    {
+        if (_limiter is not null)
+            await _limiter.WaitAsync(cancellationToken);
+
+        Interlocked.Increment(ref _requestCount);
     }
 
     public async Task<zKillRecentKillmailResult> GetRecentKillmailsAsync(
@@ -34,6 +48,8 @@ public sealed class zKillClient : IzKillClient
 
         try
         {
+            await StartRequestAsync(cancellationToken);
+
             using var response = await _http.GetAsync(
                 $"api/characterID/{characterId}/pastSeconds/{safePastSeconds}/",
                 cancellationToken);
@@ -66,6 +82,8 @@ public sealed class zKillClient : IzKillClient
     {
         try
         {
+            await StartRequestAsync(cancellationToken);
+
             using var response = await _http.GetAsync(
                 $"api/stats/characterID/{characterId}/kills/",
                 cancellationToken);

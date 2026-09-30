@@ -58,3 +58,24 @@ internal sealed record EsiAllianceResponse
     [JsonPropertyName("ticker")]
     public string? Ticker { get; init; }
 }
+
+internal sealed record EsiAffiliationResponse
+{
+    [JsonPropertyName("character_id")]
+    public long CharacterId { get; init; }
+
+    [JsonPropertyName("corporation_id")]
+    public long CorporationId { get; init; }
+
+    [JsonPropertyName("alliance_id")]
+    public long? AllianceId { get; init; }
+}
+
+internal sealed record EsiNameResponse
+{
+    [JsonPropertyName("id")]
+    public long Id { get; init; }
+
+    [JsonPropertyName("name")]
+    public string Name { get; init; } = string.Empty;
+}

@@ -33,6 +33,8 @@ public sealed class ApplicationSettings
 
     public TimingSettings Timing { get; init; } = new();
 
+    public NetworkSettings Network { get; init; } = new();
+
 #if HISTORIC_RELATIONSHIPS
     public GroupHistoryApplicationSettings GroupHistory { get; init; } = new();
 #endif
@@ -117,6 +119,28 @@ public sealed class SdeApplicationSettings
     public string DatasetZipUrl { get; init; } = "https://developers.eveonline.com/static-data/eve-online-static-data-latest-jsonl.zip";
 
     public int CheckIntervalHours { get; init; } = 24;
+}
+
+public sealed record NetworkSettings
+{
+    public const double DefaultZkillRequestsPerSecond = 15;
+
+    public const int DefaultMaxConcurrency = 8;
+
+    public double ZkillRequestsPerSecond { get; init; } = DefaultZkillRequestsPerSecond;
+
+    public int MaxConcurrency { get; init; } = DefaultMaxConcurrency;
+
+    public NetworkSettings Normalized()
+    {
+        return new NetworkSettings
+        {
+            ZkillRequestsPerSecond = double.IsFinite(ZkillRequestsPerSecond) && ZkillRequestsPerSecond > 0
+                ? ZkillRequestsPerSecond
+                : DefaultZkillRequestsPerSecond,
+            MaxConcurrency = MaxConcurrency >= 1 ? MaxConcurrency : DefaultMaxConcurrency
+        };
+    }
 }
 
 public sealed class TimingSettings

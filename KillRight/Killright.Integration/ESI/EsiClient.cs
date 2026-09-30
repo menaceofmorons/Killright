@@ -10,16 +10,177 @@ public sealed class EsiClient : IEsiClient
     private readonly HttpClient _http;
     private readonly EsiClientOptions _options;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly TimeSpan DefaultBackoff = TimeSpan.FromSeconds(60);
 
-    public EsiClient(HttpClient http, EsiClientOptions? options = null)
+    public const int BatchChunkSize = 500;
+
+    private readonly Func<DateTimeOffset> _utcNow;
+    private long _requestCount;
+    private long _backoffUntilTicks;
+
+    public EsiClient(HttpClient http, EsiClientOptions? options = null, Func<DateTimeOffset>? utcNow = null)
     {
         _http = http;
         _options = options ?? new EsiClientOptions();
+        _utcNow = utcNow ?? (() => DateTimeOffset.UtcNow);
         _http.BaseAddress ??= _options.BaseUri;
         if (!_http.DefaultRequestHeaders.UserAgent.Any())
         {
             _http.DefaultRequestHeaders.UserAgent.ParseAdd(_options.UserAgent);
         }
+    }
+
+    public long RequestCount => Interlocked.Read(ref _requestCount);
+
+    public async Task<IReadOnlyDictionary<string, EsiNameLookup>> ResolveNamesAsync(
+        IReadOnlyList<string> exactNames,
+        CancellationToken cancellationToken = default)
+    {
+        var results = new Dictionary<string, EsiNameLookup>(StringComparer.OrdinalIgnoreCase);
+        var distinctNames = exactNames
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Select(name => name.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var requestUri = $"universe/ids/?datasource={_options.DataSource}&language={_options.Language}";
+
+        foreach (var chunk in distinctNames.Chunk(BatchChunkSize))
+        {
+            var response = await PostJsonAsync<EsiUniverseIdsResponse>(requestUri, chunk, cancellationToken);
+
+            if (response is null)
+            {
+                foreach (var name in chunk)
+                    results[name] = EsiNameLookup.Failed;
+
+                continue;
+            }
+
+            var matchesByName = new Dictionary<string, EsiResolvedEntity>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var match in response.Characters ?? [])
+                matchesByName.TryAdd(match.Name, match);
+
+            foreach (var name in chunk)
+            {
+                results[name] = matchesByName.TryGetValue(name, out var match)
+                    ? EsiNameLookup.Matched(match.Id, match.Name)
+                    : EsiNameLookup.NoMatch;
+            }
+        }
+
+        return results;
+    }
+
+    public async Task<IReadOnlyDictionary<long, EsiAffiliation>> GetAffiliationsAsync(
+        IReadOnlyList<long> characterIds,
+        CancellationToken cancellationToken = default)
+    {
+        var results = new Dictionary<long, EsiAffiliation>();
+        var requestUri = $"characters/affiliation/?datasource={_options.DataSource}";
+
+        foreach (var chunk in characterIds.Distinct().Chunk(BatchChunkSize))
+        {
+            var response = await PostJsonAsync<List<EsiAffiliationResponse>>(requestUri, chunk, cancellationToken);
+
+            if (response is null)
+                continue;
+
+            foreach (var item in response)
+                results[item.CharacterId] = new EsiAffiliation(item.CharacterId, item.CorporationId, item.AllianceId);
+        }
+
+        return results;
+    }
+
+    public async Task<IReadOnlyDictionary<long, string>> GetEntityNamesAsync(
+        IReadOnlyList<long> entityIds,
+        CancellationToken cancellationToken = default)
+    {
+        var results = new Dictionary<long, string>();
+        var requestUri = $"universe/names/?datasource={_options.DataSource}";
+
+        foreach (var chunk in entityIds.Distinct().Chunk(BatchChunkSize))
+        {
+            var response = await PostJsonAsync<List<EsiNameResponse>>(requestUri, chunk, cancellationToken);
+
+            if (response is null)
+                continue;
+
+            foreach (var item in response)
+                results[item.Id] = item.Name;
+        }
+
+        return results;
+    }
+
+    public async Task<EsiCharacterDetails?> GetCharacterDetailsAsync(
+        long characterId,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            using var response = await SendCountedAsync(
+                () => _http.GetAsync($"characters/{characterId}/?datasource={_options.DataSource}", cancellationToken));
+
+            if (response is null || !response.IsSuccessStatusCode)
+                return null;
+
+            var dto = await response.Content.ReadFromJsonAsync<EsiCharacterResponse>(JsonOptions, cancellationToken);
+
+            if (dto is null)
+                return null;
+
+            return new EsiCharacterDetails(
+                characterId,
+                dto.Name,
+                dto.CorporationId,
+                dto.AllianceId,
+                dto.SecurityStatus,
+                dto.Birthday is null ? null : DateOnly.FromDateTime(dto.Birthday.Value.UtcDateTime));
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private async Task<T?> PostJsonAsync<T>(string requestUri, object body, CancellationToken cancellationToken)
+        where T : class
+    {
+        try
+        {
+            using var response = await SendCountedAsync(
+                () => _http.PostAsJsonAsync(requestUri, body, JsonOptions, cancellationToken));
+
+            if (response is null || !response.IsSuccessStatusCode)
+                return null;
+
+            return await response.Content.ReadFromJsonAsync<T>(JsonOptions, cancellationToken);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private async Task<HttpResponseMessage?> SendCountedAsync(Func<Task<HttpResponseMessage>> send)
+    {
+        if (_utcNow().UtcTicks < Interlocked.Read(ref _backoffUntilTicks))
+            return null;
+
+        Interlocked.Increment(ref _requestCount);
+
+        var response = await send();
+
+        if ((int)response.StatusCode is 429 or 420)
+        {
+            var delay = response.Headers.RetryAfter?.Delta ?? DefaultBackoff;
+            Interlocked.Exchange(ref _backoffUntilTicks, (_utcNow() + delay).UtcTicks);
+        }
+
+        return response;
     }
 
     public async Task<IReadOnlyList<Pilot>> ResolvePilotsAsync(IEnumerable<string> exactPilotNames, CancellationToken cancellationToken = default)

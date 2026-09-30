@@ -17,6 +17,7 @@ public sealed class PilotIdentityCacheRecord
     public string? AllianceName { get; init; }
     public string? AllianceTicker { get; init; }
     public DateOnly? Birthday { get; init; }
+    public DateTime? SecurityStatusAtUtc { get; init; }
     public required DateTime CachedAtUtc { get; init; }
 
     public Pilot ToPilot()
@@ -63,6 +64,7 @@ public sealed class PilotIdentityCacheRecord
             AllianceName = pilot.Alliance?.Name,
             AllianceTicker = pilot.Alliance?.Ticker,
             Birthday = pilot.Birthday,
+            SecurityStatusAtUtc = pilot.SecurityStatus is null ? null : DateTime.UtcNow,
             CachedAtUtc = DateTime.UtcNow
         };
     }
