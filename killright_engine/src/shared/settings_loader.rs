@@ -160,7 +160,7 @@ mod tests {
                 "chainDiscount": 0.75,
                 "intermediaryBonus": {"perAdditional": 10, "maximum": 30}
             },
-            "style": {"blobMinimumAverageAttackers": 5, "fleetMinimumAverageAttackers": 11, "podderMinimumSharePercent": 20, "podderMinimumKillCount": 5}
+            "style": {"blobMinimumAverageAttackers": 5, "fleetMinimumAverageAttackers": 11, "podderMinimumSharePercent": 35, "podderMinimumKillCount": 5}
         }"#
     }
 
@@ -237,8 +237,8 @@ mod tests {
     fn load_engine_settings_from_path_rejects_invalid_style_boundaries() {
         let path = std::env::temp_dir().join(format!("killright-settings-invalid-style-{}.json", unique_suffix()));
         let json = valid_settings_json().replace(
-            "\"style\": {\"blobMinimumAverageAttackers\": 5, \"fleetMinimumAverageAttackers\": 11, \"podderMinimumSharePercent\": 20, \"podderMinimumKillCount\": 5}",
-            "\"style\": {\"blobMinimumAverageAttackers\": 11, \"fleetMinimumAverageAttackers\": 11, \"podderMinimumSharePercent\": 20, \"podderMinimumKillCount\": 5}",
+            "\"style\": {\"blobMinimumAverageAttackers\": 5, \"fleetMinimumAverageAttackers\": 11, \"podderMinimumSharePercent\": 35, \"podderMinimumKillCount\": 5}",
+            "\"style\": {\"blobMinimumAverageAttackers\": 11, \"fleetMinimumAverageAttackers\": 11, \"podderMinimumSharePercent\": 35, \"podderMinimumKillCount\": 5}",
         );
         fs::write(&path, json).unwrap();
 

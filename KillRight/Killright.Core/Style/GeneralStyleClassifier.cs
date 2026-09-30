@@ -32,7 +32,10 @@ public static class GeneralStyleClassifier
         if (shipsDestroyed == 0 && statistics.shipsLost > 0)
             return new GeneralStyleResult(StyleClassification.Victim, false);
 
-        if (shipsDestroyed > 0 && statistics.shipsLost > 0)
+        if (statistics.NoHistory || shipsDestroyed == 0)
+            return new GeneralStyleResult(StyleClassification.Inactive, false);
+
+        if (statistics.shipsLost > 0)
         {
             var destroyedToLostRatio = shipsDestroyed / (double)statistics.shipsLost;
             var soloLossesToDestroyedRatio = statistics.soloLosses / (double)shipsDestroyed;

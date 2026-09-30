@@ -11,7 +11,7 @@ public sealed class GeneralStyleClassifierTests
         GeneralStyleClassifier.Configure(
             blobMinimumAverageAttackers: 5,
             fleetMinimumAverageAttackers: 11,
-            podderMinimumSharePercent: 20,
+            podderMinimumSharePercent: 35,
             podderMinimumKillCount: 5);
     }
 
@@ -59,7 +59,7 @@ public sealed class GeneralStyleClassifierTests
         GeneralStyleClassifier.Configure(
             blobMinimumAverageAttackers: 3,
             fleetMinimumAverageAttackers: 6,
-            podderMinimumSharePercent: 20,
+            podderMinimumSharePercent: 35,
             podderMinimumKillCount: 5);
 
         var result = GeneralStyleClassifier.Classify(Statistics(shipsDestroyed: 60, shipsLost: 10, soloRatio: 10, soloKills: 2, avgGangSize: 4.0));
@@ -69,7 +69,7 @@ public sealed class GeneralStyleClassifierTests
         GeneralStyleClassifier.Configure(
             blobMinimumAverageAttackers: 5,
             fleetMinimumAverageAttackers: 11,
-            podderMinimumSharePercent: 20,
+            podderMinimumSharePercent: 35,
             podderMinimumKillCount: 5);
     }
 
@@ -84,9 +84,25 @@ public sealed class GeneralStyleClassifierTests
     [Fact]
     public void Classify_PodShareAndCountMeetMinimums_SetsPodderMarker()
     {
-        var result = GeneralStyleClassifier.Classify(Statistics(shipsDestroyed: 60, shipsLost: 10, soloRatio: 10, soloKills: 2, avgGangSize: 4.0, podKills: 10));
+        var result = GeneralStyleClassifier.Classify(Statistics(shipsDestroyed: 70, shipsLost: 10, soloRatio: 10, soloKills: 2, avgGangSize: 4.0, podKills: 20));
 
         Assert.True(result.IsPodder);
+    }
+
+    [Fact]
+    public void Classify_PodShareAtThirtyFivePercent_SetsPodderMarker()
+    {
+        var result = GeneralStyleClassifier.Classify(Statistics(shipsDestroyed: 27, shipsLost: 10, soloRatio: 10, soloKills: 2, avgGangSize: 4.0, podKills: 7));
+
+        Assert.True(result.IsPodder);
+    }
+
+    [Fact]
+    public void Classify_PodShareAtThirtyFourPercent_DoesNotSetPodderMarker()
+    {
+        var result = GeneralStyleClassifier.Classify(Statistics(shipsDestroyed: 134, shipsLost: 10, soloRatio: 10, soloKills: 2, avgGangSize: 4.0, podKills: 34));
+
+        Assert.False(result.IsPodder);
     }
 
     [Fact]
@@ -104,6 +120,57 @@ public sealed class GeneralStyleClassifierTests
 
         Assert.Equal(StyleClassification.Fleet, result.Classification);
         Assert.False(result.IsPodder);
+    }
+
+    [Fact]
+    public void Classify_ZeroKillsAndZeroLosses_ReturnsInactiveAndNotPodder()
+    {
+        var result = GeneralStyleClassifier.Classify(Statistics(shipsDestroyed: 0, shipsLost: 0, soloRatio: 0, soloKills: 0, avgGangSize: 0));
+
+        Assert.Equal(StyleClassification.Inactive, result.Classification);
+        Assert.False(result.IsPodder);
+    }
+
+    [Fact]
+    public void Classify_NoHistoryMarker_ReturnsInactive()
+    {
+        var result = GeneralStyleClassifier.Classify(new zKillStatistics { NoHistory = true });
+
+        Assert.Equal(StyleClassification.Inactive, result.Classification);
+        Assert.False(result.IsPodder);
+    }
+
+    [Fact]
+    public void Classify_ZeroKillsWithOneLoss_ReturnsVictim()
+    {
+        var result = GeneralStyleClassifier.Classify(Statistics(shipsDestroyed: 0, shipsLost: 1, soloRatio: 0, soloKills: 0, avgGangSize: 0));
+
+        Assert.Equal(StyleClassification.Victim, result.Classification);
+    }
+
+    [Fact]
+    public void Classify_OnlyPodKillsAndNoLosses_ReturnsInactiveAndNotPodder()
+    {
+        var result = GeneralStyleClassifier.Classify(Statistics(shipsDestroyed: 8, shipsLost: 0, soloRatio: 0, soloKills: 0, avgGangSize: 0, podKills: 8));
+
+        Assert.Equal(StyleClassification.Inactive, result.Classification);
+        Assert.False(result.IsPodder);
+    }
+
+    [Fact]
+    public void Classify_OnlyPodKillsWithLosses_ReturnsVictim()
+    {
+        var result = GeneralStyleClassifier.Classify(Statistics(shipsDestroyed: 8, shipsLost: 2, soloRatio: 0, soloKills: 0, avgGangSize: 0, podKills: 8));
+
+        Assert.Equal(StyleClassification.Victim, result.Classification);
+    }
+
+    [Fact]
+    public void Classify_OneShipKillAndNoLosses_IsNotInactive()
+    {
+        var result = GeneralStyleClassifier.Classify(Statistics(shipsDestroyed: 1, shipsLost: 0, soloRatio: 100, soloKills: 1, avgGangSize: 1));
+
+        Assert.Equal(StyleClassification.SoloBeginner, result.Classification);
     }
 
     [Fact]

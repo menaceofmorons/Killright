@@ -9,6 +9,7 @@ public static class StyleLetterCodeFormatter
     {
         var code = style switch
         {
+            StyleClassification.Inactive => Strings.Get("Style.LetterCode.Inactive"),
             StyleClassification.Victim => Strings.Get("Style.LetterCode.Victim"),
             StyleClassification.SoloBeginner => Strings.Get("Style.LetterCode.SoloBeginner"),
             StyleClassification.Solo => Strings.Get("Style.LetterCode.Solo"),

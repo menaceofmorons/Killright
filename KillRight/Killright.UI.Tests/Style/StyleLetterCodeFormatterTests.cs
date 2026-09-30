@@ -8,6 +8,7 @@ public sealed class StyleLetterCodeFormatterTests
 {
     [Theory]
     [InlineData(StyleClassification.Unknown, "U")]
+    [InlineData(StyleClassification.Inactive, "I")]
     [InlineData(StyleClassification.Victim, "V")]
     [InlineData(StyleClassification.SoloBeginner, "Sb")]
     [InlineData(StyleClassification.Solo, "S")]
@@ -21,7 +22,6 @@ public sealed class StyleLetterCodeFormatterTests
     }
 
     [Theory]
-    [InlineData(StyleClassification.Inactive, "U")]
     [InlineData(StyleClassification.Miner, "U")]
     public void FormatGeneral_RecentOnlyValue_FallsBackToUnknown(StyleClassification style, string expected)
     {

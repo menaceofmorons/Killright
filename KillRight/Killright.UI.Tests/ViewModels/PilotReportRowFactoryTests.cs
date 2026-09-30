@@ -57,6 +57,30 @@ public sealed class PilotReportRowFactoryTests
     }
 
     [Fact]
+    public void FromPilot_ZeroKillsZeroLosses_GeneralStyleInactiveAndLetterCodeI()
+    {
+        var statistics = new zKillStatistics { shipsDestroyed = 0, shipsLost = 0 };
+
+        var row = PilotReportRowFactory.FromPilot(
+            CreatePilot(), null, statistics, StyleClassification.Solo, false, "Unk", false, false, null);
+
+        Assert.Equal("Inactive", row.GeneralStyle);
+        Assert.Equal("I/S", row.Style);
+    }
+
+    [Fact]
+    public void FromPilot_NoHistoryPilot_ShowsInactiveInBothStyleSlots()
+    {
+        var statistics = new zKillStatistics { NoHistory = true };
+
+        var row = PilotReportRowFactory.FromPilot(
+            CreatePilot(), null, statistics, StyleClassification.Inactive, false, "Unk", false, false, null);
+
+        Assert.Equal("Inactive", row.GeneralStyle);
+        Assert.Equal("I/I", row.Style);
+    }
+
+    [Fact]
     public void FromPilot_RecentIsPodder_AppendsSuffixToLetterCodeAndFullWord()
     {
         var row = PilotReportRowFactory.FromPilot(

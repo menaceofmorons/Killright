@@ -39,7 +39,7 @@ mod tests {
         let configuration = StyleConfiguration {
             blob_minimum_average_attackers: 5.0,
             fleet_minimum_average_attackers: 11.0,
-            podder_minimum_share_percent: 20.0,
+            podder_minimum_share_percent: 35.0,
             podder_minimum_kill_count: 5,
         };
 
@@ -51,7 +51,7 @@ mod tests {
         let configuration = StyleConfiguration {
             blob_minimum_average_attackers: 0.0,
             fleet_minimum_average_attackers: 11.0,
-            podder_minimum_share_percent: 20.0,
+            podder_minimum_share_percent: 35.0,
             podder_minimum_kill_count: 5,
         };
 
@@ -63,7 +63,7 @@ mod tests {
         let configuration = StyleConfiguration {
             blob_minimum_average_attackers: 11.0,
             fleet_minimum_average_attackers: 11.0,
-            podder_minimum_share_percent: 20.0,
+            podder_minimum_share_percent: 35.0,
             podder_minimum_kill_count: 5,
         };
 

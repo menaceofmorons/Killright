@@ -97,7 +97,7 @@ mod tests {
         StyleConfiguration {
             blob_minimum_average_attackers: 5.0,
             fleet_minimum_average_attackers: 11.0,
-            podder_minimum_share_percent: 20.0,
+            podder_minimum_share_percent: 35.0,
             podder_minimum_kill_count: 5,
         }
     }
@@ -212,6 +212,32 @@ mod tests {
 
         assert_eq!(result.recent_style, STYLE_GANG);
         assert!(result.is_podder);
+    }
+
+    #[test]
+    fn recent_podder_marker_set_at_thirty_five_percent_pod_share() {
+        let kills = (0..20)
+            .map(|id| kill(id, 4, false, Some(33468)))
+            .chain((0..7).map(|id| kill(100 + id, 4, false, Some(670))))
+            .collect();
+
+        let result = analyze_recent_style(request(kills), &style_configuration());
+
+        assert_eq!(result.recent_style, STYLE_GANG);
+        assert!(result.is_podder);
+    }
+
+    #[test]
+    fn recent_podder_marker_not_set_at_thirty_four_percent_pod_share() {
+        let kills = (0..100)
+            .map(|id| kill(id, 4, false, Some(33468)))
+            .chain((0..34).map(|id| kill(1000 + id, 4, false, Some(670))))
+            .collect();
+
+        let result = analyze_recent_style(request(kills), &style_configuration());
+
+        assert_eq!(result.recent_style, STYLE_GANG);
+        assert!(!result.is_podder);
     }
 
     #[test]
