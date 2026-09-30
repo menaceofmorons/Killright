@@ -7,6 +7,8 @@ public static class KillmailQualification
 
     private static readonly HashSet<long> PodShipTypeIds = [CapsuleShipTypeId, CapsuleGenolutionShipTypeId];
 
+    public static readonly string PodShipTypeIdSqlList = $"{CapsuleShipTypeId}, {CapsuleGenolutionShipTypeId}";
+
     public static int CountUniqueAttackers(IReadOnlyList<KillmailAttacker> attackers)
     {
         var unique = new HashSet<long>();

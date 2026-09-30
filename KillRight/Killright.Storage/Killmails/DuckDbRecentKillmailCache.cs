@@ -10,8 +10,7 @@ namespace Killright.Storage.Killmails;
 
 public sealed class DuckDbRecentKillmailCache : IRecentKillmailCache
 {
-    private static readonly string PodShipTypeIdList =
-        $"{KillmailQualification.CapsuleShipTypeId}, {KillmailQualification.CapsuleGenolutionShipTypeId}";
+    private static readonly string PodShipTypeIdList = KillmailQualification.PodShipTypeIdSqlList;
 
     private readonly KillRightDatabase _database;
     private readonly int _recentWindowDays;

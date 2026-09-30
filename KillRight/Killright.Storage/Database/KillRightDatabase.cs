@@ -5,7 +5,7 @@ namespace Killright.Storage.Database;
 
 public sealed class KillRightDatabase
 {
-    public const int CurrentSchemaVersion = 2;
+    public const int CurrentSchemaVersion = 3;
 
     private readonly KillRightDatabaseOptions _options;
 
@@ -58,6 +58,7 @@ public sealed class KillRightDatabase
         CreateEsiEntityNameCache(connection);
         CreatezKillActivityCache(connection);
         CreatezKillStatisticsCache(connection);
+        CreatePilotLastKillmailCache(connection);
         CreateZkillKillmailsTables(connection);
         CreateSdeTables(connection);
         CreateSdeMetadata(connection);
@@ -143,6 +144,14 @@ public sealed class KillRightDatabase
         using var command = connection.CreateCommand();
         command.CommandText = $"UPDATE main.schema_metadata SET schema_version = {version};";
         command.ExecuteNonQuery();
+    }
+
+    public void EnsurePilotLastKillmailCache()
+    {
+        using var connection = new DuckDBConnection(ConnectionString);
+        connection.Open();
+
+        CreatePilotLastKillmailCache(connection);
     }
 
     public void RebuildKillmailAndAttackerTables()
@@ -286,6 +295,27 @@ public sealed class KillRightDatabase
         using var addPodKills = connection.CreateCommand();
         addPodKills.CommandText = "ALTER TABLE main.zkill_statistics_cache ADD COLUMN IF NOT EXISTS pod_kills INTEGER;";
         addPodKills.ExecuteNonQuery();
+    }
+
+    private static void CreatePilotLastKillmailCache(DuckDBConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+                              CREATE TABLE IF NOT EXISTS main.pilot_last_killmail_cache (
+                                  character_id BIGINT PRIMARY KEY,
+                                  has_killmail BOOLEAN NOT NULL,
+                                  killmail_id BIGINT,
+                                  kill_time_utc TEXT,
+                                  activity_type TEXT,
+                                  system_id BIGINT,
+                                  ship_type_id BIGINT,
+                                  victim_ship_type_id BIGINT,
+                                  attacker_count INTEGER,
+                                  weapon_type_id BIGINT,
+                                  checked_at_utc TEXT NOT NULL
+                              );
+                              """;
+        command.ExecuteNonQuery();
     }
 
     private static void CreateZkillKillmailsTables(DuckDBConnection connection)

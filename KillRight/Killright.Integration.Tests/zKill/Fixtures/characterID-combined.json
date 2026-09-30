@@ -1,0 +1,407 @@
+[
+ {
+  "attackers": [
+   {
+    "alliance_id": 99011528,
+    "character_id": 110425513,
+    "corporation_id": 98718813,
+    "damage_done": 442,
+    "final_blow": true,
+    "security_status": 5,
+    "ship_type_id": 29984,
+    "weapon_type_id": 24490
+   }
+  ],
+  "killmail_id": 138775009,
+  "killmail_time": "2026-09-28T20:51:35Z",
+  "solar_system_id": 30001586,
+  "victim": {
+   "alliance_id": 99010105,
+   "character_id": 2116955190,
+   "corporation_id": 320656615,
+   "damage_taken": 442,
+   "items": [
+    {
+     "flag": 89,
+     "item_type_id": 3193,
+     "quantity_destroyed": 1,
+     "singleton": 0
+    },
+    {
+     "flag": 89,
+     "item_type_id": 3256,
+     "quantity_destroyed": 1,
+     "singleton": 0
+    },
+    {
+     "flag": 89,
+     "item_type_id": 3231,
+     "quantity_destroyed": 1,
+     "singleton": 0
+    }
+   ],
+   "position": {
+    "x": -484925764199.4327,
+    "y": 47866179266.7936,
+    "z": 85025091439.49677
+   },
+   "ship_type_id": 670
+  },
+  "zkb": {
+   "locationID": 40101150,
+   "hash": "4d7cfca0182f96c0a88b950f082388121637150a",
+   "fittedValue": 10000,
+   "droppedValue": 0,
+   "destroyedValue": 20494155.06,
+   "totalValue": 20494155.06,
+   "totalDroppableValue": 20484155.06,
+   "points": 1,
+   "npc": false,
+   "solo": false,
+   "awox": false,
+   "labels": [
+    "tz:eu",
+    "cat:6",
+    "#:1",
+    "pvp",
+    "loc:nullsec",
+    "isk:under1b"
+   ]
+  }
+ },
+ {
+  "attackers": [
+   {
+    "alliance_id": 99011528,
+    "character_id": 110425513,
+    "corporation_id": 98718813,
+    "damage_done": 18793,
+    "final_blow": true,
+    "security_status": 5,
+    "ship_type_id": 29984,
+    "weapon_type_id": 24490
+   }
+  ],
+  "killmail_id": 138775003,
+  "killmail_time": "2026-09-28T20:51:14Z",
+  "solar_system_id": 30001586,
+  "victim": {
+   "alliance_id": 99010105,
+   "character_id": 2116955190,
+   "corporation_id": 320656615,
+   "damage_taken": 18793,
+   "items": [
+    {
+     "flag": 14,
+     "item_type_id": 2048,
+     "quantity_destroyed": 1,
+     "singleton": 0
+    },
+    {
+     "flag": 5,
+     "item_type_id": 56076,
+     "quantity_dropped": 1,
+     "singleton": 0
+    },
+    {
+     "flag": 27,
+     "item_type_id": 3138,
+     "quantity_dropped": 1,
+     "singleton": 0
+    },
+    {
+     "flag": 29,
+     "item_type_id": 12789,
+     "quantity_destroyed": 91,
+     "singleton": 0
+    },
+    {
+     "flag": 28,
+     "item_type_id": 3138,
+     "quantity_destroyed": 1,
+     "singleton": 0
+    },
+    {
+     "flag": 92,
+     "item_type_id": 31724,
+     "quantity_destroyed": 1,
+     "singleton": 0
+    },
+    {
+     "flag": 11,
+     "item_type_id": 8748,
+     "quantity_dropped": 1,
+     "singleton": 0
+    },
+    {
+     "flag": 13,
+     "item_type_id": 10190,
+     "quantity_dropped": 1,
+     "singleton": 0
+    },
+    {
+     "flag": 5,
+     "item_type_id": 56068,
+     "quantity_dropped": 1,
+     "singleton": 0
+    },
+    {
+     "flag": 94,
+     "item_type_id": 31360,
+     "quantity_destroyed": 1,
+     "singleton": 0
+    },
+    {
+     "flag": 5,
+     "item_type_id": 53984,
+     "quantity_destroyed": 1,
+     "singleton": 0
+    },
+    {
+     "flag": 28,
+     "item_type_id": 12789,
+     "quantity_destroyed": 91,
+     "singleton": 0
+    },
+    {
+     "flag": 29,
+     "item_type_id": 3138,
+     "quantity_destroyed": 1,
+     "singleton": 0
+    },
+    {
+     "flag": 22,
+     "item_type_id": 32780,
+     "quantity_destroyed": 1,
+     "singleton": 0
+    },
+    {
+     "flag": 31,
+     "item_type_id": 12789,
+     "quantity_destroyed": 91,
+     "singleton": 0
+    },
+    {
+     "flag": 30,
+     "item_type_id": 3138,
+     "quantity_dropped": 1,
+     "singleton": 0
+    },
+    {
+     "flag": 5,
+     "item_type_id": 12785,
+     "quantity_dropped": 2000,
+     "singleton": 0
+    },
+    {
+     "flag": 5,
+     "item_type_id": 32006,
+     "quantity_dropped": 9,
+     "singleton": 0
+    },
+    {
+     "flag": 93,
+     "item_type_id": 31760,
+     "quantity_destroyed": 1,
+     "singleton": 0
+    },
+    {
+     "flag": 27,
+     "item_type_id": 12789,
+     "quantity_destroyed": 91,
+     "singleton": 0
+    },
+    {
+     "flag": 21,
+     "item_type_id": 9632,
+     "quantity_dropped": 1,
+     "singleton": 0
+    },
+    {
+     "flag": 20,
+     "item_type_id": 4027,
+     "quantity_destroyed": 1,
+     "singleton": 0
+    },
+    {
+     "flag": 5,
+     "item_type_id": 12789,
+     "quantity_destroyed": 2125,
+     "singleton": 0
+    },
+    {
+     "flag": 30,
+     "item_type_id": 12789,
+     "quantity_dropped": 91,
+     "singleton": 0
+    },
+    {
+     "flag": 22,
+     "item_type_id": 32006,
+     "quantity_dropped": 9,
+     "singleton": 0
+    },
+    {
+     "flag": 19,
+     "item_type_id": 35656,
+     "quantity_destroyed": 1,
+     "singleton": 0
+    },
+    {
+     "flag": 23,
+     "item_type_id": 16535,
+     "quantity_destroyed": 1,
+     "singleton": 0
+    },
+    {
+     "flag": 31,
+     "item_type_id": 3138,
+     "quantity_destroyed": 1,
+     "singleton": 0
+    },
+    {
+     "flag": 12,
+     "item_type_id": 10190,
+     "quantity_dropped": 1,
+     "singleton": 0
+    }
+   ],
+   "position": {
+    "x": -484925764016.8327,
+    "y": 47866179449.3936,
+    "z": 85025091256.89676
+   },
+   "ship_type_id": 623
+  },
+  "zkb": {
+   "locationID": 40101150,
+   "hash": "8c5dff67acf986fecad92fccbb2118e960a05959",
+   "fittedValue": 35887355.48,
+   "droppedValue": 17233604.74,
+   "destroyedValue": 30273333.63,
+   "totalValue": 47506938.37,
+   "totalDroppableValue": 27019844.56,
+   "points": 44,
+   "npc": false,
+   "solo": true,
+   "awox": false,
+   "labels": [
+    "tz:eu",
+    "cat:6",
+    "solo",
+    "pvp",
+    "loc:nullsec",
+    "isk:under1b"
+   ]
+  }
+ },
+ {
+  "attackers": [
+   {
+    "alliance_id": 99010105,
+    "character_id": 2116955190,
+    "corporation_id": 320656615,
+    "damage_done": 468,
+    "final_blow": true,
+    "security_status": 3.3,
+    "ship_type_id": 623,
+    "weapon_type_id": 2456
+   }
+  ],
+  "killmail_id": 138772284,
+  "killmail_time": "2026-09-28T18:40:31Z",
+  "solar_system_id": 30004470,
+  "victim": {
+   "alliance_id": 1354830081,
+   "character_id": 2123654623,
+   "corporation_id": 98791332,
+   "damage_taken": 468,
+   "items": [
+    {
+     "flag": 89,
+     "item_type_id": 13261,
+     "quantity_destroyed": 1,
+     "singleton": 0
+    }
+   ],
+   "position": {
+    "x": -118928167055.8523,
+    "y": 127744076754.39932,
+    "z": -615756604786.9628
+   },
+   "ship_type_id": 670
+  },
+  "zkb": {
+   "locationID": 40282890,
+   "hash": "3dbd1672b47b47ddd287c5762fb376cb4d90bca7",
+   "fittedValue": 10000,
+   "droppedValue": 0,
+   "destroyedValue": 17768389.63,
+   "totalValue": 17768389.63,
+   "totalDroppableValue": 17758389.63,
+   "points": 1,
+   "npc": false,
+   "solo": false,
+   "awox": false,
+   "labels": [
+    "tz:eu",
+    "cat:6",
+    "#:1",
+    "pvp",
+    "loc:nullsec",
+    "isk:under1b"
+   ]
+  }
+ },
+ {
+  "attackers": [
+   {
+    "alliance_id": 99010105,
+    "character_id": 2116955190,
+    "corporation_id": 320656615,
+    "damage_done": 465,
+    "final_blow": true,
+    "security_status": 3.3,
+    "ship_type_id": 623,
+    "weapon_type_id": 2456
+   }
+  ],
+  "killmail_id": 138772260,
+  "killmail_time": "2026-09-28T18:39:42Z",
+  "solar_system_id": 30004470,
+  "victim": {
+   "alliance_id": 1354830081,
+   "character_id": 96533891,
+   "corporation_id": 272675225,
+   "damage_taken": 465,
+   "items": [],
+   "position": {
+    "x": -118928171128.66293,
+    "y": 127744078274.11363,
+    "z": -615756602606.7234
+   },
+   "ship_type_id": 670
+  },
+  "zkb": {
+   "locationID": 40282890,
+   "hash": "a170b229739d15fecf541612459e3e7189b5b63d",
+   "fittedValue": 10000,
+   "droppedValue": 0,
+   "destroyedValue": 10000,
+   "totalValue": 10000,
+   "totalDroppableValue": 0,
+   "points": 1,
+   "npc": false,
+   "solo": false,
+   "awox": false,
+   "labels": [
+    "tz:eu",
+    "cat:6",
+    "#:1",
+    "pvp",
+    "loc:nullsec",
+    "isk:under1b"
+   ]
+  }
+ }
+]

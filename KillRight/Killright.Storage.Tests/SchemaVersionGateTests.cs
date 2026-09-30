@@ -81,11 +81,51 @@ public sealed class SchemaVersionGateTests
     {
         var database = CreateDatabase();
         database.SetAlphaLock();
-        database.SetSchemaVersion(KillRightDatabase.CurrentSchemaVersion - 1);
+        database.SetSchemaVersion(KillRightDatabase.CurrentSchemaVersion - 2);
 
         var result = SchemaVersionGate.CheckOnStartup(database, isAlphaRelease: false);
 
         Assert.Equal(SchemaVersionCheckOutcome.RefusedNoMigrationPath, result.Outcome);
+    }
+
+    [Fact]
+    public void CheckOnStartup_LockedVersionTwo_MigratesToThreeCreatesTableAndKeepsKillmails()
+    {
+        var database = CreateDatabase();
+        DropPilotLastKillmailCache(database);
+        InsertKillmailRow(database, 900003);
+        database.SetAlphaLock();
+        database.SetSchemaVersion(2);
+
+        var result = SchemaVersionGate.CheckOnStartup(database, isAlphaRelease: false);
+
+        Assert.Equal(SchemaVersionCheckOutcome.Ok, result.Outcome);
+        Assert.Equal(3, database.GetSchemaVersion());
+        Assert.Equal(0, CountPilotLastKillmailRows(database));
+        Assert.Equal(1, CountKillmails(database));
+    }
+
+    [Fact]
+    public void CheckOnStartup_NotLockedVersionTwo_FollowsTheRebuildRule()
+    {
+        var database = CreateDatabase();
+        InsertKillmailRow(database, 900004);
+        database.SetSchemaVersion(2);
+
+        var result = SchemaVersionGate.CheckOnStartup(database, isAlphaRelease: false);
+
+        Assert.Equal(SchemaVersionCheckOutcome.Ok, result.Outcome);
+        Assert.Equal(3, database.GetSchemaVersion());
+        Assert.Equal(0, CountKillmails(database));
+    }
+
+    [Fact]
+    public void Migrations_HaveOneStepFromTwoToThree()
+    {
+        var migration = Assert.Single(SchemaVersionGate.Migrations);
+
+        Assert.Equal(2, migration.FromVersion);
+        Assert.Equal(3, migration.ToVersion);
     }
 
     private static KillRightDatabase CreateDatabase()
@@ -111,6 +151,27 @@ public sealed class SchemaVersionGateTests
                  587, 1, TRUE, FALSE, FALSE, '2026-09-28T00:00:00Z');
             """;
         command.ExecuteNonQuery();
+    }
+
+    private static void DropPilotLastKillmailCache(KillRightDatabase database)
+    {
+        using var connection = new DuckDBConnection(database.ConnectionString);
+        connection.Open();
+
+        using var command = connection.CreateCommand();
+        command.CommandText = "DROP TABLE main.pilot_last_killmail_cache;";
+        command.ExecuteNonQuery();
+    }
+
+    private static int CountPilotLastKillmailRows(KillRightDatabase database)
+    {
+        using var connection = new DuckDBConnection(database.ConnectionString);
+        connection.Open();
+
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM main.pilot_last_killmail_cache;";
+
+        return Convert.ToInt32(command.ExecuteScalar());
     }
 
     private static int CountKillmails(KillRightDatabase database)

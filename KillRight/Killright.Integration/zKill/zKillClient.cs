@@ -9,6 +9,7 @@ namespace Killright.Integration.zKill;
 public sealed class zKillClient : IzKillClient
 {
     private const string CapsuleShipGroupId = "29";
+    private const int LastKillmailPageBound = 3;
 
     private readonly HttpClient _http;
     private readonly zKillClientOptions _options;
@@ -109,6 +110,67 @@ public sealed class zKillClient : IzKillClient
         {
             return new zKillStatisticsResult(zKillStatisticsOutcome.Failure, null);
         }
+    }
+
+    public async Task<zKillLastKillmailResult> GetLastKillmailAsync(
+        long characterId,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            for (var page = 1; page <= LastKillmailPageBound; page++)
+            {
+                await StartRequestAsync(cancellationToken);
+
+                using var response = await _http.GetAsync(
+                    BuildLastKillmailUri(characterId, page),
+                    cancellationToken);
+
+                if ((int)response.StatusCode == 204)
+                    return new zKillLastKillmailResult(zKillLastKillmailOutcome.Success, null, null);
+
+                if (!response.IsSuccessStatusCode)
+                    return LastKillmailFailure;
+
+                var json = await response.Content.ReadAsStringAsync(cancellationToken);
+
+                if (IsNoHistoryResponse(json))
+                    return new zKillLastKillmailResult(zKillLastKillmailOutcome.NoHistory, null, null);
+
+                var payload = JsonSerializer.Deserialize<List<zKillRecentKillmailDto>>(json) ?? [];
+
+                if (payload.Count == 0)
+                    return new zKillLastKillmailResult(zKillLastKillmailOutcome.Success, null, null);
+
+                var killmail = BuildRawKillmails(payload)
+                    .FirstOrDefault(candidate => !KillmailQualification.IsPodKill(candidate.VictimShipTypeId));
+
+                if (killmail is not null)
+                {
+                    var activityType = killmail.VictimCharacterId == characterId
+                        ? zKillActivityType.Loss
+                        : zKillActivityType.Kill;
+
+                    return new zKillLastKillmailResult(zKillLastKillmailOutcome.Success, killmail, activityType);
+                }
+            }
+
+            return LastKillmailFailure;
+        }
+        catch
+        {
+            return LastKillmailFailure;
+        }
+    }
+
+    private static readonly zKillLastKillmailResult LastKillmailFailure =
+        new(zKillLastKillmailOutcome.Failure, null, null);
+
+    private static string BuildLastKillmailUri(long characterId, int page)
+    {
+        return page == 1
+            ? $"api/characterID/{characterId}/"
+            : $"api/characterID/{characterId}/page/{page}/";
     }
 
     private static int ExtractPodKills(zKillStatistics statistics)

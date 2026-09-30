@@ -14,4 +14,8 @@ public interface IzKillClient
     Task<zKillStatisticsResult> GetStatisticsAsync(
         long characterId,
         CancellationToken cancellationToken = default);
+
+    Task<zKillLastKillmailResult> GetLastKillmailAsync(
+        long characterId,
+        CancellationToken cancellationToken = default);
 }

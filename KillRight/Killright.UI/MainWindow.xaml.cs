@@ -281,11 +281,12 @@ public partial class MainWindow : Window
         _infoSheet?.Close();
 
         var dpi = VisualTreeHelper.GetDpi(this);
+        var lookupTag = new LastActivityLookupTag();
         var viewModel = new InfoSheetViewModel(
             row,
             App.UiState.Current.DeveloperTabRevealed,
             LoadBirthdayForInfoSheetAsync,
-            LoadLastActivityForInfoSheetAsync);
+            characterId => LoadLastActivityForInfoSheetAsync(characterId, lookupTag));
 
         var infoSheet = new InfoSheetWindow(viewModel)
         {
@@ -299,7 +300,7 @@ public partial class MainWindow : Window
         _infoSheet = infoSheet;
         infoSheet.Show();
 
-        _ = LoadInfoSheetAsync(viewModel, row);
+        _ = LoadInfoSheetAsync(viewModel, row, lookupTag);
     }
 
     private static Task<DateOnly?> LoadBirthdayForInfoSheetAsync(string inputName)
@@ -307,23 +308,41 @@ public partial class MainWindow : Window
         return Task.Run(() => App.PilotIdentityCache.GetBirthdayAsync(inputName));
     }
 
-    private static Task<PilotLastActivitySummary?> LoadLastActivityForInfoSheetAsync(long characterId)
+    private static Task<PilotLastActivitySummary?> LoadLastActivityForInfoSheetAsync(long characterId, LastActivityLookupTag lookupTag)
     {
         return Task.Run(async () =>
         {
-            var killmail = await App.RecentKillmailCache.GetMostRecentKillmailAsync(characterId);
-            return PilotLastActivitySummaryBuilder.Build(killmail, App.SdeReferenceDataStore);
+            try
+            {
+                var resolution = await App.LastActivityResolver.ResolveAsync(characterId);
+                lookupTag.Value = resolution.Source == PilotLastActivitySource.Live ? "live" : "cache";
+                return PilotLastActivitySummaryBuilder.Build(resolution.Killmail, App.SdeReferenceDataStore);
+            }
+            catch
+            {
+                lookupTag.Value = "failed";
+                throw;
+            }
         });
     }
 
-    private static async Task LoadInfoSheetAsync(InfoSheetViewModel viewModel, PilotReportRow row)
+    private sealed class LastActivityLookupTag
+    {
+        public string? Value { get; set; }
+    }
+
+    private static async Task LoadInfoSheetAsync(InfoSheetViewModel viewModel, PilotReportRow row, LastActivityLookupTag lookupTag)
     {
         var timings = App.Settings.Timing.Enabled ? new ScanTimings() : null;
+        var zKillRequestsAtStart = App.zKillClient.RequestCount;
 
-        using (timings.Measure(ScanTimings.ScanLevel, "popup_load", row.CharacterId))
+        using (var scope = timings.Measure(ScanTimings.ScanLevel, "popup_load", row.CharacterId))
         {
             await viewModel.LoadAsync();
+            scope.Tag = lookupTag.Value;
         }
+
+        timings.Add(ScanTimings.ScanLevel, ScanTimings.CounterPrefix + "zkill_requests", App.zKillClient.RequestCount - zKillRequestsAtStart, row.CharacterId);
 
         try
         {

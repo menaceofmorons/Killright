@@ -7,6 +7,7 @@ using Killright.Integration.RateLimiting;
 using Killright.Integration.Sde;
 using Killright.Integration.zKill;
 using Killright.Shared.Killmails;
+using Killright.Shared.Time;
 using Killright.Storage.Database;
 using Killright.Storage.Diagnostics;
 #if HISTORIC_RELATIONSHIPS
@@ -19,6 +20,7 @@ using Killright.Storage.zKill;
 using Killright.Core.Style;
 using Killright.UI.Analysis;
 using Killright.UI.Configuration;
+using Killright.UI.InfoSheet;
 using Killright.UI.Scan;
 using Killright.UI.Sde;
 using Killright.UI.Theme;
@@ -38,6 +40,8 @@ public partial class App : Application
     public static PilotIdentityResolver IdentityResolver { get; private set; } = null!;
     public static IzKillActivityCache zKillActivityCache { get; private set; } = null!;
     public static IRecentKillmailCache RecentKillmailCache { get; private set; } = null!;
+    public static IPilotLastKillmailCache PilotLastKillmailCache { get; private set; } = null!;
+    public static PilotLastActivityResolver LastActivityResolver { get; private set; } = null!;
     public static IKillmailStore KillmailStore { get; private set; } = null!;
     public static IzKillStatisticsCache zKillStatisticsCache { get; private set; } = null!;
     public static ISdeReferenceDataStore SdeReferenceDataStore { get; private set; } = null!;
@@ -189,6 +193,8 @@ public partial class App : Application
             new DuckDbzKillActivityCache(database);
         RecentKillmailCache =
             new DuckDbRecentKillmailCache(database, Settings.RecentWindowDays);
+        PilotLastKillmailCache =
+            new DuckDbPilotLastKillmailCache(database);
         KillmailStore =
             new DuckDbKillmailStore(database, Settings.QualificationFleetThreshold);
         zKillStatisticsCache =
@@ -284,6 +290,13 @@ public partial class App : Application
             new zKillClient(
                 zKillHttpClient,
                 limiter: zKillRequestLimiter);
+
+        LastActivityResolver =
+            new PilotLastActivityResolver(
+                zKillClient,
+                PilotLastKillmailCache,
+                RecentKillmailCache,
+                () => ApplicationClock.UtcNow);
 
         PurgeScheduler =
             new KillmailPurgeScheduler(
