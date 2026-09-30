@@ -37,6 +37,11 @@ public static class ScanActivityResolver
                 lastActivityType = killmailDerived.LastActivityType;
             }
 
+            var lastKillUtc = LatestOf(
+                stored?.LastKillUtc,
+                LastActiveDeriver.DeriveLastKill(statistics?.months, now),
+                killmailDerived?.LastKillUtc);
+
             var lastSuccessfulRecentCallUtc = newLastSuccessfulCallUtc ?? stored?.LastSuccessfulRecentCallUtc;
             var recentCoverageStartUtc = RecentCallScheduler.ResolveCoverageStartUtc(
                 stored?.RecentCoverageStartUtc,
@@ -62,7 +67,7 @@ public static class ScanActivityResolver
                 killmailDerived?.Error,
                 lastSuccessfulRecentCallUtc,
                 recentCoverageStartUtc,
-                killmailDerived?.LastKillUtc);
+                lastKillUtc);
 
             return new ActivityResolution(merged, true);
         }
@@ -70,5 +75,18 @@ public static class ScanActivityResolver
         {
             return new ActivityResolution(killmailDerived, false);
         }
+    }
+
+    private static DateTimeOffset? LatestOf(params DateTimeOffset?[] candidates)
+    {
+        DateTimeOffset? latest = null;
+
+        foreach (var candidate in candidates)
+        {
+            if (candidate is not null && (latest is null || candidate > latest))
+                latest = candidate;
+        }
+
+        return latest;
     }
 }

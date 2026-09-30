@@ -252,15 +252,54 @@ public sealed class PilotReportRowFactoryTests
     }
 
     [Fact]
-    public void FromPilot_LatestActivityIsNewerKill_LastKillUsesLastActiveUtc()
+    public void FromPilot_LatestActivityIsKillAndLastKillIsSet_LastKillShowsTheStoredValue()
     {
         var now = DateTimeOffset.UtcNow;
         var activity = new zKillActivity(
-            95465499, true, 1, 0, now.AddHours(-4.5), zKillActivityType.Kill, now, LastKillUtc: now.AddDays(-3));
+            95465499, true, 1, 0, now.AddHours(-4.5), zKillActivityType.Kill, now, LastKillUtc: now.AddHours(-4.5));
 
         var row = PilotReportRowFactory.FromPilot(
             CreatePilot(), activity, null, StyleClassification.Unknown, false, "Unk", false, false, null);
 
         Assert.Equal("5h", row.LastKill);
+    }
+
+    [Fact]
+    public void FromPilot_LastKillIsNull_LastKillIsDashWhateverLastActiveUtcIs()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var activity = new zKillActivity(
+            95465499, true, 1, 0, now.AddHours(-4.5), zKillActivityType.Kill, now);
+
+        var row = PilotReportRowFactory.FromPilot(
+            CreatePilot(), activity, null, StyleClassification.Unknown, false, "Unk", false, false, null);
+
+        Assert.Equal("-", row.LastKill);
+    }
+
+    [Fact]
+    public void FromPilot_StoredLastKillOlderThanThirtyDaysAndLatestActivityIsLoss_LastKillShowsOverflowMarker()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var activity = new zKillActivity(
+            95465499, true, 0, 0, now.AddHours(-2), zKillActivityType.Loss, now, LastKillUtc: now.AddDays(-90));
+
+        var row = PilotReportRowFactory.FromPilot(
+            CreatePilot(), activity, null, StyleClassification.Unknown, false, "Unk", false, false, null);
+
+        Assert.Equal(">30d", row.LastKill);
+    }
+
+    [Fact]
+    public void FromPilot_LastKillKnownWithoutPublicActivityData_LastKillStillShowsTheAge()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var activity = new zKillActivity(
+            95465499, false, 0, 0, null, null, now, LastKillUtc: now.AddDays(-12));
+
+        var row = PilotReportRowFactory.FromPilot(
+            CreatePilot(), activity, null, StyleClassification.Unknown, false, "Unk", false, false, null);
+
+        Assert.Equal("12d", row.LastKill);
     }
 }

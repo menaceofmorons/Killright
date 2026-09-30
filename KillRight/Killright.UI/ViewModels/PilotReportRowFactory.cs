@@ -93,22 +93,10 @@ public static class PilotReportRowFactory
 
     private static string FormatLastKill(zKillActivity? activity)
     {
-        if (activity?.HasPublicActivityData != true)
+        if (activity?.LastKillUtc is not { } lastKillUtc)
             return UiText.PlaceholderDash;
 
-        var lastKillUtc = activity.LastKillUtc;
-
-        if (activity.LastActivityType == zKillActivityType.Kill
-            && activity.LastActiveUtc is not null
-            && (lastKillUtc is null || activity.LastActiveUtc > lastKillUtc))
-        {
-            lastKillUtc = activity.LastActiveUtc;
-        }
-
-        if (lastKillUtc is null)
-            return UiText.PlaceholderDash;
-
-        return FormatKillAge(ApplicationClock.UtcNow - lastKillUtc.Value);
+        return FormatKillAge(ApplicationClock.UtcNow - lastKillUtc);
     }
 
     internal static string FormatKillAge(TimeSpan age)

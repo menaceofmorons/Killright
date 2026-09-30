@@ -36,6 +36,19 @@ public sealed class InfoSheetLastActivitySourceTests
         var body = Between(Read("Diagnostics/DiagnosticsView.xaml.cs"), "private void ClearActivityCache()", "private void ClearKillmailCache()");
 
         Assert.Contains("DELETE FROM main.pilot_last_killmail_cache;", body);
+        Assert.Contains("DELETE FROM main.zkill_activity_cache;", body);
+        Assert.Contains("UPDATE main.zkill_statistics_cache SET months_processed = NULL;", body);
+    }
+
+    [Fact]
+    public void Diagnostics_OnlyClearActivityCacheUnsetsTheStatisticsMonthsProcessedFlag()
+    {
+        var source = Read("Diagnostics/DiagnosticsView.xaml.cs");
+        var killmailBody = Between(source, "private void ClearKillmailCache()", "private void ClearStatisticsCache()");
+        var statisticsBody = Between(source, "private void ClearStatisticsCache()", "private void CopySummary_Click");
+
+        Assert.DoesNotContain("months_processed", killmailBody);
+        Assert.DoesNotContain("months_processed", statisticsBody);
     }
 
     [Fact]

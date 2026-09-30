@@ -84,6 +84,29 @@ public sealed class DuckDbzKillActivityCacheTests
     }
 
     [Fact]
+    public async Task UpsertThenGet_RoundTripsLastKillUtc_IncludingNull()
+    {
+        var (_, cache) = CreateCache();
+
+        var lastKill = new DateTimeOffset(2026, 6, 30, 0, 0, 0, TimeSpan.Zero);
+        var withKill = new zKillActivity(
+            95465499, true, 0, 0, DateTimeOffset.UtcNow.AddDays(-1), zKillActivityType.Loss, DateTimeOffset.UtcNow, LastKillUtc: lastKill);
+        var withoutKill = new zKillActivity(
+            91321792, true, 0, 0, DateTimeOffset.UtcNow.AddDays(-1), zKillActivityType.Loss, DateTimeOffset.UtcNow);
+
+        await cache.UpsertAsync(withKill);
+        await cache.UpsertAsync(withoutKill);
+
+        var single = await cache.GetAsync(95465499);
+        var many = await cache.GetManyAsync([95465499, 91321792]);
+
+        Assert.Equal(lastKill, single!.LastKillUtc);
+        Assert.Equal(lastKill, many[95465499].LastKillUtc);
+        Assert.Null((await cache.GetAsync(91321792))!.LastKillUtc);
+        Assert.Null(many[91321792].LastKillUtc);
+    }
+
+    [Fact]
     public async Task GetAsync_RowCheckedLongAgo_IsStillReturned()
     {
         var (_, cache) = CreateCache();

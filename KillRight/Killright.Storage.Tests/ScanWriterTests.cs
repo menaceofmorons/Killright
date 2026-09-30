@@ -287,6 +287,53 @@ public sealed class ScanWriterTests
     }
 
     [Fact]
+    public async Task Commit_ActivityWrite_PersistsLastKillUtcAndASecondWriteReplacesIt()
+    {
+        var database = CreateDatabase();
+        var first = new ScanWriteBatch();
+        first.AddActivity(new zKillActivity(Lukas, true, 0, 0, Now, zKillActivityType.Loss, Now, LastKillUtc: Now.AddDays(-40)));
+        var second = new ScanWriteBatch();
+        second.AddActivity(new zKillActivity(Lukas, true, 0, 0, Now, zKillActivityType.Loss, Now, LastKillUtc: Now.AddDays(-10)));
+        var cache = new DuckDbzKillActivityCache(database);
+
+        using (var session = database.OpenScanSession())
+            ScanWriter.Commit(session, first, Threshold, Now);
+
+        Assert.Equal(Now.AddDays(-40), (await cache.GetAsync(Lukas))!.LastKillUtc);
+
+        using (var session = database.OpenScanSession())
+            ScanWriter.Commit(session, second, Threshold, Now);
+
+        Assert.Equal(Now.AddDays(-10), (await cache.GetAsync(Lukas))!.LastKillUtc);
+        Assert.Equal(1, CountRows(database, "zkill_activity_cache"));
+    }
+
+    [Fact]
+    public async Task EnsureCreated_ActivityTableWithoutLastKillColumn_GainsTheColumnAndKeepsItsRows()
+    {
+        var database = CreateDatabase();
+
+        using (var connection = database.OpenConnection())
+        {
+            using var drop = connection.CreateCommand();
+            drop.CommandText = "ALTER TABLE main.zkill_activity_cache DROP COLUMN last_kill_utc;";
+            drop.ExecuteNonQuery();
+
+            using var insert = connection.CreateCommand();
+            insert.CommandText = $"INSERT INTO main.zkill_activity_cache (character_id, has_public_activity_data, checked_at_utc) VALUES ({Lukas}, TRUE, '2026-09-30T12:00:00.0000000Z');";
+            insert.ExecuteNonQuery();
+        }
+
+        database.EnsureCreated();
+
+        var activity = await new DuckDbzKillActivityCache(database).GetAsync(Lukas);
+
+        Assert.NotNull(activity);
+        Assert.Null(activity!.LastKillUtc);
+        Assert.Equal(1, CountRows(database, "zkill_activity_cache"));
+    }
+
+    [Fact]
     public async Task GetManyAsync_Activity_MatchesPerPilotReads()
     {
         var database = CreateDatabase();

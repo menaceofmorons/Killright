@@ -138,6 +138,92 @@ public sealed class ScanActivityResolverTests
         Assert.Equal(Now.AddDays(-2), resolution.Activity!.LastKillUtc);
     }
 
+    [Fact]
+    public void Resolve_StoredLastKillWithNothingNewerDerived_KeepsTheStoredLastKill()
+    {
+        var stored = Stored(lastActive: Now.AddDays(-1), type: zKillActivityType.Loss) with { LastKillUtc = Now.AddDays(-40) };
+
+        var resolution = ScanActivityResolver.Resolve(Lukas, null, stored, null, null, null, Now);
+
+        Assert.True(resolution.Persist);
+        Assert.Equal(Now.AddDays(-40), resolution.Activity!.LastKillUtc);
+        Assert.Equal(zKillActivityType.Loss, resolution.Activity.LastActivityType);
+    }
+
+    [Fact]
+    public void Resolve_KillmailDerivedLastKillNewerThanStored_ReplacesIt()
+    {
+        var stored = Stored(lastActive: Now.AddDays(-1), type: zKillActivityType.Loss) with { LastKillUtc = Now.AddDays(-40) };
+        var derived = Derived(lastActive: Now.AddDays(-1), type: zKillActivityType.Loss) with { LastKillUtc = Now.AddDays(-10) };
+
+        var resolution = ScanActivityResolver.Resolve(Lukas, null, stored, derived, null, null, Now);
+
+        Assert.Equal(Now.AddDays(-10), resolution.Activity!.LastKillUtc);
+    }
+
+    [Fact]
+    public void Resolve_KillmailDerivedLastKillOlderThanStored_DoesNotReplaceIt()
+    {
+        var stored = Stored(lastActive: Now.AddDays(-1), type: zKillActivityType.Loss) with { LastKillUtc = Now.AddDays(-10) };
+        var derived = Derived(lastActive: Now.AddDays(-1), type: zKillActivityType.Loss) with { LastKillUtc = Now.AddDays(-40) };
+
+        var resolution = ScanActivityResolver.Resolve(Lukas, null, stored, derived, null, null, Now);
+
+        Assert.Equal(Now.AddDays(-10), resolution.Activity!.LastKillUtc);
+    }
+
+    [Fact]
+    public void Resolve_StatisticsDerivedLastKillWithNothingStored_IsUsed()
+    {
+        var statistics = new zKillStatistics
+        {
+            months = new Dictionary<string, zKillStatisticsMonth>
+            {
+                ["202609"] = new() { Year = 2026, Month = 9, ShipsDestroyed = 1, ShipsLost = 6 },
+                ["202606"] = new() { Year = 2026, Month = 6, ShipsDestroyed = 4, ShipsLost = 0 }
+            }
+        };
+
+        var resolution = ScanActivityResolver.Resolve(Lukas, statistics, null, null, null, null, Now);
+
+        Assert.True(resolution.Persist);
+        Assert.Equal(LastActiveDeriver.DeriveLastKill(statistics.months, Now), resolution.Activity!.LastKillUtc);
+        Assert.Equal(zKillActivityType.Loss, resolution.Activity.LastActivityType);
+    }
+
+    [Fact]
+    public void Resolve_StatisticsDerivedLastKillEarlierThanStored_DoesNotReplaceIt()
+    {
+        var stored = Stored(lastActive: Now.AddDays(-1), type: zKillActivityType.Kill) with { LastKillUtc = Now.AddDays(-2) };
+        var statistics = new zKillStatistics
+        {
+            months = new Dictionary<string, zKillStatisticsMonth>
+            {
+                ["202606"] = new() { Year = 2026, Month = 6, ShipsDestroyed = 4, ShipsLost = 0 }
+            }
+        };
+
+        var resolution = ScanActivityResolver.Resolve(Lukas, statistics, stored, null, null, null, Now);
+
+        Assert.Equal(Now.AddDays(-2), resolution.Activity!.LastKillUtc);
+    }
+
+    [Fact]
+    public void Resolve_StatisticsWithoutShipKills_LeavesLastKillNull()
+    {
+        var statistics = new zKillStatistics
+        {
+            months = new Dictionary<string, zKillStatisticsMonth>
+            {
+                ["202609"] = new() { Year = 2026, Month = 9, ShipsDestroyed = 0, ShipsLost = 3 }
+            }
+        };
+
+        var resolution = ScanActivityResolver.Resolve(Lukas, statistics, null, null, null, null, Now);
+
+        Assert.Null(resolution.Activity!.LastKillUtc);
+    }
+
     private static zKillActivity Stored(
         DateTimeOffset lastActive,
         zKillActivityType type,

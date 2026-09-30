@@ -264,6 +264,10 @@ public sealed class KillRightDatabase
         using var addRecentCoverageStartUtc = connection.CreateCommand();
         addRecentCoverageStartUtc.CommandText = "ALTER TABLE main.zkill_activity_cache ADD COLUMN IF NOT EXISTS recent_coverage_start_utc TEXT;";
         addRecentCoverageStartUtc.ExecuteNonQuery();
+
+        using var addLastKillUtc = connection.CreateCommand();
+        addLastKillUtc.CommandText = "ALTER TABLE main.zkill_activity_cache ADD COLUMN IF NOT EXISTS last_kill_utc TEXT;";
+        addLastKillUtc.ExecuteNonQuery();
     }
 
     private static void CreatezKillStatisticsCache(DuckDBConnection connection)

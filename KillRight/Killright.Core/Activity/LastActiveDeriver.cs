@@ -23,19 +23,39 @@ public static class LastActiveDeriver
             ? zKillActivityType.Kill
             : zKillActivityType.Loss;
 
-        var isCurrentMonth = latest.Year == today.Year && latest.Month == today.Month;
+        return (MonthActivityDate(latest, today), activityType);
+    }
+
+    public static DateTimeOffset? DeriveLastKill(
+        IReadOnlyDictionary<string, zKillStatisticsMonth>? months,
+        DateTimeOffset today)
+    {
+        if (months is null || months.Count == 0)
+            return null;
+
+        var latestWithKills = months.Values
+            .Where(m => m.ShipsDestroyed > 0)
+            .OrderByDescending(m => m.Year)
+            .ThenByDescending(m => m.Month)
+            .FirstOrDefault();
+
+        return latestWithKills is null ? null : MonthActivityDate(latestWithKills, today);
+    }
+
+    private static DateTimeOffset MonthActivityDate(zKillStatisticsMonth month, DateTimeOffset today)
+    {
+        var isCurrentMonth = month.Year == today.Year && month.Month == today.Month;
 
         var (previousYear, previousMonth) = PreviousMonth(today.Year, today.Month);
         var isEarlyInCurrentMonthForPreviousMonth =
-            latest.Year == previousYear && latest.Month == previousMonth && today.Day <= 7;
+            month.Year == previousYear && month.Month == previousMonth && today.Day <= 7;
 
         if (isCurrentMonth || isEarlyInCurrentMonthForPreviousMonth)
-            return (today.AddDays(-8), activityType);
+            return today.AddDays(-8);
 
-        var lastDayOfMonth = DateTime.DaysInMonth(latest.Year, latest.Month);
-        var derivedDate = new DateTimeOffset(latest.Year, latest.Month, lastDayOfMonth, 0, 0, 0, TimeSpan.Zero);
+        var lastDayOfMonth = DateTime.DaysInMonth(month.Year, month.Month);
 
-        return (derivedDate, activityType);
+        return new DateTimeOffset(month.Year, month.Month, lastDayOfMonth, 0, 0, 0, TimeSpan.Zero);
     }
 
     private static (int Year, int Month) PreviousMonth(int year, int month)

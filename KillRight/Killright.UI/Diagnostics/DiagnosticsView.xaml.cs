@@ -546,7 +546,7 @@ public partial class DiagnosticsView : UserControl
 
     private void ClearActivity_Click(object sender, RoutedEventArgs e)
     {
-        if (!Confirm("Clear Activity Cache?\n\nThis will clear derived activity rows, the stored Last Active, the last recent-call time, and the cached last killmails."))
+        if (!Confirm("Clear Activity Cache?\n\nThis will clear derived activity rows, the stored Last Active and Last Kill, the last recent-call time, and the cached last killmails, and statistics will be fetched again at the next scan."))
             return;
 
         ClearActivityCache();
@@ -606,6 +606,7 @@ public partial class DiagnosticsView : UserControl
     {
         _service.ExecuteNonQuery("DELETE FROM main.zkill_activity_cache;");
         _service.ExecuteNonQuery("DELETE FROM main.pilot_last_killmail_cache;");
+        _service.ExecuteNonQuery("UPDATE main.zkill_statistics_cache SET months_processed = NULL;");
     }
 
     private void ClearKillmailCache()

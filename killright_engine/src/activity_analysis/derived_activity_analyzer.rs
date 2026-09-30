@@ -35,12 +35,23 @@ pub fn derive_activity(killmails: &[RecentKillmailSnapshot], now: DateTime<Utc>)
 
     window.sort_by(|left, right| right.0.cmp(&left.0));
 
+    let newest_non_pod_kill_time_utc = killmails
+        .iter()
+        .filter(|row| !row.is_loss && !is_pod_kill(row.ship_type_id))
+        .filter_map(|row| {
+            DateTime::parse_from_rfc3339(&row.kill_time_utc)
+                .ok()
+                .map(|timestamp| (timestamp.with_timezone(&Utc), row))
+        })
+        .max_by_key(|(timestamp, _)| *timestamp)
+        .map(|(_, row)| row.kill_time_utc.clone());
+
     let mut derived = DerivedActivity {
         has_public_activity_data: !window.is_empty(),
         kills_week: 0,
         solo_week: 0,
         newest_non_pod_killmail: None,
-        newest_non_pod_kill_time_utc: None,
+        newest_non_pod_kill_time_utc,
     };
 
     for (_, row) in window {
@@ -54,10 +65,6 @@ pub fn derive_activity(killmails: &[RecentKillmailSnapshot], now: DateTime<Utc>)
         }
 
         if !row.is_loss && !is_pod_kill_row {
-            if derived.newest_non_pod_kill_time_utc.is_none() {
-                derived.newest_non_pod_kill_time_utc = Some(row.kill_time_utc.clone());
-            }
-
             derived.kills_week += 1;
 
             if row.is_solo {
@@ -182,6 +189,64 @@ mod tests {
         assert!(derived.has_public_activity_data);
         assert_eq!(derived.kills_week, 0);
         assert_eq!(derived.solo_week, 0);
+        assert!(derived.newest_non_pod_kill_time_utc.is_none());
+    }
+
+    #[test]
+    fn newest_kill_outside_the_weekly_window_is_still_reported() {
+        let rows = vec![row(1, "2026-09-09T00:00:00+00:00", false, true, Some(587))];
+
+        let derived = derive_activity(&rows, now());
+
+        assert!(!derived.has_public_activity_data);
+        assert_eq!(derived.kills_week, 0);
+        assert!(derived.newest_non_pod_killmail.is_none());
+        assert_eq!(derived.newest_non_pod_kill_time_utc.as_deref(), Some("2026-09-09T00:00:00+00:00"));
+    }
+
+    #[test]
+    fn old_kill_and_recent_loss_report_the_kill_and_the_loss_separately() {
+        let rows = vec![
+            row(1, "2026-09-09T00:00:00+00:00", false, false, Some(587)),
+            row(2, "2026-09-28T00:00:00+00:00", true, false, Some(587)),
+        ];
+
+        let derived = derive_activity(&rows, now());
+
+        assert_eq!(derived.newest_non_pod_kill_time_utc.as_deref(), Some("2026-09-09T00:00:00+00:00"));
+        assert_eq!(
+            derived.newest_non_pod_killmail,
+            Some(NewestKillmail {
+                kill_time_utc: "2026-09-28T00:00:00+00:00".to_string(),
+                is_loss: true,
+            })
+        );
+        assert_eq!(derived.kills_week, 0);
+    }
+
+    #[test]
+    fn pod_kills_and_losses_are_skipped_over_the_whole_history() {
+        let rows = vec![
+            row(1, "2026-08-01T00:00:00+00:00", false, true, Some(33328)),
+            row(2, "2026-08-02T00:00:00+00:00", false, true, Some(670)),
+            row(3, "2026-08-03T00:00:00+00:00", true, true, Some(587)),
+            row(4, "2026-07-15T00:00:00+00:00", false, false, Some(587)),
+        ];
+
+        let derived = derive_activity(&rows, now());
+
+        assert_eq!(derived.newest_non_pod_kill_time_utc.as_deref(), Some("2026-07-15T00:00:00+00:00"));
+    }
+
+    #[test]
+    fn only_losses_over_the_whole_history_give_no_newest_kill() {
+        let rows = vec![
+            row(1, "2026-08-03T00:00:00+00:00", true, true, Some(587)),
+            row(2, "2026-09-28T00:00:00+00:00", true, false, Some(670)),
+        ];
+
+        let derived = derive_activity(&rows, now());
+
         assert!(derived.newest_non_pod_kill_time_utc.is_none());
     }
 

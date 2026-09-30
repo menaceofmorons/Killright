@@ -139,7 +139,7 @@ public static class ScanWriter
                 {
                     var record = zKillActivityCacheRecord.FromActivity(activity);
 
-                    return $"({record.CharacterId}, {SqlValueFormatter.Bool(record.HasPublicActivityData)}, {SqlValueFormatter.Int(record.KillsWeek)}, {SqlValueFormatter.Int(record.SoloWeek)}, {SqlValueFormatter.Date(record.LastActiveUtc)}, {SqlValueFormatter.String(record.LastActivityType?.ToString())}, {SqlValueFormatter.Date(record.CheckedAtUtc)}, {SqlValueFormatter.String(record.Error)}, {SqlValueFormatter.Date(record.LastSuccessfulRecentCallUtc)}, {SqlValueFormatter.Date(record.RecentCoverageStartUtc)})";
+                    return $"({record.CharacterId}, {SqlValueFormatter.Bool(record.HasPublicActivityData)}, {SqlValueFormatter.Int(record.KillsWeek)}, {SqlValueFormatter.Int(record.SoloWeek)}, {SqlValueFormatter.Date(record.LastActiveUtc)}, {SqlValueFormatter.String(record.LastActivityType?.ToString())}, {SqlValueFormatter.Date(record.CheckedAtUtc)}, {SqlValueFormatter.String(record.Error)}, {SqlValueFormatter.Date(record.LastSuccessfulRecentCallUtc)}, {SqlValueFormatter.Date(record.RecentCoverageStartUtc)}, {SqlValueFormatter.Date(record.LastKillUtc)})";
                 }));
 
             Execute(
@@ -149,7 +149,7 @@ public static class ScanWriter
                 INSERT OR REPLACE INTO main.zkill_activity_cache (
                     character_id, has_public_activity_data, kills_week, solo_week,
                     last_active_utc, last_activity_type, checked_at_utc, error,
-                    last_recent_call_utc, recent_coverage_start_utc
+                    last_recent_call_utc, recent_coverage_start_utc, last_kill_utc
                 ) VALUES {values};
                 """);
         }

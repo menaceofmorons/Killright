@@ -32,7 +32,8 @@ public sealed class DuckDbzKillActivityCache : IzKillActivityCache
                                      checked_at_utc,
                                      error,
                                      last_recent_call_utc,
-                                     recent_coverage_start_utc
+                                     recent_coverage_start_utc,
+                                     last_kill_utc
                               FROM zkill_activity_cache
                               WHERE character_id = {characterId}
                               LIMIT 1;
@@ -56,7 +57,8 @@ public sealed class DuckDbzKillActivityCache : IzKillActivityCache
             CheckedAtUtc = checkedAtUtc,
             Error = reader.GetNullableString(7),
             LastSuccessfulRecentCallUtc = reader.GetNullableDateTimeOffset(8),
-            RecentCoverageStartUtc = reader.GetNullableDateTimeOffset(9)
+            RecentCoverageStartUtc = reader.GetNullableDateTimeOffset(9),
+            LastKillUtc = reader.GetNullableDateTimeOffset(10)
         };
 
         return Task.FromResult<zKillActivity?>(record.ToActivity());
@@ -88,7 +90,8 @@ public sealed class DuckDbzKillActivityCache : IzKillActivityCache
                                          checked_at_utc,
                                          error,
                                          last_recent_call_utc,
-                                         recent_coverage_start_utc
+                                         recent_coverage_start_utc,
+                                         last_kill_utc
                                   FROM zkill_activity_cache
                                   WHERE character_id IN ({string.Join(", ", chunk)});
                                   """;
@@ -108,7 +111,8 @@ public sealed class DuckDbzKillActivityCache : IzKillActivityCache
                     CheckedAtUtc = reader.GetDateTimeOffset(6),
                     Error = reader.GetNullableString(7),
                     LastSuccessfulRecentCallUtc = reader.GetNullableDateTimeOffset(8),
-                    RecentCoverageStartUtc = reader.GetNullableDateTimeOffset(9)
+                    RecentCoverageStartUtc = reader.GetNullableDateTimeOffset(9),
+                    LastKillUtc = reader.GetNullableDateTimeOffset(10)
                 };
 
                 results[record.CharacterId] = record.ToActivity();
@@ -144,7 +148,8 @@ public sealed class DuckDbzKillActivityCache : IzKillActivityCache
                                             checked_at_utc,
                                             error,
                                             last_recent_call_utc,
-                                            recent_coverage_start_utc
+                                            recent_coverage_start_utc,
+                                            last_kill_utc
                                         ) VALUES (
                                             {record.CharacterId},
                                             {SqlValueFormatter.Bool(record.HasPublicActivityData)},
@@ -155,7 +160,8 @@ public sealed class DuckDbzKillActivityCache : IzKillActivityCache
                                             {SqlValueFormatter.Date(record.CheckedAtUtc)},
                                             {SqlValueFormatter.String(record.Error)},
                                             {SqlValueFormatter.Date(record.LastSuccessfulRecentCallUtc)},
-                                            {SqlValueFormatter.Date(record.RecentCoverageStartUtc)}
+                                            {SqlValueFormatter.Date(record.RecentCoverageStartUtc)},
+                                            {SqlValueFormatter.Date(record.LastKillUtc)}
                                         );
                                         """;
             insertCommand.ExecuteNonQuery();
