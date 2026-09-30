@@ -18,3 +18,6 @@ pub mod ship_library;
 
 #[path = "threat_analysis/mod_threat_analysis.rs"]
 pub mod threat_analysis;
+
+#[path = "activity_analysis/mod_activity_analysis.rs"]
+pub mod activity_analysis;

@@ -1,6 +1,8 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 use chrono::{DateTime, Utc};
+use duckdb::Connection;
 
 use crate::repositories::duckdb_database::open_connection;
 use crate::repositories::repository_error::RepositoryResult;
@@ -79,6 +81,17 @@ impl PilotIdentityRepository {
 
         let connection = open_connection(&self.database_path)?;
 
+        Self::get_for_characters_on(&connection, character_ids)
+    }
+
+    pub fn get_for_characters_on(
+        connection: &Connection,
+        character_ids: &[i64],
+    ) -> RepositoryResult<Vec<PilotIdentitySnapshot>> {
+        if character_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
         let ids = character_ids
             .iter()
             .map(|character_id| character_id.to_string())
@@ -116,6 +129,18 @@ impl PilotIdentityRepository {
 
         Ok(results)
     }
+
+    pub fn first_by_character(snapshots: Vec<PilotIdentitySnapshot>) -> HashMap<i64, PilotIdentitySnapshot> {
+        let mut by_character = HashMap::new();
+
+        for snapshot in snapshots {
+            if let Some(character_id) = snapshot.character_id {
+                by_character.entry(character_id).or_insert(snapshot);
+            }
+        }
+
+        by_character
+    }
 }
 
 #[cfg(test)]
@@ -145,10 +170,13 @@ mod tests {
     }
 
     fn unique_suffix() -> u128 {
-        std::time::SystemTime::now()
+        static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let nanos = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
-            .as_nanos()
+            .as_nanos();
+
+        nanos * 1000 + u128::from(COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst) % 1000)
     }
 
     #[test]
@@ -178,6 +206,36 @@ mod tests {
         assert!(rows.iter().any(|row| row.character_id == Some(95465499)));
         assert!(rows.iter().any(|row| row.character_id == Some(91321792)));
         assert!(!rows.iter().any(|row| row.character_id == Some(90000003)));
+    }
+
+    #[test]
+    fn get_for_characters_on_matches_single_reads_per_character() {
+        let path = std::env::temp_dir().join(format!("pilot-identity-repo-{}.duckdb", unique_suffix()));
+        let connection = Connection::open(&path).unwrap();
+        create_schema(&connection);
+
+        connection
+            .execute_batch(
+                "INSERT INTO pilot_identity_cache VALUES
+                    ('Lukas Naarii', 95465499, 'Lukas Naarii', 'Verified', 1.2, 98000001, 'Corp One', 'ONE', NULL, NULL, NULL, '2026-09-20T00:00:00+00:00'),
+                    ('T''ral Vsengne', 91321792, 'T''ral Vsengne', 'Verified', 0.4, 98000002, 'Corp Two', 'TWO', 99000001, 'Alliance Two', 'ATWO', '2026-09-20T00:00:00+00:00');",
+            )
+            .unwrap();
+
+        let batch = PilotIdentityRepository::first_by_character(
+            PilotIdentityRepository::get_for_characters_on(&connection, &[95465499, 91321792, 5]).unwrap(),
+        );
+        drop(connection);
+
+        let repository = PilotIdentityRepository::new(path.clone());
+        let first = repository.get_for_character(95465499).unwrap().unwrap();
+        let second = repository.get_for_character(91321792).unwrap().unwrap();
+
+        std::fs::remove_file(&path).unwrap();
+
+        assert_eq!(batch[&95465499], first);
+        assert_eq!(batch[&91321792], second);
+        assert!(!batch.contains_key(&5));
     }
 
     #[test]

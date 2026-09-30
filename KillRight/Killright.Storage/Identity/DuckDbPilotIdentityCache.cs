@@ -95,6 +95,74 @@ public sealed class DuckDbPilotIdentityCache : IPilotIdentityCache
         return Task.FromResult<DateOnly?>(DateOnly.FromDateTime(reader.GetDateTime(0)));
     }
 
+    public Task<IReadOnlyDictionary<string, PilotIdentityCacheRecord>> GetRecordsAsync(
+        IReadOnlyCollection<string> inputNames,
+        ScanDatabaseSession? session = null,
+        CancellationToken cancellationToken = default)
+    {
+        var records = new Dictionary<string, PilotIdentityCacheRecord>(StringComparer.Ordinal);
+        var normalizedNames = inputNames
+            .Select(PilotIdentityCacheRecord.NormalizeInputName)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        if (normalizedNames.Count == 0)
+            return Task.FromResult<IReadOnlyDictionary<string, PilotIdentityCacheRecord>>(records);
+
+        using var ownedConnection = session is null ? _database.OpenConnection() : null;
+        var connection = session?.Connection ?? ownedConnection!;
+
+        foreach (var chunk in normalizedNames.Chunk(500))
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = $"""
+                                  SELECT input_name,
+                                         character_id,
+                                         character_name,
+                                         verify_status,
+                                         security_status,
+                                         corporation_id,
+                                         corporation_name,
+                                         corporation_ticker,
+                                         alliance_id,
+                                         alliance_name,
+                                         alliance_ticker,
+                                         cached_at_utc,
+                                         birthday,
+                                         security_status_at_utc
+                                  FROM pilot_identity_cache
+                                  WHERE input_name IN ({string.Join(", ", chunk.Select(SqlValueFormatter.String))});
+                                  """;
+
+            using var reader = command.ExecuteReader();
+
+            while (reader.Read())
+            {
+                var record = new PilotIdentityCacheRecord
+                {
+                    InputName = reader.GetString(0),
+                    CharacterId = reader.GetNullableInt64(1),
+                    CharacterName = reader.GetNullableString(2),
+                    VerifyStatus = Enum.Parse<VerifyStatus>(reader.GetString(3)),
+                    SecurityStatus = reader.GetNullableDouble(4),
+                    CorporationId = reader.GetNullableInt64(5),
+                    CorporationName = reader.GetNullableString(6),
+                    CorporationTicker = reader.GetNullableString(7),
+                    AllianceId = reader.GetNullableInt64(8),
+                    AllianceName = reader.GetNullableString(9),
+                    AllianceTicker = reader.GetNullableString(10),
+                    CachedAtUtc = reader.GetDateTime(11),
+                    Birthday = reader.IsDBNull(12) ? null : DateOnly.FromDateTime(reader.GetDateTime(12)),
+                    SecurityStatusAtUtc = reader.IsDBNull(13) ? null : reader.GetDateTime(13)
+                };
+
+                records[record.InputName] = record;
+            }
+        }
+
+        return Task.FromResult<IReadOnlyDictionary<string, PilotIdentityCacheRecord>>(records);
+    }
+
     public Task<PilotIdentityCacheRecord?> GetRecordAsync(string inputName, CancellationToken cancellationToken = default)
     {
         var normalizedInputName = PilotIdentityCacheRecord.NormalizeInputName(inputName);

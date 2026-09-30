@@ -12,6 +12,14 @@ public interface IKillrightEngineRuntime : IDisposable
         ScanTimings? timings = null,
         long? timingCharacterId = null);
 
+    Task<string> AnalyzePilotsAsync(
+        string requestJson,
+        CancellationToken cancellationToken = default,
+        ScanTimings? timings = null)
+    {
+        return Task.FromResult("{\"results\":[],\"failure\":\"missing_runtime\"}");
+    }
+
     Task<string> DiagnoseGroupDetectionAsync(
         string requestJson,
         CancellationToken cancellationToken = default);

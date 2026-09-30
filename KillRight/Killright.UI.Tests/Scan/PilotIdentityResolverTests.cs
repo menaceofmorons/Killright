@@ -3,6 +3,7 @@ using Killright.Integration.Esi;
 using Killright.Shared;
 using Killright.Storage.Database;
 using Killright.Storage.Identity;
+using Killright.Storage.Scan;
 using Killright.UI.Scan;
 using Xunit;
 
@@ -243,6 +244,68 @@ public sealed class PilotIdentityResolverTests
         Assert.Equal(5, counter.Milliseconds);
     }
 
+    [Fact]
+    public async Task ResolveAsync_WithWriteBatch_BuffersIdentityAndNamesInsteadOfWriting()
+    {
+        var fixture = CreateFixture();
+        var writes = new ScanWriteBatch();
+
+        var pilots = await fixture.Resolver.ResolveAsync([Tral, Lukas], writes: writes);
+
+        Assert.Equal(2, writes.Identities.Count);
+        Assert.Equal(3, writes.EntityNames.Count);
+        Assert.Null(await fixture.IdentityCache.GetRecordAsync(Tral));
+        Assert.Equal("Test Corp", pilots[0].Corporation!.Name);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_BufferedWritesCommittedLater_MatchImmediatePersistence()
+    {
+        var immediate = CreateFixture();
+        var buffered = CreateFixture();
+        var writes = new ScanWriteBatch();
+
+        await immediate.Resolver.ResolveAsync([Tral, Lukas]);
+        await buffered.Resolver.ResolveAsync([Tral, Lukas], writes: writes);
+
+        using (var session = buffered.Database.OpenScanSession())
+            ScanWriter.Commit(session, writes, 11, new DateTimeOffset(2026, 9, 30, 12, 0, 0, TimeSpan.Zero));
+
+        foreach (var name in new[] { Tral, Lukas })
+        {
+            var expected = await immediate.IdentityCache.GetRecordAsync(name);
+            var actual = await buffered.IdentityCache.GetRecordAsync(name);
+
+            Assert.Equal(expected!.CharacterId, actual!.CharacterId);
+            Assert.Equal(expected.CorporationId, actual.CorporationId);
+            Assert.Equal(expected.AllianceId, actual.AllianceId);
+            Assert.Equal(expected.SecurityStatus, actual.SecurityStatus);
+            Assert.Equal(expected.Birthday, actual.Birthday);
+            Assert.Equal(expected.SecurityStatusAtUtc, actual.SecurityStatusAtUtc);
+        }
+
+        var names = await new DuckDbEsiEntityNameCache(buffered.Database).GetNamesAsync([98765, 98766, 99001]);
+        Assert.Equal(3, names.Count);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_WithSession_ReadsCachesThroughThatSessionOnly()
+    {
+        var fixture = CreateFixture();
+        await fixture.Resolver.ResolveAsync([Tral, Lukas]);
+        fixture.Clock.Advance(TimeSpan.FromMinutes(5));
+        var before = fixture.Database.ConnectionsOpened;
+
+        using (var session = fixture.Database.OpenScanSession())
+        {
+            var pilots = await fixture.Resolver.ResolveAsync([Tral, Lukas], session: session, writes: new ScanWriteBatch());
+
+            Assert.Equal("Test Corp", pilots[0].Corporation!.Name);
+        }
+
+        Assert.Equal(1, fixture.Database.ConnectionsOpened - before);
+    }
+
     private static Fixture CreateFixture(int maxConcurrency = 8)
     {
         var path = Path.Combine(Path.GetTempPath(), $"identityResolver.{Guid.NewGuid():N}.duckdb");
@@ -258,10 +321,11 @@ public sealed class PilotIdentityResolverTests
             new PilotIdentityResolver(esi, identityCache, nameCache, maxConcurrency, () => clock.Now),
             esi,
             identityCache,
-            clock);
+            clock,
+            database);
     }
 
-    private sealed record Fixture(PilotIdentityResolver Resolver, FakeEsiClient Esi, DuckDbPilotIdentityCache IdentityCache, Clock Clock);
+    private sealed record Fixture(PilotIdentityResolver Resolver, FakeEsiClient Esi, DuckDbPilotIdentityCache IdentityCache, Clock Clock, KillRightDatabase Database);
 
     private sealed class Clock
     {

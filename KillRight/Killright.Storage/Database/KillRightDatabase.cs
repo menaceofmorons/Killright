@@ -14,7 +14,35 @@ public sealed class KillRightDatabase
         _options = options;
     }
 
+    private int _connectionsOpened;
+
     public string ConnectionString => $"Data Source={_options.DatabasePath}";
+
+    public int ConnectionsOpened => Volatile.Read(ref _connectionsOpened);
+
+    public DuckDBConnection OpenConnection()
+    {
+        var connection = new DuckDBConnection(ConnectionString);
+
+        try
+        {
+            connection.Open();
+        }
+        catch
+        {
+            connection.Dispose();
+            throw;
+        }
+
+        Interlocked.Increment(ref _connectionsOpened);
+
+        return connection;
+    }
+
+    public ScanDatabaseSession OpenScanSession()
+    {
+        return new ScanDatabaseSession(OpenConnection());
+    }
 
     public void EnsureCreated()
     {

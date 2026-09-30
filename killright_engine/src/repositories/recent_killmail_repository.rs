@@ -1,4 +1,7 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
+
+use duckdb::Connection;
 
 use crate::repositories::duckdb_database::open_connection;
 use crate::repositories::repository_error::RepositoryResult;
@@ -26,6 +29,64 @@ pub struct RecentKillmailRepository {
 impl RecentKillmailRepository {
     pub fn new(database_path: PathBuf) -> Self {
         Self { database_path }
+    }
+
+    pub fn get_for_characters_on(
+        connection: &Connection,
+        character_ids: &[i64],
+    ) -> RepositoryResult<HashMap<i64, Vec<RecentKillmailSnapshot>>> {
+        let mut grouped: HashMap<i64, Vec<RecentKillmailSnapshot>> = HashMap::new();
+
+        if character_ids.is_empty() {
+            return Ok(grouped);
+        }
+
+        let ids = character_ids
+            .iter()
+            .map(|character_id| character_id.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
+
+        let sql = format!(
+            "SELECT victim_character_id AS character_id, killmail_id, killmail_hash, kill_time_utc, \
+             TRUE AS is_loss, unique_attacker_count, is_solo, victim_ship_type_id, system_id, \
+             location_id, is_npc, cached_at_utc \
+             FROM main.zkill_killmails \
+             WHERE victim_character_id IN ({ids}) \
+             UNION ALL \
+             SELECT a.character_id, k.killmail_id, k.killmail_hash, k.kill_time_utc, \
+             FALSE AS is_loss, k.unique_attacker_count, k.is_solo, k.victim_ship_type_id, k.system_id, \
+             k.location_id, k.is_npc, k.cached_at_utc \
+             FROM main.zkill_killmail_attackers a \
+             JOIN main.zkill_killmails k ON k.killmail_id = a.killmail_id \
+             WHERE a.character_id IN ({ids}) \
+             ORDER BY kill_time_utc DESC;");
+
+        let mut statement = connection.prepare(&sql)?;
+
+        let rows = statement.query_map([], |row| {
+            Ok(RecentKillmailSnapshot {
+                character_id: row.get(0)?,
+                killmail_id: row.get(1)?,
+                killmail_hash: row.get(2)?,
+                kill_time_utc: row.get(3)?,
+                is_loss: row.get(4)?,
+                attacker_count: row.get(5)?,
+                is_solo: row.get(6)?,
+                ship_type_id: row.get(7)?,
+                system_id: row.get(8)?,
+                location_id: row.get(9)?,
+                is_npc: row.get(10)?,
+                cached_at_utc: row.get(11)?,
+            })
+        })?;
+
+        for row in rows {
+            let snapshot = row?;
+            grouped.entry(snapshot.character_id).or_default().push(snapshot);
+        }
+
+        Ok(grouped)
     }
 
     pub fn get_for_character(
@@ -112,10 +173,13 @@ mod tests {
     }
 
     fn unique_suffix() -> u128 {
-        std::time::SystemTime::now()
+        static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let nanos = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
-            .as_nanos()
+            .as_nanos();
+
+        nanos * 1000 + u128::from(COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst) % 1000)
     }
 
     #[test]
@@ -166,5 +230,44 @@ mod tests {
 
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].ship_type_id, Some(670));
+    }
+
+    #[test]
+    fn get_for_characters_on_groups_rows_per_character_and_matches_single_reads() {
+        let path = std::env::temp_dir().join(format!("recent-killmail-repo-{}.duckdb", unique_suffix()));
+        let connection = Connection::open(&path).unwrap();
+        create_schema(&connection);
+
+        connection.execute_batch(
+            "INSERT INTO zkill_killmails VALUES
+                (1, 'hash1', '2026-09-20T00:00:00+00:00', 30000142, 40000001, 91321792, 587, 2, FALSE, FALSE, TRUE, '2026-09-20T00:00:00+00:00'),
+                (2, 'hash2', '2026-09-21T00:00:00+00:00', 30000142, 40000001, 95465499, 670, 3, FALSE, FALSE, TRUE, '2026-09-21T00:00:00+00:00'),
+                (3, 'hash3', '2026-09-22T00:00:00+00:00', 30000142, 40000001, 777, 587, 1, TRUE, FALSE, FALSE, '2026-09-22T00:00:00+00:00');
+            INSERT INTO zkill_killmail_attackers VALUES
+                (1, 95465499, 98000001, NULL, 11567),
+                (3, 91321792, 98000002, NULL, 11567);",
+        )
+        .unwrap();
+
+        let grouped = RecentKillmailRepository::get_for_characters_on(&connection, &[95465499, 91321792, 5]).unwrap();
+        drop(connection);
+
+        let repository = RecentKillmailRepository::new(path.clone());
+        let first = repository.get_for_character(95465499).unwrap();
+        let second = repository.get_for_character(91321792).unwrap();
+
+        std::fs::remove_file(&path).unwrap();
+
+        assert_eq!(grouped[&95465499], first);
+        assert_eq!(grouped[&91321792], second);
+        assert!(!grouped.contains_key(&5));
+    }
+
+    #[test]
+    fn get_for_characters_on_empty_list_returns_empty() {
+        let connection = Connection::open_in_memory().unwrap();
+        create_schema(&connection);
+
+        assert!(RecentKillmailRepository::get_for_characters_on(&connection, &[]).unwrap().is_empty());
     }
 }

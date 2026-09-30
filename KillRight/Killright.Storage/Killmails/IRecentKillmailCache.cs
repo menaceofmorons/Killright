@@ -5,10 +5,6 @@ namespace Killright.Storage.Killmails;
 
 public interface IRecentKillmailCache
 {
-    Task<zKillActivity> GetDerivedActivityAsync(
-        long characterId,
-        CancellationToken cancellationToken = default);
-
     Task<PilotRecentKillmail?> GetMostRecentKillmailAsync(
         long characterId,
         CancellationToken cancellationToken = default);

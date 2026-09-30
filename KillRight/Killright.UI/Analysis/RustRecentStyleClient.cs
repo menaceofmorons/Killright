@@ -1,7 +1,11 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Globalization;
 using System.Text.Json;
 using Killright.Core.Style;
+using Killright.Integration.zKill;
+using Killright.Shared.Time;
+using Killright.Shared.zKill;
 using Killright.Storage.Diagnostics;
 using Killright.UI.Configuration;
 
@@ -41,7 +45,7 @@ public sealed class RustRecentStyleClient
                 response = JsonSerializer.Deserialize<PilotAnalysisResponse>(responseJson);
             }
 
-            var engineTimings = MapTimings(response);
+            var engineTimings = MapTimings(response?.timings_ms, response?.timing_counts);
             timings.AddEngine(characterId, engineTimings?.TimingsMs, engineTimings?.TimingCounts);
 
             if (!string.IsNullOrWhiteSpace(response?.failure))
@@ -61,6 +65,79 @@ public sealed class RustRecentStyleClient
         {
             EngineFailureLog.Record($"engine analysis threw for character {characterId}: {exception.Message}");
             return PilotEngineAnalysisResult.Failed("exception");
+        }
+    }
+
+    public async Task<IReadOnlyList<PilotEngineAnalysisResult>> AnalyzePilotsAsync(
+        IReadOnlyList<long> characterIds,
+        CancellationToken cancellationToken = default,
+        ScanTimings? timings = null)
+    {
+        if (characterIds.Count == 0)
+            return Array.Empty<PilotEngineAnalysisResult>();
+
+        try
+        {
+            string requestJson;
+
+            using (timings.Measure(ScanTimings.EngineLevel, "json_serialize"))
+            {
+                requestJson = JsonSerializer.Serialize(new PilotsAnalysisRequest(characterIds));
+            }
+
+            var responseJson = await _runtime.AnalyzePilotsAsync(requestJson, cancellationToken, timings);
+            PilotsAnalysisResponse? response;
+
+            using (timings.Measure(ScanTimings.EngineLevel, "json_deserialize"))
+            {
+                response = JsonSerializer.Deserialize<PilotsAnalysisResponse>(responseJson);
+            }
+
+            var engineTimings = MapTimings(response?.timings_ms, response?.timing_counts);
+            timings.AddEngine(null, engineTimings?.TimingsMs, engineTimings?.TimingCounts);
+
+            if (response is null || !string.IsNullOrWhiteSpace(response.failure))
+            {
+                var reason = response?.failure ?? "unreadable_response";
+                EngineFailureLog.Record($"engine batch analysis failed: {reason}");
+
+                return characterIds.Select(_ => PilotEngineAnalysisResult.Failed(reason)).ToList();
+            }
+
+            var byCharacter = new Dictionary<long, PilotAnalysisResponse>();
+
+            foreach (var result in response.results)
+                byCharacter.TryAdd(result.character_id, result);
+
+            var now = ApplicationClock.UtcNow;
+
+            using (timings.Measure(ScanTimings.EngineLevel, "result_map"))
+            {
+                return characterIds.Select(characterId =>
+                {
+                    if (!byCharacter.TryGetValue(characterId, out var result))
+                        return PilotEngineAnalysisResult.Failed("missing_result");
+
+                    if (!string.IsNullOrWhiteSpace(result.failure))
+                    {
+                        EngineFailureLog.Record($"engine analysis failed for character {characterId}: {result.failure}");
+                        return PilotEngineAnalysisResult.Failed(result.failure);
+                    }
+
+                    return new PilotEngineAnalysisResult(
+                        MapRecentStyle(result.recent_style),
+                        result.is_recent_podder ?? false,
+                        MapThreatScore(result.threat?.score),
+                        FailureReason: null,
+                        DerivedActivity: MapDerivedActivity(result.derived_activity));
+                }).ToList();
+            }
+        }
+        catch (Exception exception)
+        {
+            EngineFailureLog.Record($"engine batch analysis threw: {exception.Message}");
+
+            return characterIds.Select(_ => PilotEngineAnalysisResult.Failed("exception")).ToList();
         }
     }
 
@@ -90,7 +167,7 @@ public sealed class RustRecentStyleClient
                 response = JsonSerializer.Deserialize<PilotAnalysisResponse>(responseJson);
             }
 
-            var engineTimings = MapTimings(response);
+            var engineTimings = MapTimings(response?.timings_ms, response?.timing_counts);
             timings.AddEngine(null, engineTimings?.TimingsMs, engineTimings?.TimingCounts);
 
             if (!string.IsNullOrWhiteSpace(response?.failure) || response?.group_detection is null)
@@ -127,14 +204,40 @@ public sealed class RustRecentStyleClient
         }
     }
 
-    private static EngineTimings? MapTimings(PilotAnalysisResponse? response)
+    private static EngineTimings? MapTimings(Dictionary<string, double>? timingsMs, Dictionary<string, long>? timingCounts)
     {
-        if (response?.timings_ms is null && response?.timing_counts is null)
+        if (timingsMs is null && timingCounts is null)
             return null;
 
         return new EngineTimings(
-            response.timings_ms ?? new Dictionary<string, double>(),
-            response.timing_counts ?? new Dictionary<string, long>());
+            timingsMs ?? new Dictionary<string, double>(),
+            timingCounts ?? new Dictionary<string, long>());
+    }
+
+    private static PilotDerivedActivity? MapDerivedActivity(DerivedActivityResponse? response)
+    {
+        if (response is null)
+            return null;
+
+        return new PilotDerivedActivity(
+            response.has_public_activity_data,
+            response.kills_week,
+            response.solo_week,
+            ParseUtc(response.newest_non_pod_killmail?.kill_time_utc),
+            response.newest_non_pod_killmail?.activity_type switch
+            {
+                "Kill" => zKillActivityType.Kill,
+                "Loss" => zKillActivityType.Loss,
+                _ => null
+            },
+            ParseUtc(response.newest_non_pod_kill_time_utc));
+    }
+
+    private static DateTimeOffset? ParseUtc(string? value)
+    {
+        return DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsed)
+            ? parsed
+            : null;
     }
 
     private static StyleClassification MapRecentStyle(string? value)
@@ -179,6 +282,31 @@ public sealed class RustRecentStyleClient
 
     private sealed record PilotAnalysisRequest(long character_id, IReadOnlyList<long>? scanned_character_ids);
 
+    private sealed record PilotsAnalysisRequest(IReadOnlyList<long> character_ids);
+
+    private sealed class PilotsAnalysisResponse
+    {
+        public List<PilotAnalysisResponse> results { get; set; } = new();
+        public string? failure { get; set; }
+        public Dictionary<string, double>? timings_ms { get; set; }
+        public Dictionary<string, long>? timing_counts { get; set; }
+    }
+
+    private sealed class DerivedActivityResponse
+    {
+        public bool has_public_activity_data { get; set; }
+        public int? kills_week { get; set; }
+        public int? solo_week { get; set; }
+        public NewestKillmailResponse? newest_non_pod_killmail { get; set; }
+        public string? newest_non_pod_kill_time_utc { get; set; }
+    }
+
+    private sealed class NewestKillmailResponse
+    {
+        public string? kill_time_utc { get; set; }
+        public string? activity_type { get; set; }
+    }
+
     private sealed class PilotAnalysisResponse
     {
         public long character_id { get; set; }
@@ -186,6 +314,7 @@ public sealed class RustRecentStyleClient
         public bool? is_recent_podder { get; set; }
         public ThreatAnalysisResponse? threat { get; set; }
         public GroupDetectionResponse? group_detection { get; set; }
+        public DerivedActivityResponse? derived_activity { get; set; }
         public string? failure { get; set; }
         public Dictionary<string, double>? timings_ms { get; set; }
         public Dictionary<string, long>? timing_counts { get; set; }
@@ -245,12 +374,32 @@ public sealed record PilotGroupDetectionResult(
             relationship.PilotACharacterId == characterId || relationship.PilotBCharacterId == characterId);
 }
 
+public sealed record PilotDerivedActivity(
+    bool HasPublicActivityData,
+    int? KillsWeek,
+    int? SoloWeek,
+    DateTimeOffset? NewestKillTimeUtc,
+    zKillActivityType? NewestKillActivityType,
+    DateTimeOffset? LastKillUtc)
+{
+    public zKillActivity ToActivity(long characterId, DateTimeOffset checkedAtUtc) => new(
+        characterId,
+        HasPublicActivityData,
+        KillsWeek,
+        SoloWeek,
+        NewestKillTimeUtc,
+        NewestKillActivityType,
+        checkedAtUtc,
+        LastKillUtc: LastKillUtc);
+}
+
 public sealed record PilotEngineAnalysisResult(
     StyleClassification RecentStyle,
     bool IsRecentPodder,
     string ThreatBand,
     string? FailureReason,
-    EngineTimings? Timings = null)
+    EngineTimings? Timings = null,
+    PilotDerivedActivity? DerivedActivity = null)
 {
     public static PilotEngineAnalysisResult Failed(string reason) => new(
         StyleClassification.Unknown,

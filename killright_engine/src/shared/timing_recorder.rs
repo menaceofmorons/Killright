@@ -46,6 +46,13 @@ pub fn begin() -> Option<Instant> {
     }
 }
 
+#[cfg(test)]
+#[allow(dead_code)]
+pub(crate) fn begin_forced() -> Instant {
+    RECORDER.with(|cell| *cell.borrow_mut() = Some(Recorder::default()));
+    Instant::now()
+}
+
 pub fn clear() {
     RECORDER.with(|cell| *cell.borrow_mut() = None);
 }

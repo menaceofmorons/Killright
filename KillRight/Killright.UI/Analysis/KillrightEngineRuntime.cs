@@ -9,6 +9,7 @@ public sealed class KillrightEngineRuntime : IKillrightEngineRuntime
     private readonly nint _libraryHandle;
     private readonly InitializeDelegate _initialize;
     private readonly JsonExportDelegate _analyzePilot;
+    private readonly JsonExportDelegate _analyzePilots;
     private readonly JsonExportDelegate _diagnoseGroupDetection;
     private readonly JsonExportDelegate _diagnoseThreat;
     private readonly ShutdownDelegate _shutdown;
@@ -33,6 +34,9 @@ public sealed class KillrightEngineRuntime : IKillrightEngineRuntime
 
         _analyzePilot = GetExport<JsonExportDelegate>(
             "killright_analyze_pilot");
+
+        _analyzePilots = GetExport<JsonExportDelegate>(
+            "killright_analyze_pilots");
 
         _diagnoseGroupDetection = GetExport<JsonExportDelegate>(
             "killright_diagnose_group_detection");
@@ -60,6 +64,14 @@ public sealed class KillrightEngineRuntime : IKillrightEngineRuntime
         long? timingCharacterId = null)
     {
         return InvokeJsonExport(_analyzePilot, requestJson, cancellationToken, timings, timingCharacterId);
+    }
+
+    public Task<string> AnalyzePilotsAsync(
+        string requestJson,
+        CancellationToken cancellationToken = default,
+        ScanTimings? timings = null)
+    {
+        return InvokeJsonExport(_analyzePilots, requestJson, cancellationToken, timings);
     }
 
     public Task<string> DiagnoseGroupDetectionAsync(

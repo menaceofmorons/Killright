@@ -62,6 +62,62 @@ public sealed class DuckDbzKillActivityCache : IzKillActivityCache
         return Task.FromResult<zKillActivity?>(record.ToActivity());
     }
 
+    public Task<IReadOnlyDictionary<long, zKillActivity>> GetManyAsync(
+        IReadOnlyCollection<long> characterIds,
+        ScanDatabaseSession? session = null,
+        CancellationToken cancellationToken = default)
+    {
+        var results = new Dictionary<long, zKillActivity>();
+
+        if (characterIds.Count == 0)
+            return Task.FromResult<IReadOnlyDictionary<long, zKillActivity>>(results);
+
+        using var ownedConnection = session is null ? _database.OpenConnection() : null;
+        var connection = session?.Connection ?? ownedConnection!;
+
+        foreach (var chunk in characterIds.Distinct().Chunk(500))
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = $"""
+                                  SELECT character_id,
+                                         has_public_activity_data,
+                                         kills_week,
+                                         solo_week,
+                                         last_active_utc,
+                                         last_activity_type,
+                                         checked_at_utc,
+                                         error,
+                                         last_recent_call_utc,
+                                         recent_coverage_start_utc
+                                  FROM zkill_activity_cache
+                                  WHERE character_id IN ({string.Join(", ", chunk)});
+                                  """;
+
+            using var reader = command.ExecuteReader();
+
+            while (reader.Read())
+            {
+                var record = new zKillActivityCacheRecord
+                {
+                    CharacterId = reader.GetInt64(0),
+                    HasPublicActivityData = reader.GetBoolean(1),
+                    KillsWeek = reader.GetNullableInt32(2),
+                    SoloWeek = reader.GetNullableInt32(3),
+                    LastActiveUtc = reader.GetNullableDateTimeOffset(4),
+                    LastActivityType = ReadActivityTypeOrNull(reader.GetNullableString(5)),
+                    CheckedAtUtc = reader.GetDateTimeOffset(6),
+                    Error = reader.GetNullableString(7),
+                    LastSuccessfulRecentCallUtc = reader.GetNullableDateTimeOffset(8),
+                    RecentCoverageStartUtc = reader.GetNullableDateTimeOffset(9)
+                };
+
+                results[record.CharacterId] = record.ToActivity();
+            }
+        }
+
+        return Task.FromResult<IReadOnlyDictionary<long, zKillActivity>>(results);
+    }
+
     public Task UpsertAsync(zKillActivity activity, CancellationToken cancellationToken = default)
     {
         var record = zKillActivityCacheRecord.FromActivity(activity);

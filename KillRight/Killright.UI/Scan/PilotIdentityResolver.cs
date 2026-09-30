@@ -2,8 +2,10 @@ using Killright.Core.Models;
 using Killright.Integration.Esi;
 using Killright.Shared;
 using Killright.Shared.Constants;
+using Killright.Storage.Database;
 using Killright.Storage.Diagnostics;
 using Killright.Storage.Identity;
+using Killright.Storage.Scan;
 
 namespace Killright.UI.Scan;
 
@@ -32,7 +34,9 @@ public sealed class PilotIdentityResolver
     public async Task<IReadOnlyList<Pilot>> ResolveAsync(
         IReadOnlyList<string> inputNames,
         ScanTimings? timings = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        ScanDatabaseSession? session = null,
+        ScanWriteBatch? writes = null)
     {
         var now = _utcNow();
         var states = new Dictionary<string, PilotState>(StringComparer.Ordinal);
@@ -45,8 +49,22 @@ public sealed class PilotIdentityResolver
                 states[key] = new PilotState(key, inputName.Trim());
         }
 
+        IReadOnlyDictionary<string, PilotIdentityCacheRecord> cachedRecords;
+
+        try
+        {
+            cachedRecords = await _identityCache.GetRecordsAsync(states.Keys.ToList(), session, cancellationToken);
+        }
+        catch
+        {
+            cachedRecords = new Dictionary<string, PilotIdentityCacheRecord>();
+        }
+
         foreach (var state in states.Values)
-            await LoadCachedAsync(state, now);
+        {
+            if (cachedRecords.TryGetValue(state.Key, out var cachedRecord))
+                ApplyCached(state, cachedRecord, now);
+        }
 
         var namesResolved = 0;
 
@@ -135,7 +153,7 @@ public sealed class PilotIdentityResolver
                 state.Changed = true;
         }
 
-        var entityNames = await ResolveEntityNamesAsync(active, cancellationToken);
+        var entityNames = await ResolveEntityNamesAsync(active, session, writes, cancellationToken);
         namesResolved += entityNames.NewlyResolved;
 
         var pilotsByKey = new Dictionary<string, Pilot>(StringComparer.Ordinal);
@@ -145,7 +163,7 @@ public sealed class PilotIdentityResolver
             pilotsByKey[state.Key] = state.ToPilot(entityNames.Names);
 
             if (state.Changed)
-                await PersistAsync(state, now);
+                await PersistAsync(state, now, writes);
         }
 
         timings.Add(ScanTimings.ScanLevel, ScanTimings.CounterPrefix + "esi_names_resolved", namesResolved);
@@ -155,22 +173,8 @@ public sealed class PilotIdentityResolver
             .ToList();
     }
 
-    private async Task LoadCachedAsync(PilotState state, DateTime now)
+    private static void ApplyCached(PilotState state, PilotIdentityCacheRecord record, DateTime now)
     {
-        PilotIdentityCacheRecord? record;
-
-        try
-        {
-            record = await _identityCache.GetRecordAsync(state.InputName);
-        }
-        catch
-        {
-            return;
-        }
-
-        if (record is null)
-            return;
-
         state.Cached = record;
 
         if (record.VerifyStatus == VerifyStatus.NoMatch)
@@ -193,6 +197,8 @@ public sealed class PilotIdentityResolver
 
     private async Task<(IReadOnlyDictionary<long, string> Names, int NewlyResolved)> ResolveEntityNamesAsync(
         IReadOnlyList<PilotState> active,
+        ScanDatabaseSession? session,
+        ScanWriteBatch? writes,
         CancellationToken cancellationToken)
     {
         var corporationIds = active
@@ -213,7 +219,7 @@ public sealed class PilotIdentityResolver
 
         try
         {
-            foreach (var pair in await _nameCache.GetNamesAsync(wantedIds, cancellationToken))
+            foreach (var pair in await _nameCache.GetNamesAsync(wantedIds, session, cancellationToken))
                 names[pair.Key] = pair.Value;
         }
         catch
@@ -233,16 +239,22 @@ public sealed class PilotIdentityResolver
         foreach (var pair in fetched)
             names[pair.Key] = pair.Value;
 
+        var fetchedNames = fetched
+            .Select(pair => new EsiEntityName(
+                pair.Key,
+                corporationIds.Contains(pair.Key) ? EsiEntityTypes.Corporation : EsiEntityTypes.Alliance,
+                pair.Value))
+            .ToList();
+
+        if (writes is not null)
+        {
+            writes.AddEntityNames(fetchedNames);
+            return (names, fetched.Count);
+        }
+
         try
         {
-            await _nameCache.UpsertAsync(
-                fetched
-                    .Select(pair => new EsiEntityName(
-                        pair.Key,
-                        corporationIds.Contains(pair.Key) ? EsiEntityTypes.Corporation : EsiEntityTypes.Alliance,
-                        pair.Value))
-                    .ToList(),
-                cancellationToken);
+            await _nameCache.UpsertAsync(fetchedNames, cancellationToken);
         }
         catch
         {
@@ -251,7 +263,7 @@ public sealed class PilotIdentityResolver
         return (names, fetched.Count);
     }
 
-    private async Task PersistAsync(PilotState state, DateTime now)
+    private async Task PersistAsync(PilotState state, DateTime now, ScanWriteBatch? writes)
     {
         var record = state.Outcome == VerifyStatus.NoMatch
             ? new PilotIdentityCacheRecord
@@ -273,6 +285,12 @@ public sealed class PilotIdentityResolver
                 SecurityStatusAtUtc = state.SecurityStatusAtUtc,
                 CachedAtUtc = now
             };
+
+        if (writes is not null)
+        {
+            writes.AddIdentity(record);
+            return;
+        }
 
         try
         {

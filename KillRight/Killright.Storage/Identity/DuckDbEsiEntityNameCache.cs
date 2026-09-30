@@ -17,13 +17,21 @@ public sealed class DuckDbEsiEntityNameCache : IEsiEntityNameCache
         IReadOnlyCollection<long> entityIds,
         CancellationToken cancellationToken = default)
     {
+        return GetNamesAsync(entityIds, null, cancellationToken);
+    }
+
+    public Task<IReadOnlyDictionary<long, string>> GetNamesAsync(
+        IReadOnlyCollection<long> entityIds,
+        ScanDatabaseSession? session,
+        CancellationToken cancellationToken = default)
+    {
         var names = new Dictionary<long, string>();
 
         if (entityIds.Count == 0)
             return Task.FromResult<IReadOnlyDictionary<long, string>>(names);
 
-        using var connection = new DuckDBConnection(_database.ConnectionString);
-        connection.Open();
+        using var ownedConnection = session is null ? _database.OpenConnection() : null;
+        var connection = session?.Connection ?? ownedConnection!;
 
         using var command = connection.CreateCommand();
         command.CommandText = $"""

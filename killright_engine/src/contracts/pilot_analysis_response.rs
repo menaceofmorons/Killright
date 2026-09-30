@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use serde::Serialize;
 
+use crate::contracts::derived_activity_response::DerivedActivityResponse;
 use crate::contracts::group_detection_response::GroupDetectionResponse;
 use crate::threat_analysis::ThreatAnalysisResponse;
 
@@ -20,6 +21,9 @@ pub struct PilotAnalysisResponse {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub group_detection: Option<GroupDetectionResponse>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub derived_activity: Option<DerivedActivityResponse>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub failure: Option<String>,
@@ -42,6 +46,7 @@ mod tests {
             is_recent_podder: None,
             threat: None,
             group_detection: None,
+            derived_activity: None,
             failure: None,
             timings_ms: None,
             timing_counts: None,
@@ -54,6 +59,22 @@ mod tests {
 
         assert!(!json.contains("timings_ms"));
         assert!(!json.contains("timing_counts"));
+    }
+
+    #[test]
+    fn serialises_derived_activity_only_when_set() {
+        let mut value = response();
+        assert!(!serde_json::to_string(&value).unwrap().contains("derived_activity"));
+
+        value.derived_activity = Some(DerivedActivityResponse {
+            has_public_activity_data: false,
+            kills_week: None,
+            solo_week: None,
+            newest_non_pod_killmail: None,
+            newest_non_pod_kill_time_utc: None,
+        });
+
+        assert!(serde_json::to_string(&value).unwrap().contains("\"derived_activity\":{\"has_public_activity_data\":false}"));
     }
 
     #[test]
