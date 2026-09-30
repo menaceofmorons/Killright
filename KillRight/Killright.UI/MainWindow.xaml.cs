@@ -44,6 +44,7 @@ public partial class MainWindow : Window
     private readonly MainWindowViewModel _viewModel;
     private readonly Dictionary<string, DataGridColumn> _columnsById;
     private readonly DispatcherTimer _hoverTimer;
+    private readonly ScanCoordinator _scanCoordinator;
     private readonly IReadOnlyList<RelationshipConfidenceBandSetting> _relationshipConfidenceBands;
     private ClipboardMonitor? _clipboardMonitor;
     private bool _menuModalOpen;
@@ -59,6 +60,16 @@ public partial class MainWindow : Window
         _relationshipConfidenceBands = RelationshipConfidenceBandSetting.ValidateOrDefault(App.Settings.RelationshipConfidenceBands);
         _hoverTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(HoverDelayMilliseconds) };
         _hoverTimer.Tick += HoverTimer_Tick;
+
+        _scanCoordinator = new ScanCoordinator(
+            ResolvePilotsTimedAsync,
+            App.PurgeScheduler.ScanStarted,
+            () =>
+            {
+                App.PurgeScheduler.ScanFinished();
+                _ = App.PurgeScheduler.RunPostScanPassAsync();
+            },
+            exception => EngineFailureLog.Record($"scan failed: {exception}"));
 
         var initial = App.UiState.Current;
         Topmost = initial.AlwaysOnTop;
@@ -391,6 +402,7 @@ public partial class MainWindow : Window
     protected override void OnClosing(CancelEventArgs e)
     {
         base.OnClosing(e);
+        _scanCoordinator.CancelCurrent();
         App.UiState.SaveNow();
     }
 
@@ -461,7 +473,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private async void ClipboardChanged(object? sender, EventArgs e)
+    private void ClipboardChanged(object? sender, EventArgs e)
     {
         var timings = App.Settings.Timing.Enabled ? new ScanTimings() : null;
         string text;
@@ -495,49 +507,37 @@ public partial class MainWindow : Window
         if (pilotNames.Count == 0)
             return;
 
-        await ResolvePilotsAsync(pilotNames, timings);
+        _ = _scanCoordinator.Submit(pilotNames, timings);
     }
 
     internal ObservableCollection<PilotReportRow> Pilots => _viewModel.Pilots;
 
-    private async Task ResolvePilotsAsync(IReadOnlyList<string> pilotNames, ScanTimings? timings = null)
-    {
-        App.PurgeScheduler.ScanStarted();
-
-        try
-        {
-            await ResolvePilotsTimedAsync(pilotNames, timings);
-        }
-        finally
-        {
-            App.PurgeScheduler.ScanFinished();
-            _ = App.PurgeScheduler.RunPostScanPassAsync();
-        }
-    }
-
-    private async Task ResolvePilotsTimedAsync(IReadOnlyList<string> pilotNames, ScanTimings? timings)
+    private async Task ResolvePilotsTimedAsync(IReadOnlyList<string> pilotNames, ScanTimings? timings, ScanContext context)
     {
         timings ??= App.Settings.Timing.Enabled ? new ScanTimings() : null;
 
         if (timings is null)
         {
-            await ResolvePilotsCoreAsync(pilotNames, null);
+            await ResolvePilotsCoreAsync(pilotNames, null, context);
             return;
         }
 
         timings.PilotCount = pilotNames.Count;
         timings.Record(ScanTimings.ScanLevel, "on_ui_thread_at_start", Dispatcher.CheckAccess() ? 1 : 0);
-        var stallMonitor = UiStallMonitor.Start(Dispatcher);
+        var stallMonitor = await Dispatcher.InvokeAsync(() => UiStallMonitor.Start(Dispatcher));
 
         try
         {
-            await ResolvePilotsCoreAsync(pilotNames, timings);
+            await ResolvePilotsCoreAsync(pilotNames, timings, context);
         }
         finally
         {
             try
             {
-                timings.Record(ScanTimings.ScanLevel, "ui_max_stall_ms", stallMonitor.Stop());
+                if (context.Token.IsCancellationRequested)
+                    timings.Record(ScanTimings.ScanLevel, "scan_cancelled", 1);
+
+                timings.Record(ScanTimings.ScanLevel, "ui_max_stall_ms", await Dispatcher.InvokeAsync(stallMonitor.Stop));
                 timings.Record(ScanTimings.ScanLevel, "scan_total", timings.ElapsedMilliseconds);
                 timings.Flush();
             }
@@ -547,8 +547,9 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task ResolvePilotsCoreAsync(IReadOnlyList<string> pilotNames, ScanTimings? timings)
+    private async Task ResolvePilotsCoreAsync(IReadOnlyList<string> pilotNames, ScanTimings? timings, ScanContext context)
     {
+        var cancellationToken = context.Token;
         var ignoreList = App.UiState.Current.IgnoreListEntries;
         var esiRequestsAtStart = App.EsiClient.RequestCount;
         var zKillRequestsAtStart = App.zKillClient.RequestCount;
@@ -566,8 +567,10 @@ public partial class MainWindow : Window
 
             using (timings.Measure(ScanTimings.ScanLevel, "identity_stage"))
             {
-                resolvedPilots = await App.IdentityResolver.ResolveAsync(pilotNames, timings, default, session, writes);
+                resolvedPilots = await App.IdentityResolver.ResolveAsync(pilotNames, timings, cancellationToken, session, writes);
             }
+
+            cancellationToken.ThrowIfCancellationRequested();
 
             pilots = ScanPilotSelector.SelectForAnalysis(resolvedPilots, ignoreList);
 
@@ -589,14 +592,19 @@ public partial class MainWindow : Window
                 storedActivities = await ReadStoredActivitiesAsync(characterIds, session);
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
+
             using (timings.Measure(ScanTimings.ScanLevel, "zkill_stage"))
             {
                 networkResults = await BoundedConcurrentRunner.RunAsync(
                     pilots,
                     App.Settings.Network.MaxConcurrency,
-                    (pilot, position, _) => FetchPilotNetworkAsync(pilot, position, cachedStatistics, storedActivities, writes, timings),
-                    (_, _) => PilotNetworkResult.Failed);
+                    (pilot, position, token) => FetchPilotNetworkAsync(pilot, position, cachedStatistics, storedActivities, writes, timings, token),
+                    (_, _) => PilotNetworkResult.Failed,
+                    cancellationToken);
             }
+
+            cancellationToken.ThrowIfCancellationRequested();
 
             timings.Add(ScanTimings.ScanLevel, ScanTimings.CounterPrefix + "esi_calls", App.EsiClient.RequestCount - esiRequestsAtStart);
             timings.Add(ScanTimings.ScanLevel, ScanTimings.CounterPrefix + "zkill_requests", App.zKillClient.RequestCount - zKillRequestsAtStart);
@@ -621,6 +629,8 @@ public partial class MainWindow : Window
                     writes.AddActivity(preEngine.Activity);
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
+
             using (timings.Measure(ScanTimings.ScanLevel, "write_tx", null, "scan"))
             {
                 CommitWrites(session, writes);
@@ -639,10 +649,14 @@ public partial class MainWindow : Window
 
         IReadOnlyList<PilotEngineAnalysisResult> engineResults;
 
+        cancellationToken.ThrowIfCancellationRequested();
+
         using (timings.Measure(ScanTimings.ScanLevel, "engine_batch"))
         {
             engineResults = await App.RecentStyleClient.AnalyzePilotsAsync(engineCharacterIds, timings: timings);
         }
+
+        cancellationToken.ThrowIfCancellationRequested();
 
         var engineByCharacter = new Dictionary<long, PilotEngineAnalysisResult>();
 
@@ -727,10 +741,14 @@ public partial class MainWindow : Window
         if (rows.Count == 0)
             return;
 
+        cancellationToken.ThrowIfCancellationRequested();
+
         using (timings.Measure(ScanTimings.ScanLevel, "group_attach_total"))
         {
             await AttachGroupRelationshipsAsync(rows, timings);
         }
+
+        cancellationToken.ThrowIfCancellationRequested();
 
         using (timings.Measure(ScanTimings.ScanLevel, "write_tx", null, "post_engine"))
         {
@@ -749,15 +767,27 @@ public partial class MainWindow : Window
             PilotGroupCountAnnotator.Annotate(rows, npcCorporationIds);
         }
 
-        _hoverTimer.Stop();
-        _pendingHoverRow = null;
+        cancellationToken.ThrowIfCancellationRequested();
 
+        await ApplyRowsAsync(rows, context, timings);
+    }
+
+    private async Task ApplyRowsAsync(List<PilotReportRow> rows, ScanContext context, ScanTimings? timings)
+    {
         using (timings.Measure(ScanTimings.ScanLevel, "grid_update"))
         {
-            _viewModel.Pilots.Clear();
+            await Dispatcher.InvokeAsync(() =>
+            {
+                if (!context.IsCurrent())
+                    return;
 
-            foreach (var row in rows)
-                _viewModel.Pilots.Add(row);
+                _hoverTimer.Stop();
+                _pendingHoverRow = null;
+                _viewModel.Pilots.Clear();
+
+                foreach (var row in rows)
+                    _viewModel.Pilots.Add(row);
+            });
         }
 
         if (timings is not null)
@@ -856,12 +886,15 @@ public partial class MainWindow : Window
         IReadOnlyDictionary<long, zKillStatistics> cachedStatistics,
         IReadOnlyDictionary<long, zKillActivity> storedActivities,
         ScanWriteBatch writes,
-        ScanTimings? timings)
+        ScanTimings? timings,
+        CancellationToken cancellationToken)
     {
         if (pilot.CharacterId is not { } characterId)
             return PilotNetworkResult.NoCharacter;
 
-        var (statistics, statisticsFetchedThisScan) = await LoadzKillStatisticsAsync(characterId, cachedStatistics, writes, timings);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var (statistics, statisticsFetchedThisScan) = await LoadzKillStatisticsAsync(characterId, cachedStatistics, writes, timings, cancellationToken);
 
         storedActivities.TryGetValue(characterId, out var storedActivity);
 
@@ -876,7 +909,8 @@ public partial class MainWindow : Window
                 statistics,
                 statisticsFetchedThisScan,
                 writes,
-                timings);
+                timings,
+                cancellationToken);
         }
 
         return new PilotNetworkResult(
@@ -917,7 +951,8 @@ public partial class MainWindow : Window
         long characterId,
         IReadOnlyDictionary<long, zKillStatistics> cachedStatistics,
         ScanWriteBatch writes,
-        ScanTimings? timings = null)
+        ScanTimings? timings,
+        CancellationToken cancellationToken)
     {
         using var statisticsScope = timings.Measure(ScanTimings.PilotLevel, "zkill_statistics", characterId, "cache_hit");
 
@@ -925,7 +960,7 @@ public partial class MainWindow : Window
             return (cached, false);
 
         statisticsScope.Tag = "live_fetch";
-        var result = await App.zKillClient.GetStatisticsAsync(characterId);
+        var result = await App.zKillClient.GetStatisticsAsync(characterId, cancellationToken);
 
         var statistics = result.Outcome switch
         {
@@ -962,7 +997,8 @@ public partial class MainWindow : Window
         zKillStatistics? statistics,
         bool statisticsFetchedThisScan,
         ScanWriteBatch writes,
-        ScanTimings? timings = null)
+        ScanTimings? timings,
+        CancellationToken cancellationToken)
     {
         try
         {
@@ -986,7 +1022,7 @@ public partial class MainWindow : Window
 
             using (timings.Measure(ScanTimings.PilotLevel, "zkill_http", characterId))
             {
-                result = await App.zKillClient.GetRecentKillmailsAsync(characterId, pastSeconds);
+                result = await App.zKillClient.GetRecentKillmailsAsync(characterId, pastSeconds, cancellationToken);
             }
 
             switch (result.Outcome)

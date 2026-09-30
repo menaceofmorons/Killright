@@ -64,6 +64,29 @@ public sealed class ScanTimingsTests
     }
 
     [Fact]
+    public void Record_FromManyThreadsWhilePilotCountChanges_KeepsEveryRow()
+    {
+        var timings = new ScanTimings();
+
+        Parallel.For(0, 200, new ParallelOptions { MaxDegreeOfParallelism = 16 }, index =>
+        {
+            timings.PilotCount = index;
+
+            using (timings.Measure(ScanTimings.PilotLevel, "recent_refresh", index))
+            {
+            }
+
+            timings.Add(ScanTimings.ScanLevel, "counter", index);
+        });
+
+        var rows = timings.Rows;
+
+        Assert.Equal(400, rows.Count);
+        Assert.Equal(200, rows.Count(row => row.Phase == "recent_refresh"));
+        Assert.Equal(200, rows.Select(row => row.CharacterId).Where(id => id is not null).Distinct().Count());
+    }
+
+    [Fact]
     public void FormatLine_ProducesInvariantCsvRow()
     {
         var row = new TimingRow(

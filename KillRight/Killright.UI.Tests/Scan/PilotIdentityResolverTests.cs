@@ -306,6 +306,24 @@ public sealed class PilotIdentityResolverTests
         Assert.Equal(1, fixture.Database.ConnectionsOpened - before);
     }
 
+    [Fact]
+    public async Task ResolveAsync_CancelledDuringCharacterCalls_ThrowsAndBuffersAndPersistsNothing()
+    {
+        var fixture = CreateFixture();
+        fixture.Esi.CharacterDelay = TimeSpan.FromSeconds(30);
+        var writes = new ScanWriteBatch();
+        using var cancellation = new CancellationTokenSource();
+
+        var resolve = fixture.Resolver.ResolveAsync([Tral, Lukas], null, cancellation.Token, null, writes);
+        cancellation.CancelAfter(TimeSpan.FromMilliseconds(100));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => resolve);
+
+        Assert.True(writes.IsEmpty);
+        Assert.Null(await fixture.IdentityCache.GetRecordAsync(Tral));
+        Assert.Null(await fixture.IdentityCache.GetRecordAsync(Lukas));
+    }
+
     private static Fixture CreateFixture(int maxConcurrency = 8)
     {
         var path = Path.Combine(Path.GetTempPath(), $"identityResolver.{Guid.NewGuid():N}.duckdb");

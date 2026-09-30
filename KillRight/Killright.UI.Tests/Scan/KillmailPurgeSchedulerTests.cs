@@ -190,8 +190,10 @@ public sealed class KillmailPurgeSchedulerTests
         Assert.NotNull(directory);
 
         var mainWindow = File.ReadAllText(Path.Combine(directory!.FullName, "Killright.UI", "MainWindow.xaml.cs"));
+        var coordinator = File.ReadAllText(Path.Combine(directory.FullName, "Killright.UI", "Scan", "ScanCoordinator.cs"));
 
         Assert.DoesNotContain("RemoveExpiredAsync", mainWindow);
+        Assert.DoesNotContain("RemoveExpiredAsync", coordinator);
     }
 
     private sealed class FakeClock

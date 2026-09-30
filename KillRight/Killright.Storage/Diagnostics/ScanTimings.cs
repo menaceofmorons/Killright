@@ -82,12 +82,17 @@ public sealed class ScanTimings
     }
 
     private readonly long _createdTimestamp = Stopwatch.GetTimestamp();
+    private int _pilotCount;
 
     public string ScanId { get; }
 
     public double ElapsedMilliseconds => Stopwatch.GetElapsedTime(_createdTimestamp).TotalMilliseconds;
 
-    public int PilotCount { get; set; }
+    public int PilotCount
+    {
+        get => Volatile.Read(ref _pilotCount);
+        set => Volatile.Write(ref _pilotCount, value);
+    }
 
     public IReadOnlyList<TimingRow> Rows
     {
