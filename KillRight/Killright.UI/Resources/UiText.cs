@@ -154,6 +154,9 @@ public static class UiText
     public static string InfoSheetLabelWeapon => Strings.Get("InfoSheet.Label.Weapon");
     public static string InfoSheetLabelVictim => Strings.Get("InfoSheet.Label.Victim");
     public static string InfoSheetLabelAttackers => Strings.Get("InfoSheet.Label.Attackers");
+    public static string InfoSheetLoading => Strings.Get("InfoSheet.Loading");
+    public static string InfoSheetSourceBirthday => Strings.Get("InfoSheet.Source.Birthday");
+    public static string InfoSheetSourceLastActivity => Strings.Get("InfoSheet.Source.LastActivity");
 
     public static string FormatStatsTitle(string pilotName) =>
         string.Format(CultureInfo.CurrentCulture, Strings.Get("InfoSheet.StatsTitleFormat"), pilotName);

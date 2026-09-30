@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using DuckDB.NET.Data;
 using Killright.Shared.Data;
 using Killright.Shared.Sde;
@@ -11,6 +12,9 @@ public sealed class DuckDbSdeReferenceDataStore : ISdeReferenceDataStore
     private const int InsertBatchSize = 2000;
 
     private readonly KillRightDatabase _database;
+    private readonly ConcurrentDictionary<long, string> _typeNames = new();
+    private readonly ConcurrentDictionary<long, string> _solarSystemNames = new();
+    private IReadOnlySet<long>? _npcCorporationIds;
 
     public DuckDbSdeReferenceDataStore(KillRightDatabase database)
     {
@@ -19,24 +23,40 @@ public sealed class DuckDbSdeReferenceDataStore : ISdeReferenceDataStore
 
     public string? GetTypeName(long typeId)
     {
+        if (_typeNames.TryGetValue(typeId, out var cached))
+            return cached;
+
         using var connection = new DuckDBConnection(_database.ConnectionString);
         connection.Open();
 
         using var command = connection.CreateCommand();
         command.CommandText = $"SELECT name FROM main.sde_types WHERE type_id = {typeId} LIMIT 1;";
 
-        return command.ExecuteScalar() as string;
+        var name = command.ExecuteScalar() as string;
+
+        if (name is not null)
+            _typeNames[typeId] = name;
+
+        return name;
     }
 
     public string? GetSolarSystemName(long systemId)
     {
+        if (_solarSystemNames.TryGetValue(systemId, out var cached))
+            return cached;
+
         using var connection = new DuckDBConnection(_database.ConnectionString);
         connection.Open();
 
         using var command = connection.CreateCommand();
         command.CommandText = $"SELECT name FROM main.sde_solar_systems WHERE system_id = {systemId} LIMIT 1;";
 
-        return command.ExecuteScalar() as string;
+        var name = command.ExecuteScalar() as string;
+
+        if (name is not null)
+            _solarSystemNames[systemId] = name;
+
+        return name;
     }
 
     public bool IsNpcCorporation(long corporationId)
@@ -52,6 +72,11 @@ public sealed class DuckDbSdeReferenceDataStore : ISdeReferenceDataStore
 
     public IReadOnlySet<long> GetNpcCorporationIds()
     {
+        var cached = _npcCorporationIds;
+
+        if (cached is not null)
+            return cached;
+
         try
         {
             using var connection = new DuckDBConnection(_database.ConnectionString);
@@ -65,6 +90,9 @@ public sealed class DuckDbSdeReferenceDataStore : ISdeReferenceDataStore
 
             while (reader.Read())
                 ids.Add(reader.GetInt64(0));
+
+            if (ids.Count > 0)
+                _npcCorporationIds = ids;
 
             return ids;
         }
@@ -150,6 +178,10 @@ public sealed class DuckDbSdeReferenceDataStore : ISdeReferenceDataStore
         }
 
         transaction.Commit();
+
+        _typeNames.Clear();
+        _solarSystemNames.Clear();
+        _npcCorporationIds = null;
 
         return Task.CompletedTask;
     }

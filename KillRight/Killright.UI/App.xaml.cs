@@ -18,6 +18,7 @@ using Killright.Storage.zKill;
 using Killright.Core.Style;
 using Killright.UI.Analysis;
 using Killright.UI.Configuration;
+using Killright.UI.Scan;
 using Killright.UI.Sde;
 using Killright.UI.Theme;
 using Killright.UI.UiState;
@@ -39,6 +40,7 @@ public partial class App : Application
     public static RustRecentStyleClient RecentStyleClient { get; private set; } = null!;
     public static IKillrightEngineRuntime EngineRuntime { get; private set; } = null!;
     public static KillRightDatabase Database { get; private set; } = null!;
+    public static KillmailPurgeScheduler PurgeScheduler { get; private set; } = null!;
     public static IKillmailBackupService KillmailBackupService { get; private set; } = null!;
     public static bool SkipBackupOnClose { get; set; }
 
@@ -266,10 +268,28 @@ public partial class App : Application
             new zKillClient(
                 zKillHttpClient);
 
+        PurgeScheduler =
+            new KillmailPurgeScheduler(
+                RecentKillmailCache,
+                logFailure: EngineFailureLog.Record,
+                recordPass: RecordPurgePassTiming);
+
         var mainWindow = new MainWindow();
         MainWindow = mainWindow;
         ShutdownMode = ShutdownMode.OnMainWindowClose;
         mainWindow.Show();
+
+        _ = PurgeScheduler.RunStartupPassAsync();
+    }
+
+    private static void RecordPurgePassTiming(string tag, double milliseconds)
+    {
+        if (!Settings.Timing.Enabled)
+            return;
+
+        var timings = new ScanTimings();
+        timings.Record(ScanTimings.ScanLevel, "purge_pass", milliseconds, null, tag);
+        timings.Flush();
     }
 
     protected override void OnExit(

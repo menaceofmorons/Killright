@@ -266,7 +266,13 @@ public partial class MainWindow : Window
         _infoSheet?.Close();
 
         var dpi = VisualTreeHelper.GetDpi(this);
-        var infoSheet = new InfoSheetWindow(row, App.UiState.Current.DeveloperTabRevealed)
+        var viewModel = new InfoSheetViewModel(
+            row,
+            App.UiState.Current.DeveloperTabRevealed,
+            LoadBirthdayForInfoSheetAsync,
+            LoadLastActivityForInfoSheetAsync);
+
+        var infoSheet = new InfoSheetWindow(viewModel)
         {
             Owner = this,
             Topmost = Topmost,
@@ -277,6 +283,40 @@ public partial class MainWindow : Window
         infoSheet.Closed += (_, _) => _infoSheet = null;
         _infoSheet = infoSheet;
         infoSheet.Show();
+
+        _ = LoadInfoSheetAsync(viewModel, row);
+    }
+
+    private static Task<DateOnly?> LoadBirthdayForInfoSheetAsync(string inputName)
+    {
+        return Task.Run(() => App.PilotIdentityCache.GetBirthdayAsync(inputName));
+    }
+
+    private static Task<PilotLastActivitySummary?> LoadLastActivityForInfoSheetAsync(long characterId)
+    {
+        return Task.Run(async () =>
+        {
+            var killmail = await App.RecentKillmailCache.GetMostRecentKillmailAsync(characterId);
+            return PilotLastActivitySummaryBuilder.Build(killmail, App.SdeReferenceDataStore);
+        });
+    }
+
+    private static async Task LoadInfoSheetAsync(InfoSheetViewModel viewModel, PilotReportRow row)
+    {
+        var timings = App.Settings.Timing.Enabled ? new ScanTimings() : null;
+
+        using (timings.Measure(ScanTimings.ScanLevel, "popup_load", row.CharacterId))
+        {
+            await viewModel.LoadAsync();
+        }
+
+        try
+        {
+            timings?.Flush();
+        }
+        catch
+        {
+        }
     }
 
     private void HideColumn(string columnId)
@@ -458,6 +498,21 @@ public partial class MainWindow : Window
 
     private async Task ResolvePilotsAsync(IReadOnlyList<string> pilotNames, ScanTimings? timings = null)
     {
+        App.PurgeScheduler.ScanStarted();
+
+        try
+        {
+            await ResolvePilotsTimedAsync(pilotNames, timings);
+        }
+        finally
+        {
+            App.PurgeScheduler.ScanFinished();
+            _ = App.PurgeScheduler.RunPostScanPassAsync();
+        }
+    }
+
+    private async Task ResolvePilotsTimedAsync(IReadOnlyList<string> pilotNames, ScanTimings? timings)
+    {
         timings ??= App.Settings.Timing.Enabled ? new ScanTimings() : null;
 
         if (timings is null)
@@ -530,13 +585,6 @@ public partial class MainWindow : Window
             var statisticsCallFailed = false;
             var recentCallFailed = false;
             string? engineFailureReason = null;
-            PilotRecentKillmail? lastActivity = null;
-            DateOnly? birthday;
-
-            using (timings.Measure(ScanTimings.PilotLevel, "birthday", pilot.CharacterId))
-            {
-                birthday = await SafeGetBirthdayAsync(pilotName);
-            }
 
             if (pilot.CharacterId is not null)
             {
@@ -586,11 +634,6 @@ public partial class MainWindow : Window
                         pastSecondsRequested);
                 }
 
-                using (timings.Measure(ScanTimings.PilotLevel, "last_activity", characterId))
-                {
-                    lastActivity = await LoadMostRecentKillmailAsync(characterId);
-                }
-
                 PilotEngineAnalysisResult analysisResult;
 
                 using (timings.Measure(ScanTimings.PilotLevel, "engine_analyze", characterId))
@@ -627,10 +670,7 @@ public partial class MainWindow : Window
                     threatBand,
                     statisticsCallFailed,
                     recentCallFailed,
-                    engineFailureReason,
-                    birthday,
-                    lastActivity,
-                    App.SdeReferenceDataStore));
+                    engineFailureReason));
             }
         }
 
@@ -701,30 +741,6 @@ public partial class MainWindow : Window
 
                 row.GroupRelationships = groupResult.ForCharacter(row.CharacterId.Value).ToList();
             }
-        }
-    }
-
-    private static async Task<DateOnly?> SafeGetBirthdayAsync(string pilotName)
-    {
-        try
-        {
-            return await App.PilotIdentityCache.GetBirthdayAsync(pilotName);
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static async Task<PilotRecentKillmail?> LoadMostRecentKillmailAsync(long characterId)
-    {
-        try
-        {
-            return await App.RecentKillmailCache.GetMostRecentKillmailAsync(characterId);
-        }
-        catch
-        {
-            return null;
         }
     }
 
@@ -892,11 +908,6 @@ public partial class MainWindow : Window
     {
         try
         {
-            using (timings.Measure(ScanTimings.PilotLevel, "remove_expired", characterId))
-            {
-                await App.RecentKillmailCache.RemoveExpiredAsync();
-            }
-
             var now = ApplicationClock.UtcNow;
             var lastSuccessfulCallUtc = storedActivity?.LastSuccessfulRecentCallUtc;
 

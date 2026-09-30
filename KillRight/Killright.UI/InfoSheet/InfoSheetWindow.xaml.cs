@@ -1,6 +1,5 @@
 using System.Windows;
 using System.Windows.Threading;
-using Killright.UI.ViewModels;
 
 namespace Killright.UI.InfoSheet;
 
@@ -8,10 +7,10 @@ public partial class InfoSheetWindow : Window
 {
     private bool _closeScheduled;
 
-    public InfoSheetWindow(PilotReportRow row, bool developerModeRevealed)
+    public InfoSheetWindow(InfoSheetViewModel viewModel)
     {
         InitializeComponent();
-        DataContext = new InfoSheetViewModel(row, developerModeRevealed);
+        DataContext = viewModel;
     }
 
     private void InfoSheetWindow_Deactivated(object? sender, EventArgs e)

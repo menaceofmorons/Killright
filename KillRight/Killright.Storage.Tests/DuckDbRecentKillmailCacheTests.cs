@@ -130,6 +130,45 @@ public sealed class DuckDbRecentKillmailCacheTests
     }
 
     [Fact]
+    public async Task GetDerivedActivityAsync_RowsInsideAndOutsideSevenDayWindow_CountsOnlyInsideRows()
+    {
+        var (database, cache) = CreateCache(recentWindowDays: 14);
+
+        InsertKillmail(database, 700301, DateTimeOffset.UtcNow.AddDays(-1), isQualifying: true, isSolo: true, victimCharacterId: OtherCharacterId);
+        InsertAttacker(database, 700301, ScannedCharacterId);
+
+        InsertKillmail(database, 700302, DateTimeOffset.UtcNow.AddDays(-6), isQualifying: true, isSolo: false, victimCharacterId: OtherCharacterId);
+        InsertAttacker(database, 700302, ScannedCharacterId);
+
+        InsertKillmail(database, 700303, DateTimeOffset.UtcNow.AddDays(-8), isQualifying: true, isSolo: true, victimCharacterId: OtherCharacterId);
+        InsertAttacker(database, 700303, ScannedCharacterId);
+
+        InsertKillmail(database, 700304, DateTimeOffset.UtcNow.AddDays(-12), isQualifying: false, isSolo: true, victimCharacterId: ScannedCharacterId);
+
+        var activity = await cache.GetDerivedActivityAsync(ScannedCharacterId);
+
+        Assert.True(activity.HasPublicActivityData);
+        Assert.Equal(2, activity.KillsWeek);
+        Assert.Equal(1, activity.SoloWeek);
+        Assert.Equal(zKillActivityType.Kill, activity.LastActivityType);
+        Assert.NotNull(activity.LastKillUtc);
+        Assert.True(activity.LastKillUtc > DateTimeOffset.UtcNow.AddDays(-2));
+    }
+
+    [Fact]
+    public async Task GetDerivedActivityAsync_OnlyLossOutsideSevenDayWindow_HasNoPublicActivityData()
+    {
+        var (database, cache) = CreateCache(recentWindowDays: 14);
+
+        InsertKillmail(database, 700305, DateTimeOffset.UtcNow.AddDays(-9), isQualifying: false, victimCharacterId: ScannedCharacterId);
+
+        var activity = await cache.GetDerivedActivityAsync(ScannedCharacterId);
+
+        Assert.False(activity.HasPublicActivityData);
+        Assert.Null(activity.LastActiveUtc);
+    }
+
+    [Fact]
     public async Task GetDerivedActivityAsync_PodKillByScannedPilot_IsExcludedFromKillsAndSoloWeek()
     {
         var (database, cache) = CreateCache(recentWindowDays: 14);

@@ -39,6 +39,7 @@ public sealed class DuckDbRecentKillmailCache : IRecentKillmailCache
                                      CAST(NULL AS BIGINT) AS victim_ship_type_id
                               FROM main.zkill_killmails
                               WHERE victim_character_id = {characterId}
+                                AND kill_time_utc >= {SqlValueFormatter.Date(cutoffUtc)}
                               UNION ALL
                               SELECT k.kill_time_utc,
                                      FALSE AS is_loss,
@@ -47,6 +48,7 @@ public sealed class DuckDbRecentKillmailCache : IRecentKillmailCache
                               FROM main.zkill_killmail_attackers a
                               JOIN main.zkill_killmails k ON k.killmail_id = a.killmail_id
                               WHERE a.character_id = {characterId}
+                                AND k.kill_time_utc >= {SqlValueFormatter.Date(cutoffUtc)}
                               ORDER BY kill_time_utc DESC;
                               """;
 
@@ -64,9 +66,6 @@ public sealed class DuckDbRecentKillmailCache : IRecentKillmailCache
             var isLoss = reader.GetBoolean(1);
             var isSolo = reader.GetBoolean(2);
             var victimShipTypeId = reader.GetNullableInt64(3);
-
-            if (killTimeUtc < cutoffUtc)
-                continue;
 
             hasPublicActivityData = true;
 

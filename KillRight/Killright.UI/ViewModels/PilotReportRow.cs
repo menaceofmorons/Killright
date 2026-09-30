@@ -8,6 +8,7 @@ namespace Killright.UI.ViewModels;
 public class PilotReportRow : INotifyPropertyChanged
 {
     public long? CharacterId { get; set; }
+    public string InputName { get; set; } = string.Empty;
     public IReadOnlyList<PilotRelationship> GroupRelationships { get; set; } = Array.Empty<PilotRelationship>();
     public string Pilot { get; set; } = string.Empty;
     public bool EngineAnalysisFailed { get; set; }
@@ -29,9 +30,7 @@ public class PilotReportRow : INotifyPropertyChanged
     public string Solos { get; set; } = string.Empty;
     public string LastKill { get; set; } = string.Empty;
     public string Notes { get; set; } = string.Empty;
-    public string Birthday { get; set; } = string.Empty;
     public string? StatsFailureSource { get; set; }
-    public PilotLastActivitySummary? LastActivity { get; set; }
 
     private Brush? _highlightBrush;
     public Brush? HighlightBrush

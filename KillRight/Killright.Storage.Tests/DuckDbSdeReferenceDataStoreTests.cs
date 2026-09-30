@@ -193,6 +193,153 @@ public sealed class DuckDbSdeReferenceDataStoreTests
         Assert.Equal("ManifestFailure", metadata.LastCheckResult);
     }
 
+    [Fact]
+    public async Task GetTypeName_RepeatedLookup_ServedFromCacheAfterTableChange()
+    {
+        var (database, store) = CreateStore();
+
+        await store.ReplaceTablesAsync(SdeData(types: [new SdeType(587, "Rifter")]));
+        Assert.Equal("Rifter", store.GetTypeName(587));
+
+        ExecuteNonQuery(database, "UPDATE main.sde_types SET name = 'Changed' WHERE type_id = 587;");
+
+        Assert.Equal("Rifter", store.GetTypeName(587));
+    }
+
+    [Fact]
+    public async Task GetSolarSystemName_RepeatedLookup_ServedFromCacheAfterTableChange()
+    {
+        var (database, store) = CreateStore();
+
+        await store.ReplaceTablesAsync(SdeData(systems: [new SdeSolarSystem(30000142, "Jita")]));
+        Assert.Equal("Jita", store.GetSolarSystemName(30000142));
+
+        ExecuteNonQuery(database, "UPDATE main.sde_solar_systems SET name = 'Changed' WHERE system_id = 30000142;");
+
+        Assert.Equal("Jita", store.GetSolarSystemName(30000142));
+    }
+
+    [Fact]
+    public async Task GetNpcCorporationIds_RepeatedCall_ServedFromCacheAfterTableChange()
+    {
+        var (database, store) = CreateStore();
+
+        await store.ReplaceTablesAsync(SdeData(npcCorporationIds: [1000001]));
+        Assert.Equal(new HashSet<long> { 1000001 }, store.GetNpcCorporationIds());
+
+        ExecuteNonQuery(database, "INSERT INTO main.sde_npc_corporations (corporation_id) VALUES (1000132);");
+
+        Assert.Equal(new HashSet<long> { 1000001 }, store.GetNpcCorporationIds());
+    }
+
+    [Fact]
+    public async Task ReplaceTablesAsync_ClearsAllCaches()
+    {
+        var (_, store) = CreateStore();
+
+        await store.ReplaceTablesAsync(SdeData(
+            types: [new SdeType(587, "Rifter")],
+            systems: [new SdeSolarSystem(30000142, "Jita")],
+            npcCorporationIds: [1000001]));
+
+        Assert.Equal("Rifter", store.GetTypeName(587));
+        Assert.Equal("Jita", store.GetSolarSystemName(30000142));
+        Assert.Single(store.GetNpcCorporationIds());
+
+        await store.ReplaceTablesAsync(SdeData(
+            types: [new SdeType(587, "Rifter Renamed")],
+            systems: [new SdeSolarSystem(30000142, "Jita Renamed")],
+            npcCorporationIds: [1000001, 1000132]));
+
+        Assert.Equal("Rifter Renamed", store.GetTypeName(587));
+        Assert.Equal("Jita Renamed", store.GetSolarSystemName(30000142));
+        Assert.Equal(2, store.GetNpcCorporationIds().Count);
+    }
+
+    [Fact]
+    public async Task GetTypeName_MissThenRowInserted_LookedUpAgain()
+    {
+        var (database, store) = CreateStore();
+
+        await store.ReplaceTablesAsync(SdeData());
+        Assert.Null(store.GetTypeName(587));
+
+        ExecuteNonQuery(database, "INSERT INTO main.sde_types (type_id, name) VALUES (587, 'Rifter');");
+
+        Assert.Equal("Rifter", store.GetTypeName(587));
+    }
+
+    [Fact]
+    public async Task GetSolarSystemName_MissThenRowInserted_LookedUpAgain()
+    {
+        var (database, store) = CreateStore();
+
+        await store.ReplaceTablesAsync(SdeData());
+        Assert.Null(store.GetSolarSystemName(30000142));
+
+        ExecuteNonQuery(database, "INSERT INTO main.sde_solar_systems (system_id, name) VALUES (30000142, 'Jita');");
+
+        Assert.Equal("Jita", store.GetSolarSystemName(30000142));
+    }
+
+    [Fact]
+    public void GetNpcCorporationIds_EmptyResult_NotCachedPermanently()
+    {
+        var (database, store) = CreateStore();
+
+        Assert.Empty(store.GetNpcCorporationIds());
+
+        ExecuteNonQuery(database, "INSERT INTO main.sde_npc_corporations (corporation_id) VALUES (1000001);");
+
+        Assert.Equal(new HashSet<long> { 1000001 }, store.GetNpcCorporationIds());
+    }
+
+    [Fact]
+    public async Task ConcurrentLookups_ReturnConsistentResults()
+    {
+        var (_, store) = CreateStore();
+
+        await store.ReplaceTablesAsync(SdeData(
+            types: [new SdeType(587, "Rifter"), new SdeType(11567, "Crow")],
+            systems: [new SdeSolarSystem(30000142, "Jita")],
+            npcCorporationIds: [1000001, 1000132]));
+
+        var tasks = Enumerable.Range(0, 32)
+            .Select(_ => Task.Run(() => (
+                store.GetTypeName(587),
+                store.GetTypeName(11567),
+                store.GetSolarSystemName(30000142),
+                store.GetNpcCorporationIds().Count)))
+            .ToArray();
+
+        var results = await Task.WhenAll(tasks);
+
+        Assert.All(results, result => Assert.Equal(("Rifter", "Crow", "Jita", 2), result));
+    }
+
+    private static SdeReplacementData SdeData(
+        IReadOnlyList<SdeType>? types = null,
+        IReadOnlyList<SdeSolarSystem>? systems = null,
+        IReadOnlyList<long>? npcCorporationIds = null)
+    {
+        return new SdeReplacementData(
+            Types: types ?? [],
+            SolarSystems: systems ?? [],
+            NpcCorporationIds: npcCorporationIds ?? [],
+            BuildNumber: 1,
+            UpdatedUtc: DateTimeOffset.UtcNow);
+    }
+
+    private static void ExecuteNonQuery(KillRightDatabase database, string sql)
+    {
+        using var connection = new DuckDBConnection(database.ConnectionString);
+        connection.Open();
+
+        using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        command.ExecuteNonQuery();
+    }
+
     private static (KillRightDatabase Database, DuckDbSdeReferenceDataStore Store) CreateStore()
     {
         var path = Path.Combine(Path.GetTempPath(), $"sdeReferenceData.{Guid.NewGuid():N}.duckdb");
