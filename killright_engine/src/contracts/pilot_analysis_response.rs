@@ -70,6 +70,7 @@ mod tests {
             has_public_activity_data: false,
             kills_week: None,
             solo_week: None,
+            info_week_losses: None,
             newest_non_pod_killmail: None,
             newest_non_pod_kill_time_utc: None,
         });

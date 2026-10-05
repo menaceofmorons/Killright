@@ -292,6 +292,7 @@ public partial class MainWindow : Window
         var viewModel = new InfoSheetViewModel(
             row,
             App.UiState.Current.DeveloperTabRevealed,
+            LoadTotalsForInfoSheetAsync,
             LoadBirthdayForInfoSheetAsync,
             characterId => LoadLastActivityForInfoSheetAsync(characterId, lookupTag));
 
@@ -308,6 +309,18 @@ public partial class MainWindow : Window
         infoSheet.Show();
 
         _ = LoadInfoSheetAsync(viewModel, row, lookupTag);
+    }
+
+    private static Task<InfoSheetTotals?> LoadTotalsForInfoSheetAsync(long characterId)
+    {
+        return Task.Run(async () =>
+        {
+            var statistics = await App.zKillStatisticsCache.GetAsync(characterId, TimeSpan.MaxValue);
+
+            return statistics is null
+                ? null
+                : new InfoSheetTotals(statistics.shipsDestroyed, statistics.soloKills, statistics.shipsLost);
+        });
     }
 
     private static Task<DateOnly?> LoadBirthdayForInfoSheetAsync(string inputName)
@@ -706,6 +719,7 @@ public partial class MainWindow : Window
                 var statisticsCallFailed = false;
                 var recentCallFailed = false;
                 string? engineFailureReason = null;
+                PilotDerivedActivity? derivedActivity = null;
 
                 if (pilot.CharacterId is { } characterId)
                 {
@@ -734,6 +748,7 @@ public partial class MainWindow : Window
                     recentIsPodder = analysisResult.IsRecentPodder;
                     threatBand = analysisResult.ThreatBand;
                     engineFailureReason = analysisResult.FailureReason;
+                    derivedActivity = analysisResult.DerivedActivity;
 
                     if (engineFailureReason is null)
                     {
@@ -757,7 +772,8 @@ public partial class MainWindow : Window
                     threatBand,
                     statisticsCallFailed,
                     recentCallFailed,
-                    engineFailureReason));
+                    engineFailureReason,
+                    derivedActivity));
             }
         }
 

@@ -4,6 +4,7 @@ using Killright.Integration.zKill;
 using Killright.Shared;
 using Killright.Shared.Time;
 using Killright.Shared.zKill;
+using Killright.UI.Analysis;
 using Killright.UI.Resources;
 using Killright.UI.Style;
 
@@ -20,7 +21,8 @@ public static class PilotReportRowFactory
         string threatBand,
         bool statisticsCallFailed,
         bool recentCallFailed,
-        string? engineFailureReason)
+        string? engineFailureReason,
+        PilotDerivedActivity? derivedActivity = null)
     {
         var generalResult = GeneralStyleClassifier.Classify(statistics);
 
@@ -49,6 +51,9 @@ public static class PilotReportRowFactory
             Kills = FormatActivityValue(activity?.HasPublicActivityData, activity?.KillsWeek),
             Solos = FormatActivityValue(activity?.HasPublicActivityData, activity?.SoloWeek),
             LastKill = FormatLastKill(activity),
+            InfoWeekKills = FormatWeekSideValue(activity?.HasPublicActivityData, activity?.KillsWeek),
+            InfoWeekSolos = FormatWeekSideValue(activity?.HasPublicActivityData, activity?.SoloWeek),
+            InfoWeekLosses = FormatInfoCount(derivedActivity?.InfoWeekLosses),
             Notes = GetNotes(activity, statistics, statisticsCallFailed, recentCallFailed, engineFailureReason),
             StatsFailureSource = GetStatsFailureSource(statisticsCallFailed, recentCallFailed, activity, engineFailureReason)
         };
@@ -83,6 +88,11 @@ public static class PilotReportRowFactory
             return UiText.PlaceholderDash;
 
         return value?.ToString() ?? UiText.PlaceholderDash;
+    }
+
+    internal static string FormatInfoCount(int? value)
+    {
+        return value is > 0 ? value.Value.ToString() : UiText.PlaceholderDash;
     }
 
     private static string FormatWeekSideValue(bool? hasPublicActivityData, int? value)

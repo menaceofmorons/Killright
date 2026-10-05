@@ -16,6 +16,7 @@ pub struct DerivedActivity {
     pub has_public_activity_data: bool,
     pub kills_week: i32,
     pub solo_week: i32,
+    pub info_week_losses: i32,
     pub newest_non_pod_killmail: Option<NewestKillmail>,
     pub newest_non_pod_kill_time_utc: Option<String>,
 }
@@ -50,12 +51,17 @@ pub fn derive_activity(killmails: &[RecentKillmailSnapshot], now: DateTime<Utc>)
         has_public_activity_data: !window.is_empty(),
         kills_week: 0,
         solo_week: 0,
+        info_week_losses: 0,
         newest_non_pod_killmail: None,
         newest_non_pod_kill_time_utc,
     };
 
     for (_, row) in window {
         let is_pod_kill_row = !row.is_loss && is_pod_kill(row.ship_type_id);
+
+        if row.is_loss {
+            derived.info_week_losses += 1;
+        }
 
         if derived.newest_non_pod_killmail.is_none() && !is_pod_kill_row {
             derived.newest_non_pod_killmail = Some(NewestKillmail {
@@ -260,5 +266,50 @@ mod tests {
         descending.reverse();
 
         assert_eq!(derive_activity(&ascending, now()), derive_activity(&descending, now()));
+    }
+
+    #[test]
+    fn info_week_losses_include_pod_losses_and_exclude_kills() {
+        let rows = vec![
+            row(1, "2026-09-28T12:00:00+00:00", false, true, Some(670)),
+            row(2, "2026-09-28T06:00:00+00:00", false, false, Some(587)),
+            row(3, "2026-09-28T03:00:00+00:00", true, false, Some(670)),
+            row(4, "2026-09-27T00:00:00+00:00", true, true, Some(587)),
+        ];
+
+        let derived = derive_activity(&rows, now());
+
+        assert_eq!(derived.info_week_losses, 2);
+        assert_eq!(derived.kills_week, 1);
+        assert_eq!(derived.solo_week, 0);
+    }
+
+    #[test]
+    fn info_week_losses_respect_the_seven_day_boundary() {
+        let rows = vec![
+            row(1, "2026-09-22T12:00:00+00:00", true, false, Some(670)),
+            row(2, "2026-09-22T11:59:59+00:00", true, false, Some(670)),
+            row(3, "2026-09-22T12:00:00+00:00", false, true, Some(587)),
+        ];
+
+        let derived = derive_activity(&rows, now());
+
+        assert_eq!(derived.info_week_losses, 1);
+    }
+
+    #[test]
+    fn grid_week_values_are_unchanged_by_info_week_losses() {
+        let rows = vec![
+            row(1, "2026-09-28T00:00:00+00:00", false, true, Some(587)),
+            row(2, "2026-09-27T00:00:00+00:00", false, false, Some(587)),
+            row(3, "2026-09-26T00:00:00+00:00", false, true, Some(670)),
+            row(4, "2026-09-25T00:00:00+00:00", true, false, Some(587)),
+        ];
+
+        let derived = derive_activity(&rows, now());
+
+        assert_eq!(derived.kills_week, 2);
+        assert_eq!(derived.solo_week, 1);
+        assert_eq!(derived.info_week_losses, 1);
     }
 }

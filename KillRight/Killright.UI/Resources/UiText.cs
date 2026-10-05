@@ -136,8 +136,6 @@ public static class UiText
     public static string InfoSheetLabelBirthday => Strings.Get("InfoSheet.Label.Birthday");
     public static string InfoSheetLabelThreat => Strings.Get("InfoSheet.Label.Threat");
     public static string InfoSheetLabelSec => Strings.Get("InfoSheet.Label.Sec");
-    public static string InfoSheetLabelKills => Strings.Get("InfoSheet.Label.Kills");
-    public static string InfoSheetLabelSolos => Strings.Get("InfoSheet.Label.Solos");
     public static string InfoSheetLabelGeneral => Strings.Get("InfoSheet.Label.General");
     public static string InfoSheetLabelRecent => Strings.Get("InfoSheet.Label.Recent");
     public static string InfoSheetLabelLastActivityTitle => Strings.Get("InfoSheet.Label.LastActivityTitle");
@@ -150,6 +148,12 @@ public static class UiText
     public static string InfoSheetLabelAttackers => Strings.Get("InfoSheet.Label.Attackers");
     public static string InfoSheetLoading => Strings.Get("InfoSheet.Loading");
     public static string InfoSheetSourceBirthday => Strings.Get("InfoSheet.Source.Birthday");
+    public static string InfoSheetTableWeek => Strings.Get("InfoSheet.Table.Week");
+    public static string InfoSheetTableTotal => Strings.Get("InfoSheet.Table.Total");
+    public static string InfoSheetTableKills => Strings.Get("InfoSheet.Table.Kills");
+    public static string InfoSheetTableSolos => Strings.Get("InfoSheet.Table.Solos");
+    public static string InfoSheetTableLosses => Strings.Get("InfoSheet.Table.Losses");
+    public static string InfoSheetSourceStatistics => Strings.Get("InfoSheet.Source.Statistics");
     public static string InfoSheetSourceLastActivity => Strings.Get("InfoSheet.Source.LastActivity");
 
     public static string FormatStatsTitle(string pilotName) =>

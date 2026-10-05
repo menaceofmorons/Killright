@@ -19,6 +19,9 @@ pub struct DerivedActivityResponse {
     pub solo_week: Option<i32>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub info_week_losses: Option<i32>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub newest_non_pod_killmail: Option<NewestKillmailResponse>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -33,6 +36,7 @@ impl From<DerivedActivity> for DerivedActivityResponse {
             has_public_activity_data: has_data,
             kills_week: has_data.then_some(activity.kills_week),
             solo_week: has_data.then_some(activity.solo_week),
+            info_week_losses: has_data.then_some(activity.info_week_losses),
             newest_non_pod_killmail: activity.newest_non_pod_killmail.map(|killmail| NewestKillmailResponse {
                 kill_time_utc: killmail.kill_time_utc,
                 activity_type: if killmail.is_loss { "Loss".to_string() } else { "Kill".to_string() },
@@ -53,6 +57,7 @@ mod tests {
             has_public_activity_data: false,
             kills_week: 0,
             solo_week: 0,
+            info_week_losses: 0,
             newest_non_pod_killmail: None,
             newest_non_pod_kill_time_utc: None,
         });
@@ -66,6 +71,7 @@ mod tests {
             has_public_activity_data: true,
             kills_week: 3,
             solo_week: 1,
+            info_week_losses: 4,
             newest_non_pod_killmail: Some(NewestKillmail {
                 kill_time_utc: "2026-09-28T00:00:00+00:00".to_string(),
                 is_loss: true,
@@ -76,6 +82,7 @@ mod tests {
 
         assert!(json.contains("\"kills_week\":3"));
         assert!(json.contains("\"solo_week\":1"));
+        assert!(json.contains("\"info_week_losses\":4"));
         assert!(json.contains("\"activity_type\":\"Loss\""));
         assert!(json.contains("\"newest_non_pod_kill_time_utc\":\"2026-09-27T00:00:00+00:00\""));
     }

@@ -9,12 +9,16 @@ namespace Killright.UI.InfoSheet;
 public sealed class InfoSheetViewModel : INotifyPropertyChanged
 {
     private readonly PilotReportRow _row;
+    private readonly Func<long, Task<InfoSheetTotals?>> _loadTotals;
     private readonly Func<string, Task<DateOnly?>> _loadBirthday;
     private readonly Func<long, Task<PilotLastActivitySummary?>> _loadLastActivity;
 
     private string _errorLine;
     private Visibility _errorLineVisibility;
     private string _birthdayValue;
+    private string _totalKillsValue;
+    private string _totalSolosValue;
+    private string _totalLossesValue;
     private string _lastActivityDateTimeValue;
     private string _lastActivityKillLossValue;
     private string _lastActivitySystemValue;
@@ -27,8 +31,9 @@ public sealed class InfoSheetViewModel : INotifyPropertyChanged
     public string StatsTitle { get; }
     public string ThreatValue { get; }
     public string SecValue { get; }
-    public string KillsValue { get; }
-    public string SolosValue { get; }
+    public string WeekKillsValue { get; }
+    public string WeekSolosValue { get; }
+    public string WeekLossesValue { get; }
     public string GeneralValue { get; }
     public string RecentValue { get; }
     public Visibility DeveloperFieldsVisibility { get; }
@@ -53,6 +58,24 @@ public sealed class InfoSheetViewModel : INotifyPropertyChanged
     {
         get => _birthdayValue;
         private set => SetField(ref _birthdayValue, value);
+    }
+
+    public string TotalKillsValue
+    {
+        get => _totalKillsValue;
+        private set => SetField(ref _totalKillsValue, value);
+    }
+
+    public string TotalSolosValue
+    {
+        get => _totalSolosValue;
+        private set => SetField(ref _totalSolosValue, value);
+    }
+
+    public string TotalLossesValue
+    {
+        get => _totalLossesValue;
+        private set => SetField(ref _totalLossesValue, value);
     }
 
     public string LastActivityDateTimeValue
@@ -106,10 +129,12 @@ public sealed class InfoSheetViewModel : INotifyPropertyChanged
     public InfoSheetViewModel(
         PilotReportRow row,
         bool developerModeRevealed,
+        Func<long, Task<InfoSheetTotals?>> loadTotals,
         Func<string, Task<DateOnly?>> loadBirthday,
         Func<long, Task<PilotLastActivitySummary?>> loadLastActivity)
     {
         _row = row;
+        _loadTotals = loadTotals;
         _loadBirthday = loadBirthday;
         _loadLastActivity = loadLastActivity;
 
@@ -118,8 +143,9 @@ public sealed class InfoSheetViewModel : INotifyPropertyChanged
         _errorLineVisibility = row.StatsFailureSource is null ? Visibility.Collapsed : Visibility.Visible;
         ThreatValue = row.Threat;
         SecValue = row.SecurityStatus;
-        KillsValue = row.Kills;
-        SolosValue = row.Solos;
+        WeekKillsValue = row.InfoWeekKills;
+        WeekSolosValue = row.InfoWeekSolos;
+        WeekLossesValue = row.InfoWeekLosses;
         GeneralValue = row.GeneralStyle;
         RecentValue = row.RecentStyle;
         DeveloperFieldsVisibility = developerModeRevealed ? Visibility.Visible : Visibility.Collapsed;
@@ -128,6 +154,9 @@ public sealed class InfoSheetViewModel : INotifyPropertyChanged
 
         var loading = UiText.InfoSheetLoading;
         _birthdayValue = loading;
+        _totalKillsValue = loading;
+        _totalSolosValue = loading;
+        _totalLossesValue = loading;
         _lastActivityDateTimeValue = loading;
         _lastActivityKillLossValue = loading;
         _lastActivitySystemValue = loading;
@@ -151,6 +180,20 @@ public sealed class InfoSheetViewModel : INotifyPropertyChanged
         {
             BirthdayValue = "unk";
             failedSources.Add(UiText.InfoSheetSourceBirthday);
+        }
+
+        try
+        {
+            var totals = _row.CharacterId is { } totalsCharacterId
+                ? await _loadTotals(totalsCharacterId)
+                : null;
+
+            ApplyTotals(totals);
+        }
+        catch
+        {
+            ApplyTotals(null);
+            failedSources.Add(UiText.InfoSheetSourceStatistics);
         }
 
         try
@@ -179,6 +222,13 @@ public sealed class InfoSheetViewModel : INotifyPropertyChanged
 
         ErrorLine = UiText.FormatErrorLoading(string.Join(", ", sources));
         ErrorLineVisibility = Visibility.Visible;
+    }
+
+    private void ApplyTotals(InfoSheetTotals? totals)
+    {
+        TotalKillsValue = PilotReportRowFactory.FormatInfoCount(totals?.Kills);
+        TotalSolosValue = PilotReportRowFactory.FormatInfoCount(totals?.Solos);
+        TotalLossesValue = PilotReportRowFactory.FormatInfoCount(totals?.Losses);
     }
 
     private void ApplyLastActivity(PilotLastActivitySummary? lastActivity)

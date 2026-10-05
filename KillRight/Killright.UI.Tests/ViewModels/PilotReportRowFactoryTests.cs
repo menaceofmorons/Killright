@@ -3,6 +3,7 @@ using Killright.Core.Style;
 using Killright.Integration.zKill;
 using Killright.Shared;
 using Killright.Shared.zKill;
+using Killright.UI.Analysis;
 using Killright.UI.ViewModels;
 using Xunit;
 
@@ -32,6 +33,42 @@ public sealed class PilotReportRowFactoryTests
         Assert.Equal("4/2", row.Week);
         Assert.Equal("4", row.Kills);
         Assert.Equal("2", row.Solos);
+    }
+
+    [Fact]
+    public void FromPilot_InfoWeek_KillsAndSolosMatchGridWeekAndLossesComeFromDerivedActivity()
+    {
+        var activity = new zKillActivity(95465499, true, 4, 2, null, null, DateTimeOffset.UtcNow);
+        var derived = new PilotDerivedActivity(true, 4, 2, null, null, null, 3);
+
+        var row = PilotReportRowFactory.FromPilot(
+            CreatePilot(), activity, null, StyleClassification.Solo, false, "Low", false, false, null, derived);
+
+        Assert.Equal("4/2", row.Week);
+        Assert.Equal("4", row.InfoWeekKills);
+        Assert.Equal("2", row.InfoWeekSolos);
+        Assert.Equal("3", row.InfoWeekLosses);
+    }
+
+    [Fact]
+    public void FromPilot_InfoWeekZeroOrMissing_DisplaysDash()
+    {
+        var activity = new zKillActivity(95465499, true, 0, 2, null, null, DateTimeOffset.UtcNow);
+        var derived = new PilotDerivedActivity(true, 0, 2, null, null, null, 0);
+
+        var row = PilotReportRowFactory.FromPilot(
+            CreatePilot(), activity, null, StyleClassification.Solo, false, "Low", false, false, null, derived);
+
+        Assert.Equal("-", row.InfoWeekKills);
+        Assert.Equal("2", row.InfoWeekSolos);
+        Assert.Equal("-", row.InfoWeekLosses);
+
+        var withoutData = PilotReportRowFactory.FromPilot(
+            CreatePilot(), null, null, StyleClassification.Solo, false, "Low", false, false, null);
+
+        Assert.Equal("-", withoutData.InfoWeekKills);
+        Assert.Equal("-", withoutData.InfoWeekSolos);
+        Assert.Equal("-", withoutData.InfoWeekLosses);
     }
 
     [Fact]

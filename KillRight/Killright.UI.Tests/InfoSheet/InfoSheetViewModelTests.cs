@@ -17,8 +17,9 @@ public sealed class InfoSheetViewModelTests
             Pilot = "T'ral Vsengne",
             Threat = "Low",
             SecurityStatus = "1.23",
-            Kills = "4",
-            Solos = "2",
+            InfoWeekKills = "4",
+            InfoWeekSolos = "2",
+            InfoWeekLosses = "-",
             GeneralStyle = "Solo",
             RecentStyle = "Gang",
             StatsFailureSource = statsFailureSource
@@ -43,6 +44,7 @@ public sealed class InfoSheetViewModelTests
         var viewModel = new InfoSheetViewModel(
             CreateRow(),
             false,
+            _ => Task.FromResult<InfoSheetTotals?>(null),
             _ => new TaskCompletionSource<DateOnly?>().Task,
             _ => new TaskCompletionSource<PilotLastActivitySummary?>().Task);
 
@@ -54,7 +56,10 @@ public sealed class InfoSheetViewModelTests
         Assert.Equal(Visibility.Collapsed, viewModel.LastActivityKillOnlyVisibility);
         Assert.Equal("Low", viewModel.ThreatValue);
         Assert.Equal("1.23", viewModel.SecValue);
-        Assert.Equal("4", viewModel.KillsValue);
+        Assert.Equal("4", viewModel.WeekKillsValue);
+        Assert.Equal("2", viewModel.WeekSolosValue);
+        Assert.Equal("-", viewModel.WeekLossesValue);
+        Assert.Equal(UiText.InfoSheetLoading, viewModel.TotalKillsValue);
     }
 
     [Fact]
@@ -66,6 +71,7 @@ public sealed class InfoSheetViewModelTests
         var viewModel = new InfoSheetViewModel(
             CreateRow(),
             false,
+            _ => Task.FromResult<InfoSheetTotals?>(null),
             name =>
             {
                 requestedName = name;
@@ -99,6 +105,7 @@ public sealed class InfoSheetViewModelTests
         var viewModel = new InfoSheetViewModel(
             CreateRow(),
             false,
+            _ => Task.FromResult<InfoSheetTotals?>(null),
             _ => Task.FromResult<DateOnly?>(null),
             _ => Task.FromResult<PilotLastActivitySummary?>(null));
 
@@ -129,6 +136,7 @@ public sealed class InfoSheetViewModelTests
         var viewModel = new InfoSheetViewModel(
             CreateRow(),
             false,
+            _ => Task.FromResult<InfoSheetTotals?>(null),
             _ => Task.FromResult<DateOnly?>(null),
             _ => Task.FromResult<PilotLastActivitySummary?>(loss));
 
@@ -146,6 +154,7 @@ public sealed class InfoSheetViewModelTests
         var viewModel = new InfoSheetViewModel(
             CreateRow(characterId: null),
             false,
+            _ => Task.FromResult<InfoSheetTotals?>(null),
             _ => Task.FromResult<DateOnly?>(null),
             _ =>
             {
@@ -165,6 +174,7 @@ public sealed class InfoSheetViewModelTests
         var viewModel = new InfoSheetViewModel(
             CreateRow(),
             false,
+            _ => Task.FromResult<InfoSheetTotals?>(null),
             _ => throw new InvalidOperationException("read failed"),
             _ => Task.FromResult<PilotLastActivitySummary?>(KillSummary()));
 
@@ -182,6 +192,7 @@ public sealed class InfoSheetViewModelTests
         var viewModel = new InfoSheetViewModel(
             CreateRow(),
             false,
+            _ => Task.FromResult<InfoSheetTotals?>(null),
             _ => Task.FromResult<DateOnly?>(new DateOnly(2015, 6, 12)),
             _ => Task.FromException<PilotLastActivitySummary?>(new InvalidOperationException("read failed")));
 
@@ -199,6 +210,7 @@ public sealed class InfoSheetViewModelTests
         var viewModel = new InfoSheetViewModel(
             CreateRow(statsFailureSource: "zKill statistics"),
             false,
+            _ => Task.FromResult<InfoSheetTotals?>(null),
             _ => throw new InvalidOperationException("read failed"),
             _ => throw new InvalidOperationException("read failed"));
 
@@ -218,6 +230,7 @@ public sealed class InfoSheetViewModelTests
         var viewModel = new InfoSheetViewModel(
             CreateRow(),
             false,
+            _ => Task.FromResult<InfoSheetTotals?>(null),
             _ => Task.FromResult<DateOnly?>(new DateOnly(2015, 6, 12)),
             _ => Task.FromResult<PilotLastActivitySummary?>(KillSummary()));
 
@@ -228,6 +241,150 @@ public sealed class InfoSheetViewModelTests
         Assert.Contains(nameof(InfoSheetViewModel.BirthdayValue), changed);
         Assert.Contains(nameof(InfoSheetViewModel.LastActivityShipValue), changed);
         Assert.Contains(nameof(InfoSheetViewModel.LastActivityKillOnlyVisibility), changed);
+    }
+
+    [Fact]
+    public async Task LoadAsync_Totals_ShowKillsSolosAndLosses()
+    {
+        long? requestedId = null;
+
+        var viewModel = new InfoSheetViewModel(
+            CreateRow(),
+            false,
+            id =>
+            {
+                requestedId = id;
+                return Task.FromResult<InfoSheetTotals?>(new InfoSheetTotals(1200, 300, 45));
+            },
+            _ => Task.FromResult<DateOnly?>(null),
+            _ => Task.FromResult<PilotLastActivitySummary?>(null));
+
+        await viewModel.LoadAsync();
+
+        Assert.Equal(95465499, requestedId);
+        Assert.Equal("1200", viewModel.TotalKillsValue);
+        Assert.Equal("300", viewModel.TotalSolosValue);
+        Assert.Equal("45", viewModel.TotalLossesValue);
+        Assert.Equal(Visibility.Collapsed, viewModel.ErrorLineVisibility);
+    }
+
+    [Fact]
+    public async Task LoadAsync_ZeroTotals_ShowDash()
+    {
+        var viewModel = new InfoSheetViewModel(
+            CreateRow(),
+            false,
+            _ => Task.FromResult<InfoSheetTotals?>(new InfoSheetTotals(10, 0, 0)),
+            _ => Task.FromResult<DateOnly?>(null),
+            _ => Task.FromResult<PilotLastActivitySummary?>(null));
+
+        await viewModel.LoadAsync();
+
+        Assert.Equal("10", viewModel.TotalKillsValue);
+        Assert.Equal("-", viewModel.TotalSolosValue);
+        Assert.Equal("-", viewModel.TotalLossesValue);
+    }
+
+    [Fact]
+    public async Task LoadAsync_NoStatisticsRow_ShowsDashesWithoutErrorLine()
+    {
+        var viewModel = new InfoSheetViewModel(
+            CreateRow(),
+            false,
+            _ => Task.FromResult<InfoSheetTotals?>(null),
+            _ => Task.FromResult<DateOnly?>(null),
+            _ => Task.FromResult<PilotLastActivitySummary?>(null));
+
+        await viewModel.LoadAsync();
+
+        Assert.Equal("-", viewModel.TotalKillsValue);
+        Assert.Equal("-", viewModel.TotalSolosValue);
+        Assert.Equal("-", viewModel.TotalLossesValue);
+        Assert.Equal(Visibility.Collapsed, viewModel.ErrorLineVisibility);
+    }
+
+    [Fact]
+    public async Task LoadAsync_TotalsReadFails_ShowsDashesAndErrorLine()
+    {
+        var viewModel = new InfoSheetViewModel(
+            CreateRow(),
+            false,
+            _ => Task.FromException<InfoSheetTotals?>(new InvalidOperationException("read failed")),
+            _ => Task.FromResult<DateOnly?>(null),
+            _ => Task.FromResult<PilotLastActivitySummary?>(null));
+
+        await viewModel.LoadAsync();
+
+        Assert.Equal("-", viewModel.TotalKillsValue);
+        Assert.Equal(UiText.FormatErrorLoading(UiText.InfoSheetSourceStatistics), viewModel.ErrorLine);
+        Assert.Equal(Visibility.Visible, viewModel.ErrorLineVisibility);
+    }
+
+    [Fact]
+    public async Task LoadAsync_RowWithoutCharacterId_SkipsTotalsRead()
+    {
+        var totalsCalls = 0;
+
+        var viewModel = new InfoSheetViewModel(
+            CreateRow(characterId: null),
+            false,
+            _ =>
+            {
+                totalsCalls++;
+                return Task.FromResult<InfoSheetTotals?>(null);
+            },
+            _ => Task.FromResult<DateOnly?>(null),
+            _ => Task.FromResult<PilotLastActivitySummary?>(null));
+
+        await viewModel.LoadAsync();
+
+        Assert.Equal(0, totalsCalls);
+        Assert.Equal("-", viewModel.TotalKillsValue);
+    }
+
+    [Fact]
+    public void Layout_OrdersBirthdayThreatSecGeneralRecentThenTable()
+    {
+        var xaml = File.ReadAllText(FindInfoSheetXaml());
+
+        var birthday = xaml.IndexOf("InfoSheetLabelBirthday", StringComparison.Ordinal);
+        var threat = xaml.IndexOf("InfoSheetLabelThreat", StringComparison.Ordinal);
+        var sec = xaml.IndexOf("InfoSheetLabelSec", StringComparison.Ordinal);
+        var general = xaml.IndexOf("InfoSheetLabelGeneral", StringComparison.Ordinal);
+        var recent = xaml.IndexOf("InfoSheetLabelRecent", StringComparison.Ordinal);
+        var table = xaml.IndexOf("InfoSheetTableKills", StringComparison.Ordinal);
+
+        Assert.True(birthday >= 0 && birthday < threat);
+        Assert.True(threat < sec);
+        Assert.True(sec < general);
+        Assert.True(general < recent);
+        Assert.True(recent < table);
+    }
+
+    [Fact]
+    public void Layout_BindsTheSixTableValues()
+    {
+        var xaml = File.ReadAllText(FindInfoSheetXaml());
+
+        foreach (var name in new[] { "WeekKillsValue", "WeekSolosValue", "WeekLossesValue", "TotalKillsValue", "TotalSolosValue", "TotalLossesValue" })
+            Assert.Contains("{Binding " + name + ",", xaml);
+    }
+
+    private static string FindInfoSheetXaml()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+
+        while (directory is not null)
+        {
+            var candidate = Path.Combine(directory.FullName, "Killright.UI", "InfoSheet", "InfoSheetWindow.xaml");
+
+            if (File.Exists(candidate))
+                return candidate;
+
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException("InfoSheetWindow.xaml");
     }
 
     [Fact]

@@ -50,18 +50,36 @@
                 </TextBlock>
 
                 <TextBlock Grid.Row="2" Grid.Column="0" Foreground="{DynamicResource Brush.Text.Primary}">
-                    <Run Text="{x:Static resources:UiText.InfoSheetLabelKills}" FontWeight="Bold" /><Run Text="{Binding KillsValue, Mode=OneWay}" />
-                </TextBlock>
-                <TextBlock Grid.Row="2" Grid.Column="1" Foreground="{DynamicResource Brush.Text.Primary}">
-                    <Run Text="{x:Static resources:UiText.InfoSheetLabelSolos}" FontWeight="Bold" /><Run Text="{Binding SolosValue, Mode=OneWay}" />
-                </TextBlock>
-
-                <TextBlock Grid.Row="3" Grid.Column="0" Foreground="{DynamicResource Brush.Text.Primary}">
                     <Run Text="{x:Static resources:UiText.InfoSheetLabelGeneral}" FontWeight="Bold" /><Run Text="{Binding GeneralValue, Mode=OneWay}" />
                 </TextBlock>
-                <TextBlock Grid.Row="3" Grid.Column="1" Foreground="{DynamicResource Brush.Text.Primary}">
+                <TextBlock Grid.Row="2" Grid.Column="1" Foreground="{DynamicResource Brush.Text.Primary}">
                     <Run Text="{x:Static resources:UiText.InfoSheetLabelRecent}" FontWeight="Bold" /><Run Text="{Binding RecentValue, Mode=OneWay}" />
                 </TextBlock>
+
+                <Grid Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,6,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" MinWidth="60" />
+                        <ColumnDefinition Width="*" MinWidth="60" />
+                        <ColumnDefinition Width="*" MinWidth="60" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition />
+                        <RowDefinition />
+                        <RowDefinition />
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Grid.Column="1" Text="{x:Static resources:UiText.InfoSheetTableKills}" FontWeight="Bold" HorizontalAlignment="Right" Foreground="{DynamicResource Brush.Text.Primary}" />
+                    <TextBlock Grid.Row="0" Grid.Column="2" Text="{x:Static resources:UiText.InfoSheetTableSolos}" FontWeight="Bold" HorizontalAlignment="Right" Foreground="{DynamicResource Brush.Text.Primary}" />
+                    <TextBlock Grid.Row="0" Grid.Column="3" Text="{x:Static resources:UiText.InfoSheetTableLosses}" FontWeight="Bold" HorizontalAlignment="Right" Foreground="{DynamicResource Brush.Text.Primary}" />
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="{x:Static resources:UiText.InfoSheetTableWeek}" FontWeight="Bold" HorizontalAlignment="Left" Foreground="{DynamicResource Brush.Text.Primary}" />
+                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding WeekKillsValue, Mode=OneWay}" HorizontalAlignment="Right" Foreground="{DynamicResource Brush.Text.Primary}" />
+                    <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding WeekSolosValue, Mode=OneWay}" HorizontalAlignment="Right" Foreground="{DynamicResource Brush.Text.Primary}" />
+                    <TextBlock Grid.Row="1" Grid.Column="3" Text="{Binding WeekLossesValue, Mode=OneWay}" HorizontalAlignment="Right" Foreground="{DynamicResource Brush.Text.Primary}" />
+                    <TextBlock Grid.Row="2" Grid.Column="0" Text="{x:Static resources:UiText.InfoSheetTableTotal}" FontWeight="Bold" HorizontalAlignment="Left" Foreground="{DynamicResource Brush.Text.Primary}" />
+                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding TotalKillsValue, Mode=OneWay}" HorizontalAlignment="Right" Foreground="{DynamicResource Brush.Text.Primary}" />
+                    <TextBlock Grid.Row="2" Grid.Column="2" Text="{Binding TotalSolosValue, Mode=OneWay}" HorizontalAlignment="Right" Foreground="{DynamicResource Brush.Text.Primary}" />
+                    <TextBlock Grid.Row="2" Grid.Column="3" Text="{Binding TotalLossesValue, Mode=OneWay}" HorizontalAlignment="Right" Foreground="{DynamicResource Brush.Text.Primary}" />
+                </Grid>
             </Grid>
 
             <StackPanel Visibility="{Binding DeveloperFieldsVisibility}" Margin="0,6,0,0">

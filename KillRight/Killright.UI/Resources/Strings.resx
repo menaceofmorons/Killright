@@ -158,8 +158,6 @@
   <data name="InfoSheet.Label.Birthday" xml:space="preserve"><value>Birthday: </value></data>
   <data name="InfoSheet.Label.Threat" xml:space="preserve"><value>Threat: </value></data>
   <data name="InfoSheet.Label.Sec" xml:space="preserve"><value>Sec: </value></data>
-  <data name="InfoSheet.Label.Kills" xml:space="preserve"><value>Kills: </value></data>
-  <data name="InfoSheet.Label.Solos" xml:space="preserve"><value>Solos: </value></data>
   <data name="InfoSheet.Label.General" xml:space="preserve"><value>General: </value></data>
   <data name="InfoSheet.Label.Recent" xml:space="preserve"><value>Recent: </value></data>
   <data name="InfoSheet.Label.LastActivityTitle" xml:space="preserve"><value>Last Activity</value></data>
@@ -171,7 +169,13 @@
   <data name="InfoSheet.Label.Victim" xml:space="preserve"><value>Victim: </value></data>
   <data name="InfoSheet.Label.Attackers" xml:space="preserve"><value>Attackers: </value></data>
   <data name="InfoSheet.Loading" xml:space="preserve"><value>Loading…</value></data>
+  <data name="InfoSheet.Table.Week" xml:space="preserve"><value>Week</value></data>
+  <data name="InfoSheet.Table.Total" xml:space="preserve"><value>Total</value></data>
+  <data name="InfoSheet.Table.Kills" xml:space="preserve"><value>Kills</value></data>
+  <data name="InfoSheet.Table.Solos" xml:space="preserve"><value>Solos</value></data>
+  <data name="InfoSheet.Table.Losses" xml:space="preserve"><value>Losses</value></data>
   <data name="InfoSheet.Source.Birthday" xml:space="preserve"><value>Birthday</value></data>
+  <data name="InfoSheet.Source.Statistics" xml:space="preserve"><value>zKill statistics</value></data>
   <data name="InfoSheet.Source.LastActivity" xml:space="preserve"><value>Last Activity</value></data>
   <data name="InfoSheet.StatsTitleFormat" xml:space="preserve"><value>Stats for {0}</value></data>
   <data name="InfoSheet.ErrorLoadingFormat" xml:space="preserve"><value>Error loading {0}</value></data>

@@ -36,6 +36,9 @@ public class PilotReportRow : INotifyPropertyChanged
     public string Kills { get; set; } = string.Empty;
     public string Solos { get; set; } = string.Empty;
     public string LastKill { get; set; } = string.Empty;
+    public string InfoWeekKills { get; set; } = string.Empty;
+    public string InfoWeekSolos { get; set; } = string.Empty;
+    public string InfoWeekLosses { get; set; } = string.Empty;
     public string Notes { get; set; } = string.Empty;
     public string? StatsFailureSource { get; set; }
 

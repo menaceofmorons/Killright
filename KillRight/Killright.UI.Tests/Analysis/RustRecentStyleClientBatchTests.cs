@@ -15,6 +15,7 @@ public sealed class RustRecentStyleClientBatchTests
         "{\"results\":["
         + "{\"character_id\":95465499,\"recent_style\":\"Solo\",\"is_recent_podder\":true,\"threat\":{\"score\":30},"
         + "\"derived_activity\":{\"has_public_activity_data\":true,\"kills_week\":3,\"solo_week\":1,"
+        + "\"info_week_losses\":4,"
         + "\"newest_non_pod_killmail\":{\"kill_time_utc\":\"2026-09-28T10:00:00.0000000Z\",\"activity_type\":\"Loss\"},"
         + "\"newest_non_pod_kill_time_utc\":\"2026-09-27T08:30:00+00:00\"}},"
         + "{\"character_id\":91321792,\"recent_style\":\"Gang\",\"is_recent_podder\":false,\"threat\":{\"score\":0},"
@@ -47,6 +48,7 @@ public sealed class RustRecentStyleClientBatchTests
         Assert.True(derived.HasPublicActivityData);
         Assert.Equal(3, derived.KillsWeek);
         Assert.Equal(1, derived.SoloWeek);
+        Assert.Equal(4, derived.InfoWeekLosses);
         Assert.Equal(zKillActivityType.Loss, derived.NewestKillActivityType);
         Assert.Equal(new DateTimeOffset(2026, 9, 28, 10, 0, 0, TimeSpan.Zero), derived.NewestKillTimeUtc);
         Assert.Equal(new DateTimeOffset(2026, 9, 27, 8, 30, 0, TimeSpan.Zero), derived.LastKillUtc);
@@ -60,6 +62,7 @@ public sealed class RustRecentStyleClientBatchTests
         var none = results[1].DerivedActivity!;
         Assert.False(none.HasPublicActivityData);
         Assert.Null(none.KillsWeek);
+        Assert.Null(none.InfoWeekLosses);
         Assert.Null(none.NewestKillTimeUtc);
     }
 

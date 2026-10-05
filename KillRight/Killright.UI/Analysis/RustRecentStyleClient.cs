@@ -230,7 +230,8 @@ public sealed class RustRecentStyleClient
                 "Loss" => zKillActivityType.Loss,
                 _ => null
             },
-            ParseUtc(response.newest_non_pod_kill_time_utc));
+            ParseUtc(response.newest_non_pod_kill_time_utc),
+            response.info_week_losses);
     }
 
     private static DateTimeOffset? ParseUtc(string? value)
@@ -289,6 +290,7 @@ public sealed class RustRecentStyleClient
         public bool has_public_activity_data { get; set; }
         public int? kills_week { get; set; }
         public int? solo_week { get; set; }
+        public int? info_week_losses { get; set; }
         public NewestKillmailResponse? newest_non_pod_killmail { get; set; }
         public string? newest_non_pod_kill_time_utc { get; set; }
     }
@@ -372,7 +374,8 @@ public sealed record PilotDerivedActivity(
     int? SoloWeek,
     DateTimeOffset? NewestKillTimeUtc,
     zKillActivityType? NewestKillActivityType,
-    DateTimeOffset? LastKillUtc)
+    DateTimeOffset? LastKillUtc,
+    int? InfoWeekLosses = null)
 {
     public zKillActivity ToActivity(long characterId, DateTimeOffset checkedAtUtc) => new(
         characterId,
