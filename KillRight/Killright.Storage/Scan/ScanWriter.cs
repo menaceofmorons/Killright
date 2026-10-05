@@ -96,7 +96,7 @@ public static class ScanWriter
                         item.NoHistory,
                         item.CheckedAtUtc);
 
-                    return $"({record.CharacterId}, {record.ShipsDestroyed}, {record.SoloKills}, {SqlValueFormatter.Double(record.SoloRatio)}, {SqlValueFormatter.Double(record.AvgGangSize)}, {record.ShipsLost}, {record.SoloLosses}, {SqlValueFormatter.String(record.GeneralStyle)}, {SqlValueFormatter.Bool(true)}, {SqlValueFormatter.Bool(record.NoHistory)}, {SqlValueFormatter.Date(record.CheckedAtUtc)}, {record.PodKills})";
+                    return $"({record.CharacterId}, {record.ShipsDestroyed}, {record.SoloKills}, {SqlValueFormatter.Double(record.SoloRatio)}, {SqlValueFormatter.Double(record.AvgGangSize)}, {record.ShipsLost}, {record.SoloLosses}, {SqlValueFormatter.String(record.GeneralStyle)}, {SqlValueFormatter.Bool(true)}, {SqlValueFormatter.Bool(record.NoHistory)}, {SqlValueFormatter.Date(record.CheckedAtUtc)}, {record.PodKills}, {record.PodLosses})";
                 }));
 
             Execute(
@@ -106,7 +106,7 @@ public static class ScanWriter
                 INSERT OR REPLACE INTO main.zkill_statistics_cache (
                     character_id, ships_destroyed, solo_kills, solo_ratio, avg_gang_size,
                     ships_lost, solo_losses, general_style, months_processed, no_history_marker,
-                    checked_at_utc, pod_kills
+                    checked_at_utc, pod_kills, pod_losses
                 ) VALUES {values};
                 """);
         }

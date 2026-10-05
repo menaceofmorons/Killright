@@ -17,10 +17,6 @@ public static class StyleDisplayFormatter
             StyleClassification.Gang => Strings.Get("Style.Word.Gang"),
             StyleClassification.Blob => Strings.Get("Style.Word.Blob"),
             StyleClassification.Fleet => Strings.Get("Style.Word.Fleet"),
-            StyleClassification.Miner => Strings.Get("Style.Word.Miner"),
-            StyleClassification.Explorer => Strings.Get("Style.Word.Explorer"),
-            StyleClassification.Hauler => Strings.Get("Style.Word.Hauler"),
-            StyleClassification.PI => Strings.Get("Style.Word.Pi"),
             _ => Strings.Get("Style.Word.Unknown")
         };
 

@@ -1,5 +1,4 @@
 use crate::recent_style::kill_style_classifier::classify_kill_style;
-use crate::recent_style::victim_style_classifier::classify_victim_style;
 use crate::recent_style::{RecentKillmailInput, RecentStyleRequest, RecentStyleResult};
 use crate::shared::pod_kill::is_pod_kill;
 use crate::shared::recent_style_contract::*;
@@ -24,7 +23,7 @@ pub fn analyze_recent_style(request: RecentStyleRequest, style_configuration: &S
     let losses: Vec<RecentKillmailInput> = request
         .killmails
         .iter()
-        .filter(|killmail| killmail.is_loss)
+        .filter(|killmail| killmail.is_loss && !is_pod_kill(killmail.ship_type_id))
         .cloned()
         .collect();
 
@@ -39,9 +38,11 @@ pub fn analyze_recent_style(request: RecentStyleRequest, style_configuration: &S
     let recent_style = if analyzed_killmails == 0 {
         STYLE_INACTIVE.to_string()
     } else if is_recent_victim(kill_count, loss_count, solo_losses) {
-        classify_victim_style(&losses)
+        STYLE_VICTIM.to_string()
     } else if kill_count > 0 {
         classify_kill_style(&kills, style_configuration)
+    } else if loss_count == 0 {
+        STYLE_INACTIVE.to_string()
     } else {
         STYLE_VICTIM.to_string()
     };
@@ -170,6 +171,45 @@ mod tests {
         assert_eq!(result.recent_style, STYLE_VICTIM);
         assert_eq!(result.losses, 3);
         assert_eq!(result.solo_losses, 3);
+    }
+
+    #[test]
+    fn victim_rule_returns_victim_without_subtype_lookup_for_mining_ship_losses() {
+        let result = analyze_recent_style(
+            request(vec![loss(1, 1, true, Some(32880)), loss(2, 1, true, Some(32880))]),
+            &style_configuration(),
+        );
+
+        assert_eq!(result.recent_style, STYLE_VICTIM);
+    }
+
+    #[test]
+    fn pod_losses_are_not_counted_in_total_or_solo_recent_losses() {
+        let result = analyze_recent_style(
+            request(vec![
+                kill(1, 1, true, Some(33468)),
+                loss(2, 1, true, Some(670)),
+                loss(3, 1, true, Some(33328)),
+                loss(4, 1, true, Some(999999)),
+            ]),
+            &style_configuration(),
+        );
+
+        assert_eq!(result.losses, 1);
+        assert_eq!(result.solo_losses, 1);
+        assert_ne!(result.recent_style, STYLE_VICTIM);
+    }
+
+    #[test]
+    fn only_pod_losses_in_window_gives_no_victim() {
+        let result = analyze_recent_style(
+            request(vec![loss(1, 1, true, Some(670)), loss(2, 1, true, Some(670)), loss(3, 1, true, Some(33328))]),
+            &style_configuration(),
+        );
+
+        assert_eq!(result.losses, 0);
+        assert_eq!(result.solo_losses, 0);
+        assert_ne!(result.recent_style, STYLE_VICTIM);
     }
 
     #[test]

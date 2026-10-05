@@ -925,7 +925,7 @@ mod tests {
                     character_id BIGINT PRIMARY KEY, ships_destroyed INTEGER NOT NULL, solo_kills INTEGER NOT NULL,
                     solo_ratio DOUBLE NOT NULL, avg_gang_size DOUBLE NOT NULL, ships_lost INTEGER NOT NULL,
                     solo_losses INTEGER NOT NULL, general_style TEXT NOT NULL, checked_at_utc TEXT NOT NULL,
-                    no_history_marker BOOLEAN
+                    no_history_marker BOOLEAN, pod_losses INTEGER
                 );
                 CREATE TABLE pilot_identity_cache (
                     input_name TEXT PRIMARY KEY, character_id BIGINT, character_name TEXT, verify_status TEXT NOT NULL,
@@ -955,7 +955,7 @@ mod tests {
                     (4, {LUKAS}, 98000001, NULL, 11567),
                     (4, {SYMPTOM}, 98000002, NULL, 11567);
                 INSERT INTO zkill_statistics_cache VALUES
-                    ({LUKAS}, 120, 30, 0.25, 4.0, 12, 2, 'Gang', '{recent}', FALSE);
+                    ({LUKAS}, 120, 30, 0.25, 4.0, 12, 2, 'Gang', '{recent}', FALSE, 0);
                 INSERT INTO pilot_identity_cache VALUES
                     ('LUKAS NAARII', {LUKAS}, 'Lukas Naarii', 'Partial', 1.5, 98000001, 'Corp One', NULL, NULL, NULL, NULL, '2026-09-20T00:00:00+00:00');
                 INSERT INTO zkill_activity_cache VALUES

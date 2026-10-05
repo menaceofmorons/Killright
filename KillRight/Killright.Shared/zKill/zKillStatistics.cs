@@ -32,5 +32,8 @@ public sealed class zKillStatistics
     public int podKills { get; set; }
 
     [JsonIgnore]
+    public int podLosses { get; set; }
+
+    [JsonIgnore]
     public bool NoHistory { get; set; }
 }

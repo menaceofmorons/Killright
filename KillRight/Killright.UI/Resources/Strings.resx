@@ -122,20 +122,12 @@
   <data name="Shortcuts.Tab.Style" xml:space="preserve"><value>Style</value></data>
   <data name="Shortcuts.StyleCode.Blob" xml:space="preserve"><value>B</value></data>
   <data name="Shortcuts.StyleWord.Blob" xml:space="preserve"><value>Blob</value></data>
-  <data name="Shortcuts.StyleCode.Explorer" xml:space="preserve"><value>E</value></data>
-  <data name="Shortcuts.StyleWord.Explorer" xml:space="preserve"><value>Explorer</value></data>
   <data name="Shortcuts.StyleCode.Fleet" xml:space="preserve"><value>F</value></data>
   <data name="Shortcuts.StyleWord.Fleet" xml:space="preserve"><value>Fleet</value></data>
   <data name="Shortcuts.StyleCode.Gang" xml:space="preserve"><value>G</value></data>
   <data name="Shortcuts.StyleWord.Gang" xml:space="preserve"><value>Gang</value></data>
-  <data name="Shortcuts.StyleCode.Hauler" xml:space="preserve"><value>H</value></data>
-  <data name="Shortcuts.StyleWord.Hauler" xml:space="preserve"><value>Hauler</value></data>
   <data name="Shortcuts.StyleCode.Inactive" xml:space="preserve"><value>I</value></data>
   <data name="Shortcuts.StyleWord.Inactive" xml:space="preserve"><value>Inactive</value></data>
-  <data name="Shortcuts.StyleCode.Miner" xml:space="preserve"><value>M</value></data>
-  <data name="Shortcuts.StyleWord.Miner" xml:space="preserve"><value>Miner</value></data>
-  <data name="Shortcuts.StyleCode.Pi" xml:space="preserve"><value>P</value></data>
-  <data name="Shortcuts.StyleWord.Pi" xml:space="preserve"><value>PI</value></data>
   <data name="Shortcuts.StyleCode.Solo" xml:space="preserve"><value>S</value></data>
   <data name="Shortcuts.StyleWord.Solo" xml:space="preserve"><value>Solo</value></data>
   <data name="Shortcuts.StyleCode.Unknown" xml:space="preserve"><value>U</value></data>
@@ -202,10 +194,6 @@
   <data name="Style.Word.Gang" xml:space="preserve"><value>Gang</value></data>
   <data name="Style.Word.Blob" xml:space="preserve"><value>Blob</value></data>
   <data name="Style.Word.Fleet" xml:space="preserve"><value>Fleet</value></data>
-  <data name="Style.Word.Miner" xml:space="preserve"><value>Mine</value></data>
-  <data name="Style.Word.Explorer" xml:space="preserve"><value>Explo</value></data>
-  <data name="Style.Word.Hauler" xml:space="preserve"><value>Haul</value></data>
-  <data name="Style.Word.Pi" xml:space="preserve"><value>PI</value></data>
   <data name="Style.Word.Unknown" xml:space="preserve"><value>Unk</value></data>
   <data name="Style.PodderSuffixFormat" xml:space="preserve"><value>{0} (podder)</value></data>
 
@@ -217,10 +205,6 @@
   <data name="Style.LetterCode.Blob" xml:space="preserve"><value>B</value></data>
   <data name="Style.LetterCode.Fleet" xml:space="preserve"><value>F</value></data>
   <data name="Style.LetterCode.Inactive" xml:space="preserve"><value>I</value></data>
-  <data name="Style.LetterCode.Miner" xml:space="preserve"><value>M</value></data>
-  <data name="Style.LetterCode.Explorer" xml:space="preserve"><value>E</value></data>
-  <data name="Style.LetterCode.Hauler" xml:space="preserve"><value>H</value></data>
-  <data name="Style.LetterCode.Pi" xml:space="preserve"><value>P</value></data>
   <data name="Style.LetterCode.Unknown" xml:space="preserve"><value>U</value></data>
   <data name="Style.LetterCode.PodderSuffix" xml:space="preserve"><value>x</value></data>
 </root>

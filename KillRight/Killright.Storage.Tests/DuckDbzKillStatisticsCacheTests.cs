@@ -49,7 +49,8 @@ public sealed class DuckDbzKillStatisticsCacheTests
             avgGangSize = 4.5,
             shipsLost = 2,
             soloLosses = 1,
-            podKills = 6
+            podKills = 6,
+            podLosses = 4
         };
 
         await cache.UpsertAsync(95465499, statistics, "Gang", noHistory: false);
@@ -58,6 +59,22 @@ public sealed class DuckDbzKillStatisticsCacheTests
 
         Assert.NotNull(cached);
         Assert.Equal(6, cached!.podKills);
+        Assert.Equal(4, cached.podLosses);
+        Assert.Equal(2, cached.shipsLost);
+    }
+
+    [Fact]
+    public async Task GetAsync_RowWithNullPodLosses_IsTreatedAsExpired()
+    {
+        var (database, cache) = CreateCache();
+
+        InsertRowWithoutPodLosses(database, 91321792);
+
+        var single = await cache.GetAsync(91321792, TimeSpan.FromDays(30));
+        var many = await cache.GetManyAsync([91321792], TimeSpan.FromDays(30));
+
+        Assert.Null(single);
+        Assert.Empty(many);
     }
 
     [Fact]
@@ -141,9 +158,26 @@ public sealed class DuckDbzKillStatisticsCacheTests
         command.CommandText = $"""
             INSERT INTO main.zkill_statistics_cache (
                 character_id, ships_destroyed, solo_kills, solo_ratio, avg_gang_size,
-                ships_lost, solo_losses, general_style, months_processed, no_history_marker, checked_at_utc
+                ships_lost, solo_losses, general_style, months_processed, no_history_marker, checked_at_utc, pod_losses
             ) VALUES (
-                {characterId}, 40, 10, 60.0, 3.0, 5, 2, 'Solo', TRUE, FALSE, now()
+                {characterId}, 40, 10, 60.0, 3.0, 5, 2, 'Solo', TRUE, FALSE, now(), 0
+            );
+            """;
+        command.ExecuteNonQuery();
+    }
+
+    private static void InsertRowWithoutPodLosses(KillRightDatabase database, long characterId)
+    {
+        using var connection = new DuckDBConnection(database.ConnectionString);
+        connection.Open();
+
+        using var command = connection.CreateCommand();
+        command.CommandText = $"""
+            INSERT INTO main.zkill_statistics_cache (
+                character_id, ships_destroyed, solo_kills, solo_ratio, avg_gang_size,
+                ships_lost, solo_losses, general_style, months_processed, no_history_marker, checked_at_utc, pod_kills
+            ) VALUES (
+                {characterId}, 40, 10, 60.0, 3.0, 5, 2, 'Solo', TRUE, FALSE, now(), 1
             );
             """;
         command.ExecuteNonQuery();

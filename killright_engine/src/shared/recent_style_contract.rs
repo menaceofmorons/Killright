@@ -5,7 +5,3 @@ pub const STYLE_SOLO: &str = "Solo";
 pub const STYLE_GANG: &str = "Gang";
 pub const STYLE_BLOB: &str = "Blob";
 pub const STYLE_FLEET: &str = "Fleet";
-pub const STYLE_MINER: &str = "Miner";
-pub const STYLE_EXPLORER: &str = "Explorer";
-pub const STYLE_HAULER: &str = "Hauler";
-pub const STYLE_PI: &str = "PI";

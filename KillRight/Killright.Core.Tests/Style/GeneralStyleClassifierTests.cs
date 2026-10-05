@@ -15,7 +15,7 @@ public sealed class GeneralStyleClassifierTests
             podderMinimumKillCount: 5);
     }
 
-    private static zKillStatistics Statistics(int shipsDestroyed, int shipsLost, double soloRatio, int soloKills, double avgGangSize, int soloLosses = 0, int podKills = 0)
+    private static zKillStatistics Statistics(int shipsDestroyed, int shipsLost, double soloRatio, int soloKills, double avgGangSize, int soloLosses = 0, int podKills = 0, int podLosses = 0)
     {
         return new zKillStatistics
         {
@@ -25,7 +25,8 @@ public sealed class GeneralStyleClassifierTests
             soloKills = soloKills,
             avgGangSize = avgGangSize,
             soloLosses = soloLosses,
-            podKills = podKills
+            podKills = podKills,
+            podLosses = podLosses
         };
     }
 
@@ -180,5 +181,39 @@ public sealed class GeneralStyleClassifierTests
 
         Assert.Equal(StyleClassification.Unknown, result.Classification);
         Assert.False(result.IsPodder);
+    }
+
+    [Fact]
+    public void Classify_ZeroKillsAndOnlyPodLosses_ReturnsInactive()
+    {
+        var result = GeneralStyleClassifier.Classify(Statistics(shipsDestroyed: 0, shipsLost: 5, soloRatio: 0, soloKills: 0, avgGangSize: 0, podLosses: 5));
+
+        Assert.Equal(StyleClassification.Inactive, result.Classification);
+    }
+
+    [Fact]
+    public void Classify_ZeroKillsAndShipLossesBesidePodLosses_ReturnsVictim()
+    {
+        var result = GeneralStyleClassifier.Classify(Statistics(shipsDestroyed: 0, shipsLost: 6, soloRatio: 0, soloKills: 0, avgGangSize: 0, podLosses: 5));
+
+        Assert.Equal(StyleClassification.Victim, result.Classification);
+    }
+
+    [Fact]
+    public void Classify_KillLossRatioUsesShipLossesExcludingPods()
+    {
+        var withPodLosses = GeneralStyleClassifier.Classify(Statistics(shipsDestroyed: 10, shipsLost: 100, soloRatio: 10, soloKills: 2, avgGangSize: 4.0, soloLosses: 8, podLosses: 70));
+        var withoutPodLosses = GeneralStyleClassifier.Classify(Statistics(shipsDestroyed: 10, shipsLost: 30, soloRatio: 10, soloKills: 2, avgGangSize: 4.0, soloLosses: 8));
+
+        Assert.Equal(withoutPodLosses.Classification, withPodLosses.Classification);
+        Assert.Equal(StyleClassification.GangBeginner, withPodLosses.Classification);
+    }
+
+    [Fact]
+    public void Classify_PodLossesExceedingShipsLost_ClampToZero()
+    {
+        var result = GeneralStyleClassifier.Classify(Statistics(shipsDestroyed: 60, shipsLost: 3, soloRatio: 10, soloKills: 2, avgGangSize: 4.0, podLosses: 9));
+
+        Assert.Equal(StyleClassification.Gang, result.Classification);
     }
 }

@@ -28,16 +28,17 @@ public static class GeneralStyleClassifier
             return new GeneralStyleResult(StyleClassification.Unknown, false);
 
         var shipsDestroyed = Math.Max(0, statistics.shipsDestroyed - statistics.podKills);
+        var shipsLost = Math.Max(0, statistics.shipsLost - statistics.podLosses);
 
-        if (shipsDestroyed == 0 && statistics.shipsLost > 0)
+        if (shipsDestroyed == 0 && shipsLost > 0)
             return new GeneralStyleResult(StyleClassification.Victim, false);
 
         if (statistics.NoHistory || shipsDestroyed == 0)
             return new GeneralStyleResult(StyleClassification.Inactive, false);
 
-        if (statistics.shipsLost > 0)
+        if (shipsLost > 0)
         {
-            var destroyedToLostRatio = shipsDestroyed / (double)statistics.shipsLost;
+            var destroyedToLostRatio = shipsDestroyed / (double)shipsLost;
             var soloLossesToDestroyedRatio = statistics.soloLosses / (double)shipsDestroyed;
 
             if (destroyedToLostRatio <= 0.2 && soloLossesToDestroyedRatio >= 0.7)

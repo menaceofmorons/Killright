@@ -111,6 +111,7 @@ mod tests {
             general_style: "Unknown".to_string(),
             checked_at_utc: "2026-09-22T00:00:00Z".to_string(),
             no_history_marker,
+            pod_losses: 0,
         }
     }
 

@@ -103,6 +103,7 @@ public sealed class zKillClient : IzKillClient
                 return new zKillStatisticsResult(zKillStatisticsOutcome.Failure, null);
 
             statistics.podKills = ExtractPodKills(statistics);
+            statistics.podLosses = ExtractPodLosses(statistics);
 
             return new zKillStatisticsResult(zKillStatisticsOutcome.Success, statistics);
         }
@@ -177,6 +178,13 @@ public sealed class zKillClient : IzKillClient
     {
         return statistics.groups is not null && statistics.groups.TryGetValue(CapsuleShipGroupId, out var group)
             ? group.shipsDestroyed
+            : 0;
+    }
+
+    private static int ExtractPodLosses(zKillStatistics statistics)
+    {
+        return statistics.groups is not null && statistics.groups.TryGetValue(CapsuleShipGroupId, out var group)
+            ? group.shipsLost
             : 0;
     }
 

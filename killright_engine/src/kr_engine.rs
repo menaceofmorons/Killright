@@ -13,9 +13,6 @@ pub mod repositories;
 #[path = "shared/mod_shared.rs"]
 pub mod shared;
 
-#[path = "ship_library/mod_ship_library.rs"]
-pub mod ship_library;
-
 #[path = "threat_analysis/mod_threat_analysis.rs"]
 pub mod threat_analysis;
 

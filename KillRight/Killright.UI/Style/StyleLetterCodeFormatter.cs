@@ -33,10 +33,6 @@ public static class StyleLetterCodeFormatter
             StyleClassification.Gang => Strings.Get("Style.LetterCode.Gang"),
             StyleClassification.Blob => Strings.Get("Style.LetterCode.Blob"),
             StyleClassification.Fleet => Strings.Get("Style.LetterCode.Fleet"),
-            StyleClassification.Miner => Strings.Get("Style.LetterCode.Miner"),
-            StyleClassification.Explorer => Strings.Get("Style.LetterCode.Explorer"),
-            StyleClassification.Hauler => Strings.Get("Style.LetterCode.Hauler"),
-            StyleClassification.PI => Strings.Get("Style.LetterCode.Pi"),
             _ => Strings.Get("Style.LetterCode.Unknown")
         };
 

@@ -36,7 +36,8 @@ public sealed class DuckDbzKillStatisticsCache : IzKillStatisticsCache
                                      months_processed,
                                      no_history_marker,
                                      checked_at_utc,
-                                     pod_kills
+                                     pod_kills,
+                                     pod_losses
                               FROM main.zkill_statistics_cache
                               WHERE character_id = {characterId}
                               LIMIT 1;
@@ -50,6 +51,9 @@ public sealed class DuckDbzKillStatisticsCache : IzKillStatisticsCache
         var monthsProcessed = reader.GetNullableBoolean(8);
 
         if (monthsProcessed != true)
+            return Task.FromResult<zKillStatistics?>(null);
+
+        if (reader.GetNullableInt32(12) is null)
             return Task.FromResult<zKillStatistics?>(null);
 
         var checkedAtUtc = reader.GetDateTimeOffset(10);
@@ -69,7 +73,8 @@ public sealed class DuckDbzKillStatisticsCache : IzKillStatisticsCache
             GeneralStyle = reader.GetString(7),
             NoHistory = reader.GetBoolean(9),
             CheckedAtUtc = checkedAtUtc,
-            PodKills = reader.GetNullableInt32(11) ?? 0
+            PodKills = reader.GetNullableInt32(11) ?? 0,
+            PodLosses = reader.GetInt32(12)
         };
 
         return Task.FromResult<zKillStatistics?>(record.ToStatistics());
@@ -104,7 +109,8 @@ public sealed class DuckDbzKillStatisticsCache : IzKillStatisticsCache
                                          months_processed,
                                          no_history_marker,
                                          checked_at_utc,
-                                         pod_kills
+                                         pod_kills,
+                                         pod_losses
                                   FROM main.zkill_statistics_cache
                                   WHERE character_id IN ({string.Join(", ", chunk)});
                                   """;
@@ -114,6 +120,9 @@ public sealed class DuckDbzKillStatisticsCache : IzKillStatisticsCache
             while (reader.Read())
             {
                 if (reader.GetNullableBoolean(8) != true)
+                    continue;
+
+                if (reader.GetNullableInt32(12) is null)
                     continue;
 
                 var checkedAtUtc = reader.GetDateTimeOffset(10);
@@ -133,7 +142,8 @@ public sealed class DuckDbzKillStatisticsCache : IzKillStatisticsCache
                     GeneralStyle = reader.GetString(7),
                     NoHistory = reader.GetBoolean(9),
                     CheckedAtUtc = checkedAtUtc,
-                    PodKills = reader.GetNullableInt32(11) ?? 0
+                    PodKills = reader.GetNullableInt32(11) ?? 0,
+                    PodLosses = reader.GetInt32(12)
                 };
 
                 results[record.CharacterId] = record.ToStatistics();
@@ -180,7 +190,8 @@ public sealed class DuckDbzKillStatisticsCache : IzKillStatisticsCache
                 months_processed,
                 no_history_marker,
                 checked_at_utc,
-                pod_kills
+                pod_kills,
+                pod_losses
             ) VALUES (
                 {record.CharacterId},
                 {record.ShipsDestroyed},
@@ -193,7 +204,8 @@ public sealed class DuckDbzKillStatisticsCache : IzKillStatisticsCache
                 {SqlValueFormatter.Bool(true)},
                 {SqlValueFormatter.Bool(record.NoHistory)},
                 {SqlValueFormatter.Date(record.CheckedAtUtc)},
-                {record.PodKills}
+                {record.PodKills},
+                {record.PodLosses}
             );
             """;
         insertCommand.ExecuteNonQuery();

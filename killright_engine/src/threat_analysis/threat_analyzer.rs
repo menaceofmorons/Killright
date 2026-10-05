@@ -105,7 +105,7 @@ pub(crate) fn calculate_survivability_score(
     };
 
     let kills = statistics.ships_destroyed;
-    let losses = statistics.ships_lost;
+    let losses = statistics.ship_losses();
 
     if kills <= 0 && losses <= 0 {
         return 0;
@@ -139,7 +139,9 @@ pub(crate) fn calculate_loss_quality_score(
         return 0;
     };
 
-    if statistics.ships_lost <= 0 {
+    let ship_losses = statistics.ship_losses();
+
+    if ship_losses <= 0 {
         return if statistics.ships_destroyed > 0 {
             configuration.no_losses_with_kills_score
         } else {
@@ -147,7 +149,7 @@ pub(crate) fn calculate_loss_quality_score(
         };
     }
 
-    let solo_loss_ratio = statistics.solo_losses as f64 / statistics.ships_lost as f64;
+    let solo_loss_ratio = (statistics.solo_losses as f64 / ship_losses as f64).min(1.0);
 
     let style_bands = configuration
         .styles
@@ -330,6 +332,7 @@ mod tests {
             general_style: "Unknown".to_string(),
             checked_at_utc: "2026-09-22T00:00:00Z".to_string(),
             no_history_marker,
+            pod_losses: 0,
         }
     }
 
@@ -489,5 +492,50 @@ mod tests {
         );
 
         assert_eq!(result.score, 0);
+    }
+
+    #[test]
+    fn survivability_uses_ship_losses_excluding_pod_losses() {
+        let configuration = configuration();
+        let mut with_pods = statistics(100, 60, false);
+        with_pods.pod_losses = 50;
+        let without_pods = statistics(100, 10, false);
+
+        assert_eq!(
+            calculate_survivability_score(&configuration.survivability, Some(&with_pods)),
+            calculate_survivability_score(&configuration.survivability, Some(&without_pods))
+        );
+    }
+
+    #[test]
+    fn only_pod_losses_count_as_no_losses_for_survivability_and_loss_quality() {
+        let configuration = configuration();
+        let mut with_pod_losses = statistics(100, 20, false);
+        with_pod_losses.pod_losses = 20;
+        let no_losses = statistics(100, 0, false);
+
+        assert_eq!(
+            calculate_survivability_score(&configuration.survivability, Some(&with_pod_losses)),
+            calculate_survivability_score(&configuration.survivability, Some(&no_losses))
+        );
+        assert_eq!(
+            calculate_loss_quality_score(&configuration.loss_quality, Some(&with_pod_losses)),
+            calculate_loss_quality_score(&configuration.loss_quality, Some(&no_losses))
+        );
+    }
+
+    #[test]
+    fn loss_quality_solo_loss_ratio_never_exceeds_one() {
+        let configuration = configuration();
+        let mut inflated = statistics(100, 20, false);
+        inflated.pod_losses = 10;
+        inflated.solo_losses = 20;
+        let mut capped = statistics(100, 10, false);
+        capped.solo_losses = 10;
+
+        assert_eq!(
+            calculate_loss_quality_score(&configuration.loss_quality, Some(&inflated)),
+            calculate_loss_quality_score(&configuration.loss_quality, Some(&capped))
+        );
     }
 }

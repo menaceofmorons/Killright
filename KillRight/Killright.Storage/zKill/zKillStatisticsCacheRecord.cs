@@ -12,6 +12,7 @@ public sealed class zKillStatisticsCacheRecord
     public required int ShipsLost { get; init; }
     public required int SoloLosses { get; init; }
     public required int PodKills { get; init; }
+    public required int PodLosses { get; init; }
     public required string GeneralStyle { get; init; }
     public required bool NoHistory { get; init; }
     public required DateTimeOffset CheckedAtUtc { get; init; }
@@ -27,6 +28,7 @@ public sealed class zKillStatisticsCacheRecord
             shipsLost = ShipsLost,
             soloLosses = SoloLosses,
             podKills = PodKills,
+            podLosses = PodLosses,
             NoHistory = NoHistory
         };
     }
@@ -48,6 +50,7 @@ public sealed class zKillStatisticsCacheRecord
             ShipsLost = statistics.shipsLost,
             SoloLosses = statistics.soloLosses,
             PodKills = statistics.podKills,
+            PodLosses = statistics.podLosses,
             GeneralStyle = generalStyle,
             NoHistory = noHistory,
             CheckedAtUtc = checkedAtUtc

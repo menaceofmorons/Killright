@@ -6,4 +6,7 @@ public sealed class zKillStatisticsGroupBreakdown
 {
     [JsonPropertyName("shipsDestroyed")]
     public int shipsDestroyed { get; set; }
+
+    [JsonPropertyName("shipsLost")]
+    public int shipsLost { get; set; }
 }

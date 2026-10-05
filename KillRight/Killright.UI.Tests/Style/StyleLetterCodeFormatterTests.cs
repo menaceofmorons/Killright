@@ -22,13 +22,6 @@ public sealed class StyleLetterCodeFormatterTests
     }
 
     [Theory]
-    [InlineData(StyleClassification.Miner, "U")]
-    public void FormatGeneral_RecentOnlyValue_FallsBackToUnknown(StyleClassification style, string expected)
-    {
-        Assert.Equal(expected, StyleLetterCodeFormatter.FormatGeneral(style, isPodder: false));
-    }
-
-    [Theory]
     [InlineData(StyleClassification.Unknown, "U")]
     [InlineData(StyleClassification.Inactive, "I")]
     [InlineData(StyleClassification.Victim, "V")]
@@ -36,10 +29,6 @@ public sealed class StyleLetterCodeFormatterTests
     [InlineData(StyleClassification.Gang, "G")]
     [InlineData(StyleClassification.Blob, "B")]
     [InlineData(StyleClassification.Fleet, "F")]
-    [InlineData(StyleClassification.Miner, "M")]
-    [InlineData(StyleClassification.Explorer, "E")]
-    [InlineData(StyleClassification.Hauler, "H")]
-    [InlineData(StyleClassification.PI, "P")]
     public void FormatRecent_KnownValue_ReturnsLetterCode(StyleClassification style, string expected)
     {
         Assert.Equal(expected, StyleLetterCodeFormatter.FormatRecent(style, isPodder: false));

@@ -10,9 +10,5 @@ public enum StyleClassification
     GangBeginner,
     Gang,
     Blob,
-    Fleet,
-    Miner,
-    Explorer,
-    Hauler,
-    PI
+    Fleet
 }

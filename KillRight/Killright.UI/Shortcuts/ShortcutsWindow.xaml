@@ -71,12 +71,6 @@
                     </ListBoxItem>
                     <ListBoxItem>
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="{x:Static resources:UiText.ShortcutsStyleCodeExplorer}" FontWeight="Bold" Width="24" />
-                            <TextBlock Text="{x:Static resources:UiText.ShortcutsStyleWordExplorer}" />
-                        </StackPanel>
-                    </ListBoxItem>
-                    <ListBoxItem>
-                        <StackPanel Orientation="Horizontal">
                             <TextBlock Text="{x:Static resources:UiText.ShortcutsStyleCodeFleet}" FontWeight="Bold" Width="24" />
                             <TextBlock Text="{x:Static resources:UiText.ShortcutsStyleWordFleet}" />
                         </StackPanel>
@@ -89,26 +83,8 @@
                     </ListBoxItem>
                     <ListBoxItem>
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="{x:Static resources:UiText.ShortcutsStyleCodeHauler}" FontWeight="Bold" Width="24" />
-                            <TextBlock Text="{x:Static resources:UiText.ShortcutsStyleWordHauler}" />
-                        </StackPanel>
-                    </ListBoxItem>
-                    <ListBoxItem>
-                        <StackPanel Orientation="Horizontal">
                             <TextBlock Text="{x:Static resources:UiText.ShortcutsStyleCodeInactive}" FontWeight="Bold" Width="24" />
                             <TextBlock Text="{x:Static resources:UiText.ShortcutsStyleWordInactive}" />
-                        </StackPanel>
-                    </ListBoxItem>
-                    <ListBoxItem>
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="{x:Static resources:UiText.ShortcutsStyleCodeMiner}" FontWeight="Bold" Width="24" />
-                            <TextBlock Text="{x:Static resources:UiText.ShortcutsStyleWordMiner}" />
-                        </StackPanel>
-                    </ListBoxItem>
-                    <ListBoxItem>
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="{x:Static resources:UiText.ShortcutsStyleCodePi}" FontWeight="Bold" Width="24" />
-                            <TextBlock Text="{x:Static resources:UiText.ShortcutsStyleWordPi}" />
                         </StackPanel>
                     </ListBoxItem>
                     <ListBoxItem>

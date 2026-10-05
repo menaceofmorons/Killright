@@ -299,6 +299,10 @@ public sealed class KillRightDatabase
         using var addPodKills = connection.CreateCommand();
         addPodKills.CommandText = "ALTER TABLE main.zkill_statistics_cache ADD COLUMN IF NOT EXISTS pod_kills INTEGER;";
         addPodKills.ExecuteNonQuery();
+
+        using var addPodLosses = connection.CreateCommand();
+        addPodLosses.CommandText = "ALTER TABLE main.zkill_statistics_cache ADD COLUMN IF NOT EXISTS pod_losses INTEGER;";
+        addPodLosses.ExecuteNonQuery();
     }
 
     private static void CreatePilotLastKillmailCache(DuckDBConnection connection)

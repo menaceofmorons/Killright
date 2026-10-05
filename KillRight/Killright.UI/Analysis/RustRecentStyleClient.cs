@@ -252,10 +252,6 @@ public sealed class RustRecentStyleClient
             RecentStyleContract.Gang => StyleClassification.Gang,
             RecentStyleContract.Blob => StyleClassification.Blob,
             RecentStyleContract.Fleet => StyleClassification.Fleet,
-            RecentStyleContract.Miner => StyleClassification.Miner,
-            RecentStyleContract.Explorer => StyleClassification.Explorer,
-            RecentStyleContract.Hauler => StyleClassification.Hauler,
-            RecentStyleContract.PI => StyleClassification.PI,
             _ => StyleClassification.Unknown
         };
     }
@@ -274,10 +270,6 @@ public sealed class RustRecentStyleClient
         public const string Gang = "Gang";
         public const string Blob = "Blob";
         public const string Fleet = "Fleet";
-        public const string Miner = "Miner";
-        public const string Explorer = "Explorer";
-        public const string Hauler = "Hauler";
-        public const string PI = "PI";
     }
 
     private sealed record PilotAnalysisRequest(long character_id, IReadOnlyList<long>? scanned_character_ids);

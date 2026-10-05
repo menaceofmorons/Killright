@@ -48,6 +48,53 @@ public sealed class zKillClientTests
     }
 
     [Fact]
+    public async Task GetStatisticsAsync_SuccessWithCapsuleGroup_ExtractsPodLosses()
+    {
+        var handler = new ScriptedHttpMessageHandler()
+            .OnUriContaining("api/stats/characterID/95465499", HttpStatusCode.OK, """
+                {"shipsDestroyed":42,"soloKills":10,"soloRatio":55.5,"avgGangSize":3.2,"shipsLost":20,"soloLosses":1,
+                 "groups":{"29":{"groupID":29,"shipsLost":13,"pointsLost":13,"iskLost":182779801,"shipsDestroyed":39,"pointsDestroyed":39,"iskDestroyed":1127784}}}
+                """);
+
+        var client = new zKillClient(new HttpClient(handler));
+
+        var result = await client.GetStatisticsAsync(95465499);
+
+        Assert.Equal(13, result.Statistics!.podLosses);
+        Assert.Equal(20, result.Statistics.shipsLost);
+    }
+
+    [Fact]
+    public async Task GetStatisticsAsync_CapturedLukasNaariiResponse_ExtractsPodKillsAndPodLosses()
+    {
+        var json = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "zKill", "Fixtures", "stats-lukas-naarii.json"));
+        var handler = new ScriptedHttpMessageHandler()
+            .OnUriContaining("api/stats/characterID/2116955190", HttpStatusCode.OK, json);
+
+        var client = new zKillClient(new HttpClient(handler));
+
+        var result = await client.GetStatisticsAsync(2116955190);
+
+        Assert.Equal(zKillStatisticsOutcome.Success, result.Outcome);
+        Assert.Equal(136, result.Statistics!.podKills);
+        Assert.Equal(99, result.Statistics.podLosses);
+        Assert.Equal(355, result.Statistics.shipsLost);
+    }
+
+    [Fact]
+    public async Task GetStatisticsAsync_SuccessWithoutCapsuleGroup_PodLossesIsZero()
+    {
+        var handler = new ScriptedHttpMessageHandler()
+            .OnUriContaining("api/stats/characterID/91321792", HttpStatusCode.OK, """{"shipsDestroyed":5,"soloKills":1,"soloRatio":20,"avgGangSize":2,"shipsLost":3,"soloLosses":0}""");
+
+        var client = new zKillClient(new HttpClient(handler));
+
+        var result = await client.GetStatisticsAsync(91321792);
+
+        Assert.Equal(0, result.Statistics!.podLosses);
+    }
+
+    [Fact]
     public async Task GetStatisticsAsync_SuccessWithoutCapsuleGroup_PodKillsIsZero()
     {
         var handler = new ScriptedHttpMessageHandler()

@@ -18,6 +18,13 @@ pub struct ZKillStatisticsSnapshot {
     pub general_style: String,
     pub checked_at_utc: String,
     pub no_history_marker: bool,
+    pub pod_losses: i32,
+}
+
+impl ZKillStatisticsSnapshot {
+    pub fn ship_losses(&self) -> i32 {
+        (self.ships_lost - self.pod_losses).max(0)
+    }
 }
 
 pub struct ZKillStatisticsRepository {
@@ -46,7 +53,7 @@ impl ZKillStatisticsRepository {
             .join(",");
 
         let sql = format!(
-            "SELECT character_id, ships_destroyed, solo_kills, solo_ratio, avg_gang_size, ships_lost, solo_losses, general_style, checked_at_utc, no_history_marker \
+            "SELECT character_id, ships_destroyed, solo_kills, solo_ratio, avg_gang_size, ships_lost, solo_losses, general_style, checked_at_utc, no_history_marker, pod_losses \
              FROM main.zkill_statistics_cache \
              WHERE character_id IN ({ids});");
 
@@ -56,6 +63,7 @@ impl ZKillStatisticsRepository {
 
         while let Some(row) = rows.next()? {
             let no_history_marker: Option<bool> = row.get(9)?;
+            let pod_losses: Option<i32> = row.get(10)?;
             let snapshot = ZKillStatisticsSnapshot {
                 character_id: row.get(0)?,
                 ships_destroyed: row.get(1)?,
@@ -67,6 +75,7 @@ impl ZKillStatisticsRepository {
                 general_style: row.get(7)?,
                 checked_at_utc: row.get(8)?,
                 no_history_marker: no_history_marker.unwrap_or(false),
+                pod_losses: pod_losses.unwrap_or(0),
             };
 
             results.insert(snapshot.character_id, snapshot);
@@ -82,7 +91,7 @@ impl ZKillStatisticsRepository {
         let connection = open_connection(&self.database_path)?;
 
         let sql = format!(
-            "SELECT character_id, ships_destroyed, solo_kills, solo_ratio, avg_gang_size, ships_lost, solo_losses, general_style, checked_at_utc, no_history_marker \
+            "SELECT character_id, ships_destroyed, solo_kills, solo_ratio, avg_gang_size, ships_lost, solo_losses, general_style, checked_at_utc, no_history_marker, pod_losses \
              FROM main.zkill_statistics_cache \
              WHERE character_id = {} \
              LIMIT 1;",
@@ -94,6 +103,7 @@ impl ZKillStatisticsRepository {
 
         if let Some(row) = rows.next()? {
             let no_history_marker: Option<bool> = row.get(9)?;
+            let pod_losses: Option<i32> = row.get(10)?;
 
             return Ok(Some(ZKillStatisticsSnapshot {
                 character_id: row.get(0)?,
@@ -106,6 +116,7 @@ impl ZKillStatisticsRepository {
                 general_style: row.get(7)?,
                 checked_at_utc: row.get(8)?,
                 no_history_marker: no_history_marker.unwrap_or(false),
+                pod_losses: pod_losses.unwrap_or(0),
             }));
         }
 
@@ -143,11 +154,12 @@ mod tests {
                     solo_losses INTEGER NOT NULL,
                     general_style TEXT NOT NULL,
                     checked_at_utc TEXT NOT NULL,
-                    no_history_marker BOOLEAN
+                    no_history_marker BOOLEAN,
+                    pod_losses INTEGER
                 );
                 INSERT INTO zkill_statistics_cache VALUES
-                    (95465499, 100, 20, 0.2, 4.5, 10, 1, 'Gang', '2026-09-20T00:00:00+00:00', FALSE),
-                    (91321792, 5, 0, 0.0, 6.0, 1, 0, 'Fleet', '2026-09-20T00:00:00+00:00', NULL);",
+                    (95465499, 100, 20, 0.2, 4.5, 10, 1, 'Gang', '2026-09-20T00:00:00+00:00', FALSE, 3),
+                    (91321792, 5, 0, 0.0, 6.0, 1, 0, 'Fleet', '2026-09-20T00:00:00+00:00', NULL, NULL);",
             )
             .unwrap();
 
@@ -163,5 +175,43 @@ mod tests {
         assert_eq!(batch[&95465499], first);
         assert_eq!(batch[&91321792], second);
         assert!(!batch.contains_key(&5));
+    }
+
+    #[test]
+    fn ship_losses_excludes_pod_losses_and_missing_pod_losses_read_as_zero() {
+        let path = std::env::temp_dir().join(format!("statistics-repo-pod-{}.duckdb", unique_suffix()));
+        let connection = Connection::open(&path).unwrap();
+        connection
+            .execute_batch(
+                "CREATE TABLE zkill_statistics_cache (
+                    character_id BIGINT PRIMARY KEY,
+                    ships_destroyed INTEGER NOT NULL,
+                    solo_kills INTEGER NOT NULL,
+                    solo_ratio DOUBLE NOT NULL,
+                    avg_gang_size DOUBLE NOT NULL,
+                    ships_lost INTEGER NOT NULL,
+                    solo_losses INTEGER NOT NULL,
+                    general_style TEXT NOT NULL,
+                    checked_at_utc TEXT NOT NULL,
+                    no_history_marker BOOLEAN,
+                    pod_losses INTEGER
+                );
+                INSERT INTO zkill_statistics_cache VALUES
+                    (2116955190, 600, 280, 0.4, 5.0, 355, 127, 'Gang', '2026-09-20T00:00:00+00:00', FALSE, 99),
+                    (95465499, 5, 0, 0.0, 6.0, 4, 0, 'Fleet', '2026-09-20T00:00:00+00:00', FALSE, NULL);",
+            )
+            .unwrap();
+        drop(connection);
+
+        let repository = ZKillStatisticsRepository::new(path.clone());
+        let with_pods = repository.get_for_character(2116955190).unwrap().unwrap();
+        let without_column_value = repository.get_for_character(95465499).unwrap().unwrap();
+
+        std::fs::remove_file(&path).unwrap();
+
+        assert_eq!(with_pods.pod_losses, 99);
+        assert_eq!(with_pods.ship_losses(), 256);
+        assert_eq!(without_column_value.pod_losses, 0);
+        assert_eq!(without_column_value.ship_losses(), 4);
     }
 }
