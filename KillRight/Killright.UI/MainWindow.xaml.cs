@@ -32,6 +32,7 @@ using Killright.UI.Resources;
 using Killright.UI.Scan;
 using Killright.UI.Shortcuts;
 using Killright.UI.Style;
+using Killright.UI.Theme;
 using Killright.UI.UiState;
 using Killright.UI.ViewModels;
 
@@ -50,6 +51,7 @@ public partial class MainWindow : Window
     private bool _menuModalOpen;
     private InfoSheetWindow? _infoSheet;
     private PilotReportRow? _pendingHoverRow;
+    private IReadOnlySet<string>? _previousScanKeys;
 
     public MainWindow()
     {
@@ -123,6 +125,11 @@ public partial class MainWindow : Window
         Height = state.WindowHeight;
         Left = state.WindowLeft;
         Top = state.WindowTop;
+    }
+
+    internal void ApplyPreviewNewPilotColor(string? hex)
+    {
+        AppearanceManager.ApplyNewPilotColor(hex, App.Settings.HighlightOpacity);
     }
 
     internal void ApplyPreviewColumns(UiStateModel state)
@@ -802,6 +809,7 @@ public partial class MainWindow : Window
 
                 _hoverTimer.Stop();
                 _pendingHoverRow = null;
+                _previousScanKeys = NewPilotFlagger.Apply(rows, _previousScanKeys);
                 _viewModel.Pilots.Clear();
 
                 foreach (var row in rows)

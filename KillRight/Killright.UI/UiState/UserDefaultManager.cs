@@ -15,7 +15,8 @@ public static class UserDefaultManager
             GridFontTier = state.GridFontTier,
             Columns = state.Columns,
             PilotHighlightColorHex = state.PilotHighlightColorHex,
-            RelatedHighlightColorHex = state.RelatedHighlightColorHex
+            RelatedHighlightColorHex = state.RelatedHighlightColorHex,
+            NewPilotColorHex = state.NewPilotColorHex
         };
     }
 
@@ -48,7 +49,8 @@ public static class UserDefaultManager
             GridFontTier = snapshot.GridFontTier,
             Columns = UiStateDefaults.ReconcileColumns(snapshot.Columns),
             PilotHighlightColorHex = snapshot.PilotHighlightColorHex,
-            RelatedHighlightColorHex = snapshot.RelatedHighlightColorHex
+            RelatedHighlightColorHex = snapshot.RelatedHighlightColorHex,
+            NewPilotColorHex = snapshot.NewPilotColorHex
         };
     }
 }

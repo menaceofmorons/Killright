@@ -55,6 +55,8 @@ public static class UiText
     public static string MenuAppearanceHighlightColours => Strings.Get("Menu.Appearance.HighlightColours");
     public static string MenuAppearanceHighlightPilot => Strings.Get("Menu.Appearance.HighlightPilot");
     public static string MenuAppearanceHighlightRelated => Strings.Get("Menu.Appearance.HighlightRelated");
+    public static string MenuAppearanceHighlightNewPilot => Strings.Get("Menu.Appearance.HighlightNewPilot");
+    public static string MenuAppearanceHighlightNewPilotDefault => Strings.Get("Menu.Appearance.HighlightNewPilotDefault");
     public static string MenuTabColumns => Strings.Get("Menu.Tab.Columns");
     public static string MenuTabIgnoreList => Strings.Get("Menu.Tab.IgnoreList");
     public static string MenuIgnoreListSectionTitle => Strings.Get("Menu.IgnoreList.SectionTitle");

@@ -21,6 +21,7 @@ public class UserDefaultManagerTests
             Columns = new[] { new ColumnState { Id = ColumnIds.Pilot, DisplayIndex = 0, Width = 170, Visible = true } },
             PilotHighlightColorHex = "#FF112233",
             RelatedHighlightColorHex = "#FF445566",
+            NewPilotColorHex = "#FF778899",
             DeveloperTabRevealed = true,
             IgnoreListEntries = new[] { new IgnoreListEntry { Id = 1, Type = IgnoreEntryType.Pilot, Name = "T'ral Vsengne" } }
         };
@@ -37,6 +38,29 @@ public class UserDefaultManagerTests
         Assert.Single(snapshot.Columns);
         Assert.Equal(state.PilotHighlightColorHex, snapshot.PilotHighlightColorHex);
         Assert.Equal(state.RelatedHighlightColorHex, snapshot.RelatedHighlightColorHex);
+        Assert.Equal("#FF778899", snapshot.NewPilotColorHex);
+    }
+
+    [Fact]
+    public void ApplyTo_RestoresNewPilotColorIncludingThemeDefaultNull()
+    {
+        var state = new UiStateModel { NewPilotColorHex = "#FF112233" };
+
+        var restoredColour = UserDefaultManager.ApplyTo(
+            state, new UserDefaultSnapshot { NewPilotColorHex = "#FFAABBCC" }, 0, 0, 1920, 1080);
+        var restoredDefault = UserDefaultManager.ApplyTo(
+            state, new UserDefaultSnapshot { NewPilotColorHex = null }, 0, 0, 1920, 1080);
+
+        Assert.Equal("#FFAABBCC", restoredColour.NewPilotColorHex);
+        Assert.Null(restoredDefault.NewPilotColorHex);
+    }
+
+    [Fact]
+    public void SystemDefault_NewPilotColorIsThemeDefaultNull()
+    {
+        Assert.Null(UiStateDefaults.NewPilotColorHex);
+        Assert.Null(new UiStateModel().NewPilotColorHex);
+        Assert.Null(new UserDefaultSnapshot().NewPilotColorHex);
     }
 
     [Fact]

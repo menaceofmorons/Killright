@@ -5,7 +5,7 @@
         xmlns:resources="clr-namespace:Killright.UI.Resources"
         Title="{x:Static resources:UiText.WindowTitleMenu}"
         Width="420"
-        Height="380"
+        Height="440"
         ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False"
@@ -79,6 +79,8 @@
                     <WrapPanel x:Name="PilotSwatchPanel" Orientation="Horizontal" />
                     <TextBlock Text="{x:Static resources:UiText.MenuAppearanceHighlightRelated}" Margin="0,8,0,2" />
                     <WrapPanel x:Name="RelatedSwatchPanel" Orientation="Horizontal" />
+                    <TextBlock Text="{x:Static resources:UiText.MenuAppearanceHighlightNewPilot}" Margin="0,8,0,2" />
+                    <WrapPanel x:Name="NewPilotSwatchPanel" Orientation="Horizontal" />
                 </StackPanel>
             </TabItem>
             <TabItem Header="{x:Static resources:UiText.MenuTabColumns}">

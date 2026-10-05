@@ -20,6 +20,7 @@
                              UseAeroCaptionButtons="False" />
     </shell:WindowChrome.WindowChrome>
     <Window.Resources>
+        <controls:SpaceIndentConverter x:Key="SpaceIndentConverter" />
         <Style x:Key="ColumnHeaderStyle" TargetType="DataGridColumnHeader">
             <Setter Property="Background" Value="{DynamicResource Brush.Header.Background}" />
             <Setter Property="Foreground" Value="{DynamicResource Brush.Header.Text}" />
@@ -43,7 +44,32 @@
         <Style x:Key="CellStyleCentered" TargetType="DataGridCell" BasedOn="{StaticResource CellStyle}">
             <Setter Property="HorizontalContentAlignment" Value="Center" />
         </Style>
-        <Style x:Key="PilotCellStyle" TargetType="DataGridCell" BasedOn="{StaticResource CellStyle}">
+        <Style x:Key="IndentedCellStyle" TargetType="DataGridCell" BasedOn="{StaticResource CellStyle}">
+            <Setter Property="Padding">
+                <Setter.Value>
+                    <MultiBinding Converter="{StaticResource SpaceIndentConverter}">
+                        <Binding RelativeSource="{RelativeSource Self}" Path="FontSize" />
+                        <Binding RelativeSource="{RelativeSource Self}" Path="FontFamily" />
+                    </MultiBinding>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="DataGridCell">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="PilotCellStyle" TargetType="DataGridCell" BasedOn="{StaticResource IndentedCellStyle}">
             <EventSetter Event="MouseEnter" Handler="PilotCell_MouseEnter" />
             <EventSetter Event="MouseLeave" Handler="PilotCell_MouseLeave" />
         </Style>
@@ -158,7 +184,10 @@
                     <Style TargetType="DataGridRow">
                         <Setter Property="Background" Value="{DynamicResource Brush.Grid.Background}" />
                         <Style.Triggers>
-                            <DataTrigger Binding="{Binding HasHighlight}" Value="True">
+                            <DataTrigger Binding="{Binding RowBackgroundKind}" Value="NewPilot">
+                                <Setter Property="Background" Value="{DynamicResource Brush.Row.NewPilot}" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding RowBackgroundKind}" Value="Highlight">
                                 <Setter Property="Background" Value="{Binding HighlightBrush}" />
                             </DataTrigger>
                         </Style.Triggers>
@@ -218,8 +247,8 @@
                             </Style>
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
-                    <DataGridTextColumn x:Name="ColumnCorporation" Header="{x:Static resources:UiText.GridColumnHeaderCorporation}" Binding="{Binding Corporation}" Width="210" />
-                    <DataGridTextColumn x:Name="ColumnAlliance" Header="{x:Static resources:UiText.GridColumnHeaderAlliance}" Binding="{Binding Alliance}" Width="210" />
+                    <DataGridTextColumn x:Name="ColumnCorporation" Header="{x:Static resources:UiText.GridColumnHeaderCorporation}" Binding="{Binding Corporation}" Width="210" CellStyle="{StaticResource IndentedCellStyle}" />
+                    <DataGridTextColumn x:Name="ColumnAlliance" Header="{x:Static resources:UiText.GridColumnHeaderAlliance}" Binding="{Binding Alliance}" Width="210" CellStyle="{StaticResource IndentedCellStyle}" />
                     <DataGridTextColumn x:Name="ColumnLastActive" Header="{x:Static resources:UiText.GridColumnHeaderLastKill}" Binding="{Binding LastKill}" Width="90" />
                     <DataGridTextColumn x:Name="ColumnNotes" Header="{x:Static resources:UiText.GridColumnHeaderNotes}" Binding="{Binding Notes}" Width="260" />
                     <DataGridTextColumn x:Name="ColumnVerify" Header="{x:Static resources:UiText.GridColumnHeaderVerify}" Binding="{Binding Verify}" Width="70" />

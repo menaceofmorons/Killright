@@ -12,6 +12,8 @@ public static class HighlightColorCalculator
 
     public static Color ForRelated(Color baseColor, double opacity) => ApplyOpacity(baseColor, opacity);
 
+    public static Color ForNewPilot(Color baseColor, double opacity) => ApplyOpacity(baseColor, opacity);
+
     private static Color ApplyOpacity(Color color, double opacity)
     {
         var alpha = (byte)Math.Round(Math.Clamp(opacity, 0d, 1d) * 255d);

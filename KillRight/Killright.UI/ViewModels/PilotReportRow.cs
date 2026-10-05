@@ -5,6 +5,13 @@ using Killright.UI.Analysis;
 
 namespace Killright.UI.ViewModels;
 
+public enum RowBackgroundKind
+{
+    None,
+    NewPilot,
+    Highlight
+}
+
 public class PilotReportRow : INotifyPropertyChanged
 {
     public long? CharacterId { get; set; }
@@ -36,10 +43,27 @@ public class PilotReportRow : INotifyPropertyChanged
     public Brush? HighlightBrush
     {
         get => _highlightBrush;
-        set => SetField(ref _highlightBrush, value, nameof(HasHighlight));
+        set
+        {
+            SetField(ref _highlightBrush, value, nameof(HasHighlight));
+            OnPropertyChanged(nameof(RowBackgroundKind));
+        }
     }
 
     public bool HasHighlight => _highlightBrush is not null;
+
+    private bool _isNewPilot;
+    public bool IsNewPilot
+    {
+        get => _isNewPilot;
+        set => SetField(ref _isNewPilot, value, nameof(RowBackgroundKind));
+    }
+
+    public RowBackgroundKind RowBackgroundKind => _highlightBrush is not null
+        ? RowBackgroundKind.Highlight
+        : _isNewPilot
+            ? RowBackgroundKind.NewPilot
+            : RowBackgroundKind.None;
 
     private string _relationshipStrengthDisplay = "-";
     public string RelationshipStrengthDisplay
@@ -56,6 +80,9 @@ public class PilotReportRow : INotifyPropertyChanged
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
+
+    private void OnPropertyChanged(string propertyName) =>
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 
     private void SetField<T>(ref T field, T value, string? alsoNotify = null, [CallerMemberName] string? propertyName = null)
     {

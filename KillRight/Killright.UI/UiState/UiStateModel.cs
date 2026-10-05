@@ -81,6 +81,8 @@ public sealed record UserDefaultSnapshot
     public string PilotHighlightColorHex { get; init; } = UiStateDefaults.PilotHighlightColorHex;
 
     public string RelatedHighlightColorHex { get; init; } = UiStateDefaults.RelatedHighlightColorHex;
+
+    public string? NewPilotColorHex { get; init; } = UiStateDefaults.NewPilotColorHex;
 }
 
 public sealed record UiStateModel
@@ -109,6 +111,8 @@ public sealed record UiStateModel
 
     public string RelatedHighlightColorHex { get; init; } = UiStateDefaults.RelatedHighlightColorHex;
 
+    public string? NewPilotColorHex { get; init; } = UiStateDefaults.NewPilotColorHex;
+
     public IReadOnlyList<IgnoreListEntry> IgnoreListEntries { get; init; } = Array.Empty<IgnoreListEntry>();
 
     public UserDefaultSnapshot? UserDefault { get; init; }
@@ -125,6 +129,7 @@ public static class UiStateDefaults
     public const bool DeveloperTabRevealed = false;
     public const string PilotHighlightColorHex = "#FFADD8E6";
     public const string RelatedHighlightColorHex = "#FF90EE90";
+    public const string? NewPilotColorHex = null;
 
     public static readonly IReadOnlyList<(string Id, double Width, string Label, bool RequiresDeveloperMode, bool DefaultVisible)> ColumnCatalog = new[]
     {

@@ -84,6 +84,8 @@
   <data name="Menu.Appearance.HighlightColours" xml:space="preserve"><value>Highlight Colours</value></data>
   <data name="Menu.Appearance.HighlightPilot" xml:space="preserve"><value>Pilot</value></data>
   <data name="Menu.Appearance.HighlightRelated" xml:space="preserve"><value>Related</value></data>
+  <data name="Menu.Appearance.HighlightNewPilot" xml:space="preserve"><value>New pilot</value></data>
+  <data name="Menu.Appearance.HighlightNewPilotDefault" xml:space="preserve"><value>Default</value></data>
   <data name="Menu.Tab.Columns" xml:space="preserve"><value>Columns</value></data>
   <data name="Menu.Tab.IgnoreList" xml:space="preserve"><value>Ignore List</value></data>
   <data name="Menu.IgnoreList.SectionTitle" xml:space="preserve"><value>Ignore List</value></data>

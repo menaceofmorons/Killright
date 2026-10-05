@@ -98,6 +98,7 @@ public partial class App : Application
 
         AppearanceManager.ApplyTheme(UiState.Current.Theme);
         AppearanceManager.ApplyFontTier(UiState.Current.GridFontTier);
+        AppearanceManager.ApplyNewPilotColor(UiState.Current.NewPilotColorHex, Settings.HighlightOpacity);
 
 #if HISTORIC_RELATIONSHIPS
         // Step 19.00.59: the application half of promotion (Design

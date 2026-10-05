@@ -295,6 +295,51 @@ public class UiStateLoaderTests
     }
 
     [Fact]
+    public void SaveThenLoad_RoundTripsNewPilotColorInStateAndUserDefault()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"ui-state-{Guid.NewGuid():N}.json");
+
+        try
+        {
+            var state = new UiStateModel
+            {
+                NewPilotColorHex = "#FFD8B4FE",
+                UserDefault = new UserDefaultSnapshot { NewPilotColorHex = "#FFF8BBD0" }
+            };
+
+            UiStateLoader.Save(state, path);
+            var result = UiStateLoader.LoadOrDefault(path);
+
+            Assert.False(result.WasCorrupt);
+            Assert.Equal("#FFD8B4FE", result.State.NewPilotColorHex);
+            Assert.Equal("#FFF8BBD0", result.State.UserDefault!.NewPilotColorHex);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void SaveThenLoad_ThemeDefaultNewPilotColorStaysNull()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"ui-state-{Guid.NewGuid():N}.json");
+
+        try
+        {
+            UiStateLoader.Save(new UiStateModel(), path);
+            var result = UiStateLoader.LoadOrDefault(path);
+
+            Assert.False(result.WasCorrupt);
+            Assert.Null(result.State.NewPilotColorHex);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void SaveThenLoad_RoundTripsUserDefault()
     {
         var path = Path.Combine(Path.GetTempPath(), $"ui-state-{Guid.NewGuid():N}.json");

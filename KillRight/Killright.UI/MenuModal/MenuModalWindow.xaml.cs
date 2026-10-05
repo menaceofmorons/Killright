@@ -15,7 +15,7 @@ namespace Killright.UI.MenuModal;
 public partial class MenuModalWindow : Window
 {
     private const double DefaultWidth = 420;
-    private const double DefaultHeight = 380;
+    private const double DefaultHeight = 440;
     private const double DeveloperTabWidth = 1100;
     private const double DeveloperTabHeight = 760;
     private const double IgnoreListTabWidth = 640;
@@ -43,6 +43,7 @@ public partial class MenuModalWindow : Window
         RefreshColumnsList();
         RefreshPilotSwatches();
         RefreshRelatedSwatches();
+        RefreshNewPilotSwatches();
         SelectComboBoxItem(IgnoreTypeComboBox, IgnoreEntryType.Pilot.ToString());
         RefreshIgnoreList();
         PilotsFromGridDataGrid.ItemsSource = _owner.Pilots;
@@ -102,9 +103,45 @@ public partial class MenuModalWindow : Window
         });
     }
 
-    private static void BuildSwatchPanel(WrapPanel panel, string selectedHex, Action<string> onSelect)
+    private void RefreshNewPilotSwatches()
+    {
+        void Select(string? hex)
+        {
+            _workingState = _workingState with { NewPilotColorHex = hex };
+            _owner.ApplyPreviewNewPilotColor(hex);
+            RefreshNewPilotSwatches();
+        }
+
+        BuildSwatchPanel(NewPilotSwatchPanel, _workingState.NewPilotColorHex, hex => Select(hex), () => Select(null));
+    }
+
+    private static void BuildSwatchPanel(WrapPanel panel, string? selectedHex, Action<string> onSelect, Action? onSelectDefault = null)
     {
         panel.Children.Clear();
+
+        if (onSelectDefault is not null)
+        {
+            var defaultBorder = new Border
+            {
+                Width = 22,
+                Height = 22,
+                Margin = new Thickness(0, 0, 6, 6),
+                Background = Brushes.Transparent,
+                BorderBrush = selectedHex is null ? Brushes.Black : Brushes.Gray,
+                BorderThickness = new Thickness(2),
+                Cursor = Cursors.Hand,
+                ToolTip = UiText.MenuAppearanceHighlightNewPilotDefault,
+                Child = new TextBlock
+                {
+                    Text = "/",
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center
+                }
+            };
+
+            defaultBorder.MouseLeftButtonDown += (_, _) => onSelectDefault();
+            panel.Children.Add(defaultBorder);
+        }
 
         foreach (var (name, hex) in HighlightSwatchPalette.Swatches)
         {
@@ -450,6 +487,8 @@ public partial class MenuModalWindow : Window
         RefreshColumnsList();
         RefreshPilotSwatches();
         RefreshRelatedSwatches();
+        RefreshNewPilotSwatches();
+        _owner.ApplyPreviewNewPilotColor(_workingState.NewPilotColorHex);
         _owner.ApplyPreviewBounds(_workingState);
         _owner.ApplyPreviewColumns(_workingState);
     }
@@ -476,7 +515,8 @@ public partial class MenuModalWindow : Window
             GridFontTier = UiStateDefaults.DefaultGridFontTier,
             Columns = UiStateDefaults.DefaultColumns,
             PilotHighlightColorHex = UiStateDefaults.PilotHighlightColorHex,
-            RelatedHighlightColorHex = UiStateDefaults.RelatedHighlightColorHex
+            RelatedHighlightColorHex = UiStateDefaults.RelatedHighlightColorHex,
+            NewPilotColorHex = UiStateDefaults.NewPilotColorHex
         };
 
         AlwaysOnTopCheckBox.IsChecked = _workingState.AlwaysOnTop;
@@ -485,6 +525,8 @@ public partial class MenuModalWindow : Window
         RefreshColumnsList();
         RefreshPilotSwatches();
         RefreshRelatedSwatches();
+        RefreshNewPilotSwatches();
+        _owner.ApplyPreviewNewPilotColor(_workingState.NewPilotColorHex);
         _owner.ApplyPreviewBounds(_workingState);
         _owner.ApplyPreviewColumns(_workingState);
     }
@@ -575,6 +617,7 @@ public partial class MenuModalWindow : Window
             AppearanceManager.ApplyTheme(App.UiState.Current.Theme);
             AppearanceManager.ApplyFontTier(App.UiState.Current.GridFontTier);
             _owner.ApplyPreviewColumns(App.UiState.Current);
+            _owner.ApplyPreviewNewPilotColor(App.UiState.Current.NewPilotColorHex);
         }
     }
 
