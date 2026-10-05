@@ -91,8 +91,15 @@ public partial class MainWindow : Window
         }
         else
         {
-            Left = initial.WindowLeft;
-            Top = initial.WindowTop;
+            (Left, Top) = WindowBoundsCalculator.ClampToVirtualScreen(
+                initial.WindowLeft,
+                initial.WindowTop,
+                initial.WindowWidth,
+                initial.WindowHeight,
+                SystemParameters.VirtualScreenLeft,
+                SystemParameters.VirtualScreenTop,
+                SystemParameters.VirtualScreenWidth,
+                SystemParameters.VirtualScreenHeight);
         }
 
         _columnsById = new Dictionary<string, DataGridColumn>
