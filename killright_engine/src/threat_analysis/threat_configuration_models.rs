@@ -16,6 +16,20 @@ pub struct ThreatConfiguration {
     pub recent_activity: RecentActivityConfiguration,
     #[serde(rename = "securityStatus")]
     pub security_status: SecurityStatusConfiguration,
+    pub gating: GatingConfiguration,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct GatingConfiguration {
+    #[serde(rename = "mediumCap")]
+    pub medium_cap: i32,
+    #[serde(rename = "highCap")]
+    pub high_cap: i32,
+    #[serde(rename = "mediumRatioMaximum")]
+    pub medium_ratio_maximum: f64,
+    #[serde(rename = "highRatioBelow")]
+    pub high_ratio_below: f64,
+    pub floor: i32,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -143,7 +157,7 @@ pub struct SecurityStatusConfiguration {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct SecurityStatusBand {
-    #[serde(rename = "minimumSecurityStatus")]
-    pub minimum_security_status: f64,
+    #[serde(rename = "belowSecurityStatus")]
+    pub below_security_status: f64,
     pub score: i32,
 }

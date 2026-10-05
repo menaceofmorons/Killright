@@ -148,11 +148,17 @@
     },
     "securityStatus": {
       "bands": [
-        { "minimumSecurityStatus": 0.0, "score": 0 },
-        { "minimumSecurityStatus": -2.0, "score": 1 },
-        { "minimumSecurityStatus": -5.0, "score": 3 },
-        { "minimumSecurityStatus": -10.0, "score": 5 }
+        { "belowSecurityStatus": 0.0, "score": 1 },
+        { "belowSecurityStatus": -2.0, "score": 3 },
+        { "belowSecurityStatus": -5.0, "score": 5 }
       ]
+    },
+    "gating": {
+      "mediumCap": 40,
+      "highCap": 60,
+      "mediumRatioMaximum": 0.5,
+      "highRatioBelow": 1.0,
+      "floor": 1
     }
   },
   "groupDetection": {

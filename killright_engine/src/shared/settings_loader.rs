@@ -149,7 +149,8 @@ mod tests {
                     "noLossesWithKillsScore": 15
                 },
                 "recentActivity": {"points": [{"dailyRate": 0.0, "score": 0.0}, {"dailyRate": 1.0, "score": 10.0}]},
-                "securityStatus": {"bands": [{"minimumSecurityStatus": 0.0, "score": 0}]}
+                "securityStatus": {"bands": [{"belowSecurityStatus": 0.0, "score": 1}]},
+                "gating": {"mediumCap": 40, "highCap": 60, "mediumRatioMaximum": 0.5, "highRatioBelow": 1.0, "floor": 1}
             },
             "groupDetection": {
                 "minimumSharedEvents": 2,
@@ -233,6 +234,86 @@ mod tests {
         assert!(result.is_err());
     }
 
+    fn load_with_replacement(label: &str, from: &str, to: &str) -> Result<EngineSettings, String> {
+        let path = std::env::temp_dir().join(format!("killright-settings-{}-{}.json", label, unique_suffix()));
+        let json = valid_settings_json().replace(from, to);
+        assert_ne!(json, valid_settings_json());
+        fs::write(&path, json).unwrap();
+
+        let result = load_engine_settings_from_path(&path);
+
+        fs::remove_file(&path).unwrap();
+        result
+    }
+
+    #[test]
+    fn load_engine_settings_from_path_reads_gating() {
+        let path = std::env::temp_dir().join(format!("killright-settings-gating-{}.json", unique_suffix()));
+        fs::write(&path, valid_settings_json()).unwrap();
+
+        let settings = load_engine_settings_from_path(&path).unwrap();
+
+        fs::remove_file(&path).unwrap();
+        assert_eq!(settings.threat.gating.medium_cap, 40);
+        assert_eq!(settings.threat.gating.high_cap, 60);
+        assert_eq!(settings.threat.gating.medium_ratio_maximum, 0.5);
+        assert_eq!(settings.threat.gating.high_ratio_below, 1.0);
+        assert_eq!(settings.threat.gating.floor, 1);
+    }
+
+    #[test]
+    fn load_engine_settings_from_path_rejects_cap_out_of_range() {
+        assert!(load_with_replacement("cap-high", "\"mediumCap\": 40", "\"mediumCap\": 101").is_err());
+        assert!(load_with_replacement("cap-low", "\"highCap\": 60", "\"highCap\": 0").is_err());
+        assert!(load_with_replacement("floor-low", "\"floor\": 1", "\"floor\": 0").is_err());
+    }
+
+    #[test]
+    fn load_engine_settings_from_path_rejects_caps_out_of_order() {
+        assert!(load_with_replacement(
+            "caps-order",
+            "\"mediumCap\": 40, \"highCap\": 60",
+            "\"mediumCap\": 60, \"highCap\": 40"
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn load_engine_settings_from_path_rejects_ratio_thresholds_out_of_order() {
+        assert!(load_with_replacement("ratio-order", "\"highRatioBelow\": 1.0", "\"highRatioBelow\": 0.4").is_err());
+        assert!(load_with_replacement("ratio-equal", "\"highRatioBelow\": 1.0", "\"highRatioBelow\": 0.5").is_err());
+    }
+
+    #[test]
+    fn load_engine_settings_from_path_rejects_missing_gating() {
+        let from = ",\n                \"gating\": {\"mediumCap\": 40, \"highCap\": 60, \"mediumRatioMaximum\": 0.5, \"highRatioBelow\": 1.0, \"floor\": 1}";
+        let json = valid_settings_json().replace("\r\n", "\n");
+        assert!(json.contains(from));
+        let path = std::env::temp_dir().join(format!("killright-settings-no-gating-{}.json", unique_suffix()));
+        fs::write(&path, json.replace(from, "")).unwrap();
+
+        let result = load_engine_settings_from_path(&path);
+
+        fs::remove_file(&path).unwrap();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn load_engine_settings_from_path_rejects_old_security_band_field() {
+        assert!(load_with_replacement("old-band", "belowSecurityStatus", "minimumSecurityStatus").is_err());
+    }
+
+    #[test]
+    fn load_engine_settings_from_path_rejects_component_weights_not_totalling_100() {
+        assert!(load_with_replacement(
+            "weights",
+            "\"securityStatus\": {\"maximumScore\": 5}",
+            "\"securityStatus\": {\"maximumScore\": 6}"
+        )
+        .is_err());
+    }
+
+    #[test]
     #[test]
     fn load_engine_settings_from_path_rejects_invalid_style_boundaries() {
         let path = std::env::temp_dir().join(format!("killright-settings-invalid-style-{}.json", unique_suffix()));

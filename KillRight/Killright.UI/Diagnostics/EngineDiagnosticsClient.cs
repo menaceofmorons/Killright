@@ -66,6 +66,9 @@ public sealed class EngineDiagnosticsClient
         table.Rows.Add("Observed Days", diagnostics.observed_days.ToString("0.###"));
         table.Rows.Add("Counted Kills", diagnostics.counted_kills.ToString());
         table.Rows.Add("Daily Rate", diagnostics.daily_rate.ToString("0.###"));
+        table.Rows.Add("Gate Rule", diagnostics.gate_rule);
+        table.Rows.Add("Gate Cap", diagnostics.gate_cap?.ToString() ?? "-");
+        table.Rows.Add("Floor Applied", diagnostics.floor_applied.ToString());
 
         return table;
     }
@@ -263,6 +266,9 @@ public sealed class EngineDiagnosticsClient
         public double observed_days { get; set; }
         public long counted_kills { get; set; }
         public double daily_rate { get; set; }
+        public string gate_rule { get; set; } = string.Empty;
+        public int? gate_cap { get; set; }
+        public bool floor_applied { get; set; }
     }
 }
 

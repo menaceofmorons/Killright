@@ -25,6 +25,9 @@ pub struct ThreatDiagnosticsResponse {
     pub observed_days: f64,
     pub counted_kills: i64,
     pub daily_rate: f64,
+    pub gate_rule: String,
+    pub gate_cap: Option<i32>,
+    pub floor_applied: bool,
 }
 
 impl From<ThreatDiagnostics> for ThreatDiagnosticsResponse {
@@ -40,6 +43,9 @@ impl From<ThreatDiagnostics> for ThreatDiagnosticsResponse {
             observed_days: value.observed_days,
             counted_kills: value.counted_kills,
             daily_rate: value.daily_rate,
+            gate_rule: value.gate_rule,
+            gate_cap: value.gate_cap,
+            floor_applied: value.floor_applied,
         }
     }
 }

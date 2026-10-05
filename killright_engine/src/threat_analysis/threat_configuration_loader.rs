@@ -28,6 +28,37 @@ pub(crate) fn validate_threat_configuration(configuration: &ThreatConfiguration)
     validate_non_negative_scores(configuration)?;
     validate_recent_activity_points(configuration)?;
     validate_security_status_bounds(configuration)?;
+    validate_gating(configuration)?;
+
+    Ok(())
+}
+
+fn validate_gating(configuration: &ThreatConfiguration) -> Result<(), String> {
+    let gating = &configuration.gating;
+
+    for (name, value) in [
+        ("mediumCap", gating.medium_cap),
+        ("highCap", gating.high_cap),
+        ("floor", gating.floor),
+    ] {
+        if !(1..=100).contains(&value) {
+            return Err(format!("gating.{} {} is outside 1 to 100", name, value));
+        }
+    }
+
+    if gating.medium_cap > gating.high_cap {
+        return Err("gating.mediumCap must not exceed gating.highCap".to_string());
+    }
+
+    if gating.floor > gating.medium_cap {
+        return Err("gating.floor must not exceed gating.mediumCap".to_string());
+    }
+
+    if !(gating.medium_ratio_maximum > 0.0 && gating.medium_ratio_maximum < gating.high_ratio_below) {
+        return Err(
+            "gating.mediumRatioMaximum must be above 0 and below gating.highRatioBelow".to_string(),
+        );
+    }
 
     Ok(())
 }

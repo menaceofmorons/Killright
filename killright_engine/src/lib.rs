@@ -227,6 +227,7 @@ fn build_pilot_response(
             coverage_start_utc,
             now,
             recent_window_configuration.recent_window_days,
+            &recent_style_result.recent_style,
         )
     };
     let derived_activity = {
@@ -648,7 +649,7 @@ pub extern "C" fn killright_diagnose_threat(request_json: *const c_char) -> *mut
             threat_configuration,
             recent_window_configuration,
             _group_detection_configuration,
-            _style_configuration,
+            style_configuration,
         )) = get_runtime_state()
         else {
             return threat_diagnostics_failure(request.character_id, "missing_runtime");
@@ -688,6 +689,23 @@ pub extern "C" fn killright_diagnose_threat(request_json: *const c_char) -> *mut
             now,
         );
 
+        let recent_style_result = analyze_recent_style(
+            RecentStyleRequest {
+                character_id: request.character_id,
+                killmails: recent_window_killmails
+                    .iter()
+                    .map(|row| RecentKillmailInput {
+                        killmail_id: row.killmail_id,
+                        is_loss: row.is_loss,
+                        attacker_count: row.attacker_count,
+                        is_solo: row.is_solo,
+                        ship_type_id: row.ship_type_id,
+                    })
+                    .collect(),
+            },
+            &style_configuration,
+        );
+
         let diagnostics = analyze_intrinsic_threat_diagnostics(
             &threat_configuration,
             statistics.as_ref(),
@@ -696,6 +714,7 @@ pub extern "C" fn killright_diagnose_threat(request_json: *const c_char) -> *mut
             coverage_start_utc,
             now,
             recent_window_configuration.recent_window_days,
+            &recent_style_result.recent_style,
         );
 
         threat_diagnostics_json(ThreatDiagnosticsEnvelope {

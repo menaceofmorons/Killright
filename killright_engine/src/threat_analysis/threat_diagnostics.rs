@@ -6,7 +6,7 @@ use crate::repositories::zkill_statistics_repository::ZKillStatisticsSnapshot;
 use crate::threat_analysis::threat_analyzer::{
     calculate_historical_capability_score, calculate_loss_quality_score,
     calculate_recent_activity_diagnostics, calculate_security_modifier, calculate_survivability_score,
-    is_threat_none,
+    evaluate_threat_gate, finalize_threat_score, GateRule,
 };
 use crate::threat_analysis::threat_configuration_models::ThreatConfiguration;
 
@@ -22,6 +22,9 @@ pub struct ThreatDiagnostics {
     pub observed_days: f64,
     pub counted_kills: i64,
     pub daily_rate: f64,
+    pub gate_rule: String,
+    pub gate_cap: Option<i32>,
+    pub floor_applied: bool,
 }
 
 pub fn analyze_intrinsic_threat_diagnostics(
@@ -32,6 +35,7 @@ pub fn analyze_intrinsic_threat_diagnostics(
     coverage_start_utc: Option<DateTime<Utc>>,
     now: DateTime<Utc>,
     recent_window_days: i64,
+    recent_style: &str,
 ) -> ThreatDiagnostics {
     let recent_activity = calculate_recent_activity_diagnostics(
         &configuration.recent_activity,
@@ -41,7 +45,9 @@ pub fn analyze_intrinsic_threat_diagnostics(
         recent_window_days,
     );
 
-    if is_threat_none(statistics, recent_killmails) {
+    let gate = evaluate_threat_gate(&configuration.gating, statistics, recent_killmails, recent_style);
+
+    if matches!(gate.rule, GateRule::NoData | GateRule::NonCombatNone) {
         return ThreatDiagnostics {
             historical_capability: 0,
             survivability: 0,
@@ -53,6 +59,9 @@ pub fn analyze_intrinsic_threat_diagnostics(
             observed_days: recent_activity.observed_days,
             counted_kills: recent_activity.counted_kills,
             daily_rate: recent_activity.daily_rate,
+            gate_rule: gate.rule.as_str().to_string(),
+            gate_cap: None,
+            floor_applied: false,
         };
     }
 
@@ -68,7 +77,8 @@ pub fn analyze_intrinsic_threat_diagnostics(
         + recent_activity.score
         + security_modifier as f64;
 
-    let score = raw_score.round().clamp(0.0, 100.0) as i32;
+    let (score, floor_applied) =
+        finalize_threat_score(&configuration.gating, &gate, raw_score, recent_style);
 
     ThreatDiagnostics {
         historical_capability,
@@ -81,6 +91,9 @@ pub fn analyze_intrinsic_threat_diagnostics(
         observed_days: recent_activity.observed_days,
         counted_kills: recent_activity.counted_kills,
         daily_rate: recent_activity.daily_rate,
+        gate_rule: gate.rule.as_str().to_string(),
+        gate_cap: gate.cap,
+        floor_applied,
     }
 }
 
@@ -136,7 +149,7 @@ mod tests {
     fn none_pilot_returns_zeroed_components() {
         let stats = statistics(0, 0, true);
 
-        let diagnostics = analyze_intrinsic_threat_diagnostics(&configuration(), Some(&stats), &[], None, None, now(), 14);
+        let diagnostics = analyze_intrinsic_threat_diagnostics(&configuration(), Some(&stats), &[], None, None, now(), 14, "Solo");
 
         assert_eq!(diagnostics.score, 0);
         assert_eq!(diagnostics.historical_capability, 0);
@@ -149,7 +162,7 @@ mod tests {
     fn real_kill_history_components_sum_to_reported_score() {
         let stats = statistics(500, 50, false);
 
-        let diagnostics = analyze_intrinsic_threat_diagnostics(&configuration(), Some(&stats), &[], None, None, now(), 14);
+        let diagnostics = analyze_intrinsic_threat_diagnostics(&configuration(), Some(&stats), &[], None, None, now(), 14, "Solo");
 
         let expected_score = (diagnostics.historical_capability as f64
             + diagnostics.survivability as f64
@@ -179,6 +192,7 @@ mod tests {
             Some(coverage_start),
             now(),
             14,
+            "Solo",
         );
 
         assert!(diagnostics.coverage_start_present);
@@ -192,9 +206,82 @@ mod tests {
     fn missing_coverage_start_reports_not_present() {
         let stats = statistics(10, 0, false);
 
-        let diagnostics = analyze_intrinsic_threat_diagnostics(&configuration(), Some(&stats), &[], None, None, now(), 14);
+        let diagnostics = analyze_intrinsic_threat_diagnostics(&configuration(), Some(&stats), &[], None, None, now(), 14, "Solo");
 
         assert!(!diagnostics.coverage_start_present);
         assert_eq!(diagnostics.recent_activity_modifier, 0.0);
+    }
+
+    fn statistics_with_style(ships_destroyed: i32, ships_lost: i32, general_style: &str) -> ZKillStatisticsSnapshot {
+        let mut value = statistics(ships_destroyed, ships_lost, false);
+        value.general_style = general_style.to_string();
+        value
+    }
+
+    #[test]
+    fn non_combat_gate_reports_rule_and_zeroed_components() {
+        let stats = statistics_with_style(1, 42, "Vict");
+
+        let diagnostics = analyze_intrinsic_threat_diagnostics(&configuration(), Some(&stats), &[], None, None, now(), 14, "Inactive");
+
+        assert_eq!(diagnostics.score, 0);
+        assert_eq!(diagnostics.gate_rule, "non_combat_none");
+        assert_eq!(diagnostics.gate_cap, None);
+        assert!(!diagnostics.floor_applied);
+    }
+
+    #[test]
+    fn no_history_reports_no_data_rule() {
+        let stats = statistics(0, 0, true);
+
+        let diagnostics = analyze_intrinsic_threat_diagnostics(&configuration(), Some(&stats), &[], None, None, now(), 14, "Solo");
+
+        assert_eq!(diagnostics.gate_rule, "no_data");
+    }
+
+    #[test]
+    fn capped_gate_reports_cap_and_matches_the_analyzer_score() {
+        let stats = statistics_with_style(5000, 10000, "Solo");
+        let killmails: Vec<RecentKillmailSnapshot> = (0..20)
+            .map(|_| killmail_at(false, "2026-09-21T12:00:00Z"))
+            .collect();
+        let coverage_start = Some(now() - chrono::Duration::days(1));
+
+        let diagnostics = analyze_intrinsic_threat_diagnostics(
+            &configuration(),
+            Some(&stats),
+            &killmails,
+            None,
+            coverage_start,
+            now(),
+            14,
+            "Solo",
+        );
+        let analyzed = crate::threat_analysis::threat_analyzer::analyze_intrinsic_threat(
+            &configuration(),
+            Some(&stats),
+            &killmails,
+            None,
+            coverage_start,
+            now(),
+            14,
+            "Solo",
+        );
+
+        assert_eq!(diagnostics.gate_rule, "capped");
+        assert_eq!(diagnostics.gate_cap, Some(40));
+        assert_eq!(diagnostics.score, 40);
+        assert_eq!(diagnostics.score, analyzed.score);
+    }
+
+    #[test]
+    fn floor_applied_is_reported() {
+        let stats = statistics_with_style(0, 42, "Vict");
+
+        let diagnostics = analyze_intrinsic_threat_diagnostics(&configuration(), Some(&stats), &[], None, None, now(), 14, "Gang");
+
+        assert_eq!(diagnostics.score, 1);
+        assert!(diagnostics.floor_applied);
+        assert_eq!(diagnostics.gate_cap, Some(40));
     }
 }

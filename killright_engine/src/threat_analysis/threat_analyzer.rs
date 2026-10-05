@@ -4,8 +4,39 @@ use crate::repositories::pilot_identity_repository::PilotIdentitySnapshot;
 use crate::repositories::recent_killmail_repository::RecentKillmailSnapshot;
 use crate::repositories::zkill_statistics_repository::ZKillStatisticsSnapshot;
 use crate::shared::pod_kill::is_pod_kill;
+use crate::shared::recent_style_contract::{
+    STYLE_BLOB, STYLE_FLEET, STYLE_GANG, STYLE_INACTIVE, STYLE_SOLO, STYLE_UNKNOWN, STYLE_VICTIM,
+};
 use crate::threat_analysis::threat_analysis_response::ThreatAnalysisResponse;
 use crate::threat_analysis::threat_configuration_models::*;
+
+const GENERAL_STYLE_LABEL_VICTIM: &str = "Vict";
+const GENERAL_STYLE_LABEL_INACTIVE: &str = "Inactive";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum GateRule {
+    NoData,
+    NonCombatNone,
+    Capped,
+    Uncapped,
+}
+
+impl GateRule {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            GateRule::NoData => "no_data",
+            GateRule::NonCombatNone => "non_combat_none",
+            GateRule::Capped => "capped",
+            GateRule::Uncapped => "uncapped",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ThreatGate {
+    pub rule: GateRule,
+    pub cap: Option<i32>,
+}
 
 pub fn analyze_intrinsic_threat(
     configuration: &ThreatConfiguration,
@@ -15,8 +46,11 @@ pub fn analyze_intrinsic_threat(
     coverage_start_utc: Option<DateTime<Utc>>,
     now: DateTime<Utc>,
     recent_window_days: i64,
+    recent_style: &str,
 ) -> ThreatAnalysisResponse {
-    if is_threat_none(statistics, recent_killmails) {
+    let gate = evaluate_threat_gate(&configuration.gating, statistics, recent_killmails, recent_style);
+
+    if matches!(gate.rule, GateRule::NoData | GateRule::NonCombatNone) {
         return ThreatAnalysisResponse { score: 0 };
     }
 
@@ -43,7 +77,7 @@ pub fn analyze_intrinsic_threat(
         + recent_activity
         + security as f64;
 
-    let score = raw_score.round().clamp(0.0, 100.0) as i32;
+    let (score, _) = finalize_threat_score(&configuration.gating, &gate, raw_score, recent_style);
 
     ThreatAnalysisResponse { score }
 }
@@ -54,8 +88,109 @@ pub(crate) fn is_threat_none(
 ) -> bool {
     match statistics {
         None => recent_killmails.is_empty(),
-        Some(statistics) => statistics.no_history_marker || statistics.ships_destroyed == 0,
+        Some(statistics) => statistics.no_history_marker,
     }
+}
+
+fn is_combat_recent_style(recent_style: &str) -> bool {
+    matches!(
+        recent_style,
+        STYLE_SOLO | STYLE_GANG | STYLE_BLOB | STYLE_FLEET
+    )
+}
+
+fn is_non_combat_recent_style(recent_style: &str) -> bool {
+    matches!(recent_style, STYLE_VICTIM | STYLE_INACTIVE | STYLE_UNKNOWN)
+}
+
+fn is_non_combat_general_style(general_style: &str) -> bool {
+    let label = general_style.trim();
+
+    label.eq_ignore_ascii_case(GENERAL_STYLE_LABEL_VICTIM)
+        || label.eq_ignore_ascii_case(GENERAL_STYLE_LABEL_INACTIVE)
+}
+
+fn ratio_cap(configuration: &GatingConfiguration, statistics: &ZKillStatisticsSnapshot) -> Option<i32> {
+    let ship_losses = statistics.ship_losses();
+
+    if ship_losses <= 0 {
+        return None;
+    }
+
+    let ratio = statistics.ships_destroyed as f64 / ship_losses as f64;
+
+    if ratio <= configuration.medium_ratio_maximum {
+        Some(configuration.medium_cap)
+    } else if ratio < configuration.high_ratio_below {
+        Some(configuration.high_cap)
+    } else {
+        None
+    }
+}
+
+pub(crate) fn evaluate_threat_gate(
+    configuration: &GatingConfiguration,
+    statistics: Option<&ZKillStatisticsSnapshot>,
+    recent_killmails: &[RecentKillmailSnapshot],
+    recent_style: &str,
+) -> ThreatGate {
+    if is_threat_none(statistics, recent_killmails) {
+        return ThreatGate {
+            rule: GateRule::NoData,
+            cap: None,
+        };
+    }
+
+    let general_non_combat = statistics
+        .map(|value| is_non_combat_general_style(&value.general_style))
+        .unwrap_or(false);
+
+    if general_non_combat && is_non_combat_recent_style(recent_style) {
+        return ThreatGate {
+            rule: GateRule::NonCombatNone,
+            cap: None,
+        };
+    }
+
+    let style_cap = if general_non_combat {
+        Some(configuration.medium_cap)
+    } else {
+        None
+    };
+    let cap = [style_cap, statistics.and_then(|value| ratio_cap(configuration, value))]
+        .into_iter()
+        .flatten()
+        .min();
+
+    ThreatGate {
+        rule: if cap.is_some() {
+            GateRule::Capped
+        } else {
+            GateRule::Uncapped
+        },
+        cap,
+    }
+}
+
+pub(crate) fn finalize_threat_score(
+    configuration: &GatingConfiguration,
+    gate: &ThreatGate,
+    raw_score: f64,
+    recent_style: &str,
+) -> (i32, bool) {
+    let mut score = raw_score.round().clamp(0.0, 100.0) as i32;
+
+    if let Some(cap) = gate.cap {
+        score = score.min(cap);
+    }
+
+    let floor_applied = is_combat_recent_style(recent_style) && score < configuration.floor;
+
+    if floor_applied {
+        score = configuration.floor;
+    }
+
+    (score, floor_applied)
 }
 
 pub(crate) fn calculate_historical_capability_score(
@@ -107,7 +242,7 @@ pub(crate) fn calculate_survivability_score(
     let kills = statistics.ships_destroyed;
     let losses = statistics.ship_losses();
 
-    if kills <= 0 && losses <= 0 {
+    if kills <= 0 {
         return 0;
     }
 
@@ -139,14 +274,14 @@ pub(crate) fn calculate_loss_quality_score(
         return 0;
     };
 
+    if statistics.ships_destroyed <= 0 {
+        return 0;
+    }
+
     let ship_losses = statistics.ship_losses();
 
     if ship_losses <= 0 {
-        return if statistics.ships_destroyed > 0 {
-            configuration.no_losses_with_kills_score
-        } else {
-            0
-        };
+        return configuration.no_losses_with_kills_score;
     }
 
     let solo_loss_ratio = (statistics.solo_losses as f64 / ship_losses as f64).min(1.0);
@@ -292,7 +427,7 @@ pub(crate) fn calculate_security_modifier(
     configuration
         .bands
         .iter()
-        .filter(|band| security_status >= band.minimum_security_status)
+        .filter(|band| security_status < band.below_security_status)
         .map(|band| band.score)
         .max()
         .unwrap_or(0)
@@ -336,6 +471,33 @@ mod tests {
         }
     }
 
+    fn statistics_with_style(
+        ships_destroyed: i32,
+        ships_lost: i32,
+        general_style: &str,
+    ) -> ZKillStatisticsSnapshot {
+        let mut value = statistics(ships_destroyed, ships_lost, false);
+        value.general_style = general_style.to_string();
+        value
+    }
+
+    fn identity(security_status: Option<f64>) -> PilotIdentitySnapshot {
+        PilotIdentitySnapshot {
+            input_name: "Lukas Naarii".to_string(),
+            character_id: Some(1),
+            character_name: Some("Lukas Naarii".to_string()),
+            verify_status: "Verified".to_string(),
+            security_status,
+            corporation_id: None,
+            corporation_name: None,
+            corporation_ticker: None,
+            alliance_id: None,
+            alliance_name: None,
+            alliance_ticker: None,
+            cached_at_utc: "2026-09-22T00:00:00Z".to_string(),
+        }
+    }
+
     fn killmail_at(is_loss: bool, kill_time_utc: &str) -> RecentKillmailSnapshot {
         RecentKillmailSnapshot {
             killmail_id: 1,
@@ -357,39 +519,62 @@ mod tests {
         killmail_at(is_loss, "2026-09-20T00:00:00Z")
     }
 
+    fn busy_recent_killmails() -> Vec<RecentKillmailSnapshot> {
+        (0..20)
+            .map(|_| killmail_at(false, "2026-09-21T12:00:00Z"))
+            .collect()
+    }
+
+    fn score(
+        statistics: Option<&ZKillStatisticsSnapshot>,
+        recent_killmails: &[RecentKillmailSnapshot],
+        recent_style: &str,
+    ) -> i32 {
+        analyze_intrinsic_threat(
+            &configuration(),
+            statistics,
+            recent_killmails,
+            None,
+            Some(now() - chrono::Duration::days(1)),
+            now(),
+            14,
+            recent_style,
+        )
+        .score
+    }
+
     #[test]
     fn no_statistics_and_no_killmails_returns_none_score() {
-        let result = analyze_intrinsic_threat(&configuration(), None, &[], None, None, now(), 14);
+        let result = analyze_intrinsic_threat(&configuration(), None, &[], None, None, now(), 14, "Inactive");
 
         assert_eq!(result.score, 0);
     }
 
     #[test]
-    fn no_history_marker_returns_none_score() {
+    fn no_history_marker_returns_none_score_even_with_combat_recent_style() {
         let stats = statistics(0, 0, true);
         let killmails = vec![killmail(false)];
 
-        let result = analyze_intrinsic_threat(&configuration(), Some(&stats), &killmails, None, None, now(), 14);
+        let result = analyze_intrinsic_threat(&configuration(), Some(&stats), &killmails, None, None, now(), 14, "Solo");
 
         assert_eq!(result.score, 0);
     }
 
     #[test]
-    fn zero_kills_in_statistics_returns_none_score_regardless_of_losses() {
+    fn zero_statistics_kills_with_losses_scores_nothing_from_statistics_components() {
+        let configuration = configuration();
         let stats = statistics(0, 5, false);
 
-        let result = analyze_intrinsic_threat(&configuration(), Some(&stats), &[], None, None, now(), 14);
-
-        assert_eq!(result.score, 0);
+        assert_eq!(calculate_survivability_score(&configuration.survivability, Some(&stats)), 0);
+        assert_eq!(calculate_loss_quality_score(&configuration.loss_quality, Some(&stats)), 0);
+        assert_eq!(score(Some(&stats), &[], "Inactive"), 0);
     }
 
     #[test]
     fn real_kill_history_returns_scored_result() {
         let stats = statistics(500, 50, false);
 
-        let result = analyze_intrinsic_threat(&configuration(), Some(&stats), &[], None, None, now(), 14);
-
-        assert!(result.score > 0);
+        assert!(score(Some(&stats), &[], "Solo") > 0);
     }
 
     #[test]
@@ -409,6 +594,7 @@ mod tests {
             Some(coverage_start),
             now(),
             14,
+            "Gang",
         );
 
         assert_eq!(result.score, 2);
@@ -417,9 +603,7 @@ mod tests {
     #[test]
     fn recent_activity_modifier_reaches_maximum_at_high_daily_rate() {
         let coverage_start = now() - chrono::Duration::days(1);
-        let killmails: Vec<RecentKillmailSnapshot> = (0..20)
-            .map(|_| killmail_at(false, "2026-09-21T12:00:00Z"))
-            .collect();
+        let killmails = busy_recent_killmails();
 
         let result = analyze_intrinsic_threat(
             &configuration(),
@@ -429,6 +613,7 @@ mod tests {
             Some(coverage_start),
             now(),
             14,
+            "Gang",
         );
 
         assert_eq!(result.score, 10);
@@ -451,6 +636,7 @@ mod tests {
             Some(coverage_start),
             now(),
             14,
+            "Solo",
         );
 
         assert_eq!(result.score, 1);
@@ -489,6 +675,7 @@ mod tests {
             Some(coverage_start),
             now(),
             14,
+            "Inactive",
         );
 
         assert_eq!(result.score, 0);
@@ -537,5 +724,184 @@ mod tests {
             calculate_loss_quality_score(&configuration.loss_quality, Some(&inflated)),
             calculate_loss_quality_score(&configuration.loss_quality, Some(&capped))
         );
+    }
+
+    #[test]
+    fn general_victim_with_recent_inactive_victim_or_unknown_is_none() {
+        let stats = statistics_with_style(1, 42, "Vict");
+
+        for recent in ["Inactive", "Victim", "Unknown"] {
+            assert_eq!(score(Some(&stats), &busy_recent_killmails(), recent), 0, "{recent}");
+        }
+    }
+
+    #[test]
+    fn general_inactive_with_recent_inactive_is_none() {
+        let stats = statistics_with_style(0, 0, "Inactive");
+
+        assert_eq!(score(Some(&stats), &busy_recent_killmails(), "Inactive"), 0);
+    }
+
+    #[test]
+    fn general_victim_with_solo_recent_style_is_scored_capped_at_medium_and_never_none() {
+        let stats = statistics_with_style(500, 10, "Vict");
+
+        let value = score(Some(&stats), &busy_recent_killmails(), "Solo");
+
+        assert!(value >= 1);
+        assert!(value <= 40);
+    }
+
+    #[test]
+    fn general_victim_style_cap_is_applied_to_a_high_raw_score() {
+        let capped = statistics_with_style(5000, 1, "Vict");
+        let uncapped = statistics_with_style(5000, 1, "Solo");
+
+        assert_eq!(score(Some(&capped), &busy_recent_killmails(), "Solo"), 40);
+        assert!(score(Some(&uncapped), &busy_recent_killmails(), "Solo") > 40);
+    }
+
+    #[test]
+    fn general_inactive_zero_statistics_with_gang_recent_style_scores_from_recent_activity_and_security_only() {
+        let stats = statistics_with_style(0, 0, "Inactive");
+        let killmails = busy_recent_killmails();
+        let pilot = identity(Some(-6.0));
+
+        let result = analyze_intrinsic_threat(
+            &configuration(),
+            Some(&stats),
+            &killmails,
+            Some(&pilot),
+            Some(now() - chrono::Duration::days(1)),
+            now(),
+            14,
+            "Gang",
+        );
+
+        assert_eq!(result.score, 15);
+    }
+
+    #[test]
+    fn floor_gives_one_for_a_combat_recent_style_that_computes_zero() {
+        let stats = statistics_with_style(0, 42, "Vict");
+
+        assert_eq!(score(Some(&stats), &[], "Solo"), 1);
+        assert_eq!(score(Some(&stats), &[], "Fleet"), 1);
+    }
+
+    #[test]
+    fn floor_is_not_applied_for_non_combat_recent_style_with_a_computed_zero() {
+        let stats = statistics_with_style(0, 5, "Unknown");
+
+        assert_eq!(score(Some(&stats), &[], "Victim"), 0);
+    }
+
+    #[test]
+    fn ratio_caps_follow_the_configured_thresholds() {
+        let configuration = configuration();
+        let at_half = statistics_with_style(5000, 10000, "Solo");
+        let above_half = statistics_with_style(5100, 10000, "Solo");
+        let below_one = statistics_with_style(99, 100, "Solo");
+        let at_one = statistics_with_style(5000, 5000, "Solo");
+        let no_losses = statistics_with_style(5000, 0, "Solo");
+
+        assert_eq!(ratio_cap(&configuration.gating, &at_half), Some(40));
+        assert_eq!(ratio_cap(&configuration.gating, &above_half), Some(60));
+        assert_eq!(ratio_cap(&configuration.gating, &below_one), Some(60));
+        assert_eq!(ratio_cap(&configuration.gating, &at_one), None);
+        assert_eq!(ratio_cap(&configuration.gating, &no_losses), None);
+    }
+
+    #[test]
+    fn high_volume_pilot_is_capped_by_ratio_and_uncapped_ratio_is_unchanged() {
+        let killmails = busy_recent_killmails();
+        let half = statistics_with_style(5000, 10000, "Solo");
+        let above_half = statistics_with_style(10000, 19000, "Solo");
+        let even = statistics_with_style(10000, 10000, "Solo");
+
+        assert_eq!(score(Some(&half), &killmails, "Solo"), 40);
+        assert_eq!(score(Some(&above_half), &killmails, "Solo"), 60);
+        assert!(score(Some(&even), &killmails, "Solo") > 60);
+    }
+
+    #[test]
+    fn ratio_ignores_pod_losses() {
+        let configuration = configuration();
+        let mut stats = statistics_with_style(100, 400, "Solo");
+        stats.pod_losses = 300;
+
+        assert_eq!(ratio_cap(&configuration.gating, &stats), None);
+    }
+
+    #[test]
+    fn lowest_applicable_cap_wins() {
+        let configuration = configuration();
+        let style_and_ratio = statistics_with_style(60, 100, "Vict");
+        let ratio_only = statistics_with_style(10, 100, "Solo");
+
+        let first = evaluate_threat_gate(&configuration.gating, Some(&style_and_ratio), &[], "Solo");
+        let second = evaluate_threat_gate(&configuration.gating, Some(&ratio_only), &[], "Solo");
+
+        assert_eq!(first.rule, GateRule::Capped);
+        assert_eq!(first.cap, Some(40));
+        assert_eq!(second.cap, Some(40));
+    }
+
+    #[test]
+    fn low_volume_pilot_below_the_cap_is_unchanged() {
+        let configuration = configuration();
+        let stats = statistics_with_style(10, 100, "Solo");
+        let uncapped_total = calculate_historical_capability_score(&configuration.historical_capability, Some(&stats))
+            + calculate_survivability_score(&configuration.survivability, Some(&stats))
+            + calculate_loss_quality_score(&configuration.loss_quality, Some(&stats));
+
+        assert!(uncapped_total < 40);
+        assert_eq!(score(Some(&stats), &[], "Solo"), uncapped_total);
+    }
+
+    #[test]
+    fn statistics_missing_applies_no_general_style_or_ratio_gate() {
+        let configuration = configuration();
+        let killmails = vec![killmail(false)];
+        let gate = evaluate_threat_gate(&configuration.gating, None, &killmails, "Solo");
+
+        assert_eq!(gate.rule, GateRule::Uncapped);
+        assert_eq!(gate.cap, None);
+    }
+
+    #[test]
+    fn security_modifier_awards_points_only_below_each_threshold() {
+        let configuration = configuration();
+        let cases = [
+            (Some(0.1), 0),
+            (Some(0.0), 0),
+            (Some(-0.5), 1),
+            (Some(-2.0), 1),
+            (Some(-2.5), 3),
+            (Some(-5.0), 3),
+            (Some(-5.5), 5),
+            (Some(-10.0), 5),
+            (None, 0),
+        ];
+
+        for (status, expected) in cases {
+            let pilot = identity(status);
+
+            assert_eq!(
+                calculate_security_modifier(&configuration.security_status, Some(&pilot)),
+                expected,
+                "{status:?}"
+            );
+        }
+
+        assert_eq!(calculate_security_modifier(&configuration.security_status, None), 0);
+    }
+
+    #[test]
+    fn positive_security_status_never_returns_the_maximum() {
+        let configuration = configuration();
+        let pilot = identity(Some(5.0));
+
+        assert_eq!(calculate_security_modifier(&configuration.security_status, Some(&pilot)), 0);
     }
 }
