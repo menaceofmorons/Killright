@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Stop'
 
-$version   = '0.2.0'
+$version   = '0.3.0'
 $codeRoot  = Split-Path $PSScriptRoot -Parent
 $engineDir = Join-Path $codeRoot 'killright_engine'
 $uiProject = Join-Path $codeRoot 'KillRight\Killright.UI\Killright.UI.csproj'
