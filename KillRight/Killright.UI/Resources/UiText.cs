@@ -184,6 +184,7 @@ public static class UiText
     public static string SdeFailureUnexpected => Strings.Get("Sde.Failure.Unexpected");
 
     public static string PlaceholderDash => Strings.Get("Placeholder.Dash");
+    public static string PlaceholderUnk => Strings.Get("Placeholder.Unk");
 
     public static string? FactionShortCode(long? factionId)
     {

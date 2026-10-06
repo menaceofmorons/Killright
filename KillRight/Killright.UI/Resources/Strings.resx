@@ -208,6 +208,7 @@
   <data name="Sde.Failure.Unexpected" xml:space="preserve"><value>An unexpected error occurred.</value></data>
 
   <data name="Placeholder.Dash" xml:space="preserve"><value>-</value></data>
+  <data name="Placeholder.Unk" xml:space="preserve"><value>Unk</value></data>
 
   <data name="Style.Word.Inactive" xml:space="preserve"><value>Inactive</value></data>
   <data name="Style.Word.Victim" xml:space="preserve"><value>Vict</value></data>

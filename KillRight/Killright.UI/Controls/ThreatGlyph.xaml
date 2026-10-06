@@ -20,13 +20,6 @@
                   Stroke="{DynamicResource Brush.Border}"
                   StrokeThickness="1"
                   Fill="Transparent" />
-        <Ellipse x:Name="DangerRing"
-                 Width="16"
-                 Height="16"
-                 Stroke="{DynamicResource Brush.Threat.Red}"
-                 StrokeThickness="2"
-                 Fill="Transparent"
-                 Visibility="Collapsed" />
         <TextBlock x:Name="TextGlyph"
                    HorizontalAlignment="Center"
                    VerticalAlignment="Center"

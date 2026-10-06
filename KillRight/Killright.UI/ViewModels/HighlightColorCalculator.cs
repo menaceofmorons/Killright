@@ -1,4 +1,5 @@
 using System.Windows.Media;
+using Killright.UI.UiState;
 
 namespace Killright.UI.ViewModels;
 
@@ -8,7 +9,8 @@ public static class HighlightColorCalculator
 
     public static Color ForPilot(Color baseColor, double opacity) => ApplyOpacity(baseColor, opacity);
 
-    public static Color ForSameGroup(Color baseColor, double opacity) => ApplyOpacity(Lighten(baseColor, SameGroupLightnessDelta), opacity);
+    public static Color ForSameGroup(Color baseColor, double opacity, AppTheme resolvedTheme = AppTheme.Dark) =>
+        ApplyOpacity(ShiftLightness(baseColor, resolvedTheme == AppTheme.Light ? -SameGroupLightnessDelta : SameGroupLightnessDelta), opacity);
 
     public static Color ForRelated(Color baseColor, double opacity) => ApplyOpacity(baseColor, opacity);
 
@@ -20,7 +22,7 @@ public static class HighlightColorCalculator
         return Color.FromArgb(alpha, color.R, color.G, color.B);
     }
 
-    private static Color Lighten(Color color, double lightnessDelta)
+    private static Color ShiftLightness(Color color, double lightnessDelta)
     {
         var (h, s, l) = ToHsl(color);
         l = Math.Clamp(l + lightnessDelta, 0d, 1d);

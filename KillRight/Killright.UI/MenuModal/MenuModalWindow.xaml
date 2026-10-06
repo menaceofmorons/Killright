@@ -76,11 +76,32 @@
                     </ComboBox>
                     <TextBlock Text="{x:Static resources:UiText.MenuAppearanceHighlightColours}" />
                     <TextBlock Text="{x:Static resources:UiText.MenuAppearanceHighlightPilot}" Margin="0,8,0,2" />
-                    <WrapPanel x:Name="PilotSwatchPanel" Orientation="Horizontal" />
+                    <Button x:Name="PilotSwatchButton" Width="44" Height="26" HorizontalAlignment="Left" Padding="2" Click="PilotSwatchButton_Click">
+                        <Border x:Name="PilotSwatchChip" Width="34" Height="16" BorderBrush="Gray" BorderThickness="1" />
+                    </Button>
+                    <Popup x:Name="PilotSwatchPopup" PlacementTarget="{Binding ElementName=PilotSwatchButton}" Placement="Bottom" StaysOpen="False" AllowsTransparency="True">
+                        <Border Background="{DynamicResource Brush.Window.Background}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" Padding="8,8,2,2">
+                            <WrapPanel x:Name="PilotSwatchPanel" Orientation="Horizontal" Width="220" />
+                        </Border>
+                    </Popup>
                     <TextBlock Text="{x:Static resources:UiText.MenuAppearanceHighlightRelated}" Margin="0,8,0,2" />
-                    <WrapPanel x:Name="RelatedSwatchPanel" Orientation="Horizontal" />
+                    <Button x:Name="RelatedSwatchButton" Width="44" Height="26" HorizontalAlignment="Left" Padding="2" Click="RelatedSwatchButton_Click">
+                        <Border x:Name="RelatedSwatchChip" Width="34" Height="16" BorderBrush="Gray" BorderThickness="1" />
+                    </Button>
+                    <Popup x:Name="RelatedSwatchPopup" PlacementTarget="{Binding ElementName=RelatedSwatchButton}" Placement="Bottom" StaysOpen="False" AllowsTransparency="True">
+                        <Border Background="{DynamicResource Brush.Window.Background}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" Padding="8,8,2,2">
+                            <WrapPanel x:Name="RelatedSwatchPanel" Orientation="Horizontal" Width="220" />
+                        </Border>
+                    </Popup>
                     <TextBlock Text="{x:Static resources:UiText.MenuAppearanceHighlightNewPilot}" Margin="0,8,0,2" />
-                    <WrapPanel x:Name="NewPilotSwatchPanel" Orientation="Horizontal" />
+                    <Button x:Name="NewPilotSwatchButton" Width="44" Height="26" HorizontalAlignment="Left" Padding="2" Click="NewPilotSwatchButton_Click">
+                        <Border x:Name="NewPilotSwatchChip" Width="34" Height="16" BorderBrush="Gray" BorderThickness="1" />
+                    </Button>
+                    <Popup x:Name="NewPilotSwatchPopup" PlacementTarget="{Binding ElementName=NewPilotSwatchButton}" Placement="Bottom" StaysOpen="False" AllowsTransparency="True">
+                        <Border Background="{DynamicResource Brush.Window.Background}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" Padding="8,8,2,2">
+                            <WrapPanel x:Name="NewPilotSwatchPanel" Orientation="Horizontal" Width="220" />
+                        </Border>
+                    </Popup>
                 </StackPanel>
             </TabItem>
             <TabItem Header="{x:Static resources:UiText.MenuTabColumns}">

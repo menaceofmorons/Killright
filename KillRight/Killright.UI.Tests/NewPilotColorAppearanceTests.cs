@@ -17,8 +17,11 @@ public sealed class NewPilotColorAppearanceTests
         {
             try
             {
-                if (Application.Current is null)
-                    _ = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+                lock (Sta.Gate)
+                {
+                    if (Application.Current is null)
+                        _ = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+                }
 
                 action();
             }

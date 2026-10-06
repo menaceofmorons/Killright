@@ -1,6 +1,7 @@
 using System.Windows.Media;
 using Killright.UI.Analysis;
 using Killright.UI.Configuration;
+using Killright.UI.UiState;
 
 namespace Killright.UI.ViewModels;
 
@@ -21,7 +22,8 @@ public static class RelationshipHighlightCalculator
         IReadOnlyList<RelationshipConfidenceBandSetting> confidenceBands,
         Color pilotColor,
         Color relatedColor,
-        double highlightOpacity)
+        double highlightOpacity,
+        AppTheme resolvedTheme = AppTheme.Dark)
     {
         if (hovered?.CharacterId is null)
         {
@@ -32,7 +34,7 @@ public static class RelationshipHighlightCalculator
         var isNpc = Memoize(isNpcCorporation);
 
         ApplyRelationshipValues(rows, hovered, isNpc, confidenceBands);
-        ApplyTints(rows, hovered, isNpc, pilotColor, relatedColor, highlightOpacity);
+        ApplyTints(rows, hovered, isNpc, pilotColor, relatedColor, highlightOpacity, resolvedTheme);
     }
 
     public static void ApplyRelationshipValues(
@@ -73,7 +75,8 @@ public static class RelationshipHighlightCalculator
         Func<long, bool> isNpcCorporation,
         Color pilotColor,
         Color relatedColor,
-        double highlightOpacity)
+        double highlightOpacity,
+        AppTheme resolvedTheme = AppTheme.Dark)
     {
         if (pilot.CharacterId is null)
         {
@@ -90,7 +93,7 @@ public static class RelationshipHighlightCalculator
             row.HighlightBrush = Classify(row, pilot, isNpc, out _) switch
             {
                 RowRole.Pilot => new SolidColorBrush(HighlightColorCalculator.ForPilot(pilotColor, highlightOpacity)),
-                RowRole.SameGroup => new SolidColorBrush(HighlightColorCalculator.ForSameGroup(pilotColor, highlightOpacity)),
+                RowRole.SameGroup => new SolidColorBrush(HighlightColorCalculator.ForSameGroup(pilotColor, highlightOpacity, resolvedTheme)),
                 RowRole.Related => new SolidColorBrush(HighlightColorCalculator.ForRelated(relatedColor, highlightOpacity)),
                 _ => null
             };

@@ -35,49 +35,54 @@ public partial class ThreatGlyph : UserControl
         ((ThreatGlyph)d).Render((string)e.NewValue);
     }
 
+    public enum WedgeKind
+    {
+        None,
+        Quarter,
+        Half,
+        ThreeQuarter,
+        Full
+    }
+
+    public sealed record GlyphSpec(WedgeKind Wedge, string? WedgeBrushKey, string RingBrushKey, bool ShowRing, string Text);
+
+    public static GlyphSpec Describe(string band) => band switch
+    {
+        "None" => new GlyphSpec(WedgeKind.None, null, "Brush.Border", false, UiText.PlaceholderDash),
+        "Low" => new GlyphSpec(WedgeKind.None, null, "Brush.Threat.Amber", true, string.Empty),
+        "Medium" => new GlyphSpec(WedgeKind.Quarter, "Brush.Threat.Amber", "Brush.Border", true, string.Empty),
+        "High" => new GlyphSpec(WedgeKind.Half, "Brush.Threat.Amber", "Brush.Border", true, string.Empty),
+        "Very High" => new GlyphSpec(WedgeKind.ThreeQuarter, "Brush.Threat.Amber", "Brush.Border", true, string.Empty),
+        "Extreme" => new GlyphSpec(WedgeKind.Full, "Brush.Threat.Red", "Brush.Border", false, string.Empty),
+        _ => new GlyphSpec(WedgeKind.None, null, "Brush.Border", false, "?")
+    };
+
     private void Render(string band)
     {
-        TextGlyph.Text = string.Empty;
-        FillWedge.Visibility = Visibility.Collapsed;
-        FullFill.Visibility = Visibility.Collapsed;
-        DangerRing.Visibility = Visibility.Collapsed;
-        RingOutline.Visibility = Visibility.Visible;
+        var spec = Describe(band);
 
-        switch (band)
+        TextGlyph.Text = spec.Text;
+        RingOutline.Visibility = spec.ShowRing ? Visibility.Visible : Visibility.Collapsed;
+        RingOutline.SetResourceReference(Shape.StrokeProperty, spec.RingBrushKey);
+        FullFill.Visibility = spec.Wedge == WedgeKind.Full ? Visibility.Visible : Visibility.Collapsed;
+
+        var geometry = spec.Wedge switch
         {
-            case "None":
-                TextGlyph.Text = UiText.PlaceholderDash;
-                RingOutline.Visibility = Visibility.Collapsed;
-                break;
-            case "Low":
-                FillWedge.Data = QuarterWedge;
-                FillWedge.SetResourceReference(Shape.FillProperty, "Brush.Threat.Yellow");
-                FillWedge.Visibility = Visibility.Visible;
-                break;
-            case "Medium":
-                FillWedge.Data = HalfWedge;
-                FillWedge.SetResourceReference(Shape.FillProperty, "Brush.Threat.Amber");
-                FillWedge.Visibility = Visibility.Visible;
-                break;
-            case "High":
-                FillWedge.Data = ThreeQuarterWedge;
-                FillWedge.SetResourceReference(Shape.FillProperty, "Brush.Threat.Amber");
-                FillWedge.Visibility = Visibility.Visible;
-                break;
-            case "Very High":
-                FillWedge.Data = ThreeQuarterWedge;
-                FillWedge.SetResourceReference(Shape.FillProperty, "Brush.Threat.Amber");
-                FillWedge.Visibility = Visibility.Visible;
-                DangerRing.Visibility = Visibility.Visible;
-                break;
-            case "Extreme":
-                FullFill.Visibility = Visibility.Visible;
-                RingOutline.Visibility = Visibility.Collapsed;
-                break;
-            default:
-                TextGlyph.Text = "?";
-                RingOutline.Visibility = Visibility.Collapsed;
-                break;
+            WedgeKind.Quarter => QuarterWedge,
+            WedgeKind.Half => HalfWedge,
+            WedgeKind.ThreeQuarter => ThreeQuarterWedge,
+            _ => null
+        };
+
+        if (geometry is null || spec.WedgeBrushKey is null)
+        {
+            FillWedge.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            FillWedge.Data = geometry;
+            FillWedge.SetResourceReference(Shape.FillProperty, spec.WedgeBrushKey);
+            FillWedge.Visibility = Visibility.Visible;
         }
 
         ToolTip = UiText.GetThreatBandDisplay(band);

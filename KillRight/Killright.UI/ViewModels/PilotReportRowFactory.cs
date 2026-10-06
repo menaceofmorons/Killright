@@ -36,7 +36,7 @@ public static class PilotReportRowFactory
             Threat = string.IsNullOrWhiteSpace(threatBand)
                 ? UiText.ThreatBandUnk
                 : threatBand,
-            SecurityStatus = pilot.SecurityStatus?.ToString("0.00") ?? "unk",
+            SecurityStatus = SecurityStatusFormatter.Format(pilot.SecurityStatus),
             Group = "unk",
             CorporationId = pilot.Corporation?.CorporationId,
             Corporation = pilot.Corporation?.Name ?? "unk",

@@ -73,6 +73,7 @@ public partial class MenuModalWindow : Window
         var theme = Enum.Parse<AppTheme>((string)item.Tag);
         _workingState = _workingState with { Theme = theme };
         AppearanceManager.ApplyTheme(theme);
+        RefreshAllSwatches();
     }
 
     private void FontTier_Changed(object sender, SelectionChangedEventArgs e)
@@ -87,18 +88,22 @@ public partial class MenuModalWindow : Window
 
     private void RefreshPilotSwatches()
     {
-        BuildSwatchPanel(PilotSwatchPanel, _workingState.PilotHighlightColorHex, hex =>
+        HighlightSwatchPanelBuilder.ApplyChip(PilotSwatchChip, _workingState.PilotHighlightColorHex, AppearanceManager.ResolvedTheme);
+        HighlightSwatchPanelBuilder.Build(PilotSwatchPanel, _workingState.PilotHighlightColorHex, AppearanceManager.ResolvedTheme, hex =>
         {
             _workingState = _workingState with { PilotHighlightColorHex = hex };
+            PilotSwatchPopup.IsOpen = false;
             RefreshPilotSwatches();
         });
     }
 
     private void RefreshRelatedSwatches()
     {
-        BuildSwatchPanel(RelatedSwatchPanel, _workingState.RelatedHighlightColorHex, hex =>
+        HighlightSwatchPanelBuilder.ApplyChip(RelatedSwatchChip, _workingState.RelatedHighlightColorHex, AppearanceManager.ResolvedTheme);
+        HighlightSwatchPanelBuilder.Build(RelatedSwatchPanel, _workingState.RelatedHighlightColorHex, AppearanceManager.ResolvedTheme, hex =>
         {
             _workingState = _workingState with { RelatedHighlightColorHex = hex };
+            RelatedSwatchPopup.IsOpen = false;
             RefreshRelatedSwatches();
         });
     }
@@ -109,58 +114,25 @@ public partial class MenuModalWindow : Window
         {
             _workingState = _workingState with { NewPilotColorHex = hex };
             _owner.ApplyPreviewNewPilotColor(hex);
+            NewPilotSwatchPopup.IsOpen = false;
             RefreshNewPilotSwatches();
         }
 
-        BuildSwatchPanel(NewPilotSwatchPanel, _workingState.NewPilotColorHex, hex => Select(hex), () => Select(null));
+        HighlightSwatchPanelBuilder.ApplyChip(NewPilotSwatchChip, _workingState.NewPilotColorHex, AppearanceManager.ResolvedTheme);
+        HighlightSwatchPanelBuilder.Build(NewPilotSwatchPanel, _workingState.NewPilotColorHex, AppearanceManager.ResolvedTheme, hex => Select(hex), () => Select(null));
     }
 
-    private static void BuildSwatchPanel(WrapPanel panel, string? selectedHex, Action<string> onSelect, Action? onSelectDefault = null)
+    private void PilotSwatchButton_Click(object sender, RoutedEventArgs e) => PilotSwatchPopup.IsOpen = true;
+
+    private void RelatedSwatchButton_Click(object sender, RoutedEventArgs e) => RelatedSwatchPopup.IsOpen = true;
+
+    private void NewPilotSwatchButton_Click(object sender, RoutedEventArgs e) => NewPilotSwatchPopup.IsOpen = true;
+
+    private void RefreshAllSwatches()
     {
-        panel.Children.Clear();
-
-        if (onSelectDefault is not null)
-        {
-            var defaultBorder = new Border
-            {
-                Width = 22,
-                Height = 22,
-                Margin = new Thickness(0, 0, 6, 6),
-                Background = Brushes.Transparent,
-                BorderBrush = selectedHex is null ? Brushes.Black : Brushes.Gray,
-                BorderThickness = new Thickness(2),
-                Cursor = Cursors.Hand,
-                ToolTip = UiText.MenuAppearanceHighlightNewPilotDefault,
-                Child = new TextBlock
-                {
-                    Text = "/",
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center
-                }
-            };
-
-            defaultBorder.MouseLeftButtonDown += (_, _) => onSelectDefault();
-            panel.Children.Add(defaultBorder);
-        }
-
-        foreach (var (name, hex) in HighlightSwatchPalette.Swatches)
-        {
-            var border = new Border
-            {
-                Width = 22,
-                Height = 22,
-                Margin = new Thickness(0, 0, 6, 6),
-                Background = (Brush)new BrushConverter().ConvertFromString(hex)!,
-                BorderBrush = string.Equals(hex, selectedHex, StringComparison.OrdinalIgnoreCase) ? Brushes.Black : Brushes.Transparent,
-                BorderThickness = new Thickness(2),
-                Cursor = Cursors.Hand,
-                ToolTip = name,
-                Tag = hex
-            };
-
-            border.MouseLeftButtonDown += (_, _) => onSelect(hex);
-            panel.Children.Add(border);
-        }
+        RefreshPilotSwatches();
+        RefreshRelatedSwatches();
+        RefreshNewPilotSwatches();
     }
 
     private void ColumnVisibility_Changed(object sender, RoutedEventArgs e)

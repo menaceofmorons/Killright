@@ -413,8 +413,9 @@ public partial class MainWindow : Window
     {
         _hoverTimer.Stop();
 
-        var pilotColor = ParseColor(App.UiState.Current.PilotHighlightColorHex, UiStateDefaults.PilotHighlightColorHex);
-        var relatedColor = ParseColor(App.UiState.Current.RelatedHighlightColorHex, UiStateDefaults.RelatedHighlightColorHex);
+        var resolvedTheme = AppearanceManager.ResolvedTheme;
+        var pilotColor = ParseColor(HighlightColorResolver.ResolveHex(App.UiState.Current.PilotHighlightColorHex, resolvedTheme), UiStateDefaults.PilotHighlightColorHex);
+        var relatedColor = ParseColor(HighlightColorResolver.ResolveHex(App.UiState.Current.RelatedHighlightColorHex, resolvedTheme), UiStateDefaults.RelatedHighlightColorHex);
 
         RelationshipHighlightCalculator.Apply(
             _viewModel.Pilots,
@@ -423,7 +424,8 @@ public partial class MainWindow : Window
             _relationshipConfidenceBands,
             pilotColor,
             relatedColor,
-            App.Settings.HighlightOpacity);
+            App.Settings.HighlightOpacity,
+            resolvedTheme);
     }
 
     private static Color ParseColor(string hex, string fallbackHex)
