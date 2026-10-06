@@ -29,6 +29,7 @@ public static class ColumnIds
     public const string Group = "Group";
     public const string Corporation = "Corporation";
     public const string Alliance = "Alliance";
+    public const string FactionWarfare = "FactionWarfare";
     public const string Style = "Style";
     public const string Week = "Week";
     public const string LastActive = "LastActive";
@@ -142,6 +143,7 @@ public static class UiStateDefaults
         (ColumnIds.Group, 90d, UiText.ColumnsLabelGroup, false, true),
         (ColumnIds.Corporation, 210d, UiText.ColumnsLabelCorporation, false, true),
         (ColumnIds.Alliance, 210d, UiText.ColumnsLabelAlliance, false, true),
+        (ColumnIds.FactionWarfare, 60d, UiText.ColumnsLabelFactionWarfare, false, true),
         (ColumnIds.LastActive, 90d, UiText.ColumnsLabelLastKill, false, true),
         (ColumnIds.Notes, 260d, UiText.ColumnsLabelNotes, true, false),
         (ColumnIds.Verify, 70d, UiText.ColumnsLabelVerify, true, false)

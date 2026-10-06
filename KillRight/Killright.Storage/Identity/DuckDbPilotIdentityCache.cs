@@ -36,7 +36,8 @@ public sealed class DuckDbPilotIdentityCache : IPilotIdentityCache
                                      alliance_name,
                                      alliance_ticker,
                                      cached_at_utc,
-                                     birthday
+                                     birthday,
+                                     faction_id
                               FROM pilot_identity_cache
                               WHERE input_name = {SqlValueFormatter.String(normalizedInputName)}
                               LIMIT 1;
@@ -66,7 +67,8 @@ public sealed class DuckDbPilotIdentityCache : IPilotIdentityCache
             AllianceName = reader.GetNullableString(9),
             AllianceTicker = reader.GetNullableString(10),
             CachedAtUtc = cachedAtUtc,
-            Birthday = reader.IsDBNull(12) ? null : DateOnly.FromDateTime(reader.GetDateTime(12))
+            Birthday = reader.IsDBNull(12) ? null : DateOnly.FromDateTime(reader.GetDateTime(12)),
+            FactionId = reader.GetNullableInt64(13)
         };
 
         return Task.FromResult<Pilot?>(record.ToPilot());
@@ -129,7 +131,8 @@ public sealed class DuckDbPilotIdentityCache : IPilotIdentityCache
                                          alliance_ticker,
                                          cached_at_utc,
                                          birthday,
-                                         security_status_at_utc
+                                         security_status_at_utc,
+                                         faction_id
                                   FROM pilot_identity_cache
                                   WHERE input_name IN ({string.Join(", ", chunk.Select(SqlValueFormatter.String))});
                                   """;
@@ -153,7 +156,8 @@ public sealed class DuckDbPilotIdentityCache : IPilotIdentityCache
                     AllianceTicker = reader.GetNullableString(10),
                     CachedAtUtc = reader.GetDateTime(11),
                     Birthday = reader.IsDBNull(12) ? null : DateOnly.FromDateTime(reader.GetDateTime(12)),
-                    SecurityStatusAtUtc = reader.IsDBNull(13) ? null : reader.GetDateTime(13)
+                    SecurityStatusAtUtc = reader.IsDBNull(13) ? null : reader.GetDateTime(13),
+                    FactionId = reader.GetNullableInt64(14)
                 };
 
                 records[record.InputName] = record;
@@ -185,7 +189,8 @@ public sealed class DuckDbPilotIdentityCache : IPilotIdentityCache
                                      alliance_ticker,
                                      cached_at_utc,
                                      birthday,
-                                     security_status_at_utc
+                                     security_status_at_utc,
+                                     faction_id
                               FROM pilot_identity_cache
                               WHERE input_name = {SqlValueFormatter.String(normalizedInputName)}
                               LIMIT 1;
@@ -211,7 +216,8 @@ public sealed class DuckDbPilotIdentityCache : IPilotIdentityCache
             AllianceTicker = reader.GetNullableString(10),
             CachedAtUtc = reader.GetDateTime(11),
             Birthday = reader.IsDBNull(12) ? null : DateOnly.FromDateTime(reader.GetDateTime(12)),
-            SecurityStatusAtUtc = reader.IsDBNull(13) ? null : reader.GetDateTime(13)
+            SecurityStatusAtUtc = reader.IsDBNull(13) ? null : reader.GetDateTime(13),
+            FactionId = reader.GetNullableInt64(14)
         };
 
         return Task.FromResult<PilotIdentityCacheRecord?>(record);
@@ -253,7 +259,8 @@ public sealed class DuckDbPilotIdentityCache : IPilotIdentityCache
                                             alliance_ticker,
                                             cached_at_utc,
                                             birthday,
-                                            security_status_at_utc
+                                            security_status_at_utc,
+                                            faction_id
                                         ) VALUES (
                                             {SqlValueFormatter.String(record.InputName)},
                                             {SqlValueFormatter.Long(record.CharacterId)},
@@ -268,7 +275,8 @@ public sealed class DuckDbPilotIdentityCache : IPilotIdentityCache
                                             {SqlValueFormatter.String(record.AllianceTicker)},
                                             {SqlValueFormatter.Date(record.CachedAtUtc)},
                                             {SqlValueFormatter.Date(record.Birthday)},
-                                            {(record.SecurityStatusAtUtc is { } securityStatusAtUtc ? SqlValueFormatter.Date(securityStatusAtUtc) : "NULL")}
+                                            {(record.SecurityStatusAtUtc is { } securityStatusAtUtc ? SqlValueFormatter.Date(securityStatusAtUtc) : "NULL")},
+                                            {SqlValueFormatter.Long(record.FactionId)}
                                         );
                                         """;
             insertCommand.ExecuteNonQuery();

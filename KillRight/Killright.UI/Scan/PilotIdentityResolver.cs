@@ -137,6 +137,7 @@ public sealed class PilotIdentityResolver
             state.SecurityStatus = details.SecurityStatus;
             state.SecurityStatusAtUtc = now;
             state.Birthday = details.Birthday;
+            state.FactionId = details.FactionId;
             state.Changed = true;
         }
 
@@ -193,6 +194,7 @@ public sealed class PilotIdentityResolver
         state.SecurityStatus = record.SecurityStatus;
         state.SecurityStatusAtUtc = record.SecurityStatusAtUtc;
         state.Birthday = record.Birthday;
+        state.FactionId = record.FactionId;
     }
 
     private async Task<(IReadOnlyDictionary<long, string> Names, int NewlyResolved)> ResolveEntityNamesAsync(
@@ -282,6 +284,7 @@ public sealed class PilotIdentityResolver
                 CorporationId = state.IdsRefreshed ? state.CorporationId : state.Cached?.CorporationId,
                 AllianceId = state.IdsRefreshed ? state.AllianceId : state.Cached?.AllianceId,
                 Birthday = state.Birthday,
+                FactionId = state.FactionId,
                 SecurityStatusAtUtc = state.SecurityStatusAtUtc,
                 CachedAtUtc = now
             };
@@ -329,6 +332,8 @@ public sealed class PilotIdentityResolver
 
         public DateOnly? Birthday { get; set; }
 
+        public long? FactionId { get; set; }
+
         public bool IdsRefreshed { get; set; }
 
         public long? CorporationId { get; set; }
@@ -359,7 +364,8 @@ public sealed class PilotIdentityResolver
                 Corporation = corporation,
                 Alliance = alliance,
                 AllianceId = AllianceId,
-                Birthday = Birthday
+                Birthday = Birthday,
+                FactionId = FactionId
             };
         }
     }

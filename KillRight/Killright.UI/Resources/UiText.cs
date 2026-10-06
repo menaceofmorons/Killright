@@ -13,6 +13,7 @@ public static class UiText
     public static string GridColumnHeaderWeek => Strings.Get("Grid.ColumnHeader.Week");
     public static string GridColumnHeaderCorporation => Strings.Get("Grid.ColumnHeader.Corporation");
     public static string GridColumnHeaderAlliance => Strings.Get("Grid.ColumnHeader.Alliance");
+    public static string GridColumnHeaderFactionWarfare => Strings.Get("Grid.ColumnHeader.FactionWarfare");
     public static string GridColumnHeaderLastKill => Strings.Get("Grid.ColumnHeader.LastKill");
     public static string GridColumnHeaderNotes => Strings.Get("Grid.ColumnHeader.Notes");
     public static string GridColumnHeaderVerify => Strings.Get("Grid.ColumnHeader.Verify");
@@ -28,6 +29,7 @@ public static class UiText
     public static string ColumnsLabelGroup => Strings.Get("Columns.Label.Group");
     public static string ColumnsLabelCorporation => Strings.Get("Columns.Label.Corporation");
     public static string ColumnsLabelAlliance => Strings.Get("Columns.Label.Alliance");
+    public static string ColumnsLabelFactionWarfare => Strings.Get("Columns.Label.FactionWarfare");
     public static string ColumnsLabelLastKill => Strings.Get("Columns.Label.LastKill");
     public static string ColumnsLabelNotes => Strings.Get("Columns.Label.Notes");
     public static string ColumnsLabelVerify => Strings.Get("Columns.Label.Verify");
@@ -133,6 +135,7 @@ public static class UiText
     public static string GetThreatBandDisplay(string? bandName) =>
         string.IsNullOrWhiteSpace(bandName) ? ThreatBandUnk : Strings.Get($"ThreatBand.{bandName}", bandName);
 
+    public static string InfoSheetLabelFaction => Strings.Get("InfoSheet.Label.Faction");
     public static string InfoSheetLabelBirthday => Strings.Get("InfoSheet.Label.Birthday");
     public static string InfoSheetLabelThreat => Strings.Get("InfoSheet.Label.Threat");
     public static string InfoSheetLabelSec => Strings.Get("InfoSheet.Label.Sec");
@@ -173,4 +176,15 @@ public static class UiText
     public static string SdeFailureUnexpected => Strings.Get("Sde.Failure.Unexpected");
 
     public static string PlaceholderDash => Strings.Get("Placeholder.Dash");
+
+    public static string? FactionShortCode(long? factionId)
+    {
+        if (factionId is not { } id)
+            return null;
+
+        var key = $"Faction.Code.{id}";
+        var code = Strings.Get(key, string.Empty);
+
+        return code.Length == 0 ? null : code;
+    }
 }

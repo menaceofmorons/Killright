@@ -324,6 +324,71 @@ public sealed class PilotIdentityResolverTests
         Assert.Null(await fixture.IdentityCache.GetRecordAsync(Lukas));
     }
 
+    [Fact]
+    public async Task ResolveAsync_EnlistedPilot_CarriesFactionIdAndPersistsIt()
+    {
+        var fixture = CreateFixture();
+        fixture.Esi.FactionIds[95465499] = 500004;
+
+        var pilots = await fixture.Resolver.ResolveAsync([Tral, Lukas]);
+
+        Assert.Equal(500004, pilots[0].FactionId);
+        Assert.Null(pilots[1].FactionId);
+        Assert.Equal(500004, (await fixture.IdentityCache.GetRecordAsync(Tral))!.FactionId);
+        Assert.Null((await fixture.IdentityCache.GetRecordAsync(Lukas))!.FactionId);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_WarmScanWithinOneHour_KeepsCachedFactionWithoutCharacterCall()
+    {
+        var fixture = CreateFixture();
+        fixture.Esi.FactionIds[95465499] = 500010;
+        await fixture.Resolver.ResolveAsync([Tral]);
+        fixture.Esi.Reset();
+        fixture.Clock.Advance(TimeSpan.FromMinutes(10));
+
+        var pilots = await fixture.Resolver.ResolveAsync([Tral]);
+
+        Assert.Empty(fixture.Esi.CharacterCalls);
+        Assert.Equal(500010, pilots[0].FactionId);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_AffiliationChangeOnWarmScan_PreservesCachedFaction()
+    {
+        var fixture = CreateFixture();
+        fixture.Esi.FactionIds[95465499] = 500002;
+        await fixture.Resolver.ResolveAsync([Tral]);
+        fixture.Esi.Reset();
+        fixture.Esi.Affiliations[95465499] = new EsiAffiliation(95465499, 98766, null);
+
+        await fixture.Resolver.ResolveAsync([Tral]);
+
+        Assert.Equal(500002, (await fixture.IdentityCache.GetRecordAsync(Tral))!.FactionId);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_CachedRowWithNullSecurityTimestamp_RequestsCharacterDetail()
+    {
+        var fixture = CreateFixture();
+        await fixture.Resolver.ResolveAsync([Tral]);
+        fixture.Esi.Reset();
+        fixture.Esi.FactionIds[95465499] = 500003;
+
+        using (var connection = new DuckDB.NET.Data.DuckDBConnection(fixture.Database.ConnectionString))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = "UPDATE main.pilot_identity_cache SET security_status_at_utc = NULL;";
+            command.ExecuteNonQuery();
+        }
+
+        var pilots = await fixture.Resolver.ResolveAsync([Tral]);
+
+        Assert.Single(fixture.Esi.CharacterCalls);
+        Assert.Equal(500003, pilots[0].FactionId);
+    }
+
     private static Fixture CreateFixture(int maxConcurrency = 8)
     {
         var path = Path.Combine(Path.GetTempPath(), $"identityResolver.{Guid.NewGuid():N}.duckdb");
@@ -378,6 +443,8 @@ public sealed class PilotIdentityResolverTests
         public Dictionary<long, EsiAffiliation> Affiliations { get; } = new();
 
         public Dictionary<long, string> EntityNames { get; } = new();
+
+        public Dictionary<long, long> FactionIds { get; } = new();
 
         public List<IReadOnlyList<string>> NameBatches { get; } = [];
 
@@ -494,7 +561,8 @@ public sealed class PilotIdentityResolverTests
                     affiliation.CorporationId,
                     affiliation.AllianceId,
                     SecurityStatus ?? details.SecurityStatus,
-                    details.Birthday);
+                    details.Birthday,
+                    FactionIds.TryGetValue(characterId, out var factionId) ? factionId : null);
             }
             finally
             {

@@ -138,7 +138,8 @@ public sealed class EsiClient : IEsiClient
                 dto.CorporationId,
                 dto.AllianceId,
                 dto.SecurityStatus,
-                dto.Birthday is null ? null : DateOnly.FromDateTime(dto.Birthday.Value.UtcDateTime));
+                dto.Birthday is null ? null : DateOnly.FromDateTime(dto.Birthday.Value.UtcDateTime),
+                dto.FactionId);
         }
         catch
         {
@@ -245,7 +246,8 @@ public sealed class EsiClient : IEsiClient
             AllianceId = characterInfo.AllianceId,
             Birthday = characterInfo.Birthday is null
                 ? null
-                : DateOnly.FromDateTime(characterInfo.Birthday.Value.UtcDateTime)
+                : DateOnly.FromDateTime(characterInfo.Birthday.Value.UtcDateTime),
+            FactionId = characterInfo.FactionId
         };
     }
 

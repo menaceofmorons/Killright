@@ -14,6 +14,7 @@ public sealed class DuckDbSdeReferenceDataStore : ISdeReferenceDataStore
     private readonly KillRightDatabase _database;
     private readonly ConcurrentDictionary<long, string> _typeNames = new();
     private readonly ConcurrentDictionary<long, string> _solarSystemNames = new();
+    private IReadOnlyDictionary<long, string>? _factionNames;
     private IReadOnlySet<long>? _npcCorporationIds;
 
     public DuckDbSdeReferenceDataStore(KillRightDatabase database)
@@ -57,6 +58,45 @@ public sealed class DuckDbSdeReferenceDataStore : ISdeReferenceDataStore
             _solarSystemNames[systemId] = name;
 
         return name;
+    }
+
+    public string? GetFactionName(long factionId)
+    {
+        var names = _factionNames;
+
+        if (names is null)
+        {
+            try
+            {
+                using var connection = new DuckDBConnection(_database.ConnectionString);
+                connection.Open();
+
+                using var command = connection.CreateCommand();
+                command.CommandText = "SELECT faction_id, name FROM main.sde_factions;";
+
+                using var reader = command.ExecuteReader();
+                var loaded = new Dictionary<long, string>();
+
+                while (reader.Read())
+                {
+                    if (!reader.IsDBNull(1))
+                        loaded[reader.GetInt64(0)] = reader.GetString(1);
+                }
+
+                if (loaded.Count == 0)
+                    return null;
+
+                _factionNames = loaded;
+                names = loaded;
+            }
+            catch (Exception exception)
+            {
+                EngineFailureLog.Record($"SDE faction lookup failed, faction names unavailable: {exception.Message}");
+                return null;
+            }
+        }
+
+        return names.TryGetValue(factionId, out var name) ? name : null;
     }
 
     public bool IsNpcCorporation(long corporationId)
@@ -110,9 +150,10 @@ public sealed class DuckDbSdeReferenceDataStore : ISdeReferenceDataStore
 
         using var command = connection.CreateCommand();
         command.CommandText = """
-                              SELECT EXISTS (SELECT 1 FROM main.sde_types)
-                                  OR EXISTS (SELECT 1 FROM main.sde_solar_systems)
-                                  OR EXISTS (SELECT 1 FROM main.sde_npc_corporations);
+                              SELECT (EXISTS (SELECT 1 FROM main.sde_types)
+                                      OR EXISTS (SELECT 1 FROM main.sde_solar_systems)
+                                      OR EXISTS (SELECT 1 FROM main.sde_npc_corporations))
+                                  AND EXISTS (SELECT 1 FROM main.sde_factions);
                               """;
 
         return Task.FromResult(Convert.ToBoolean(command.ExecuteScalar()));
@@ -159,9 +200,13 @@ public sealed class DuckDbSdeReferenceDataStore : ISdeReferenceDataStore
         CreateStagingTable(connection, transaction, "sde_npc_corporations_staging", "corporation_id BIGINT PRIMARY KEY");
         InsertNpcCorporationIds(connection, transaction, "sde_npc_corporations_staging", data.NpcCorporationIds);
 
+        CreateStagingTable(connection, transaction, "sde_factions_staging", "faction_id BIGINT PRIMARY KEY, name TEXT");
+        InsertFactions(connection, transaction, "sde_factions_staging", data.Factions ?? []);
+
         SwapStagingTable(connection, transaction, "sde_types");
         SwapStagingTable(connection, transaction, "sde_solar_systems");
         SwapStagingTable(connection, transaction, "sde_npc_corporations");
+        SwapStagingTable(connection, transaction, "sde_factions");
 
         using (var updateMetadata = connection.CreateCommand())
         {
@@ -182,6 +227,7 @@ public sealed class DuckDbSdeReferenceDataStore : ISdeReferenceDataStore
         _typeNames.Clear();
         _solarSystemNames.Clear();
         _npcCorporationIds = null;
+        _factionNames = null;
 
         return Task.CompletedTask;
     }
@@ -283,6 +329,29 @@ public sealed class DuckDbSdeReferenceDataStore : ISdeReferenceDataStore
             using var command = connection.CreateCommand();
             command.Transaction = transaction;
             command.CommandText = $"INSERT INTO main.{tableName} (system_id, name) VALUES {values};";
+            command.ExecuteNonQuery();
+        }
+    }
+
+    private static void InsertFactions(
+        DuckDBConnection connection,
+        DuckDBTransaction transaction,
+        string tableName,
+        IReadOnlyList<SdeFaction> factions)
+    {
+        for (var offset = 0; offset < factions.Count; offset += InsertBatchSize)
+        {
+            var values = string.Join(
+                ",",
+                factions.Skip(offset).Take(InsertBatchSize)
+                    .Select(row => $"({row.FactionId}, {SqlValueFormatter.String(row.Name)})"));
+
+            if (values.Length == 0)
+                continue;
+
+            using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = $"INSERT INTO main.{tableName} (faction_id, name) VALUES {values};";
             command.ExecuteNonQuery();
         }
     }

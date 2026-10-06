@@ -44,7 +44,7 @@ public static class ScanWriter
             var values = string.Join(
                 ", ",
                 chunk.Select(record =>
-                    $"({SqlValueFormatter.String(record.InputName)}, {SqlValueFormatter.Long(record.CharacterId)}, {SqlValueFormatter.String(record.CharacterName)}, {SqlValueFormatter.String(record.VerifyStatus.ToString())}, {SqlValueFormatter.Double(record.SecurityStatus)}, {SqlValueFormatter.Long(record.CorporationId)}, {SqlValueFormatter.String(record.CorporationName)}, {SqlValueFormatter.String(record.CorporationTicker)}, {SqlValueFormatter.Long(record.AllianceId)}, {SqlValueFormatter.String(record.AllianceName)}, {SqlValueFormatter.String(record.AllianceTicker)}, {SqlValueFormatter.Date(record.CachedAtUtc)}, {SqlValueFormatter.Date(record.Birthday)}, {(record.SecurityStatusAtUtc is { } securityStatusAtUtc ? SqlValueFormatter.Date(securityStatusAtUtc) : "NULL")})"));
+                    $"({SqlValueFormatter.String(record.InputName)}, {SqlValueFormatter.Long(record.CharacterId)}, {SqlValueFormatter.String(record.CharacterName)}, {SqlValueFormatter.String(record.VerifyStatus.ToString())}, {SqlValueFormatter.Double(record.SecurityStatus)}, {SqlValueFormatter.Long(record.CorporationId)}, {SqlValueFormatter.String(record.CorporationName)}, {SqlValueFormatter.String(record.CorporationTicker)}, {SqlValueFormatter.Long(record.AllianceId)}, {SqlValueFormatter.String(record.AllianceName)}, {SqlValueFormatter.String(record.AllianceTicker)}, {SqlValueFormatter.Date(record.CachedAtUtc)}, {SqlValueFormatter.Date(record.Birthday)}, {(record.SecurityStatusAtUtc is { } securityStatusAtUtc ? SqlValueFormatter.Date(securityStatusAtUtc) : "NULL")}, {SqlValueFormatter.Long(record.FactionId)})"));
 
             Execute(
                 connection,
@@ -54,7 +54,7 @@ public static class ScanWriter
                     input_name, character_id, character_name, verify_status, security_status,
                     corporation_id, corporation_name, corporation_ticker,
                     alliance_id, alliance_name, alliance_ticker,
-                    cached_at_utc, birthday, security_status_at_utc
+                    cached_at_utc, birthday, security_status_at_utc, faction_id
                 ) VALUES {values};
                 """);
         }

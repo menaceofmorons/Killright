@@ -249,6 +249,14 @@
                     </DataGridTextColumn>
                     <DataGridTextColumn x:Name="ColumnCorporation" Header="{x:Static resources:UiText.GridColumnHeaderCorporation}" Binding="{Binding Corporation}" Width="210" CellStyle="{StaticResource IndentedCellStyle}" />
                     <DataGridTextColumn x:Name="ColumnAlliance" Header="{x:Static resources:UiText.GridColumnHeaderAlliance}" Binding="{Binding Alliance}" Width="210" CellStyle="{StaticResource IndentedCellStyle}" />
+                    <DataGridTextColumn x:Name="ColumnFactionWarfare" Header="{x:Static resources:UiText.GridColumnHeaderFactionWarfare}" Binding="{Binding FactionWarfare}" Width="60" HeaderStyle="{StaticResource ColumnHeaderStyleCentered}">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="HorizontalAlignment" Value="Stretch" />
+                                <Setter Property="TextAlignment" Value="Center" />
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
                     <DataGridTextColumn x:Name="ColumnLastActive" Header="{x:Static resources:UiText.GridColumnHeaderLastKill}" Binding="{Binding LastKill}" Width="90" />
                     <DataGridTextColumn x:Name="ColumnNotes" Header="{x:Static resources:UiText.GridColumnHeaderNotes}" Binding="{Binding Notes}" Width="260" />
                     <DataGridTextColumn x:Name="ColumnVerify" Header="{x:Static resources:UiText.GridColumnHeaderVerify}" Binding="{Binding Verify}" Width="70" />

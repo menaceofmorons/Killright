@@ -136,4 +136,45 @@ public sealed class PilotGroupCountAnnotatorTests
 
         Assert.All(rows, row => Assert.Equal("Federation [3]", row.Alliance));
     }
+
+    [Fact]
+    public void Annotate_TwoPilotsSameFaction_AppendsCountToBoth()
+    {
+        var rows = new[]
+        {
+            new PilotReportRow { FactionId = 500001 },
+            new PilotReportRow { FactionId = 500001 },
+            new PilotReportRow { FactionId = 500010 },
+            new PilotReportRow()
+        };
+
+        PilotGroupCountAnnotator.Annotate(rows, NpcCorporationIds);
+
+        Assert.Equal("Ca (2)", rows[0].FactionWarfare);
+        Assert.Equal("Ca (2)", rows[1].FactionWarfare);
+        Assert.Equal("Gu", rows[2].FactionWarfare);
+        Assert.Equal("-", rows[3].FactionWarfare);
+    }
+
+    [Fact]
+    public void Annotate_CalledAgainAfterRowsChange_RecomputesFactionCounts()
+    {
+        var rows = new List<PilotReportRow>
+        {
+            new() { FactionId = 500004 },
+            new() { FactionId = 500004 },
+            new() { FactionId = 500004 }
+        };
+
+        PilotGroupCountAnnotator.Annotate(rows, NpcCorporationIds);
+        Assert.All(rows, row => Assert.Equal("Ga (3)", row.FactionWarfare));
+
+        rows.RemoveAt(2);
+        PilotGroupCountAnnotator.Annotate(rows, NpcCorporationIds);
+        Assert.All(rows, row => Assert.Equal("Ga (2)", row.FactionWarfare));
+
+        rows.RemoveAt(1);
+        PilotGroupCountAnnotator.Annotate(rows, NpcCorporationIds);
+        Assert.Equal("Ga", rows[0].FactionWarfare);
+    }
 }

@@ -29,6 +29,8 @@ public class PilotReportRow : INotifyPropertyChanged
     public long? AllianceId { get; set; }
     public string Alliance { get; set; } = string.Empty;
     public string AlliancePlain { get; set; } = string.Empty;
+    public long? FactionId { get; set; }
+    public string FactionWarfare { get; set; } = string.Empty;
     public string Style { get; set; } = string.Empty;
     public string GeneralStyle { get; set; } = string.Empty;
     public string RecentStyle { get; set; } = string.Empty;

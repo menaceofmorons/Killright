@@ -12,6 +12,8 @@ public interface ISdeReferenceDataStore
 
     IReadOnlySet<long> GetNpcCorporationIds();
 
+    string? GetFactionName(long factionId);
+
     Task<bool> HasReferenceDataAsync(
         CancellationToken cancellationToken = default);
 

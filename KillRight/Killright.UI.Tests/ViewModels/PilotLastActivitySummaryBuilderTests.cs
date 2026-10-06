@@ -143,6 +143,8 @@ public sealed class PilotLastActivitySummaryBuilderTests
 
         public IReadOnlySet<long> GetNpcCorporationIds() => throw new NotSupportedException();
 
+        public string? GetFactionName(long factionId) => null;
+
         public Task<bool> HasReferenceDataAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
         public Task<SdeMetadata> GetMetadataAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();

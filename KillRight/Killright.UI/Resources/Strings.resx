@@ -57,6 +57,7 @@
   <data name="Columns.Label.Group" xml:space="preserve"><value>Group</value></data>
   <data name="Columns.Label.Corporation" xml:space="preserve"><value>Corporation</value></data>
   <data name="Columns.Label.Alliance" xml:space="preserve"><value>Alliance</value></data>
+  <data name="Columns.Label.FactionWarfare" xml:space="preserve"><value>FW</value></data>
   <data name="Columns.Label.LastKill" xml:space="preserve"><value>Last Kill</value></data>
   <data name="Columns.Label.Notes" xml:space="preserve"><value>Notes</value></data>
   <data name="Columns.Label.Verify" xml:space="preserve"><value>Verify</value></data>
@@ -169,6 +170,14 @@
   <data name="InfoSheet.Label.Victim" xml:space="preserve"><value>Victim: </value></data>
   <data name="InfoSheet.Label.Attackers" xml:space="preserve"><value>Attackers: </value></data>
   <data name="InfoSheet.Loading" xml:space="preserve"><value>Loading…</value></data>
+  <data name="Grid.ColumnHeader.FactionWarfare" xml:space="preserve"><value>FW</value></data>
+  <data name="Faction.Code.500001" xml:space="preserve"><value>Ca</value></data>
+  <data name="Faction.Code.500004" xml:space="preserve"><value>Ga</value></data>
+  <data name="Faction.Code.500002" xml:space="preserve"><value>Mn</value></data>
+  <data name="Faction.Code.500003" xml:space="preserve"><value>Am</value></data>
+  <data name="Faction.Code.500011" xml:space="preserve"><value>An</value></data>
+  <data name="Faction.Code.500010" xml:space="preserve"><value>Gu</value></data>
+  <data name="InfoSheet.Label.Faction" xml:space="preserve"><value>Faction: </value></data>
   <data name="InfoSheet.Table.Week" xml:space="preserve"><value>Week</value></data>
   <data name="InfoSheet.Table.Total" xml:space="preserve"><value>Total</value></data>
   <data name="InfoSheet.Table.Kills" xml:space="preserve"><value>Kills</value></data>

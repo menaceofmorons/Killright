@@ -8,6 +8,7 @@ public static class PilotGroupCountAnnotator
     {
         AnnotateAlliance(rows);
         AnnotateCorporation(rows, npcCorporationIds);
+        AnnotateFaction(rows);
         AnnotateGroupCell(rows);
     }
 
@@ -37,6 +38,21 @@ public static class PilotGroupCountAnnotator
                 continue;
 
             row.Alliance = $"{row.Alliance} [{count}]";
+        }
+    }
+
+    private static void AnnotateFaction(IReadOnlyList<PilotReportRow> rows)
+    {
+        var counts = rows
+            .Where(row => row.FactionId is not null)
+            .GroupBy(row => row.FactionId!.Value)
+            .ToDictionary(group => group.Key, group => group.Count());
+
+        foreach (var row in rows)
+        {
+            var count = row.FactionId is { } factionId && counts.TryGetValue(factionId, out var sameFaction) ? sameFaction : 1;
+
+            row.FactionWarfare = PilotReportRowFactory.FormatFactionWarfare(row.FactionId, count);
         }
     }
 

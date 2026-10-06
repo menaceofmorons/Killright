@@ -84,9 +84,8 @@
                 </StackPanel>
             </TabItem>
             <TabItem Header="{x:Static resources:UiText.MenuTabColumns}">
-                <StackPanel Margin="12">
+                <Grid Margin="12">
                     <ListBox x:Name="ColumnsListBox"
-                             MaxHeight="220"
                              BorderThickness="0"
                              ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                              AllowDrop="True"
@@ -116,7 +115,7 @@
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>
-                </StackPanel>
+                </Grid>
             </TabItem>
             <TabItem x:Name="IgnoreListTabItem"
                      Header="{x:Static resources:UiText.MenuTabIgnoreList}">

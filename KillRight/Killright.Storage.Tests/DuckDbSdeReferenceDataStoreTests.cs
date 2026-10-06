@@ -51,9 +51,73 @@ public sealed class DuckDbSdeReferenceDataStoreTests
             SolarSystems: [],
             NpcCorporationIds: [1000001],
             BuildNumber: 1,
-            UpdatedUtc: DateTimeOffset.UtcNow));
+            UpdatedUtc: DateTimeOffset.UtcNow,
+            Factions: [new SdeFaction(500001, "Caldari State")]));
 
         Assert.True(await store.HasReferenceDataAsync());
+    }
+
+    [Fact]
+    public async Task HasReferenceDataAsync_OtherTablesPopulatedButFactionsEmpty_ReturnsFalse()
+    {
+        var (_, store) = CreateStore();
+
+        await store.ReplaceTablesAsync(SdeData(
+            types: [new SdeType(587, "Rifter")],
+            systems: [new SdeSolarSystem(30000142, "Jita")],
+            npcCorporationIds: [1000001]));
+
+        Assert.False(await store.HasReferenceDataAsync());
+    }
+
+    [Fact]
+    public async Task ReplaceTablesAsync_Factions_LoadsTableAndNameLookupReturnsEnglishName()
+    {
+        var (database, store) = CreateStore();
+
+        await store.ReplaceTablesAsync(new SdeReplacementData(
+            Types: [],
+            SolarSystems: [],
+            NpcCorporationIds: [],
+            BuildNumber: 1,
+            UpdatedUtc: DateTimeOffset.UtcNow,
+            Factions: [new SdeFaction(500001, "Caldari State"), new SdeFaction(500011, "Angel Cartel")]));
+
+        Assert.Equal("Caldari State", store.GetFactionName(500001));
+        Assert.Equal("Angel Cartel", store.GetFactionName(500011));
+        Assert.Null(store.GetFactionName(500099));
+        Assert.Equal(2, CountRows(database, "main.sde_factions"));
+    }
+
+    [Fact]
+    public async Task ReplaceTablesAsync_FactionsReplaced_ClearsFactionNameCache()
+    {
+        var (_, store) = CreateStore();
+
+        await store.ReplaceTablesAsync(SdeData(factions: [new SdeFaction(500001, "Caldari State")]));
+        Assert.Equal("Caldari State", store.GetFactionName(500001));
+
+        await store.ReplaceTablesAsync(SdeData(factions: [new SdeFaction(500001, "Caldari Renamed")]));
+
+        Assert.Equal("Caldari Renamed", store.GetFactionName(500001));
+    }
+
+    [Fact]
+    public void GetFactionName_FreshDatabase_ReturnsNull()
+    {
+        var (_, store) = CreateStore();
+
+        Assert.Null(store.GetFactionName(500001));
+    }
+
+    [Fact]
+    public void GetFactionName_FactionsTableUnreadable_ReturnsNullWithoutThrowing()
+    {
+        var (database, store) = CreateStore();
+
+        ExecuteNonQuery(database, "DROP TABLE main.sde_factions;");
+
+        Assert.Null(store.GetFactionName(500001));
     }
 
     [Fact]
@@ -320,14 +384,27 @@ public sealed class DuckDbSdeReferenceDataStoreTests
     private static SdeReplacementData SdeData(
         IReadOnlyList<SdeType>? types = null,
         IReadOnlyList<SdeSolarSystem>? systems = null,
-        IReadOnlyList<long>? npcCorporationIds = null)
+        IReadOnlyList<long>? npcCorporationIds = null,
+        IReadOnlyList<SdeFaction>? factions = null)
     {
         return new SdeReplacementData(
             Types: types ?? [],
             SolarSystems: systems ?? [],
             NpcCorporationIds: npcCorporationIds ?? [],
             BuildNumber: 1,
-            UpdatedUtc: DateTimeOffset.UtcNow);
+            UpdatedUtc: DateTimeOffset.UtcNow,
+            Factions: factions);
+    }
+
+    private static long CountRows(KillRightDatabase database, string table)
+    {
+        using var connection = new DuckDBConnection(database.ConnectionString);
+        connection.Open();
+
+        using var command = connection.CreateCommand();
+        command.CommandText = $"SELECT COUNT(*) FROM {table};";
+
+        return Convert.ToInt64(command.ExecuteScalar());
     }
 
     private static void ExecuteNonQuery(KillRightDatabase database, string sql)

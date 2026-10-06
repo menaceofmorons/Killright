@@ -44,6 +44,8 @@ public static class PilotReportRowFactory
             AllianceId = pilot.Alliance?.AllianceId,
             Alliance = GetAllianceDisplay(pilot),
             AlliancePlain = GetAllianceDisplay(pilot),
+            FactionId = pilot.FactionId,
+            FactionWarfare = FormatFactionWarfare(pilot.FactionId, 1),
             Style = $"{StyleLetterCodeFormatter.FormatGeneral(generalResult.Classification, generalResult.IsPodder)}/{StyleLetterCodeFormatter.FormatRecent(recentStyle, recentIsPodder)}",
             GeneralStyle = StyleDisplayFormatter.Format(generalResult.Classification, generalResult.IsPodder),
             RecentStyle = StyleDisplayFormatter.Format(recentStyle, recentIsPodder),
@@ -57,6 +59,16 @@ public static class PilotReportRowFactory
             Notes = GetNotes(activity, statistics, statisticsCallFailed, recentCallFailed, engineFailureReason),
             StatsFailureSource = GetStatsFailureSource(statisticsCallFailed, recentCallFailed, activity, engineFailureReason)
         };
+    }
+
+    internal static string FormatFactionWarfare(long? factionId, int sameFactionCount)
+    {
+        var code = UiText.FactionShortCode(factionId);
+
+        if (code is null)
+            return UiText.PlaceholderDash;
+
+        return sameFactionCount >= 2 ? $"{code} ({sameFactionCount})" : code;
     }
 
     private static string GetPilotName(Pilot pilot)

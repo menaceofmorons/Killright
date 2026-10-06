@@ -36,6 +36,7 @@
                     <RowDefinition />
                     <RowDefinition />
                     <RowDefinition />
+                    <RowDefinition />
                 </Grid.RowDefinitions>
 
                 <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Foreground="{DynamicResource Brush.Text.Primary}">
@@ -80,6 +81,10 @@
                     <TextBlock Grid.Row="2" Grid.Column="2" Text="{Binding TotalSolosValue, Mode=OneWay}" HorizontalAlignment="Right" Foreground="{DynamicResource Brush.Text.Primary}" />
                     <TextBlock Grid.Row="2" Grid.Column="3" Text="{Binding TotalLossesValue, Mode=OneWay}" HorizontalAlignment="Right" Foreground="{DynamicResource Brush.Text.Primary}" />
                 </Grid>
+
+                <TextBlock Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,6,0,0" Visibility="{Binding FactionVisibility}" Foreground="{DynamicResource Brush.Text.Primary}">
+                    <Run Text="{x:Static resources:UiText.InfoSheetLabelFaction}" FontWeight="Bold" /><Run Text="{Binding FactionValue, Mode=OneWay}" />
+                </TextBlock>
             </Grid>
 
             <StackPanel Visibility="{Binding DeveloperFieldsVisibility}" Margin="0,6,0,0">

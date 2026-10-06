@@ -38,8 +38,11 @@ public sealed class SdeIngestionService
         {
             var metadata = await _store.GetMetadataAsync(cancellationToken);
             var now = ApplicationClock.UtcNow;
+            var reloadRequired = metadata.BuildNumber is not null
+                && !await _store.HasReferenceDataAsync(cancellationToken);
 
-            if (metadata.LastCheckedUtc is not null
+            if (!reloadRequired
+                && metadata.LastCheckedUtc is not null
                 && now - metadata.LastCheckedUtc.Value < TimeSpan.FromHours(_checkIntervalHours))
                 return SdeCheckOutcome.Skipped;
 
@@ -54,7 +57,7 @@ public sealed class SdeIngestionService
                 return SdeCheckOutcome.ManifestFailure;
             }
 
-            if (metadata.BuildNumber == manifest.BuildNumber.Value)
+            if (!reloadRequired && metadata.BuildNumber == manifest.BuildNumber.Value)
             {
                 await _store.RecordCheckAsync(now, "UpToDate", succeeded: true, cancellationToken);
                 return SdeCheckOutcome.UpToDate;
@@ -127,7 +130,8 @@ public sealed class SdeIngestionService
                 contents.SolarSystems,
                 contents.NpcCorporationIds,
                 buildNumber,
-                now);
+                now,
+                contents.Factions);
 
             await _store.ReplaceTablesAsync(replacementData, cancellationToken);
 

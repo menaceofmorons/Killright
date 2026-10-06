@@ -5,4 +5,5 @@ public sealed record SdeReplacementData(
     IReadOnlyList<SdeSolarSystem> SolarSystems,
     IReadOnlyList<long> NpcCorporationIds,
     long BuildNumber,
-    DateTimeOffset UpdatedUtc);
+    DateTimeOffset UpdatedUtc,
+    IReadOnlyList<SdeFaction>? Factions = null);

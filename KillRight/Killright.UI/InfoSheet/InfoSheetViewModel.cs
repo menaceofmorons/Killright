@@ -39,6 +39,8 @@ public sealed class InfoSheetViewModel : INotifyPropertyChanged
     public Visibility DeveloperFieldsVisibility { get; }
     public string VerifyValue { get; }
     public string NotesValue { get; }
+    public string FactionValue { get; }
+    public Visibility FactionVisibility { get; }
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -131,7 +133,8 @@ public sealed class InfoSheetViewModel : INotifyPropertyChanged
         bool developerModeRevealed,
         Func<long, Task<InfoSheetTotals?>> loadTotals,
         Func<string, Task<DateOnly?>> loadBirthday,
-        Func<long, Task<PilotLastActivitySummary?>> loadLastActivity)
+        Func<long, Task<PilotLastActivitySummary?>> loadLastActivity,
+        Func<long, string?>? lookupFactionName = null)
     {
         _row = row;
         _loadTotals = loadTotals;
@@ -151,6 +154,17 @@ public sealed class InfoSheetViewModel : INotifyPropertyChanged
         DeveloperFieldsVisibility = developerModeRevealed ? Visibility.Visible : Visibility.Collapsed;
         VerifyValue = row.Verify;
         NotesValue = row.Notes;
+
+        if (row.FactionId is { } factionId)
+        {
+            FactionValue = SafeFactionName(lookupFactionName, factionId) ?? UiText.FactionShortCode(factionId) ?? UiText.PlaceholderDash;
+            FactionVisibility = Visibility.Visible;
+        }
+        else
+        {
+            FactionValue = string.Empty;
+            FactionVisibility = Visibility.Collapsed;
+        }
 
         var loading = UiText.InfoSheetLoading;
         _birthdayValue = loading;
@@ -222,6 +236,18 @@ public sealed class InfoSheetViewModel : INotifyPropertyChanged
 
         ErrorLine = UiText.FormatErrorLoading(string.Join(", ", sources));
         ErrorLineVisibility = Visibility.Visible;
+    }
+
+    private static string? SafeFactionName(Func<long, string?>? lookupFactionName, long factionId)
+    {
+        try
+        {
+            return lookupFactionName?.Invoke(factionId);
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private void ApplyTotals(InfoSheetTotals? totals)

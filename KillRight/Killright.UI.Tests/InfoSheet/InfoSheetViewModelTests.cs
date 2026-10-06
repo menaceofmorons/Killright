@@ -370,6 +370,74 @@ public sealed class InfoSheetViewModelTests
             Assert.Contains("{Binding " + name + ",", xaml);
     }
 
+    [Fact]
+    public void Faction_EnlistedPilotWithReferenceName_ShowsFullName()
+    {
+        var row = CreateRow();
+        row.FactionId = 500004;
+
+        var viewModel = CreateFactionViewModel(row, _ => "Gallente Federation");
+
+        Assert.Equal(Visibility.Visible, viewModel.FactionVisibility);
+        Assert.Equal("Gallente Federation", viewModel.FactionValue);
+        Assert.Equal("Faction: ", UiText.InfoSheetLabelFaction);
+    }
+
+    [Fact]
+    public void Faction_NotEnlisted_IsHidden()
+    {
+        var viewModel = CreateFactionViewModel(CreateRow(), _ => "Gallente Federation");
+
+        Assert.Equal(Visibility.Collapsed, viewModel.FactionVisibility);
+    }
+
+    [Fact]
+    public void Faction_NameMissingFromReferenceData_ShowsShortCode()
+    {
+        var row = CreateRow();
+        row.FactionId = 500010;
+
+        var viewModel = CreateFactionViewModel(row, _ => null);
+
+        Assert.Equal(Visibility.Visible, viewModel.FactionVisibility);
+        Assert.Equal("Gu", viewModel.FactionValue);
+    }
+
+    [Fact]
+    public void Faction_NameLookupThrows_ShowsShortCode()
+    {
+        var row = CreateRow();
+        row.FactionId = 500011;
+
+        var viewModel = CreateFactionViewModel(row, _ => throw new InvalidOperationException("SDE table missing"));
+
+        Assert.Equal("An", viewModel.FactionValue);
+    }
+
+    [Fact]
+    public void Layout_FactionLineFollowsTheTable()
+    {
+        var xaml = File.ReadAllText(FindInfoSheetXaml());
+
+        var table = xaml.IndexOf("InfoSheetTableTotal", StringComparison.Ordinal);
+        var faction = xaml.IndexOf("InfoSheetLabelFaction", StringComparison.Ordinal);
+
+        Assert.True(table >= 0 && table < faction);
+        Assert.Contains("{Binding FactionVisibility}", xaml);
+        Assert.Contains("{Binding FactionValue,", xaml);
+    }
+
+    private static InfoSheetViewModel CreateFactionViewModel(PilotReportRow row, Func<long, string?> lookupFactionName)
+    {
+        return new InfoSheetViewModel(
+            row,
+            false,
+            _ => Task.FromResult<InfoSheetTotals?>(null),
+            _ => Task.FromResult<DateOnly?>(null),
+            _ => Task.FromResult<PilotLastActivitySummary?>(null),
+            lookupFactionName);
+    }
+
     private static string FindInfoSheetXaml()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

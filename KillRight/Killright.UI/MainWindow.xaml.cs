@@ -112,6 +112,7 @@ public partial class MainWindow : Window
             [ColumnIds.Group] = ColumnGroup,
             [ColumnIds.Corporation] = ColumnCorporation,
             [ColumnIds.Alliance] = ColumnAlliance,
+            [ColumnIds.FactionWarfare] = ColumnFactionWarfare,
             [ColumnIds.Style] = ColumnStyle,
             [ColumnIds.Week] = ColumnWeek,
             [ColumnIds.LastActive] = ColumnLastActive,
@@ -301,7 +302,8 @@ public partial class MainWindow : Window
             App.UiState.Current.DeveloperTabRevealed,
             LoadTotalsForInfoSheetAsync,
             LoadBirthdayForInfoSheetAsync,
-            characterId => LoadLastActivityForInfoSheetAsync(characterId, lookupTag));
+            characterId => LoadLastActivityForInfoSheetAsync(characterId, lookupTag),
+            factionId => App.SdeReferenceDataStore.GetFactionName(factionId));
 
         var infoSheet = new InfoSheetWindow(viewModel)
         {

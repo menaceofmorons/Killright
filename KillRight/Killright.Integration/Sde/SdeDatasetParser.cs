@@ -9,6 +9,7 @@ public static class SdeDatasetParser
     private const string TypesEntryName = "types.jsonl";
     private const string SolarSystemsEntryName = "mapSolarSystems.jsonl";
     private const string NpcCorporationsEntryName = "npcCorporations.jsonl";
+    private const string FactionsEntryName = "factions.jsonl";
 
     public static SdeDatasetContents ParseZip(string zipPath)
     {
@@ -17,8 +18,9 @@ public static class SdeDatasetParser
         var types = ParseTypes(RequireEntry(archive, TypesEntryName));
         var solarSystems = ParseSolarSystems(RequireEntry(archive, SolarSystemsEntryName));
         var npcCorporationIds = ParseNpcCorporationIds(RequireEntry(archive, NpcCorporationsEntryName));
+        var factions = ParseFactions(RequireEntry(archive, FactionsEntryName));
 
-        return new SdeDatasetContents(types, solarSystems, npcCorporationIds);
+        return new SdeDatasetContents(types, solarSystems, npcCorporationIds, factions);
     }
 
     private static ZipArchiveEntry RequireEntry(ZipArchive archive, string entryName)
@@ -59,6 +61,21 @@ public static class SdeDatasetParser
         }
 
         return solarSystems;
+    }
+
+    private static List<SdeFaction> ParseFactions(ZipArchiveEntry entry)
+    {
+        var factions = new List<SdeFaction>();
+
+        foreach (var line in ReadJsonLines(entry))
+        {
+            if (!TryGetKeyAndEnglishName(line.RootElement, out var factionId, out var name))
+                continue;
+
+            factions.Add(new SdeFaction(factionId, name));
+        }
+
+        return factions;
     }
 
     private static List<long> ParseNpcCorporationIds(ZipArchiveEntry entry)

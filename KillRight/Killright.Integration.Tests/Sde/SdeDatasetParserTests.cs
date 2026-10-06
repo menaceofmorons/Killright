@@ -82,6 +82,50 @@ public sealed class SdeDatasetParserTests
     }
 
     [Fact]
+    public void ParseZip_FactionsEntry_KeepsRowsWithEnglishNames()
+    {
+        var zipPath = WriteZip(
+            types: "",
+            solarSystems: "",
+            npcCorporations: "",
+            factions: """
+                {"_key": 500001, "name": {"en": "Caldari State", "de": "Staat der Caldari"}}
+                {"_key": 500010, "name": {"en": "Guristas Pirates"}}
+                {"_key": 500099, "name": {"de": "No English Name"}}
+                """);
+
+        try
+        {
+            var contents = SdeDatasetParser.ParseZip(zipPath);
+
+            Assert.Equal(2, contents.Factions.Count);
+            Assert.Contains(contents.Factions, f => f is { FactionId: 500001, Name: "Caldari State" });
+            Assert.Contains(contents.Factions, f => f is { FactionId: 500010, Name: "Guristas Pirates" });
+        }
+        finally
+        {
+            File.Delete(zipPath);
+        }
+    }
+
+    [Fact]
+    public void ParseZip_MissingFactionsEntry_Throws()
+    {
+        var zipPath = WriteZip(types: "", solarSystems: "", npcCorporations: "", includeFactionsEntry: false);
+
+        try
+        {
+            var exception = Assert.Throws<InvalidDataException>(() => SdeDatasetParser.ParseZip(zipPath));
+
+            Assert.Contains("factions.jsonl", exception.Message);
+        }
+        finally
+        {
+            File.Delete(zipPath);
+        }
+    }
+
+    [Fact]
     public void ParseZip_MissingRequiredEntry_Throws()
     {
         var zipPath = Path.Combine(Path.GetTempPath(), $"sde-dataset-{Guid.NewGuid():N}.zip");
@@ -102,7 +146,7 @@ public sealed class SdeDatasetParserTests
         }
     }
 
-    private static string WriteZip(string types, string solarSystems, string npcCorporations)
+    private static string WriteZip(string types, string solarSystems, string npcCorporations, string factions = "", bool includeFactionsEntry = true)
     {
         var zipPath = Path.Combine(Path.GetTempPath(), $"sde-dataset-{Guid.NewGuid():N}.zip");
 
@@ -112,6 +156,9 @@ public sealed class SdeDatasetParserTests
         WriteEntry(archive, "types.jsonl", types);
         WriteEntry(archive, "mapSolarSystems.jsonl", solarSystems);
         WriteEntry(archive, "npcCorporations.jsonl", npcCorporations);
+
+        if (includeFactionsEntry)
+            WriteEntry(archive, "factions.jsonl", factions);
 
         return zipPath;
     }

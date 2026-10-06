@@ -210,6 +210,16 @@ public sealed class KillRightDatabase
                               """;
         command.ExecuteNonQuery();
 
+        using var checkFactionId = connection.CreateCommand();
+        checkFactionId.CommandText = """
+                              SELECT COUNT(*)
+                              FROM information_schema.columns
+                              WHERE table_schema = 'main'
+                                AND table_name = 'pilot_identity_cache'
+                                AND column_name = 'faction_id';
+                              """;
+        var factionIdColumnExisted = Convert.ToInt64(checkFactionId.ExecuteScalar()) > 0;
+
         using var addBirthday = connection.CreateCommand();
         addBirthday.CommandText = "ALTER TABLE main.pilot_identity_cache ADD COLUMN IF NOT EXISTS birthday DATE;";
         addBirthday.ExecuteNonQuery();
@@ -225,6 +235,17 @@ public sealed class KillRightDatabase
                               WHERE security_status_at_utc IS NULL AND security_status IS NOT NULL;
                               """;
         migrateSecurityStatusAtUtc.ExecuteNonQuery();
+
+        using var addFactionId = connection.CreateCommand();
+        addFactionId.CommandText = "ALTER TABLE main.pilot_identity_cache ADD COLUMN IF NOT EXISTS faction_id BIGINT;";
+        addFactionId.ExecuteNonQuery();
+
+        if (factionIdColumnExisted)
+            return;
+
+        using var resetSecurityStatusAtUtc = connection.CreateCommand();
+        resetSecurityStatusAtUtc.CommandText = "UPDATE main.pilot_identity_cache SET security_status_at_utc = NULL;";
+        resetSecurityStatusAtUtc.ExecuteNonQuery();
     }
 
     private static void CreateEsiEntityNameCache(DuckDBConnection connection)
@@ -394,6 +415,17 @@ public sealed class KillRightDatabase
             command.CommandText = """
                                   CREATE TABLE IF NOT EXISTS main.sde_npc_corporations (
                                       corporation_id BIGINT PRIMARY KEY
+                                  );
+                                  """;
+            command.ExecuteNonQuery();
+        }
+
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = """
+                                  CREATE TABLE IF NOT EXISTS main.sde_factions (
+                                      faction_id BIGINT PRIMARY KEY,
+                                      name TEXT
                                   );
                                   """;
             command.ExecuteNonQuery();

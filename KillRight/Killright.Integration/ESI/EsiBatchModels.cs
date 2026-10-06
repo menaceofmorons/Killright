@@ -24,4 +24,5 @@ public sealed record EsiCharacterDetails(
     long CorporationId,
     long? AllianceId,
     double? SecurityStatus,
-    DateOnly? Birthday);
+    DateOnly? Birthday,
+    long? FactionId = null);

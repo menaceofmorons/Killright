@@ -39,7 +39,8 @@ public sealed class SdeIngestionServiceTests
             SolarSystems: [],
             NpcCorporationIds: [],
             BuildNumber: 3542233,
-            UpdatedUtc: DateTimeOffset.UtcNow.AddDays(-1)));
+            UpdatedUtc: DateTimeOffset.UtcNow.AddDays(-1),
+            Factions: [new SdeFaction(500001, "Caldari State")]));
 
         var client = new FakeSdeClient(manifestBuildNumber: 3542233, zipContentsFactory: BuildValidZip);
 
@@ -52,6 +53,66 @@ public sealed class SdeIngestionServiceTests
         var metadata = await store.GetMetadataAsync();
         Assert.Equal("UpToDate", metadata.LastCheckResult);
         Assert.Equal("Rifter", store.GetTypeName(587));
+    }
+
+    [Fact]
+    public async Task RunCheckAsync_FirstRunWithNewBuild_LoadsFactions()
+    {
+        var (_, store) = CreateStore();
+        var client = new FakeSdeClient(manifestBuildNumber: 3542233, zipContentsFactory: BuildValidZip);
+
+        await new SdeIngestionService(client, store, checkIntervalHours: 24).RunCheckAsync();
+
+        Assert.Equal("Caldari State", store.GetFactionName(500001));
+    }
+
+    [Fact]
+    public async Task RunCheckAsync_ZipWithoutFactionsEntry_FailsIngestionAndLeavesTablesUntouched()
+    {
+        var (_, store) = CreateStore();
+
+        await store.ReplaceTablesAsync(new SdeReplacementData(
+            Types: [new SdeType(587, "Rifter")],
+            SolarSystems: [],
+            NpcCorporationIds: [],
+            BuildNumber: 100,
+            UpdatedUtc: DateTimeOffset.UtcNow.AddDays(-2),
+            Factions: [new SdeFaction(500001, "Caldari State")]));
+
+        var client = new FakeSdeClient(manifestBuildNumber: 200, zipContentsFactory: BuildZipWithoutFactions);
+
+        var outcome = await new SdeIngestionService(client, store, checkIntervalHours: 24).RunCheckAsync();
+
+        Assert.Equal(SdeCheckOutcome.UnexpectedFailure, outcome);
+        Assert.Equal("Rifter", store.GetTypeName(587));
+        Assert.Null(store.GetTypeName(999));
+        Assert.Equal("Caldari State", store.GetFactionName(500001));
+        Assert.Equal(100, (await store.GetMetadataAsync()).BuildNumber);
+    }
+
+    [Fact]
+    public async Task RunCheckAsync_InstallWithEmptyFactionsAndSameBuild_ReloadsReferenceData()
+    {
+        var (_, store) = CreateStore();
+
+        await store.ReplaceTablesAsync(new SdeReplacementData(
+            Types: [new SdeType(587, "Rifter")],
+            SolarSystems: [],
+            NpcCorporationIds: [],
+            BuildNumber: 3542233,
+            UpdatedUtc: DateTimeOffset.UtcNow));
+        await store.RecordCheckAsync(DateTimeOffset.UtcNow, "UpToDate", succeeded: true);
+
+        Assert.False(await store.HasReferenceDataAsync());
+
+        var client = new FakeSdeClient(manifestBuildNumber: 3542233, zipContentsFactory: BuildValidZip);
+
+        var outcome = await new SdeIngestionService(client, store, checkIntervalHours: 24).RunCheckAsync();
+
+        Assert.Equal(SdeCheckOutcome.Replaced, outcome);
+        Assert.Equal(1, client.DownloadCallCount);
+        Assert.Equal("Caldari State", store.GetFactionName(500001));
+        Assert.True(await store.HasReferenceDataAsync());
     }
 
     [Fact]
@@ -157,6 +218,21 @@ public sealed class SdeIngestionServiceTests
         using (var archive = new ZipArchive(memoryStream, ZipArchiveMode.Create, leaveOpen: true))
         {
             WriteEntry(archive, "types.jsonl", """{"_key": 587, "name": {"en": "Rifter"}, "published": true}""");
+            WriteEntry(archive, "mapSolarSystems.jsonl", """{"_key": 30000142, "name": {"en": "Jita"}}""");
+            WriteEntry(archive, "npcCorporations.jsonl", """{"_key": 1000001, "deleted": false}""");
+            WriteEntry(archive, "factions.jsonl", """{"_key": 500001, "name": {"en": "Caldari State"}}""");
+        }
+
+        return memoryStream.ToArray();
+    }
+
+    private static byte[] BuildZipWithoutFactions()
+    {
+        using var memoryStream = new MemoryStream();
+
+        using (var archive = new ZipArchive(memoryStream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            WriteEntry(archive, "types.jsonl", """{"_key": 999, "name": {"en": "Replaced Type"}, "published": true}""");
             WriteEntry(archive, "mapSolarSystems.jsonl", """{"_key": 30000142, "name": {"en": "Jita"}}""");
             WriteEntry(archive, "npcCorporations.jsonl", """{"_key": 1000001, "deleted": false}""");
         }

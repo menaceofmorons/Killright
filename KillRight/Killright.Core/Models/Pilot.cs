@@ -13,4 +13,5 @@ public sealed record Pilot
     public Alliance? Alliance { get; init; }
     public long? AllianceId { get; init; }
     public DateOnly? Birthday { get; init; }
+    public long? FactionId { get; init; }
 }

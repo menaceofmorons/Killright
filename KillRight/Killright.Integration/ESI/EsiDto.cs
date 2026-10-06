@@ -39,6 +39,9 @@ internal sealed record EsiCharacterResponse
 
     [JsonPropertyName("birthday")]
     public DateTimeOffset? Birthday { get; init; }
+
+    [JsonPropertyName("faction_id")]
+    public long? FactionId { get; init; }
 }
 
 internal sealed record EsiCorporationResponse
