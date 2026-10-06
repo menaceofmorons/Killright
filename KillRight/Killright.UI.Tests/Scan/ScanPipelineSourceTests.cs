@@ -72,6 +72,23 @@ public sealed class ScanPipelineSourceTests
         Assert.Contains("App.PurgeScheduler.ScanFinished()", source);
     }
 
+    [Fact]
+    public void GridFilters_AreClearedByNewScanCtrlRAndHidingAFilteredColumn()
+    {
+        var source = ReadMainWindow();
+        var applyStart = source.IndexOf("private async Task ApplyRowsAsync(", StringComparison.Ordinal);
+        var apply = source[applyStart..];
+        var currentCheck = apply.IndexOf("if (!context.IsCurrent())", StringComparison.Ordinal);
+        var clearCall = apply.IndexOf("ClearFilters();", StringComparison.Ordinal);
+        var rowsClear = apply.IndexOf("_viewModel.Pilots.Clear()", StringComparison.Ordinal);
+
+        Assert.True(currentCheck >= 0 && clearCall > currentCheck && clearCall < rowsClear);
+        Assert.Contains("e.Key == Key.R", source);
+        Assert.Contains("if (_filters.CarriesFilter(columnId))", source);
+        Assert.Contains("_columnsById[columnId].Visibility != Visibility.Visible", source);
+        Assert.Contains("if (_filters.IsPilotFilterActive)", source);
+    }
+
     private static string ReadMainWindow()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

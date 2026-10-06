@@ -19,6 +19,10 @@ public static class UiText
     public static string GridColumnHeaderVerify => Strings.Get("Grid.ColumnHeader.Verify");
     public static string GridColumnHeaderGroup => Strings.Get("Grid.ColumnHeader.Group");
     public static string GridContextMenuHide => Strings.Get("Grid.ContextMenu.Hide");
+    public static string GridFilterMenuIgnore => Strings.Get("Grid.Filter.Menu.Ignore");
+    public static string GridFilterMenuFilterTo => Strings.Get("Grid.Filter.Menu.FilterTo");
+    public static string GridFilterMenuGeneral => Strings.Get("Grid.Filter.Menu.General");
+    public static string GridFilterMenuRecent => Strings.Get("Grid.Filter.Menu.Recent");
 
     public static string ColumnsLabelThreat => Strings.Get("Columns.Label.Threat");
     public static string ColumnsLabelPilot => Strings.Get("Columns.Label.Pilot");
@@ -98,6 +102,10 @@ public static class UiText
     public static string ShortcutsActionMoveWindow => Strings.Get("Shortcuts.Action.MoveWindow");
     public static string ShortcutsKeyMinimizeWindow => Strings.Get("Shortcuts.Key.MinimizeWindow");
     public static string ShortcutsActionMinimizeWindow => Strings.Get("Shortcuts.Action.MinimizeWindow");
+    public static string ShortcutsKeyClearFilters => Strings.Get("Shortcuts.Key.ClearFilters");
+    public static string ShortcutsActionClearFilters => Strings.Get("Shortcuts.Action.ClearFilters");
+    public static string ShortcutsKeyPilotFilter => Strings.Get("Shortcuts.Key.PilotFilter");
+    public static string ShortcutsActionPilotFilter => Strings.Get("Shortcuts.Action.PilotFilter");
     public static string ShortcutsTabStyle => Strings.Get("Shortcuts.Tab.Style");
     public static string ShortcutsStyleCodeBlob => Strings.Get("Shortcuts.StyleCode.Blob");
     public static string ShortcutsStyleWordBlob => Strings.Get("Shortcuts.StyleWord.Blob");

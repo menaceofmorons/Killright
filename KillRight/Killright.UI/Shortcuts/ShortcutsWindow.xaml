@@ -57,6 +57,18 @@
                             <TextBlock Text="{x:Static resources:UiText.ShortcutsActionMinimizeWindow}" />
                         </StackPanel>
                     </ListBoxItem>
+                    <ListBoxItem>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{x:Static resources:UiText.ShortcutsKeyClearFilters}" FontWeight="Bold" Width="120" />
+                            <TextBlock Text="{x:Static resources:UiText.ShortcutsActionClearFilters}" />
+                        </StackPanel>
+                    </ListBoxItem>
+                    <ListBoxItem>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{x:Static resources:UiText.ShortcutsKeyPilotFilter}" FontWeight="Bold" Width="120" />
+                            <TextBlock Text="{x:Static resources:UiText.ShortcutsActionPilotFilter}" />
+                        </StackPanel>
+                    </ListBoxItem>
                 </ListBox>
             </TabItem>
             <TabItem Header="{x:Static resources:UiText.ShortcutsTabStyle}">

@@ -127,4 +127,56 @@ public sealed class RelationshipHighlightCalculatorTests
         Assert.Equal("-", rows[0].RelationshipStrengthDisplay);
         Assert.Null(rows[0].RelationshipConfidenceBand);
     }
+
+    [Fact]
+    public void ApplyRelationshipValues_SetsStrengthAndBandWithoutAnyTint()
+    {
+        var pilot = new PilotReportRow { CharacterId = 1, Pilot = "Lukas Naarii" };
+        var related = new PilotReportRow
+        {
+            CharacterId = 2,
+            Pilot = "T'ral Vsengne",
+            GroupRelationships = new[] { Relationship(2, 1, 42, 90) }
+        };
+        var sameGroup = new PilotReportRow { CharacterId = 3, CorporationId = 2000001, Pilot = "syMptom NZ" };
+        pilot.CorporationId = 2000001;
+
+        RelationshipHighlightCalculator.ApplyRelationshipValues(
+            new[] { pilot, related, sameGroup }, pilot, _ => false, RelationshipConfidenceBandSetting.Defaults);
+
+        Assert.Equal("42", related.RelationshipStrengthDisplay);
+        Assert.Equal("High", related.RelationshipConfidenceBand);
+        Assert.Equal("-", sameGroup.RelationshipStrengthDisplay);
+        Assert.Equal("-", pilot.RelationshipStrengthDisplay);
+        Assert.Null(pilot.HighlightBrush);
+        Assert.Null(related.HighlightBrush);
+        Assert.Null(sameGroup.HighlightBrush);
+    }
+
+    [Fact]
+    public void ApplyRelationshipValues_PilotWithoutCharacterId_ResetsValues()
+    {
+        var pilot = new PilotReportRow { CharacterId = null };
+        var other = new PilotReportRow { CharacterId = 2, RelationshipStrengthDisplay = "50", RelationshipConfidenceBand = "High" };
+
+        RelationshipHighlightCalculator.ApplyRelationshipValues(
+            new[] { pilot, other }, pilot, _ => false, RelationshipConfidenceBandSetting.Defaults);
+
+        Assert.Equal("-", other.RelationshipStrengthDisplay);
+        Assert.Null(other.RelationshipConfidenceBand);
+    }
+
+    [Fact]
+    public void IsSameGroup_AndFindRelationship_AreSharedWithTheHighlight()
+    {
+        var a = new PilotReportRow { CharacterId = 1, CorporationId = 2000001, AllianceId = 7 };
+        var b = new PilotReportRow { CharacterId = 2, CorporationId = 2000001, AllianceId = 8, GroupRelationships = new[] { Relationship(1, 2, 10, 10) } };
+        var c = new PilotReportRow { CharacterId = 3, CorporationId = 2000009, AllianceId = 7 };
+
+        Assert.True(RelationshipHighlightCalculator.IsSameGroup(b, a, _ => false));
+        Assert.False(RelationshipHighlightCalculator.IsSameGroup(b, a, _ => true));
+        Assert.True(RelationshipHighlightCalculator.IsSameGroup(c, a, _ => true));
+        Assert.NotNull(RelationshipHighlightCalculator.FindRelationship(b, a));
+        Assert.Null(RelationshipHighlightCalculator.FindRelationship(c, a));
+    }
 }

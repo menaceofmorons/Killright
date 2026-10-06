@@ -52,12 +52,23 @@ public partial class MainWindow : Window
     private InfoSheetWindow? _infoSheet;
     private PilotReportRow? _pendingHoverRow;
     private IReadOnlySet<string>? _previousScanKeys;
+    private readonly GridFilterState _filters = new();
+
+    private static readonly string[] FilterableColumnIds =
+    {
+        ColumnIds.Pilot,
+        ColumnIds.Corporation,
+        ColumnIds.Alliance,
+        ColumnIds.FactionWarfare,
+        ColumnIds.Style
+    };
 
     public MainWindow()
     {
         InitializeComponent();
         _viewModel = new MainWindowViewModel();
         DataContext = _viewModel;
+        CollectionViewSource.GetDefaultView(_viewModel.Pilots).Filter = item => item is PilotReportRow row && _filters.IsVisible(row);
 
         _relationshipConfidenceBands = RelationshipConfidenceBandSetting.ValidateOrDefault(App.Settings.RelationshipConfidenceBands);
         _hoverTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(HoverDelayMilliseconds) };
@@ -155,6 +166,9 @@ public partial class MainWindow : Window
         }
 
         ResetSortIfHiddenColumnIsSorted();
+
+        if (FilterableColumnIds.Any(columnId => _filters.CarriesFilter(columnId) && _columnsById[columnId].Visibility != Visibility.Visible))
+            ClearFilters();
     }
 
     private void HookColumnLiveUpdateEvents()
@@ -219,13 +233,143 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (FindAncestor<DataGridCell>(e.OriginalSource as DependencyObject) is { Column: var cellColumn } cell
-            && cellColumn == ColumnPilot
-            && FindAncestor<DataGridRow>(cell) is { Item: PilotReportRow row })
+        if (FindAncestor<DataGridCell>(e.OriginalSource as DependencyObject) is not { Column: var cellColumn } cell
+            || FindAncestor<DataGridRow>(cell) is not { Item: PilotReportRow row })
+            return;
+
+        if (cellColumn == ColumnPilot)
         {
+            if ((Keyboard.Modifiers & ModifierKeys.Control) != 0)
+            {
+                e.Handled = true;
+                ApplyPilotFilter(row);
+                return;
+            }
+
             OpenInfoSheet(row, PointToScreen(e.GetPosition(this)));
+            return;
+        }
+
+        if (BuildTempFilterMenu(cellColumn, row) is { } menu)
+        {
+            cell.ContextMenu = menu;
+            menu.PlacementTarget = cell;
+            menu.IsOpen = true;
         }
     }
+
+    private ContextMenu? BuildTempFilterMenu(DataGridColumn column, PilotReportRow row)
+    {
+        if (column == ColumnCorporation)
+            return BuildFieldMenu(GridFilterField.Corporation, row);
+
+        if (column == ColumnAlliance)
+            return BuildFieldMenu(GridFilterField.Alliance, row);
+
+        if (column == ColumnFactionWarfare)
+            return BuildFieldMenu(GridFilterField.FactionWarfare, row);
+
+        if (column != ColumnStyle)
+            return null;
+
+        var menu = new ContextMenu();
+
+        foreach (var (field, header) in new[]
+        {
+            (GridFilterField.GeneralStyle, UiText.GridFilterMenuGeneral),
+            (GridFilterField.RecentStyle, UiText.GridFilterMenuRecent)
+        })
+        {
+            if (!GridFilterState.TryGetKey(row, field, out _))
+                continue;
+
+            var slotItem = new MenuItem { Header = header };
+            AddFilterItems(slotItem.Items, field, row);
+            menu.Items.Add(slotItem);
+        }
+
+        return menu.Items.Count == 0 ? null : menu;
+    }
+
+    private ContextMenu? BuildFieldMenu(GridFilterField field, PilotReportRow row)
+    {
+        if (!GridFilterState.TryGetKey(row, field, out _))
+            return null;
+
+        var menu = new ContextMenu();
+        AddFilterItems(menu.Items, field, row);
+        return menu;
+    }
+
+    private void AddFilterItems(ItemCollection items, GridFilterField field, PilotReportRow row)
+    {
+        items.Add(CreateFilterItem(UiText.GridFilterMenuIgnore, field, GridFilterMode.Ignore, row));
+        items.Add(CreateFilterItem(UiText.GridFilterMenuFilterTo, field, GridFilterMode.FilterTo, row));
+    }
+
+    private MenuItem CreateFilterItem(string header, GridFilterField field, GridFilterMode mode, PilotReportRow row)
+    {
+        var item = new MenuItem { Header = header };
+
+        item.Click += (_, _) =>
+        {
+            if (_filters.Add(row, field, mode))
+                RefreshFilterView();
+        };
+
+        return item;
+    }
+
+    private void ApplyPilotFilter(PilotReportRow row)
+    {
+        if (_filters.IsPilotFilterActive || row.CharacterId is null)
+            return;
+
+        _hoverTimer.Stop();
+        _pendingHoverRow = null;
+        RelationshipHighlightCalculator.Clear(_viewModel.Pilots);
+
+        _filters.ApplyPilotFilter(row, _viewModel.Pilots, App.SdeReferenceDataStore.IsNpcCorporation);
+        RelationshipHighlightCalculator.ApplyRelationshipValues(
+            _viewModel.Pilots,
+            row,
+            App.SdeReferenceDataStore.IsNpcCorporation,
+            _relationshipConfidenceBands);
+
+        RefreshFilterView();
+    }
+
+    private void ClearFilters()
+    {
+        if (!_filters.IsActive)
+            return;
+
+        var pilotFilterWasActive = _filters.IsPilotFilterActive;
+        _filters.Clear();
+
+        if (pilotFilterWasActive)
+            RelationshipHighlightCalculator.Clear(_viewModel.Pilots);
+
+        RefreshFilterView();
+    }
+
+    private void RefreshFilterView()
+    {
+        foreach (var columnId in FilterableColumnIds)
+            _columnsById[columnId].Header = _filters.HeaderPrefix(columnId) + GetPlainHeader(columnId);
+
+        CollectionViewSource.GetDefaultView(_viewModel.Pilots).Refresh();
+    }
+
+    private static string GetPlainHeader(string columnId) => columnId switch
+    {
+        ColumnIds.Pilot => UiText.GridColumnHeaderPilot,
+        ColumnIds.Corporation => UiText.GridColumnHeaderCorporation,
+        ColumnIds.Alliance => UiText.GridColumnHeaderAlliance,
+        ColumnIds.FactionWarfare => UiText.GridColumnHeaderFactionWarfare,
+        ColumnIds.Style => UiText.GridColumnHeaderStyle,
+        _ => string.Empty
+    };
 
     private void PilotGrid_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
@@ -247,7 +391,7 @@ public partial class MainWindow : Window
 
     private void PilotCell_MouseEnter(object sender, MouseEventArgs e)
     {
-        if (sender is not DataGridCell { DataContext: PilotReportRow row })
+        if (_filters.IsPilotFilterActive || sender is not DataGridCell { DataContext: PilotReportRow row })
             return;
 
         _pendingHoverRow = row;
@@ -257,6 +401,9 @@ public partial class MainWindow : Window
 
     private void PilotCell_MouseLeave(object sender, MouseEventArgs e)
     {
+        if (_filters.IsPilotFilterActive)
+            return;
+
         _hoverTimer.Stop();
         _pendingHoverRow = null;
         RelationshipHighlightCalculator.Clear(_viewModel.Pilots);
@@ -390,6 +537,9 @@ public partial class MainWindow : Window
         column.Visibility = Visibility.Collapsed;
         ResetSortIfHiddenColumnIsSorted();
 
+        if (_filters.CarriesFilter(columnId))
+            ClearFilters();
+
         var updatedColumns = App.UiState.Current.Columns
             .Select(columnState => columnState.Id == columnId ? columnState with { Visible = false } : columnState)
             .ToList();
@@ -487,6 +637,11 @@ public partial class MainWindow : Window
         {
             e.Handled = true;
             Close();
+        }
+        else if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.R)
+        {
+            e.Handled = true;
+            ClearFilters();
         }
         else if (e.Key == Key.F1)
         {
@@ -834,6 +989,7 @@ public partial class MainWindow : Window
 
                 _hoverTimer.Stop();
                 _pendingHoverRow = null;
+                ClearFilters();
                 _previousScanKeys = NewPilotFlagger.Apply(rows, _previousScanKeys);
                 _viewModel.Pilots.Clear();
 

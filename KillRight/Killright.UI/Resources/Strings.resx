@@ -47,6 +47,10 @@
   <data name="Grid.ColumnHeader.Verify" xml:space="preserve"><value>Verify</value></data>
   <data name="Grid.ColumnHeader.Group" xml:space="preserve"><value>Group</value></data>
   <data name="Grid.ContextMenu.Hide" xml:space="preserve"><value>Hide</value></data>
+  <data name="Grid.Filter.Menu.Ignore" xml:space="preserve"><value>Ignore</value></data>
+  <data name="Grid.Filter.Menu.FilterTo" xml:space="preserve"><value>Filter to</value></data>
+  <data name="Grid.Filter.Menu.General" xml:space="preserve"><value>General</value></data>
+  <data name="Grid.Filter.Menu.Recent" xml:space="preserve"><value>Recent</value></data>
 
   <data name="Columns.Label.Threat" xml:space="preserve"><value>Threat</value></data>
   <data name="Columns.Label.Pilot" xml:space="preserve"><value>Pilot</value></data>
@@ -122,6 +126,10 @@
   <data name="Shortcuts.Action.MoveWindow" xml:space="preserve"><value>Move window</value></data>
   <data name="Shortcuts.Key.MinimizeWindow" xml:space="preserve"><value>Win+Down</value></data>
   <data name="Shortcuts.Action.MinimizeWindow" xml:space="preserve"><value>Minimize window</value></data>
+  <data name="Shortcuts.Key.ClearFilters" xml:space="preserve"><value>Ctrl+R</value></data>
+  <data name="Shortcuts.Action.ClearFilters" xml:space="preserve"><value>Clear grid filters</value></data>
+  <data name="Shortcuts.Key.PilotFilter" xml:space="preserve"><value>Ctrl+right-click</value></data>
+  <data name="Shortcuts.Action.PilotFilter" xml:space="preserve"><value>Filter to pilot (Pilot cell)</value></data>
   <data name="Shortcuts.Tab.Style" xml:space="preserve"><value>Style</value></data>
   <data name="Shortcuts.StyleCode.Blob" xml:space="preserve"><value>B</value></data>
   <data name="Shortcuts.StyleWord.Blob" xml:space="preserve"><value>Blob</value></data>

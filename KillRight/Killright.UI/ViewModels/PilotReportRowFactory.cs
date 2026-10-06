@@ -49,6 +49,8 @@ public static class PilotReportRowFactory
             Style = $"{StyleLetterCodeFormatter.FormatGeneral(generalResult.Classification, generalResult.IsPodder)}/{StyleLetterCodeFormatter.FormatRecent(recentStyle, recentIsPodder)}",
             GeneralStyle = StyleDisplayFormatter.Format(generalResult.Classification, generalResult.IsPodder),
             RecentStyle = StyleDisplayFormatter.Format(recentStyle, recentIsPodder),
+            GeneralStyleClassification = generalResult.Classification,
+            RecentStyleClassification = recentStyle,
             Week = $"{FormatWeekSideValue(activity?.HasPublicActivityData, activity?.KillsWeek)}/{FormatWeekSideValue(activity?.HasPublicActivityData, activity?.SoloWeek)}",
             Kills = FormatActivityValue(activity?.HasPublicActivityData, activity?.KillsWeek),
             Solos = FormatActivityValue(activity?.HasPublicActivityData, activity?.SoloWeek),

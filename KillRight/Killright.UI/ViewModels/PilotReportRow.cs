@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows.Media;
+using Killright.Core.Style;
 using Killright.UI.Analysis;
 
 namespace Killright.UI.ViewModels;
@@ -34,6 +35,8 @@ public class PilotReportRow : INotifyPropertyChanged
     public string Style { get; set; } = string.Empty;
     public string GeneralStyle { get; set; } = string.Empty;
     public string RecentStyle { get; set; } = string.Empty;
+    public StyleClassification GeneralStyleClassification { get; set; } = StyleClassification.Unknown;
+    public StyleClassification RecentStyleClassification { get; set; } = StyleClassification.Unknown;
     public string Week { get; set; } = string.Empty;
     public string Kills { get; set; } = string.Empty;
     public string Solos { get; set; } = string.Empty;
