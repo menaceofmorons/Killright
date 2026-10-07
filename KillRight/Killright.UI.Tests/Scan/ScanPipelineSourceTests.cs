@@ -88,9 +88,45 @@ public sealed class ScanPipelineSourceTests
 
         Assert.DoesNotContain("_viewModel.Pilots.Clear()", core);
         Assert.DoesNotContain("_viewModel.Pilots.Add(", core);
+        Assert.DoesNotContain("_viewModel.Pilots.ReplaceAll(", core);
         Assert.Contains("Dispatcher.InvokeAsync(() =>", apply);
         Assert.Contains("if (!context.IsCurrent())", apply);
-        Assert.Contains("_viewModel.Pilots.Clear()", apply);
+        Assert.Contains("_viewModel.Pilots.ReplaceAll(rows)", apply);
+        Assert.DoesNotContain("_viewModel.Pilots.Clear()", apply);
+        Assert.DoesNotContain("_viewModel.Pilots.Add(", apply);
+    }
+
+    [Fact]
+    public void PostEngineWrite_FollowsTheGridUpdateAndTheScanWritePrecedesTheEngineCall()
+    {
+        var source = ReadMainWindow();
+        var core = source[source.IndexOf("private async Task ResolvePilotsCoreAsync(", StringComparison.Ordinal)..source.IndexOf("private async Task ApplyRowsAsync(", StringComparison.Ordinal)];
+
+        var scanWrite = core.IndexOf("CommitWrites(session, writes, timings, \"scan\");", StringComparison.Ordinal);
+        var engineCall = core.IndexOf("engineResults = await App.RecentStyleClient.AnalyzePilotsAsync(", StringComparison.Ordinal);
+        var applyRows = core.IndexOf("await ApplyRowsAsync(rows, context, timings);", StringComparison.Ordinal);
+        var postEngineWrite = core.IndexOf("CommitWrites(null, postEngineWrites, timings, \"post_engine\");", StringComparison.Ordinal);
+
+        Assert.True(scanWrite >= 0 && scanWrite < engineCall);
+        Assert.True(engineCall < applyRows);
+        Assert.True(applyRows < postEngineWrite);
+        Assert.Equal(1, core.Split("CommitWrites(null, postEngineWrites").Length - 1);
+        Assert.True(core.IndexOf("\"write_tx\", null, \"post_engine\"", StringComparison.Ordinal) > applyRows);
+    }
+
+    [Fact]
+    public void GridUpdate_RecordsSubPhasesAndLayoutBeforeRender()
+    {
+        var source = ReadMainWindow();
+        var apply = source[source.IndexOf("private async Task ApplyRowsAsync(", StringComparison.Ordinal)..];
+
+        foreach (var phase in new[] { "grid_update", "grid_filters_clear", "grid_flag", "grid_replace", "grid_layout", "grid_render" })
+            Assert.Contains($"\"{phase}\"", apply);
+
+        Assert.True(apply.IndexOf("\"grid_update\"", StringComparison.Ordinal) < apply.IndexOf("\"grid_layout\"", StringComparison.Ordinal));
+        Assert.True(apply.IndexOf("\"grid_layout\"", StringComparison.Ordinal) < apply.IndexOf("\"grid_render\"", StringComparison.Ordinal));
+        Assert.Matches(@"""grid_layout""\)\)\s*\{\s*await Dispatcher\.InvokeAsync\(\(\) => \{ \}, DispatcherPriority\.Loaded\);", apply);
+        Assert.Matches(@"""grid_render""\)\)\s*\{\s*await Dispatcher\.InvokeAsync\(\(\) => \{ \}, DispatcherPriority\.ContextIdle\);", apply);
     }
 
     [Fact]
@@ -112,7 +148,7 @@ public sealed class ScanPipelineSourceTests
         var apply = source[applyStart..];
         var currentCheck = apply.IndexOf("if (!context.IsCurrent())", StringComparison.Ordinal);
         var clearCall = apply.IndexOf("ClearFilters();", StringComparison.Ordinal);
-        var rowsClear = apply.IndexOf("_viewModel.Pilots.Clear()", StringComparison.Ordinal);
+        var rowsClear = apply.IndexOf("_viewModel.Pilots.ReplaceAll(rows)", StringComparison.Ordinal);
 
         Assert.True(currentCheck >= 0 && clearCall > currentCheck && clearCall < rowsClear);
         Assert.Contains("e.Key == Key.R", source);

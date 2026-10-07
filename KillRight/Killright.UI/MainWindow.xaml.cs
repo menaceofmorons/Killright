@@ -983,13 +983,6 @@ public partial class MainWindow : Window
             await AttachGroupRelationshipsAsync(rows, timings);
         }
 
-        cancellationToken.ThrowIfCancellationRequested();
-
-        using (timings.Measure(ScanTimings.ScanLevel, "write_tx", null, "post_engine"))
-        {
-            CommitWrites(null, postEngineWrites, timings, "post_engine");
-        }
-
         IReadOnlySet<long> npcCorporationIds;
 
         using (timings.Measure(ScanTimings.ScanLevel, "npc_ids"))
@@ -1005,6 +998,13 @@ public partial class MainWindow : Window
         cancellationToken.ThrowIfCancellationRequested();
 
         await ApplyRowsAsync(rows, context, timings);
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        using (timings.Measure(ScanTimings.ScanLevel, "write_tx", null, "post_engine"))
+        {
+            CommitWrites(null, postEngineWrites, timings, "post_engine");
+        }
     }
 
     private async Task ApplyRowsAsync(List<PilotReportRow> rows, ScanContext context, ScanTimings? timings)
@@ -1018,17 +1018,31 @@ public partial class MainWindow : Window
 
                 _hoverTimer.Stop();
                 _pendingHoverRow = null;
-                ClearFilters();
-                _previousScanKeys = NewPilotFlagger.Apply(rows, _previousScanKeys);
-                _viewModel.Pilots.Clear();
 
-                foreach (var row in rows)
-                    _viewModel.Pilots.Add(row);
+                using (timings.Measure(ScanTimings.ScanLevel, "grid_filters_clear"))
+                {
+                    ClearFilters();
+                }
+
+                using (timings.Measure(ScanTimings.ScanLevel, "grid_flag"))
+                {
+                    _previousScanKeys = NewPilotFlagger.Apply(rows, _previousScanKeys);
+                }
+
+                using (timings.Measure(ScanTimings.ScanLevel, "grid_replace"))
+                {
+                    _viewModel.Pilots.ReplaceAll(rows);
+                }
             });
         }
 
         if (timings is not null)
         {
+            using (timings.Measure(ScanTimings.ScanLevel, "grid_layout"))
+            {
+                await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Loaded);
+            }
+
             using (timings.Measure(ScanTimings.ScanLevel, "grid_render"))
             {
                 await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
