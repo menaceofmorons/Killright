@@ -19,8 +19,15 @@
     "enabled": false
   },
   "network": {
-    "zkillRequestsPerSecond": 15,
-    "maxConcurrency": 8
+    "esiMaxConcurrency": 8,
+    "zkill": {
+      "requestBudget": 550,
+      "budgetWindowSeconds": 60,
+      "maxConcurrency": 50,
+      "requestTimeoutSeconds": 3,
+      "retryCount": 1,
+      "rateLimitPauseSeconds": 60
+    }
   },
   "database": {
     "memoryLimit": "1GB",

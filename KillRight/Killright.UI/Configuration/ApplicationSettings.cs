@@ -126,22 +126,60 @@ public sealed class SdeApplicationSettings
 
 public sealed record NetworkSettings
 {
-    public const double DefaultZkillRequestsPerSecond = 15;
+    public const int DefaultEsiMaxConcurrency = 8;
 
-    public const int DefaultMaxConcurrency = 8;
+    public int EsiMaxConcurrency { get; init; } = DefaultEsiMaxConcurrency;
 
-    public double ZkillRequestsPerSecond { get; init; } = DefaultZkillRequestsPerSecond;
-
-    public int MaxConcurrency { get; init; } = DefaultMaxConcurrency;
+    public ZkillSettings Zkill { get; init; } = new();
 
     public NetworkSettings Normalized()
     {
         return new NetworkSettings
         {
-            ZkillRequestsPerSecond = double.IsFinite(ZkillRequestsPerSecond) && ZkillRequestsPerSecond > 0
-                ? ZkillRequestsPerSecond
-                : DefaultZkillRequestsPerSecond,
-            MaxConcurrency = MaxConcurrency >= 1 ? MaxConcurrency : DefaultMaxConcurrency
+            EsiMaxConcurrency = EsiMaxConcurrency >= 1 ? EsiMaxConcurrency : DefaultEsiMaxConcurrency,
+            Zkill = (Zkill ?? new ZkillSettings()).Normalized()
+        };
+    }
+}
+
+public sealed record ZkillSettings
+{
+    public const int DefaultRequestBudget = 550;
+
+    public const int MaximumRequestBudget = 600;
+
+    public const int DefaultBudgetWindowSeconds = 60;
+
+    public const int DefaultMaxConcurrency = 50;
+
+    public const int DefaultRequestTimeoutSeconds = 3;
+
+    public const int DefaultRetryCount = 1;
+
+    public const int DefaultRateLimitPauseSeconds = 60;
+
+    public int RequestBudget { get; init; } = DefaultRequestBudget;
+
+    public int BudgetWindowSeconds { get; init; } = DefaultBudgetWindowSeconds;
+
+    public int MaxConcurrency { get; init; } = DefaultMaxConcurrency;
+
+    public int RequestTimeoutSeconds { get; init; } = DefaultRequestTimeoutSeconds;
+
+    public int RetryCount { get; init; } = DefaultRetryCount;
+
+    public int RateLimitPauseSeconds { get; init; } = DefaultRateLimitPauseSeconds;
+
+    public ZkillSettings Normalized()
+    {
+        return new ZkillSettings
+        {
+            RequestBudget = RequestBudget >= 1 ? Math.Min(RequestBudget, MaximumRequestBudget) : DefaultRequestBudget,
+            BudgetWindowSeconds = BudgetWindowSeconds >= 1 ? BudgetWindowSeconds : DefaultBudgetWindowSeconds,
+            MaxConcurrency = MaxConcurrency >= 1 ? MaxConcurrency : DefaultMaxConcurrency,
+            RequestTimeoutSeconds = RequestTimeoutSeconds >= 1 ? RequestTimeoutSeconds : DefaultRequestTimeoutSeconds,
+            RetryCount = RetryCount >= 1 ? RetryCount : DefaultRetryCount,
+            RateLimitPauseSeconds = RateLimitPauseSeconds >= 1 ? RateLimitPauseSeconds : DefaultRateLimitPauseSeconds
         };
     }
 }

@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using Killright.Integration.RateLimiting;
@@ -9,18 +10,30 @@ namespace Killright.Integration.zKill;
 public sealed class zKillClient : IzKillClient
 {
     private const string CapsuleShipGroupId = "29";
-    private const int LastKillmailPageBound = 3;
+
+    private static readonly zKillLastKillmailResult LastKillmailFailure =
+        new(zKillLastKillmailOutcome.Failure, null, null);
 
     private readonly HttpClient _http;
     private readonly zKillClientOptions _options;
     private readonly IRequestStartLimiter? _limiter;
+    private readonly Action<string>? _log;
     private long _requestCount;
+    private long _timeoutCount;
+    private long _retryCount;
+    private long _rateLimitedCount;
+    private long _pausedRejectCount;
 
-    public zKillClient(HttpClient http, zKillClientOptions? options = null, IRequestStartLimiter? limiter = null)
+    public zKillClient(
+        HttpClient http,
+        zKillClientOptions? options = null,
+        IRequestStartLimiter? limiter = null,
+        Action<string>? log = null)
     {
         _http = http;
         _options = options ?? new zKillClientOptions();
         _limiter = limiter;
+        _log = log;
         _http.BaseAddress ??= _options.BaseUri;
 
         if (!_http.DefaultRequestHeaders.UserAgent.Any())
@@ -32,12 +45,92 @@ public sealed class zKillClient : IzKillClient
 
     public long RequestCount => Interlocked.Read(ref _requestCount);
 
+    public long TimeoutCount => Interlocked.Read(ref _timeoutCount);
+
+    public long RetryCount => Interlocked.Read(ref _retryCount);
+
+    public long RateLimitedCount => Interlocked.Read(ref _rateLimitedCount);
+
+    public long PausedRejectCount => Interlocked.Read(ref _pausedRejectCount);
+
     private async Task StartRequestAsync(CancellationToken cancellationToken)
     {
         if (_limiter is not null)
-            await _limiter.WaitAsync(cancellationToken);
+        {
+            try
+            {
+                await _limiter.WaitAsync(cancellationToken);
+            }
+            catch (ZkillRateLimitedException)
+            {
+                Interlocked.Increment(ref _pausedRejectCount);
+                throw;
+            }
+        }
 
         Interlocked.Increment(ref _requestCount);
+    }
+
+    private async Task<T> GetWithRetryAsync<T>(
+        string uri,
+        Func<HttpResponseMessage, CancellationToken, Task<T>> read,
+        T failure,
+        CancellationToken cancellationToken)
+    {
+        var attempts = 1 + Math.Max(0, _options.RetryCount);
+
+        for (var attempt = 1; ; attempt++)
+        {
+            await StartRequestAsync(cancellationToken);
+
+            using var attemptCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            attemptCancellation.CancelAfter(_options.RequestTimeout);
+
+            try
+            {
+                using var response = await _http.GetAsync(uri, attemptCancellation.Token);
+
+                if (response.StatusCode == HttpStatusCode.TooManyRequests)
+                {
+                    HandleRateLimited(response);
+                    return failure;
+                }
+
+                return await read(response, attemptCancellation.Token);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                Interlocked.Increment(ref _timeoutCount);
+            }
+            catch (HttpRequestException)
+            {
+            }
+
+            if (attempt >= attempts)
+                return failure;
+
+            Interlocked.Increment(ref _retryCount);
+        }
+    }
+
+    private void HandleRateLimited(HttpResponseMessage response)
+    {
+        Interlocked.Increment(ref _rateLimitedCount);
+
+        var pause = ReadRetryAfter(response) ?? _options.RateLimitPause;
+
+        _limiter?.Pause(pause);
+        _log?.Invoke($"zKill rate limited (429); paused {(long)Math.Ceiling(pause.TotalSeconds)} s");
+    }
+
+    private static TimeSpan? ReadRetryAfter(HttpResponseMessage response)
+    {
+        var retryAfter = response.Headers.RetryAfter;
+
+        var pause = retryAfter?.Delta
+            ?? (retryAfter?.Date is { } date ? date - DateTimeOffset.UtcNow : null);
+
+        return pause is { } value && value > TimeSpan.Zero ? value : null;
     }
 
     public async Task<zKillRecentKillmailResult> GetRecentKillmailsAsync(
@@ -49,32 +142,37 @@ public sealed class zKillClient : IzKillClient
 
         try
         {
-            await StartRequestAsync(cancellationToken);
-
-            using var response = await _http.GetAsync(
+            return await GetWithRetryAsync(
                 $"api/characterID/{characterId}/pastSeconds/{safePastSeconds}/",
+                ReadRecentKillmailsAsync,
+                new zKillRecentKillmailResult(zKillRecentKillmailOutcome.Failure, []),
                 cancellationToken);
-
-            if ((int)response.StatusCode == 204)
-                return new zKillRecentKillmailResult(zKillRecentKillmailOutcome.Success, []);
-
-            if (!response.IsSuccessStatusCode)
-                return new zKillRecentKillmailResult(zKillRecentKillmailOutcome.Failure, []);
-
-            var json = await response.Content.ReadAsStringAsync(cancellationToken);
-
-            if (IsNoHistoryResponse(json))
-                return new zKillRecentKillmailResult(zKillRecentKillmailOutcome.NoHistory, []);
-
-            var payload = JsonSerializer.Deserialize<List<zKillRecentKillmailDto>>(json) ?? [];
-            var rawKillmails = BuildRawKillmails(payload);
-
-            return new zKillRecentKillmailResult(zKillRecentKillmailOutcome.Success, rawKillmails);
         }
         catch
         {
             return new zKillRecentKillmailResult(zKillRecentKillmailOutcome.Failure, []);
         }
+    }
+
+    private static async Task<zKillRecentKillmailResult> ReadRecentKillmailsAsync(
+        HttpResponseMessage response,
+        CancellationToken cancellationToken)
+    {
+        if ((int)response.StatusCode == 204)
+            return new zKillRecentKillmailResult(zKillRecentKillmailOutcome.Success, []);
+
+        if (!response.IsSuccessStatusCode)
+            return new zKillRecentKillmailResult(zKillRecentKillmailOutcome.Failure, []);
+
+        var json = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (IsNoHistoryResponse(json))
+            return new zKillRecentKillmailResult(zKillRecentKillmailOutcome.NoHistory, []);
+
+        var payload = JsonSerializer.Deserialize<List<zKillRecentKillmailDto>>(json) ?? [];
+        var rawKillmails = BuildRawKillmails(payload);
+
+        return new zKillRecentKillmailResult(zKillRecentKillmailOutcome.Success, rawKillmails);
     }
 
     public async Task<zKillStatisticsResult> GetStatisticsAsync(
@@ -83,34 +181,39 @@ public sealed class zKillClient : IzKillClient
     {
         try
         {
-            await StartRequestAsync(cancellationToken);
-
-            using var response = await _http.GetAsync(
+            return await GetWithRetryAsync(
                 $"api/stats/characterID/{characterId}/kills/",
+                ReadStatisticsAsync,
+                new zKillStatisticsResult(zKillStatisticsOutcome.Failure, null),
                 cancellationToken);
-
-            if (!response.IsSuccessStatusCode)
-                return new zKillStatisticsResult(zKillStatisticsOutcome.Failure, null);
-
-            var json = await response.Content.ReadAsStringAsync(cancellationToken);
-
-            if (IsNoHistoryResponse(json))
-                return new zKillStatisticsResult(zKillStatisticsOutcome.NoHistory, null);
-
-            var statistics = JsonSerializer.Deserialize<zKillStatistics>(json);
-
-            if (statistics is null)
-                return new zKillStatisticsResult(zKillStatisticsOutcome.Failure, null);
-
-            statistics.podKills = ExtractPodKills(statistics);
-            statistics.podLosses = ExtractPodLosses(statistics);
-
-            return new zKillStatisticsResult(zKillStatisticsOutcome.Success, statistics);
         }
         catch
         {
             return new zKillStatisticsResult(zKillStatisticsOutcome.Failure, null);
         }
+    }
+
+    private static async Task<zKillStatisticsResult> ReadStatisticsAsync(
+        HttpResponseMessage response,
+        CancellationToken cancellationToken)
+    {
+        if (!response.IsSuccessStatusCode)
+            return new zKillStatisticsResult(zKillStatisticsOutcome.Failure, null);
+
+        var json = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (IsNoHistoryResponse(json))
+            return new zKillStatisticsResult(zKillStatisticsOutcome.NoHistory, null);
+
+        var statistics = JsonSerializer.Deserialize<zKillStatistics>(json);
+
+        if (statistics is null)
+            return new zKillStatisticsResult(zKillStatisticsOutcome.Failure, null);
+
+        statistics.podKills = ExtractPodKills(statistics);
+        statistics.podLosses = ExtractPodLosses(statistics);
+
+        return new zKillStatisticsResult(zKillStatisticsOutcome.Success, statistics);
     }
 
     public async Task<zKillLastKillmailResult> GetLastKillmailAsync(
@@ -119,44 +222,11 @@ public sealed class zKillClient : IzKillClient
     {
         try
         {
-            for (var page = 1; page <= LastKillmailPageBound; page++)
-            {
-                await StartRequestAsync(cancellationToken);
-
-                using var response = await _http.GetAsync(
-                    BuildLastKillmailUri(characterId, page),
-                    cancellationToken);
-
-                if ((int)response.StatusCode == 204)
-                    return new zKillLastKillmailResult(zKillLastKillmailOutcome.Success, null, null);
-
-                if (!response.IsSuccessStatusCode)
-                    return LastKillmailFailure;
-
-                var json = await response.Content.ReadAsStringAsync(cancellationToken);
-
-                if (IsNoHistoryResponse(json))
-                    return new zKillLastKillmailResult(zKillLastKillmailOutcome.NoHistory, null, null);
-
-                var payload = JsonSerializer.Deserialize<List<zKillRecentKillmailDto>>(json) ?? [];
-
-                if (payload.Count == 0)
-                    return new zKillLastKillmailResult(zKillLastKillmailOutcome.Success, null, null);
-
-                var killmail = BuildRawKillmails(payload)
-                    .FirstOrDefault(candidate => !KillmailQualification.IsPodKill(candidate.VictimShipTypeId));
-
-                if (killmail is not null)
-                {
-                    var activityType = killmail.VictimCharacterId == characterId
-                        ? zKillActivityType.Loss
-                        : zKillActivityType.Kill;
-
-                    return new zKillLastKillmailResult(zKillLastKillmailOutcome.Success, killmail, activityType);
-                }
-            }
-
-            return LastKillmailFailure;
+            return await GetWithRetryAsync(
+                $"api/characterID/{characterId}/",
+                (response, token) => ReadLastKillmailAsync(response, characterId, token),
+                LastKillmailFailure,
+                cancellationToken);
         }
         catch
         {
@@ -164,14 +234,35 @@ public sealed class zKillClient : IzKillClient
         }
     }
 
-    private static readonly zKillLastKillmailResult LastKillmailFailure =
-        new(zKillLastKillmailOutcome.Failure, null, null);
-
-    private static string BuildLastKillmailUri(long characterId, int page)
+    private static async Task<zKillLastKillmailResult> ReadLastKillmailAsync(
+        HttpResponseMessage response,
+        long characterId,
+        CancellationToken cancellationToken)
     {
-        return page == 1
-            ? $"api/characterID/{characterId}/"
-            : $"api/characterID/{characterId}/page/{page}/";
+        if ((int)response.StatusCode == 204)
+            return new zKillLastKillmailResult(zKillLastKillmailOutcome.Success, null, null);
+
+        if (!response.IsSuccessStatusCode)
+            return LastKillmailFailure;
+
+        var json = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (IsNoHistoryResponse(json))
+            return new zKillLastKillmailResult(zKillLastKillmailOutcome.NoHistory, null, null);
+
+        var payload = JsonSerializer.Deserialize<List<zKillRecentKillmailDto>>(json) ?? [];
+
+        var killmail = BuildRawKillmails(payload)
+            .FirstOrDefault(candidate => !KillmailQualification.IsPodKill(candidate.VictimShipTypeId));
+
+        if (killmail is null)
+            return new zKillLastKillmailResult(zKillLastKillmailOutcome.Success, null, null);
+
+        var activityType = killmail.VictimCharacterId == characterId
+            ? zKillActivityType.Loss
+            : zKillActivityType.Kill;
+
+        return new zKillLastKillmailResult(zKillLastKillmailOutcome.Success, killmail, activityType);
     }
 
     private static int ExtractPodKills(zKillStatistics statistics)

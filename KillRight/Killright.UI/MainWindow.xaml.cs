@@ -769,7 +769,11 @@ public partial class MainWindow : Window
         var ignoreList = App.UiState.Current.IgnoreListEntries;
         var esiRequestsAtStart = App.EsiClient.RequestCount;
         var zKillRequestsAtStart = App.zKillClient.RequestCount;
-        var limiterWaitAtStart = App.zKillRequestLimiter.TotalWaitMilliseconds;
+        var budgetWaitAtStart = App.zKillRequestLimiter.TotalWaitMilliseconds;
+        var zKillTimeoutsAtStart = App.zKillClient.TimeoutCount;
+        var zKillRetriesAtStart = App.zKillClient.RetryCount;
+        var zKillRateLimitedAtStart = App.zKillClient.RateLimitedCount;
+        var zKillPausedRejectsAtStart = App.zKillClient.PausedRejectCount;
         var writes = new ScanWriteBatch();
 
         IReadOnlyList<Pilot> pilots;
@@ -819,7 +823,7 @@ public partial class MainWindow : Window
             {
                 networkResults = await BoundedConcurrentRunner.RunAsync(
                     pilots,
-                    App.Settings.Network.MaxConcurrency,
+                    App.Settings.Network.Zkill.MaxConcurrency,
                     (pilot, position, token) => FetchPilotNetworkAsync(pilot, position, cachedStatistics, storedActivities, writes, timings, token),
                     (_, _) => PilotNetworkResult.Failed,
                     cancellationToken);
@@ -829,7 +833,11 @@ public partial class MainWindow : Window
 
             timings.Add(ScanTimings.ScanLevel, ScanTimings.CounterPrefix + "esi_calls", App.EsiClient.RequestCount - esiRequestsAtStart);
             timings.Add(ScanTimings.ScanLevel, ScanTimings.CounterPrefix + "zkill_requests", App.zKillClient.RequestCount - zKillRequestsAtStart);
-            timings.Add(ScanTimings.ScanLevel, ScanTimings.CounterPrefix + "limiter_wait_ms", App.zKillRequestLimiter.TotalWaitMilliseconds - limiterWaitAtStart);
+            timings.Add(ScanTimings.ScanLevel, ScanTimings.CounterPrefix + "zkill_timeouts", App.zKillClient.TimeoutCount - zKillTimeoutsAtStart);
+            timings.Add(ScanTimings.ScanLevel, ScanTimings.CounterPrefix + "zkill_retries", App.zKillClient.RetryCount - zKillRetriesAtStart);
+            timings.Add(ScanTimings.ScanLevel, ScanTimings.CounterPrefix + "zkill_429", App.zKillClient.RateLimitedCount - zKillRateLimitedAtStart);
+            timings.Add(ScanTimings.ScanLevel, ScanTimings.CounterPrefix + "zkill_paused_rejects", App.zKillClient.PausedRejectCount - zKillPausedRejectsAtStart);
+            timings.Add(ScanTimings.ScanLevel, ScanTimings.CounterPrefix + "budget_wait_ms", App.zKillRequestLimiter.TotalWaitMilliseconds - budgetWaitAtStart);
 
             for (var pilotIndex = 0; pilotIndex < pilots.Count; pilotIndex++)
             {

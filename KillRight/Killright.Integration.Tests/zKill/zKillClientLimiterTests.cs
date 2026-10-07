@@ -26,6 +26,32 @@ public sealed class zKillClientLimiterTests
     }
 
     [Fact]
+    public async Task GetStatisticsAsync_WithBudget_RequestBeyondBudgetWaitsForTheWindowAndStillSucceeds()
+    {
+        var now = 0L;
+        var waits = new List<TimeSpan>();
+        var budget = new RollingWindowRequestBudget(2, TimeSpan.FromSeconds(60), () => now, (span, _) =>
+        {
+            waits.Add(span);
+            now += span.Ticks;
+            return Task.CompletedTask;
+        });
+        var handler = new ScriptedHttpMessageHandler()
+            .OnUriContaining("api/stats/characterID/95465499", HttpStatusCode.OK, """{"shipsDestroyed":1,"soloKills":0,"soloRatio":0,"avgGangSize":2,"shipsLost":0,"soloLosses":0}""");
+        var client = new zKillClient(new HttpClient(handler), limiter: budget);
+
+        for (var call = 0; call < 3; call++)
+        {
+            var result = await client.GetStatisticsAsync(95465499);
+            Assert.Equal(zKillStatisticsOutcome.Success, result.Outcome);
+        }
+
+        Assert.Equal([TimeSpan.FromSeconds(60)], waits);
+        Assert.Equal(3, client.RequestCount);
+        Assert.Equal(60_000, budget.TotalWaitMilliseconds);
+    }
+
+    [Fact]
     public async Task GetStatisticsAsync_LimiterWaitCancelled_ReturnsFailureAndSendsNoRequest()
     {
         var handler = new ScriptedHttpMessageHandler();
@@ -56,6 +82,12 @@ public sealed class zKillClientLimiterTests
 
         public long TotalWaitMilliseconds => 0;
 
+        public bool IsPaused => false;
+
+        public void Pause(TimeSpan duration)
+        {
+        }
+
         public Task WaitAsync(CancellationToken cancellationToken = default)
         {
             Calls++;
@@ -66,6 +98,12 @@ public sealed class zKillClientLimiterTests
     private sealed class CancellingLimiter : IRequestStartLimiter
     {
         public long TotalWaitMilliseconds => 0;
+
+        public bool IsPaused => false;
+
+        public void Pause(TimeSpan duration)
+        {
+        }
 
         public Task WaitAsync(CancellationToken cancellationToken = default) => Task.FromCanceled(new CancellationToken(true));
     }

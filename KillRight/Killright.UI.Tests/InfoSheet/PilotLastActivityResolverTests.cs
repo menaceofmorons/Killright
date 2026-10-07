@@ -117,6 +117,22 @@ public sealed class PilotLastActivityResolverTests
     }
 
     [Fact]
+    public async Task ResolveAsync_AllPodsPageResult_IsCachedAsConfirmedNoneAndNextOpenMakesNoRequest()
+    {
+        var (resolver, client, cache, _) = Create(result: new zKillLastKillmailResult(zKillLastKillmailOutcome.Success, null, null));
+
+        var first = await resolver.ResolveAsync(Lukas);
+        var second = await resolver.ResolveAsync(Lukas);
+
+        Assert.Null(first.Killmail);
+        Assert.Equal(PilotLastActivitySource.Live, first.Source);
+        Assert.False(cache.Rows[Lukas].HasKillmail);
+        Assert.Null(second.Killmail);
+        Assert.Equal(PilotLastActivitySource.Cache, second.Source);
+        Assert.Equal(1, client.Calls);
+    }
+
+    [Fact]
     public async Task ResolveAsync_FreshConfirmedNoneRow_MakesNoRequestAndReturnsNull()
     {
         var row = new PilotLastKillmailRecord(Lukas, false, null, null, Now.AddDays(-1));

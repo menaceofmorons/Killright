@@ -90,43 +90,10 @@ public sealed class zKillClientLastKillmailTests
     }
 
     [Fact]
-    public async Task GetLastKillmailAsync_PageOfOnlyPods_RequestsPageTwo()
+    public async Task GetLastKillmailAsync_PageOfOnlyPods_ReturnsSuccessWithNoKillmailAfterOneRequest()
     {
         var handler = new ScriptedHttpMessageHandler()
-            .OnUriContaining($"api/characterID/{Lukas}/page/2/", HttpStatusCode.OK, List(Entry(3, Lukas, Punisher, 501)))
             .OnUriContaining($"api/characterID/{Lukas}/", HttpStatusCode.OK, List(Entry(1, 500, Pod, Lukas), Entry(2, 500, Pod, Lukas)));
-        var client = new zKillClient(new HttpClient(handler));
-
-        var result = await client.GetLastKillmailAsync(Lukas);
-
-        Assert.Equal(zKillLastKillmailOutcome.Success, result.Outcome);
-        Assert.Equal(3, result.Killmail!.KillmailId);
-        Assert.Equal(2, client.RequestCount);
-    }
-
-    [Fact]
-    public async Task GetLastKillmailAsync_PageBoundExhaustedWithPodsOnly_ReturnsFailure()
-    {
-        var pods = List(Entry(1, 500, Pod, Lukas));
-        var handler = new ScriptedHttpMessageHandler()
-            .OnUriContaining($"api/characterID/{Lukas}/page/3/", HttpStatusCode.OK, pods)
-            .OnUriContaining($"api/characterID/{Lukas}/page/2/", HttpStatusCode.OK, pods)
-            .OnUriContaining($"api/characterID/{Lukas}/", HttpStatusCode.OK, pods);
-        var client = new zKillClient(new HttpClient(handler));
-
-        var result = await client.GetLastKillmailAsync(Lukas);
-
-        Assert.Equal(zKillLastKillmailOutcome.Failure, result.Outcome);
-        Assert.Null(result.Killmail);
-        Assert.Equal(3, client.RequestCount);
-    }
-
-    [Fact]
-    public async Task GetLastKillmailAsync_PodOnlyPageThenEmptyPage_ReturnsSuccessWithNoKillmail()
-    {
-        var handler = new ScriptedHttpMessageHandler()
-            .OnUriContaining($"api/characterID/{Lukas}/page/2/", HttpStatusCode.OK, "[]")
-            .OnUriContaining($"api/characterID/{Lukas}/", HttpStatusCode.OK, List(Entry(1, 500, Pod, Lukas)));
         var client = new zKillClient(new HttpClient(handler));
 
         var result = await client.GetLastKillmailAsync(Lukas);
@@ -134,7 +101,7 @@ public sealed class zKillClientLastKillmailTests
         Assert.Equal(zKillLastKillmailOutcome.Success, result.Outcome);
         Assert.Null(result.Killmail);
         Assert.Null(result.ActivityType);
-        Assert.Equal(2, client.RequestCount);
+        Assert.Equal(1, client.RequestCount);
     }
 
     [Fact]
@@ -204,29 +171,28 @@ public sealed class zKillClientLastKillmailTests
     }
 
     [Fact]
-    public async Task GetLastKillmailAsync_RequestUris_EndWithTrailingSlashAndCarryNoPastSeconds()
+    public async Task GetLastKillmailAsync_RequestUri_EndsWithTrailingSlashAndCarriesNoPageOrPastSeconds()
     {
-        var handler = new RecordingHandler(List(Entry(1, 500, Pod, Lukas)), "[]");
+        var handler = new RecordingHandler(List(Entry(1, 500, Pod, Lukas)));
         var client = new zKillClient(new HttpClient(handler));
 
         await client.GetLastKillmailAsync(Lukas);
 
-        Assert.Equal([$"/api/characterID/{Lukas}/", $"/api/characterID/{Lukas}/page/2/"], handler.Paths);
+        Assert.Equal([$"/api/characterID/{Lukas}/"], handler.Paths);
     }
 
     [Fact]
-    public async Task GetLastKillmailAsync_EachRequestPassesThroughLimiter()
+    public async Task GetLastKillmailAsync_PassesThroughLimiterOnce()
     {
         var handler = new ScriptedHttpMessageHandler()
-            .OnUriContaining($"api/characterID/{Lukas}/page/2/", HttpStatusCode.OK, List(Entry(3, Lukas, Punisher, 501)))
             .OnUriContaining($"api/characterID/{Lukas}/", HttpStatusCode.OK, List(Entry(1, 500, Pod, Lukas)));
         var limiter = new CountingLimiter();
         var client = new zKillClient(new HttpClient(handler), limiter: limiter);
 
         await client.GetLastKillmailAsync(Lukas);
 
-        Assert.Equal(2, limiter.Calls);
-        Assert.Equal(2, client.RequestCount);
+        Assert.Equal(1, limiter.Calls);
+        Assert.Equal(1, client.RequestCount);
     }
 
     private static string ReadFixture(string name)
@@ -273,6 +239,12 @@ public sealed class zKillClientLastKillmailTests
         public int Calls { get; private set; }
 
         public long TotalWaitMilliseconds => 0;
+
+        public bool IsPaused => false;
+
+        public void Pause(TimeSpan duration)
+        {
+        }
 
         public Task WaitAsync(CancellationToken cancellationToken = default)
         {

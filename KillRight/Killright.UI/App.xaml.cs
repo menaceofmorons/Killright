@@ -35,7 +35,7 @@ public partial class App : Application
     public static ApplicationSettings Settings { get; private set; } = null!;
     public static UiStateStore UiState { get; private set; } = null!;
     public static IEsiClient EsiClient { get; private set; } = null!;
-    public static IzKillClient zKillClient { get; private set; } = null!;
+    public static zKillClient zKillClient { get; private set; } = null!;
     public static IPilotIdentityCache PilotIdentityCache { get; private set; } = null!;
     public static IEsiEntityNameCache EsiEntityNameCache { get; private set; } = null!;
     public static IRequestStartLimiter zKillRequestLimiter { get; private set; } = null!;
@@ -302,7 +302,7 @@ public partial class App : Application
                 EsiClient,
                 PilotIdentityCache,
                 EsiEntityNameCache,
-                Settings.Network.MaxConcurrency);
+                Settings.Network.EsiMaxConcurrency);
 
         var zKillHandler =
             new HttpClientHandler
@@ -316,17 +316,27 @@ public partial class App : Application
             new HttpClient(
                 zKillHandler)
             {
-                Timeout = TimeSpan.FromSeconds(zKillClientOptions.RequestTimeoutSeconds)
+                Timeout = Timeout.InfiniteTimeSpan
             };
 
+        var zkillSettings = Settings.Network.Zkill;
+
         zKillRequestLimiter =
-            new RequestStartLimiter(
-                Settings.Network.ZkillRequestsPerSecond);
+            new RollingWindowRequestBudget(
+                zkillSettings.RequestBudget,
+                TimeSpan.FromSeconds(zkillSettings.BudgetWindowSeconds));
 
         zKillClient =
             new zKillClient(
                 zKillHttpClient,
-                limiter: zKillRequestLimiter);
+                new zKillClientOptions
+                {
+                    RequestTimeout = TimeSpan.FromSeconds(zkillSettings.RequestTimeoutSeconds),
+                    RetryCount = zkillSettings.RetryCount,
+                    RateLimitPause = TimeSpan.FromSeconds(zkillSettings.RateLimitPauseSeconds)
+                },
+                zKillRequestLimiter,
+                EngineFailureLog.Record);
 
         LastActivityResolver =
             new PilotLastActivityResolver(
