@@ -30,6 +30,62 @@ public sealed class ScanTimingsTests
     }
 
     [Fact]
+    public void Measure_NestedScopes_KeepBothRows()
+    {
+        var timings = new ScanTimings();
+
+        using (timings.Measure(ScanTimings.ScanLevel, "write_tx", null, "scan"))
+        {
+            using (timings.Measure(ScanTimings.ScanLevel, "write_commit", null, "scan"))
+            {
+            }
+        }
+
+        var rows = timings.Rows;
+
+        Assert.Equal(2, rows.Count);
+        Assert.Equal("write_commit", rows[0].Phase);
+        Assert.Equal("write_tx", rows[1].Phase);
+        Assert.True(rows[1].Milliseconds >= rows[0].Milliseconds);
+    }
+
+    [Theory]
+    [InlineData("stall_monitor_start", null)]
+    [InlineData("db_session_open", null)]
+    [InlineData("db_session_close", null)]
+    [InlineData("write_open", "post_engine")]
+    [InlineData("write_commit", "scan")]
+    [InlineData("write_close", "post_engine")]
+    public void NewPhaseNames_FlushWithScanLevelAndTag(string phase, string? tag)
+    {
+        var path = TempPath();
+
+        try
+        {
+            var timings = new ScanTimings();
+
+            using (timings.Measure(ScanTimings.ScanLevel, phase, null, tag))
+            {
+            }
+
+            timings.Flush(path);
+
+            var rows = timings.Rows;
+            var lines = File.ReadAllLines(path);
+
+            Assert.Equal(ScanTimings.ScanLevel, rows[0].Level);
+            Assert.Equal(tag, rows[0].Tag);
+            Assert.Equal(2, lines.Length);
+            Assert.Contains($",scan,,{phase},", lines[1]);
+            Assert.EndsWith("," + tag, lines[1]);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void NullSession_MeasureAddAndAddEngine_AreSafeNoOps()
     {
         ScanTimings? timings = null;

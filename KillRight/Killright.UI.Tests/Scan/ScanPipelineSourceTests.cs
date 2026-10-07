@@ -7,8 +7,8 @@ public sealed class ScanPipelineSourceTests
     private const string Checkpoint = "cancellationToken.ThrowIfCancellationRequested();";
 
     [Theory]
-    [InlineData("CommitWrites(session, writes);")]
-    [InlineData("CommitWrites(null, postEngineWrites);")]
+    [InlineData("CommitWrites(session, writes, timings, \"scan\");")]
+    [InlineData("CommitWrites(null, postEngineWrites, timings, \"post_engine\");")]
     [InlineData("engineResults = await App.RecentStyleClient.AnalyzePilotsAsync(")]
     [InlineData("await AttachGroupRelationshipsAsync(rows, timings);")]
     [InlineData("await ApplyRowsAsync(rows, context, timings);")]
@@ -34,6 +34,38 @@ public sealed class ScanPipelineSourceTests
         var core = source[source.IndexOf("private async Task ResolvePilotsCoreAsync(", StringComparison.Ordinal)..source.IndexOf("private async Task ApplyRowsAsync(", StringComparison.Ordinal)];
 
         Assert.True(core.Split(Checkpoint).Length - 1 >= 8);
+    }
+
+    [Fact]
+    public void ScanSessionOpenAndClose_AreTimed()
+    {
+        var source = ReadMainWindow();
+        var core = source[source.IndexOf("private async Task ResolvePilotsCoreAsync(", StringComparison.Ordinal)..source.IndexOf("private async Task ApplyRowsAsync(", StringComparison.Ordinal)];
+
+        Assert.Matches(@"timings\.Measure\(ScanTimings\.ScanLevel, ""db_session_open""\)\)\s*\{\s*session = TryOpenScanSession\(\);\s*\}", core);
+        Assert.Matches(@"timings\.Measure\(ScanTimings\.ScanLevel, ""db_session_close""\)\)\s*\{\s*session\?\.Dispose\(\);\s*\}", core);
+    }
+
+    [Fact]
+    public void StallMonitorStart_IsTimed()
+    {
+        var source = ReadMainWindow();
+
+        Assert.Matches(@"timings\.Measure\(ScanTimings\.ScanLevel, ""stall_monitor_start""\)\)\s*\{\s*stallMonitor = await Dispatcher\.InvokeAsync\(\(\) => UiStallMonitor\.Start\(Dispatcher\)\);\s*\}", source);
+    }
+
+    [Fact]
+    public void CommitWrites_RecordsOpenCommitAndClosePhases()
+    {
+        var source = ReadMainWindow();
+        var start = source.IndexOf("private static void CommitWrites(", StringComparison.Ordinal);
+        var commitWrites = source[start..source.IndexOf("ReadCachedStatisticsAsync(", start, StringComparison.Ordinal)];
+
+        Assert.Contains("\"write_open\", null, tag", commitWrites);
+        Assert.Contains("\"write_commit\", null, tag", commitWrites);
+        Assert.Contains("\"write_close\", null, tag", commitWrites);
+        Assert.True(commitWrites.IndexOf("\"write_open\"", StringComparison.Ordinal) < commitWrites.IndexOf("\"write_commit\"", StringComparison.Ordinal));
+        Assert.True(commitWrites.IndexOf("\"write_commit\"", StringComparison.Ordinal) < commitWrites.IndexOf("\"write_close\"", StringComparison.Ordinal));
     }
 
     [Fact]

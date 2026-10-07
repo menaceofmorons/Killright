@@ -729,7 +729,12 @@ public partial class MainWindow : Window
 
         timings.PilotCount = pilotNames.Count;
         timings.Record(ScanTimings.ScanLevel, "on_ui_thread_at_start", Dispatcher.CheckAccess() ? 1 : 0);
-        var stallMonitor = await Dispatcher.InvokeAsync(() => UiStallMonitor.Start(Dispatcher));
+        UiStallMonitor stallMonitor;
+
+        using (timings.Measure(ScanTimings.ScanLevel, "stall_monitor_start"))
+        {
+            stallMonitor = await Dispatcher.InvokeAsync(() => UiStallMonitor.Start(Dispatcher));
+        }
 
         try
         {
@@ -764,7 +769,12 @@ public partial class MainWindow : Window
         IReadOnlyList<Pilot> pilots;
         PilotNetworkResult[] networkResults;
 
-        var session = TryOpenScanSession();
+        ScanDatabaseSession? session;
+
+        using (timings.Measure(ScanTimings.ScanLevel, "db_session_open"))
+        {
+            session = TryOpenScanSession();
+        }
 
         try
         {
@@ -838,12 +848,15 @@ public partial class MainWindow : Window
 
             using (timings.Measure(ScanTimings.ScanLevel, "write_tx", null, "scan"))
             {
-                CommitWrites(session, writes);
+                CommitWrites(session, writes, timings, "scan");
             }
         }
         finally
         {
-            session?.Dispose();
+            using (timings.Measure(ScanTimings.ScanLevel, "db_session_close"))
+            {
+                session?.Dispose();
+            }
         }
 
         var engineCharacterIds = pilots
@@ -960,7 +973,7 @@ public partial class MainWindow : Window
 
         using (timings.Measure(ScanTimings.ScanLevel, "write_tx", null, "post_engine"))
         {
-            CommitWrites(null, postEngineWrites);
+            CommitWrites(null, postEngineWrites, timings, "post_engine");
         }
 
         IReadOnlySet<long> npcCorporationIds;
@@ -1035,7 +1048,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private static void CommitWrites(ScanDatabaseSession? session, ScanWriteBatch batch)
+    private static void CommitWrites(ScanDatabaseSession? session, ScanWriteBatch batch, ScanTimings? timings, string tag)
     {
         if (batch.IsEmpty)
             return;
@@ -1044,13 +1057,22 @@ public partial class MainWindow : Window
 
         try
         {
-            ownedSession = session is null ? App.Database.OpenScanSession() : null;
+            if (session is null)
+            {
+                using (timings.Measure(ScanTimings.ScanLevel, "write_open", null, tag))
+                {
+                    ownedSession = App.Database.OpenScanSession();
+                }
+            }
 
-            ScanWriter.Commit(
-                session ?? ownedSession!,
-                batch,
-                App.Settings.QualificationFleetThreshold,
-                ApplicationClock.UtcNow);
+            using (timings.Measure(ScanTimings.ScanLevel, "write_commit", null, tag))
+            {
+                ScanWriter.Commit(
+                    session ?? ownedSession!,
+                    batch,
+                    App.Settings.QualificationFleetThreshold,
+                    ApplicationClock.UtcNow);
+            }
         }
         catch (Exception exception)
         {
@@ -1058,7 +1080,13 @@ public partial class MainWindow : Window
         }
         finally
         {
-            ownedSession?.Dispose();
+            if (ownedSession is not null)
+            {
+                using (timings.Measure(ScanTimings.ScanLevel, "write_close", null, tag))
+                {
+                    ownedSession.Dispose();
+                }
+            }
         }
     }
 
