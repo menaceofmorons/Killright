@@ -1,8 +1,8 @@
 use chrono::{DateTime, Utc};
 
-use crate::repositories::pilot_identity_repository::PilotIdentitySnapshot;
-use crate::repositories::recent_killmail_repository::RecentKillmailSnapshot;
-use crate::repositories::zkill_statistics_repository::ZKillStatisticsSnapshot;
+use crate::contracts::PilotIdentitySnapshot;
+use crate::contracts::RecentKillmailSnapshot;
+use crate::contracts::ZKillStatisticsSnapshot;
 use crate::threat_analysis::threat_analyzer::{
     calculate_historical_capability_score, calculate_loss_quality_score,
     calculate_recent_activity_diagnostics, calculate_security_modifier, calculate_survivability_score,
@@ -100,7 +100,7 @@ pub fn analyze_intrinsic_threat_diagnostics(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::repositories::recent_killmail_repository::RecentKillmailSnapshot;
+    use crate::contracts::RecentKillmailSnapshot;
     use chrono::TimeZone;
 
     fn configuration() -> ThreatConfiguration {

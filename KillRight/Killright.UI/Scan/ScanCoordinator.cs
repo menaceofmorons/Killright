@@ -53,6 +53,23 @@ public sealed class ScanCoordinator
             _current?.Cancel();
     }
 
+    public bool WaitForIdle(TimeSpan timeout)
+    {
+        Task tail;
+
+        lock (_gate)
+            tail = _tail;
+
+        try
+        {
+            return tail.Wait(timeout);
+        }
+        catch
+        {
+            return true;
+        }
+    }
+
     private bool IsCurrent(long id)
     {
         lock (_gate)

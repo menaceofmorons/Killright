@@ -4,6 +4,7 @@ using Killright.Storage.GroupHistory.Models;
 
 #endif
 using Killright.Shared.Killmails;
+using Killright.Storage.Database;
 
 namespace Killright.UI.Configuration;
 
@@ -34,6 +35,8 @@ public sealed class ApplicationSettings
     public TimingSettings Timing { get; init; } = new();
 
     public NetworkSettings Network { get; init; } = new();
+
+    public DatabaseSettings Database { get; init; } = new();
 
 #if HISTORIC_RELATIONSHIPS
     public GroupHistoryApplicationSettings GroupHistory { get; init; } = new();
@@ -139,6 +142,27 @@ public sealed record NetworkSettings
                 ? ZkillRequestsPerSecond
                 : DefaultZkillRequestsPerSecond,
             MaxConcurrency = MaxConcurrency >= 1 ? MaxConcurrency : DefaultMaxConcurrency
+        };
+    }
+}
+
+public sealed record DatabaseSettings
+{
+    public string MemoryLimit { get; init; } = KillRightDatabaseOptions.DefaultMemoryLimit;
+
+    public int Threads { get; init; } = KillRightDatabaseOptions.DefaultThreads;
+
+    public int IdleCheckpointSeconds { get; init; } = KillRightDatabaseOptions.DefaultIdleCheckpointSeconds;
+
+    public DatabaseSettings Normalized()
+    {
+        return new DatabaseSettings
+        {
+            MemoryLimit = KillRightDatabaseOptions.NormalizeMemoryLimit(MemoryLimit),
+            Threads = KillRightDatabaseOptions.NormalizeThreads(Threads),
+            IdleCheckpointSeconds = IdleCheckpointSeconds >= 1
+                ? IdleCheckpointSeconds
+                : KillRightDatabaseOptions.DefaultIdleCheckpointSeconds
         };
     }
 }

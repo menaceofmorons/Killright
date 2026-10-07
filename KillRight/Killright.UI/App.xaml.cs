@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Net.Http;
@@ -10,6 +11,7 @@ using Killright.Shared.Killmails;
 using Killright.Shared.Time;
 using Killright.Storage.Database;
 using Killright.Storage.Diagnostics;
+using Killright.Storage.Engine;
 #if HISTORIC_RELATIONSHIPS
 using Killright.Storage.GroupHistory;
 #endif
@@ -49,8 +51,13 @@ public partial class App : Application
     public static IKillrightEngineRuntime EngineRuntime { get; private set; } = null!;
     public static KillRightDatabase Database { get; private set; } = null!;
     public static KillmailPurgeScheduler PurgeScheduler { get; private set; } = null!;
+    public static IdleCheckpointScheduler IdleCheckpointScheduler { get; private set; } = null!;
+    public static IEngineInputReader EngineInputReader { get; private set; } = null!;
+    public static ScanCoordinator? ScanCoordinator { get; set; }
     public static IKillmailBackupService KillmailBackupService { get; private set; } = null!;
     public static bool SkipBackupOnClose { get; set; }
+
+    private static readonly TimeSpan ShutdownWaitTimeout = TimeSpan.FromSeconds(5);
 
 #if ALPHA_RELEASE
     private const bool IsAlphaRelease = true;
@@ -139,7 +146,9 @@ public partial class App : Application
             new KillRightDatabase(
                 new KillRightDatabaseOptions
                 {
-                    DatabasePath = databasePath
+                    DatabasePath = databasePath,
+                    MemoryLimit = Settings.Database.MemoryLimit,
+                    Threads = Settings.Database.Threads
                 });
 
         Database = database;
@@ -162,6 +171,27 @@ public partial class App : Application
 
             if (restored)
                 EngineFailureLog.Record("Restored killmail and attacker tables from the latest backup.");
+        }
+
+        try
+        {
+            database.Open();
+
+            if (!database.VerifySharedInstance())
+                EngineFailureLog.Record("Database instance self-check failed: a second connection did not report the settings applied to the held instance.");
+        }
+        catch (Exception exception)
+        {
+            EngineFailureLog.Record($"Startup refused: the operational database could not be opened. {exception.Message}");
+
+            MessageBox.Show(
+                "The KillRight database could not be opened. Close any other program or KillRight window using it and start KillRight again.",
+                "KillRight - Database",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+
+            Shutdown();
+            return;
         }
 
         var schemaCheckResult = SchemaVersionGate.CheckOnStartup(database, IsAlphaRelease);
@@ -242,15 +272,21 @@ public partial class App : Application
         EngineRuntime =
             new KillrightEngineRuntime(
                 dllPath,
-                databasePath,
                 settingsPath);
 
         if (!EngineRuntime.IsAvailable)
             EngineFailureLog.Record("killright_engine failed to initialize (killright_initialize did not return success).");
 
+        EngineInputReader =
+            new EngineInputReader(
+                database,
+                SdeReferenceDataStore,
+                EngineFailureLog.Record);
+
         RecentStyleClient =
             new RustRecentStyleClient(
                 EngineRuntime,
+                EngineInputReader,
                 Settings.ThreatBands);
 
         var esiHttpClient =
@@ -299,11 +335,21 @@ public partial class App : Application
                 RecentKillmailCache,
                 () => ApplicationClock.UtcNow);
 
+        IdleCheckpointScheduler =
+            new IdleCheckpointScheduler(
+                TimeSpan.FromSeconds(Settings.Database.IdleCheckpointSeconds),
+                database.HasPendingWal,
+                database.Checkpoint,
+                logFailure: EngineFailureLog.Record,
+                recordCheckpoint: RecordCheckpointTiming);
+
         PurgeScheduler =
             new KillmailPurgeScheduler(
                 RecentKillmailCache,
                 logFailure: EngineFailureLog.Record,
-                recordPass: RecordPurgePassTiming);
+                recordPass: RecordPurgePassTiming,
+                passStarted: IdleCheckpointScheduler.ActivityStarted,
+                passFinished: () => _ = IdleCheckpointScheduler.ActivityFinished());
 
         var mainWindow = new MainWindow();
         MainWindow = mainWindow;
@@ -323,11 +369,47 @@ public partial class App : Application
         timings.Flush();
     }
 
+    private static void RecordCheckpointTiming(string tag, double milliseconds)
+    {
+        if (!Settings.Timing.Enabled)
+            return;
+
+        var timings = new ScanTimings();
+        timings.Record(ScanTimings.ScanLevel, "checkpoint", milliseconds, null, tag);
+        timings.Flush();
+    }
+
+    private static void RunShutdownStep(string step, Action action)
+    {
+        try
+        {
+            action();
+        }
+        catch (Exception ex)
+        {
+            EngineFailureLog.Record($"Shutdown step '{step}' failed. {ex.Message}");
+        }
+    }
+
     protected override void OnExit(
         ExitEventArgs e)
     {
         try
         {
+            RunShutdownStep("wait for running work", () =>
+            {
+                var deadline = Stopwatch.StartNew();
+
+                ScanCoordinator?.CancelCurrent();
+
+                var scanIdle = ScanCoordinator?.WaitForIdle(ShutdownWaitTimeout) ?? true;
+                var purgeIdle = PurgeScheduler?.WaitForIdle(
+                    deadline.Elapsed >= ShutdownWaitTimeout ? TimeSpan.Zero : ShutdownWaitTimeout - deadline.Elapsed) ?? true;
+
+                if (!scanIdle || !purgeIdle)
+                    EngineFailureLog.Record("Shutdown continued while a scan or purge pass was still running.");
+            });
+
             if (!SkipBackupOnClose)
             {
                 try
@@ -340,7 +422,18 @@ public partial class App : Application
                 }
             }
 
-            EngineRuntime?.Dispose();
+            RunShutdownStep("checkpoint", () =>
+            {
+                if (Database is null || !Database.IsOpen)
+                    return;
+
+                var startTimestamp = Stopwatch.GetTimestamp();
+                Database.Checkpoint();
+                RecordCheckpointTiming("shutdown", Stopwatch.GetElapsedTime(startTimestamp).TotalMilliseconds);
+            });
+
+            RunShutdownStep("close database", () => Database?.Close());
+            RunShutdownStep("dispose engine", () => EngineRuntime?.Dispose());
         }
         finally
         {

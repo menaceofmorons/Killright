@@ -1,6 +1,3 @@
-#[path = "database_path.rs"]
-pub mod database_path;
-
 #[path = "pod_kill.rs"]
 pub mod pod_kill;
 

@@ -4,8 +4,8 @@ use crate::group_analysis::shared_relationship_evidence::{
     apply_after_split_rule, build_current_identity_index, build_shared_events_by_pair,
     group_attackers_by_killmail, is_currently_same_corporation_or_alliance,
 };
-use crate::repositories::killmail_relationship_repository::KillmailAttackerEvidence;
-use crate::repositories::pilot_identity_repository::PilotIdentitySnapshot;
+use crate::contracts::KillmailAttackerEvidence;
+use crate::contracts::PilotIdentitySnapshot;
 use crate::shared::timing_recorder;
 
 pub const PROVISIONAL_MINIMUM_SHARED_EVENTS: i64 = 2;

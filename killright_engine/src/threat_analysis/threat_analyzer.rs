@@ -1,8 +1,8 @@
 use chrono::{DateTime, Utc};
 
-use crate::repositories::pilot_identity_repository::PilotIdentitySnapshot;
-use crate::repositories::recent_killmail_repository::RecentKillmailSnapshot;
-use crate::repositories::zkill_statistics_repository::ZKillStatisticsSnapshot;
+use crate::contracts::PilotIdentitySnapshot;
+use crate::contracts::RecentKillmailSnapshot;
+use crate::contracts::ZKillStatisticsSnapshot;
 use crate::shared::pod_kill::is_pod_kill;
 use crate::shared::recent_style_contract::{
     STYLE_BLOB, STYLE_FLEET, STYLE_GANG, STYLE_INACTIVE, STYLE_SOLO, STYLE_UNKNOWN, STYLE_VICTIM,
@@ -443,7 +443,7 @@ fn style_matches(actual: &str, expected: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::repositories::recent_killmail_repository::RecentKillmailSnapshot;
+    use crate::contracts::RecentKillmailSnapshot;
     use chrono::TimeZone;
 
     fn configuration() -> ThreatConfiguration {

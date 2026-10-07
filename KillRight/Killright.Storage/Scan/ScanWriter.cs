@@ -20,18 +20,26 @@ public static class ScanWriter
         if (batch.IsEmpty)
             return;
 
-        var connection = session.Connection;
+        try
+        {
+            var connection = session.Connection;
 
-        using var transaction = connection.BeginTransaction();
+            using var transaction = connection.BeginTransaction();
 
-        WriteIdentities(connection, transaction, batch.Identities);
-        WriteEntityNames(connection, transaction, batch.EntityNames);
-        WriteStatistics(connection, transaction, batch.Statistics);
-        KillmailBulkWriter.Write(connection, transaction, batch.Killmails, qualificationFleetThreshold, cachedAtUtc);
-        ClearNoHistoryMarkers(connection, transaction, batch.NoHistoryClears);
-        WriteActivities(connection, transaction, batch.Activities);
+            WriteIdentities(connection, transaction, batch.Identities);
+            WriteEntityNames(connection, transaction, batch.EntityNames);
+            WriteStatistics(connection, transaction, batch.Statistics);
+            KillmailBulkWriter.Write(connection, transaction, batch.Killmails, qualificationFleetThreshold, cachedAtUtc);
+            ClearNoHistoryMarkers(connection, transaction, batch.NoHistoryClears);
+            WriteActivities(connection, transaction, batch.Activities);
 
-        transaction.Commit();
+            transaction.Commit();
+        }
+        catch (Exception exception)
+        {
+            session.ReportFailure(exception);
+            throw;
+        }
     }
 
     private static void WriteIdentities(

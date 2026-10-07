@@ -1,6 +1,6 @@
 use chrono::{DateTime, Duration, Utc};
 
-use crate::repositories::recent_killmail_repository::RecentKillmailSnapshot;
+use crate::contracts::RecentKillmailSnapshot;
 use crate::shared::pod_kill::is_pod_kill;
 
 pub const WEEKLY_WINDOW_DAYS: i64 = 7;

@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::repositories::killmail_relationship_repository::KillmailAttackerEvidence;
-use crate::repositories::pilot_identity_repository::PilotIdentitySnapshot;
+use crate::contracts::KillmailAttackerEvidence;
+use crate::contracts::PilotIdentitySnapshot;
 
 #[derive(Clone)]
 pub(crate) struct SharedKillEvent {

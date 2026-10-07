@@ -292,6 +292,49 @@ public sealed class ScanCoordinatorTests
         while (Interlocked.CompareExchange(ref target, value, current) != current);
     }
 
+    [Fact]
+    public async Task WaitForIdle_ReportsFalseWhileAScanRunsAndTrueOnceItFinishes()
+    {
+        var release = new TaskCompletionSource();
+        var entered = new TaskCompletionSource();
+        var harness = new Harness(async (_, _, _) =>
+        {
+            entered.TrySetResult();
+            await release.Task;
+        });
+
+        Assert.True(harness.Coordinator.WaitForIdle(TimeSpan.Zero));
+
+        var scan = harness.Coordinator.Submit(["Lukas Naarii"]);
+        await entered.Task;
+
+        Assert.False(harness.Coordinator.WaitForIdle(TimeSpan.FromMilliseconds(20)));
+
+        release.SetResult();
+        await scan;
+
+        Assert.True(harness.Coordinator.WaitForIdle(TimeSpan.FromSeconds(5)));
+    }
+
+    [Fact]
+    public async Task WaitForIdle_AfterCancelCurrent_ReturnsOnceTheCancelledScanUnwinds()
+    {
+        var entered = new TaskCompletionSource();
+        var harness = new Harness(async (_, _, context) =>
+        {
+            entered.TrySetResult();
+            await Task.Delay(System.Threading.Timeout.Infinite, context.Token);
+        });
+
+        _ = harness.Coordinator.Submit(["Lukas Naarii"]);
+        await entered.Task;
+
+        harness.Coordinator.CancelCurrent();
+
+        Assert.True(harness.Coordinator.WaitForIdle(TimeSpan.FromSeconds(5)));
+        Assert.Equal(1, harness.Finished);
+    }
+
     private sealed class Harness
     {
         private int _started;

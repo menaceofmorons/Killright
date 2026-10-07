@@ -13,21 +13,38 @@ public sealed class KillmailPurgeScheduler
     private readonly Func<DateTimeOffset> _utcNow;
     private readonly Action<string>? _logFailure;
     private readonly Action<string, double>? _recordPass;
+    private readonly Action? _passStarted;
+    private readonly Action? _passFinished;
     private readonly object _gate = new();
     private int _runningScans;
     private bool _passRunning;
+    private Task _currentPass = Task.CompletedTask;
     private DateTimeOffset? _lastPassUtc;
 
     public KillmailPurgeScheduler(
         IRecentKillmailCache cache,
         Func<DateTimeOffset>? utcNow = null,
         Action<string>? logFailure = null,
-        Action<string, double>? recordPass = null)
+        Action<string, double>? recordPass = null,
+        Action? passStarted = null,
+        Action? passFinished = null)
     {
         _cache = cache;
         _utcNow = utcNow ?? (() => DateTimeOffset.UtcNow);
         _logFailure = logFailure;
         _recordPass = recordPass;
+        _passStarted = passStarted;
+        _passFinished = passFinished;
+    }
+
+    public bool WaitForIdle(TimeSpan timeout)
+    {
+        Task pass;
+
+        lock (_gate)
+            pass = _currentPass;
+
+        return pass.Wait(timeout);
     }
 
     public void ScanStarted()
@@ -51,6 +68,8 @@ public sealed class KillmailPurgeScheduler
 
     private async Task<bool> TryRunPassAsync(string tag, bool requireInterval)
     {
+        var passDone = new TaskCompletionSource();
+
         lock (_gate)
         {
             if (_runningScans > 0 || _passRunning)
@@ -60,7 +79,10 @@ public sealed class KillmailPurgeScheduler
                 return false;
 
             _passRunning = true;
+            _currentPass = passDone.Task;
         }
+
+        Notify(_passStarted);
 
         var startTimestamp = Stopwatch.GetTimestamp();
 
@@ -90,6 +112,20 @@ public sealed class KillmailPurgeScheduler
         {
             lock (_gate)
                 _passRunning = false;
+
+            passDone.TrySetResult();
+            Notify(_passFinished);
+        }
+    }
+
+    private static void Notify(Action? callback)
+    {
+        try
+        {
+            callback?.Invoke();
+        }
+        catch
+        {
         }
     }
 

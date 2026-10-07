@@ -1,5 +1,6 @@
 using System.Data;
 using System.Text.Json;
+using Killright.Storage.Engine;
 using Killright.UI.Analysis;
 
 namespace Killright.UI.Diagnostics;
@@ -7,10 +8,12 @@ namespace Killright.UI.Diagnostics;
 public sealed class EngineDiagnosticsClient
 {
     private readonly IKillrightEngineRuntime _runtime;
+    private readonly IEngineInputReader _inputReader;
 
-    public EngineDiagnosticsClient(IKillrightEngineRuntime runtime)
+    public EngineDiagnosticsClient(IKillrightEngineRuntime runtime, IEngineInputReader inputReader)
     {
         _runtime = runtime;
+        _inputReader = inputReader;
     }
 
     public async Task<GroupDetectionDiagnosticsResult> DiagnoseGroupDetectionAsync(
@@ -20,7 +23,12 @@ public sealed class EngineDiagnosticsClient
         if (scannedCharacterIds.Count == 0)
             return GroupDetectionDiagnosticsResult.Empty;
 
-        var request = new DiagnosticsRequest(scannedCharacterIds[0], scannedCharacterIds);
+        var groupInputs = await _inputReader.ReadGroupInputsAsync(scannedCharacterIds, null, cancellationToken);
+
+        if (groupInputs.Inputs is null)
+            return GroupDetectionDiagnosticsResult.Empty;
+
+        var request = new DiagnosticsRequest(scannedCharacterIds[0], scannedCharacterIds, null, groupInputs.Inputs);
         var requestJson = JsonSerializer.Serialize(request);
         var responseJson = await _runtime.DiagnoseGroupDetectionAsync(requestJson, cancellationToken);
         var envelope = JsonSerializer.Deserialize<GroupDetectionDiagnosticsEnvelope>(responseJson);
@@ -40,14 +48,22 @@ public sealed class EngineDiagnosticsClient
         long characterId,
         CancellationToken cancellationToken = default)
     {
-        var request = new DiagnosticsRequest(characterId, null);
-        var requestJson = JsonSerializer.Serialize(request);
-        var responseJson = await _runtime.DiagnoseThreatAsync(requestJson, cancellationToken);
-        var envelope = JsonSerializer.Deserialize<ThreatDiagnosticsEnvelope>(responseJson);
-
         var table = new DataTable();
         table.Columns.Add("Component", typeof(string));
         table.Columns.Add("Value", typeof(string));
+
+        var pilotInputs = (await _inputReader.ReadPilotInputsAsync([characterId], null, cancellationToken)).Single();
+
+        if (pilotInputs.Inputs is null)
+        {
+            table.Rows.Add("Failure", pilotInputs.FailureReason ?? "no_response");
+            return table;
+        }
+
+        var request = new DiagnosticsRequest(characterId, null, pilotInputs.Inputs, null);
+        var requestJson = JsonSerializer.Serialize(request);
+        var responseJson = await _runtime.DiagnoseThreatAsync(requestJson, cancellationToken);
+        var envelope = JsonSerializer.Deserialize<ThreatDiagnosticsEnvelope>(responseJson);
 
         if (!string.IsNullOrWhiteSpace(envelope?.failure) || envelope?.diagnostics is null)
         {
@@ -173,7 +189,11 @@ public sealed class EngineDiagnosticsClient
         return table;
     }
 
-    private sealed record DiagnosticsRequest(long character_id, IReadOnlyList<long>? scanned_character_ids);
+    private sealed record DiagnosticsRequest(
+        long character_id,
+        IReadOnlyList<long>? scanned_character_ids,
+        EnginePilotInputs? pilot,
+        EngineGroupInputs? group_inputs);
 
     private sealed class GroupDetectionDiagnosticsEnvelope
     {

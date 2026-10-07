@@ -8,29 +8,150 @@ public sealed class KillRightDatabase
     public const int CurrentSchemaVersion = 3;
 
     private readonly KillRightDatabaseOptions _options;
+    private readonly object _instanceGate = new();
+    private DuckDBConnection? _anchor;
+    private InstanceState _state = InstanceState.NeverOpened;
+    private int _instanceGeneration;
+    private int _connectionsOpened;
 
     public KillRightDatabase(KillRightDatabaseOptions options)
     {
         _options = options;
     }
 
-    private int _connectionsOpened;
+    private enum InstanceState
+    {
+        NeverOpened,
+        Open,
+        Closed
+    }
 
     public string ConnectionString => $"Data Source={_options.DatabasePath}";
 
     public int ConnectionsOpened => Volatile.Read(ref _connectionsOpened);
 
+    public int InstanceGeneration => Volatile.Read(ref _instanceGeneration);
+
+    public bool IsOpen
+    {
+        get
+        {
+            lock (_instanceGate)
+                return _state == InstanceState.Open;
+        }
+    }
+
+    public void Open()
+    {
+        lock (_instanceGate)
+        {
+            if (_state == InstanceState.Open)
+                return;
+
+            OpenAnchorLocked();
+        }
+    }
+
+    public void Close()
+    {
+        lock (_instanceGate)
+        {
+            _anchor?.Dispose();
+            _anchor = null;
+            _state = InstanceState.Closed;
+        }
+    }
+
+    public void Reopen()
+    {
+        lock (_instanceGate)
+        {
+            _anchor?.Dispose();
+            _anchor = null;
+            OpenAnchorLocked();
+        }
+    }
+
+    public bool VerifySharedInstance()
+    {
+        lock (_instanceGate)
+        {
+            if (_anchor is null)
+                return false;
+
+            using var other = OpenConnection();
+
+            return ReadSetting(_anchor, "memory_limit") == ReadSetting(other, "memory_limit")
+                && ReadSetting(_anchor, "threads") == ReadSetting(other, "threads");
+        }
+    }
+
+    public void Checkpoint()
+    {
+        try
+        {
+            using var connection = OpenConnection();
+            using var command = connection.CreateCommand();
+            command.CommandText = "CHECKPOINT;";
+            command.ExecuteNonQuery();
+        }
+        catch (Exception exception)
+        {
+            NotifyFailure(exception);
+            throw;
+        }
+    }
+
+    public bool HasPendingWal()
+    {
+        var wal = new FileInfo(_options.DatabasePath + ".wal");
+
+        return wal.Exists && wal.Length > 0;
+    }
+
+    public static bool IsInvalidatedFailure(Exception? exception)
+    {
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            if (current.Message.Contains("invalidated", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
+
+    public void NotifyFailure(Exception exception)
+    {
+        if (!IsInvalidatedFailure(exception))
+            return;
+
+        try
+        {
+            Reopen();
+        }
+        catch
+        {
+        }
+    }
+
     public DuckDBConnection OpenConnection()
     {
+        lock (_instanceGate)
+        {
+            if (_state == InstanceState.Closed)
+                throw new InvalidOperationException("The database instance is closed.");
+        }
+
         var connection = new DuckDBConnection(ConnectionString);
 
         try
         {
             connection.Open();
         }
-        catch
+        catch (Exception exception)
         {
             connection.Dispose();
+            NotifyFailure(exception);
             throw;
         }
 
@@ -41,7 +162,43 @@ public sealed class KillRightDatabase
 
     public ScanDatabaseSession OpenScanSession()
     {
-        return new ScanDatabaseSession(OpenConnection());
+        return new ScanDatabaseSession(OpenConnection(), NotifyFailure);
+    }
+
+    private void OpenAnchorLocked()
+    {
+        var connection = new DuckDBConnection(ConnectionString);
+
+        try
+        {
+            connection.Open();
+            ExecuteNonQuery(connection, $"SET memory_limit='{KillRightDatabaseOptions.NormalizeMemoryLimit(_options.MemoryLimit)}';");
+            ExecuteNonQuery(connection, $"SET threads={KillRightDatabaseOptions.NormalizeThreads(_options.Threads)};");
+        }
+        catch
+        {
+            connection.Dispose();
+            throw;
+        }
+
+        _anchor = connection;
+        _state = InstanceState.Open;
+        Interlocked.Increment(ref _instanceGeneration);
+    }
+
+    private static void ExecuteNonQuery(DuckDBConnection connection, string sql)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        command.ExecuteNonQuery();
+    }
+
+    private static string? ReadSetting(DuckDBConnection connection, string name)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = $"SELECT current_setting('{name}');";
+
+        return Convert.ToString(command.ExecuteScalar());
     }
 
     public void EnsureCreated()
@@ -83,8 +240,7 @@ public sealed class KillRightDatabase
 
     public int GetSchemaVersion()
     {
-        using var connection = new DuckDBConnection(ConnectionString);
-        connection.Open();
+        using var connection = OpenConnection();
 
         using var command = connection.CreateCommand();
         command.CommandText = "SELECT schema_version FROM main.schema_metadata LIMIT 1;";
@@ -94,8 +250,7 @@ public sealed class KillRightDatabase
 
     public int? GetLastAppliedQualificationFleetThreshold()
     {
-        using var connection = new DuckDBConnection(ConnectionString);
-        connection.Open();
+        using var connection = OpenConnection();
 
         using var command = connection.CreateCommand();
         command.CommandText = "SELECT last_qualification_fleet_threshold FROM main.schema_metadata LIMIT 1;";
@@ -107,8 +262,7 @@ public sealed class KillRightDatabase
 
     public void SetLastAppliedQualificationFleetThreshold(int threshold)
     {
-        using var connection = new DuckDBConnection(ConnectionString);
-        connection.Open();
+        using var connection = OpenConnection();
 
         using var command = connection.CreateCommand();
         command.CommandText = $"UPDATE main.schema_metadata SET last_qualification_fleet_threshold = {threshold};";
@@ -117,8 +271,7 @@ public sealed class KillRightDatabase
 
     public bool GetAlphaLock()
     {
-        using var connection = new DuckDBConnection(ConnectionString);
-        connection.Open();
+        using var connection = OpenConnection();
 
         using var command = connection.CreateCommand();
         command.CommandText = "SELECT alpha_lock FROM main.schema_metadata LIMIT 1;";
@@ -128,8 +281,7 @@ public sealed class KillRightDatabase
 
     public void SetAlphaLock()
     {
-        using var connection = new DuckDBConnection(ConnectionString);
-        connection.Open();
+        using var connection = OpenConnection();
 
         using var command = connection.CreateCommand();
         command.CommandText = "UPDATE main.schema_metadata SET alpha_lock = TRUE;";
@@ -138,8 +290,7 @@ public sealed class KillRightDatabase
 
     public void SetSchemaVersion(int version)
     {
-        using var connection = new DuckDBConnection(ConnectionString);
-        connection.Open();
+        using var connection = OpenConnection();
 
         using var command = connection.CreateCommand();
         command.CommandText = $"UPDATE main.schema_metadata SET schema_version = {version};";
@@ -148,16 +299,14 @@ public sealed class KillRightDatabase
 
     public void EnsurePilotLastKillmailCache()
     {
-        using var connection = new DuckDBConnection(ConnectionString);
-        connection.Open();
+        using var connection = OpenConnection();
 
         CreatePilotLastKillmailCache(connection);
     }
 
     public void RebuildKillmailAndAttackerTables()
     {
-        using var connection = new DuckDBConnection(ConnectionString);
-        connection.Open();
+        using var connection = OpenConnection();
 
         using (var dropAttackers = connection.CreateCommand())
         {

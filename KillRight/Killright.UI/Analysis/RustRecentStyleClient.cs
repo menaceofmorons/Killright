@@ -7,6 +7,7 @@ using Killright.Integration.zKill;
 using Killright.Shared.Time;
 using Killright.Shared.zKill;
 using Killright.Storage.Diagnostics;
+using Killright.Storage.Engine;
 using Killright.UI.Configuration;
 
 namespace Killright.UI.Analysis;
@@ -14,11 +15,16 @@ namespace Killright.UI.Analysis;
 public sealed class RustRecentStyleClient
 {
     private readonly IKillrightEngineRuntime _runtime;
+    private readonly IEngineInputReader _inputReader;
     private readonly IReadOnlyList<ThreatBandSetting> _threatBands;
 
-    public RustRecentStyleClient(IKillrightEngineRuntime runtime, IReadOnlyList<ThreatBandSetting>? threatBands = null)
+    public RustRecentStyleClient(
+        IKillrightEngineRuntime runtime,
+        IEngineInputReader inputReader,
+        IReadOnlyList<ThreatBandSetting>? threatBands = null)
     {
         _runtime = runtime;
+        _inputReader = inputReader;
         _threatBands = ThreatBandSetting.ValidateOrDefault(threatBands);
     }
 
@@ -29,11 +35,19 @@ public sealed class RustRecentStyleClient
     {
         try
         {
+            var inputs = (await _inputReader.ReadPilotInputsAsync([characterId], timings, cancellationToken)).Single();
+
+            if (inputs.Inputs is null)
+            {
+                EngineFailureLog.Record($"engine analysis failed for character {characterId}: {inputs.FailureReason}");
+                return PilotEngineAnalysisResult.Failed(inputs.FailureReason ?? "unreadable_request");
+            }
+
             string requestJson;
 
             using (timings.Measure(ScanTimings.EngineLevel, "json_serialize", characterId))
             {
-                var request = new PilotAnalysisRequest(characterId, null);
+                var request = new PilotAnalysisRequest(characterId, null, inputs.Inputs, null);
                 requestJson = JsonSerializer.Serialize(request);
             }
 
@@ -78,11 +92,34 @@ public sealed class RustRecentStyleClient
 
         try
         {
+            var inputResults = await _inputReader.ReadPilotInputsAsync(characterIds, timings, cancellationToken);
+            var readFailures = new Dictionary<long, string>();
+            var readableIds = new List<long>();
+            var readablePilots = new List<EnginePilotInputs>();
+
+            foreach (var inputResult in inputResults)
+            {
+                if (inputResult.Inputs is null)
+                {
+                    readFailures.TryAdd(inputResult.CharacterId, inputResult.FailureReason ?? "unreadable_request");
+                    continue;
+                }
+
+                readableIds.Add(inputResult.CharacterId);
+                readablePilots.Add(inputResult.Inputs);
+            }
+
+            foreach (var failure in readFailures)
+                EngineFailureLog.Record($"engine analysis failed for character {failure.Key}: {failure.Value}");
+
+            if (readableIds.Count == 0)
+                return characterIds.Select(characterId => PilotEngineAnalysisResult.Failed(readFailures.GetValueOrDefault(characterId, "unreadable_request"))).ToList();
+
             string requestJson;
 
             using (timings.Measure(ScanTimings.EngineLevel, "json_serialize"))
             {
-                requestJson = JsonSerializer.Serialize(new PilotsAnalysisRequest(characterIds));
+                requestJson = JsonSerializer.Serialize(new PilotsAnalysisRequest(readableIds, readablePilots));
             }
 
             var responseJson = await _runtime.AnalyzePilotsAsync(requestJson, cancellationToken, timings);
@@ -101,7 +138,9 @@ public sealed class RustRecentStyleClient
                 var reason = response?.failure ?? "unreadable_response";
                 EngineFailureLog.Record($"engine batch analysis failed: {reason}");
 
-                return characterIds.Select(_ => PilotEngineAnalysisResult.Failed(reason)).ToList();
+                return characterIds
+                    .Select(characterId => PilotEngineAnalysisResult.Failed(readFailures.GetValueOrDefault(characterId, reason)))
+                    .ToList();
             }
 
             var byCharacter = new Dictionary<long, PilotAnalysisResponse>();
@@ -115,6 +154,9 @@ public sealed class RustRecentStyleClient
             {
                 return characterIds.Select(characterId =>
                 {
+                    if (readFailures.TryGetValue(characterId, out var readFailure))
+                        return PilotEngineAnalysisResult.Failed(readFailure);
+
                     if (!byCharacter.TryGetValue(characterId, out var result))
                         return PilotEngineAnalysisResult.Failed("missing_result");
 
@@ -151,11 +193,19 @@ public sealed class RustRecentStyleClient
 
         try
         {
+            var groupInputs = await _inputReader.ReadGroupInputsAsync(scannedCharacterIds, timings, cancellationToken);
+
+            if (groupInputs.Inputs is null)
+            {
+                EngineFailureLog.Record($"engine group detection failed: {groupInputs.FailureReason}");
+                return PilotGroupDetectionResult.Empty;
+            }
+
             string requestJson;
 
             using (timings.Measure(ScanTimings.EngineLevel, "json_serialize"))
             {
-                var request = new PilotAnalysisRequest(scannedCharacterIds[0], scannedCharacterIds);
+                var request = new PilotAnalysisRequest(scannedCharacterIds[0], scannedCharacterIds, null, groupInputs.Inputs);
                 requestJson = JsonSerializer.Serialize(request);
             }
 
@@ -273,9 +323,13 @@ public sealed class RustRecentStyleClient
         public const string Fleet = "Fleet";
     }
 
-    private sealed record PilotAnalysisRequest(long character_id, IReadOnlyList<long>? scanned_character_ids);
+    private sealed record PilotAnalysisRequest(
+        long character_id,
+        IReadOnlyList<long>? scanned_character_ids,
+        EnginePilotInputs? pilot,
+        EngineGroupInputs? group_inputs);
 
-    private sealed record PilotsAnalysisRequest(IReadOnlyList<long> character_ids);
+    private sealed record PilotsAnalysisRequest(IReadOnlyList<long> character_ids, IReadOnlyList<EnginePilotInputs> pilots);
 
     private sealed class PilotsAnalysisResponse
     {

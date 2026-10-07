@@ -180,6 +180,80 @@ public sealed class KillmailPurgeSchedulerTests
     }
 
     [Fact]
+    public async Task Pass_NotifiesStartAndFinishOncePerRunPass()
+    {
+        var events = new List<string>();
+        var scheduler = new KillmailPurgeScheduler(
+            new FakeCache(),
+            passStarted: () => events.Add("started"),
+            passFinished: () => events.Add("finished"));
+
+        await scheduler.RunStartupPassAsync();
+
+        Assert.Equal(["started", "finished"], events);
+    }
+
+    [Fact]
+    public async Task SkippedPass_DoesNotNotifyStartOrFinish()
+    {
+        var events = new List<string>();
+        var scheduler = new KillmailPurgeScheduler(
+            new FakeCache(),
+            passStarted: () => events.Add("started"),
+            passFinished: () => events.Add("finished"));
+
+        scheduler.ScanStarted();
+        await scheduler.RunPostScanPassAsync();
+
+        Assert.Empty(events);
+    }
+
+    [Fact]
+    public async Task FailedPass_StillNotifiesFinish()
+    {
+        var events = new List<string>();
+        var scheduler = new KillmailPurgeScheduler(
+            new FakeCache { FailNext = true },
+            passStarted: () => events.Add("started"),
+            passFinished: () => events.Add("finished"));
+
+        await scheduler.RunStartupPassAsync();
+
+        Assert.Equal(["started", "finished"], events);
+    }
+
+    [Fact]
+    public async Task NotificationFailure_IsSwallowed()
+    {
+        var scheduler = new KillmailPurgeScheduler(
+            new FakeCache(),
+            passStarted: () => throw new InvalidOperationException("hook failed"),
+            passFinished: () => throw new InvalidOperationException("hook failed"));
+
+        Assert.True(await scheduler.RunStartupPassAsync());
+    }
+
+    [Fact]
+    public async Task WaitForIdle_ReportsFalseWhilePassRunsAndTrueOnceItFinishes()
+    {
+        var release = new TaskCompletionSource();
+        var cache = new FakeCache(release.Task);
+        var scheduler = new KillmailPurgeScheduler(cache);
+
+        Assert.True(scheduler.WaitForIdle(TimeSpan.Zero));
+
+        var pass = scheduler.RunStartupPassAsync();
+        await cache.Entered.Task;
+
+        Assert.False(scheduler.WaitForIdle(TimeSpan.FromMilliseconds(20)));
+
+        release.SetResult();
+        await pass;
+
+        Assert.True(scheduler.WaitForIdle(TimeSpan.FromSeconds(5)));
+    }
+
+    [Fact]
     public void ScanPath_DoesNotCallRemoveExpiredAsync()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

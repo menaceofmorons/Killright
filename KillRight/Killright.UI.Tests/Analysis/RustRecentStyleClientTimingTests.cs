@@ -21,7 +21,7 @@ public sealed class RustRecentStyleClientTimingTests
     public async Task AnalyzeAsync_ResponseWithoutTiming_ReturnsNoTimingsAndRecordsNoEngineRows()
     {
         var timings = new ScanTimings();
-        var client = new RustRecentStyleClient(new FakeRuntime(PilotResponseWithoutTiming));
+        var client = new RustRecentStyleClient(new FakeRuntime(PilotResponseWithoutTiming), new FakeEngineInputReader());
 
         var result = await client.AnalyzeAsync(95465499, timings: timings);
 
@@ -35,7 +35,7 @@ public sealed class RustRecentStyleClientTimingTests
     public async Task AnalyzeAsync_ResponseWithTiming_MapsObjectsAndRecordsEngineRows()
     {
         var timings = new ScanTimings();
-        var client = new RustRecentStyleClient(new FakeRuntime(PilotResponseWithTiming));
+        var client = new RustRecentStyleClient(new FakeRuntime(PilotResponseWithTiming), new FakeEngineInputReader());
 
         var result = await client.AnalyzeAsync(95465499, timings: timings);
 
@@ -49,7 +49,7 @@ public sealed class RustRecentStyleClientTimingTests
     [Fact]
     public async Task AnalyzeAsync_NullSession_StillMapsTimingsWithoutThrowing()
     {
-        var client = new RustRecentStyleClient(new FakeRuntime(PilotResponseWithTiming));
+        var client = new RustRecentStyleClient(new FakeRuntime(PilotResponseWithTiming), new FakeEngineInputReader());
 
         var result = await client.AnalyzeAsync(95465499);
 
@@ -61,7 +61,7 @@ public sealed class RustRecentStyleClientTimingTests
     public async Task AnalyzeGroupAsync_ResponseWithTiming_MapsObjectsAndRecordsGroupRows()
     {
         var timings = new ScanTimings();
-        var client = new RustRecentStyleClient(new FakeRuntime(GroupResponseWithTiming));
+        var client = new RustRecentStyleClient(new FakeRuntime(GroupResponseWithTiming), new FakeEngineInputReader());
 
         var result = await client.AnalyzeGroupAsync(new long[] { 95465499, 2112625428 }, timings: timings);
 
@@ -74,7 +74,7 @@ public sealed class RustRecentStyleClientTimingTests
     [Fact]
     public async Task AnalyzeGroupAsync_ResponseWithoutTiming_ReturnsNoTimings()
     {
-        var client = new RustRecentStyleClient(new FakeRuntime("{\"character_id\":1,\"group_detection\":{\"relationships\":[]}}"));
+        var client = new RustRecentStyleClient(new FakeRuntime("{\"character_id\":1,\"group_detection\":{\"relationships\":[]}}"), new FakeEngineInputReader());
 
         var result = await client.AnalyzeGroupAsync(new long[] { 1, 2 });
 

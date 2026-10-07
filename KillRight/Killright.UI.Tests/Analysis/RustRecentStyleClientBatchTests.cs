@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Killright.Shared.zKill;
 using Killright.Storage.Diagnostics;
 using Killright.UI.Analysis;
@@ -25,7 +26,7 @@ public sealed class RustRecentStyleClientBatchTests
     [Fact]
     public async Task AnalyzePilotsAsync_Success_MapsEachPilotInRequestOrder()
     {
-        var client = new RustRecentStyleClient(new FakeRuntime(Success));
+        var client = new RustRecentStyleClient(new FakeRuntime(Success), new FakeEngineInputReader());
 
         var results = await client.AnalyzePilotsAsync([Tral, Lukas]);
 
@@ -40,7 +41,7 @@ public sealed class RustRecentStyleClientBatchTests
     [Fact]
     public async Task AnalyzePilotsAsync_Success_MapsDerivedActivity()
     {
-        var client = new RustRecentStyleClient(new FakeRuntime(Success));
+        var client = new RustRecentStyleClient(new FakeRuntime(Success), new FakeEngineInputReader());
 
         var results = await client.AnalyzePilotsAsync([Lukas, Tral]);
 
@@ -74,7 +75,7 @@ public sealed class RustRecentStyleClientBatchTests
             + "{\"character_id\":95465499,\"recent_style\":\"Solo\",\"is_recent_podder\":false,\"threat\":{\"score\":30}},"
             + "{\"character_id\":91321792,\"failure\":\"repository_read_error:killmails\"}"
             + "]}";
-        var client = new RustRecentStyleClient(new FakeRuntime(response));
+        var client = new RustRecentStyleClient(new FakeRuntime(response), new FakeEngineInputReader());
 
         var results = await client.AnalyzePilotsAsync([Lukas, Tral]);
 
@@ -87,7 +88,7 @@ public sealed class RustRecentStyleClientBatchTests
     [Fact]
     public async Task AnalyzePilotsAsync_WholeCallFailure_FailsEveryPilotWithTheReason()
     {
-        var client = new RustRecentStyleClient(new FakeRuntime("{\"results\":[],\"failure\":\"missing_runtime\"}"));
+        var client = new RustRecentStyleClient(new FakeRuntime("{\"results\":[],\"failure\":\"missing_runtime\"}"), new FakeEngineInputReader());
 
         var results = await client.AnalyzePilotsAsync([Lukas, Tral, Symptom]);
 
@@ -98,7 +99,7 @@ public sealed class RustRecentStyleClientBatchTests
     [Fact]
     public async Task AnalyzePilotsAsync_PilotMissingFromResponse_IsFailed()
     {
-        var client = new RustRecentStyleClient(new FakeRuntime(Success));
+        var client = new RustRecentStyleClient(new FakeRuntime(Success), new FakeEngineInputReader());
 
         var results = await client.AnalyzePilotsAsync([Lukas, Symptom]);
 
@@ -109,7 +110,7 @@ public sealed class RustRecentStyleClientBatchTests
     [Fact]
     public async Task AnalyzePilotsAsync_RuntimeThrows_FailsEveryPilot()
     {
-        var client = new RustRecentStyleClient(new FakeRuntime(null));
+        var client = new RustRecentStyleClient(new FakeRuntime(null), new FakeEngineInputReader());
 
         var results = await client.AnalyzePilotsAsync([Lukas, Tral]);
 
@@ -119,7 +120,7 @@ public sealed class RustRecentStyleClientBatchTests
     [Fact]
     public async Task AnalyzePilotsAsync_MalformedJson_FailsEveryPilot()
     {
-        var client = new RustRecentStyleClient(new FakeRuntime("not json"));
+        var client = new RustRecentStyleClient(new FakeRuntime("not json"), new FakeEngineInputReader());
 
         var results = await client.AnalyzePilotsAsync([Lukas]);
 
@@ -130,7 +131,7 @@ public sealed class RustRecentStyleClientBatchTests
     public async Task AnalyzePilotsAsync_EmptyList_ReturnsEmptyWithoutCallingTheEngine()
     {
         var runtime = new FakeRuntime(Success);
-        var client = new RustRecentStyleClient(runtime);
+        var client = new RustRecentStyleClient(runtime, new FakeEngineInputReader());
 
         var results = await client.AnalyzePilotsAsync([]);
 
@@ -142,19 +143,81 @@ public sealed class RustRecentStyleClientBatchTests
     public async Task AnalyzePilotsAsync_SendsOneRequestCarryingEveryCharacterId()
     {
         var runtime = new FakeRuntime(Success);
-        var client = new RustRecentStyleClient(runtime);
+        var client = new RustRecentStyleClient(runtime, new FakeEngineInputReader());
 
         await client.AnalyzePilotsAsync([Lukas, Tral, Symptom]);
 
         Assert.Equal(1, runtime.BatchCalls);
-        Assert.Equal("{\"character_ids\":[95465499,91321792,2112625428]}", runtime.LastRequest);
+
+        using var request = JsonDocument.Parse(runtime.LastRequest!);
+        Assert.Equal(
+            [Lukas, Tral, Symptom],
+            request.RootElement.GetProperty("character_ids").EnumerateArray().Select(id => id.GetInt64()).ToArray());
+        Assert.Equal(
+            [Lukas, Tral, Symptom],
+            request.RootElement.GetProperty("pilots").EnumerateArray().Select(pilot => pilot.GetProperty("character_id").GetInt64()).ToArray());
+    }
+
+    [Fact]
+    public async Task AnalyzePilotsAsync_RequestCarriesTheInputsReadForEachPilot()
+    {
+        var runtime = new FakeRuntime(Success);
+        var client = new RustRecentStyleClient(runtime, new FakeEngineInputReader());
+
+        await client.AnalyzePilotsAsync([Lukas]);
+
+        using var request = JsonDocument.Parse(runtime.LastRequest!);
+        var pilot = request.RootElement.GetProperty("pilots")[0];
+        Assert.Equal(1, pilot.GetProperty("killmails")[0].GetProperty("killmail_id").GetInt64());
+        Assert.Equal(587, pilot.GetProperty("killmails")[0].GetProperty("ship_type_id").GetInt64());
+        Assert.Equal("Gang", pilot.GetProperty("statistics").GetProperty("general_style").GetString());
+        Assert.Equal("Lukas Naarii", pilot.GetProperty("identity").GetProperty("character_name").GetString());
+        Assert.Equal("2026-09-08T00:00:00+00:00", pilot.GetProperty("coverage_start_utc").GetString());
+    }
+
+    [Fact]
+    public async Task AnalyzePilotsAsync_ReaderFailure_FailsOnlyThatPilotAndSendsNoInputsForIt()
+    {
+        var runtime = new FakeRuntime(Success);
+        var reader = new FakeEngineInputReader(new Dictionary<long, string> { [Tral] = "repository_read_error:statistics" });
+        var client = new RustRecentStyleClient(runtime, reader);
+
+        var results = await client.AnalyzePilotsAsync([Lukas, Tral]);
+
+        Assert.Null(results[0].FailureReason);
+        Assert.Equal("repository_read_error:statistics", results[1].FailureReason);
+        Assert.Equal("Unk", results[1].ThreatBand);
+        Assert.Equal(1, runtime.BatchCalls);
+
+        using var request = JsonDocument.Parse(runtime.LastRequest!);
+        Assert.Equal(
+            [Lukas],
+            request.RootElement.GetProperty("character_ids").EnumerateArray().Select(id => id.GetInt64()).ToArray());
+        Assert.Equal(1, request.RootElement.GetProperty("pilots").GetArrayLength());
+    }
+
+    [Fact]
+    public async Task AnalyzePilotsAsync_ReaderFailsEveryPilot_FailsThemWithoutCallingTheEngine()
+    {
+        var runtime = new FakeRuntime(Success);
+        var reader = new FakeEngineInputReader(new Dictionary<long, string>
+        {
+            [Lukas] = "repository_read_error:killmails",
+            [Tral] = "repository_read_error:killmails"
+        });
+        var client = new RustRecentStyleClient(runtime, reader);
+
+        var results = await client.AnalyzePilotsAsync([Lukas, Tral]);
+
+        Assert.All(results, result => Assert.Equal("repository_read_error:killmails", result.FailureReason));
+        Assert.Equal(0, runtime.BatchCalls);
     }
 
     [Fact]
     public async Task AnalyzePilotsAsync_WithTiming_RecordsBatchEngineRowsAndCounters()
     {
         var timings = new ScanTimings();
-        var client = new RustRecentStyleClient(new FakeRuntime(Success));
+        var client = new RustRecentStyleClient(new FakeRuntime(Success), new FakeEngineInputReader());
 
         await client.AnalyzePilotsAsync([Lukas, Tral], timings: timings);
 
@@ -169,7 +232,7 @@ public sealed class RustRecentStyleClientBatchTests
     public async Task AnalyzePilotsAsync_ResponseWithoutTiming_RecordsNoEngineRows()
     {
         var timings = new ScanTimings();
-        var client = new RustRecentStyleClient(new FakeRuntime("{\"results\":[{\"character_id\":95465499,\"recent_style\":\"Solo\",\"is_recent_podder\":false,\"threat\":{\"score\":30}}]}"));
+        var client = new RustRecentStyleClient(new FakeRuntime("{\"results\":[{\"character_id\":95465499,\"recent_style\":\"Solo\",\"is_recent_podder\":false,\"threat\":{\"score\":30}}]}"), new FakeEngineInputReader());
 
         await client.AnalyzePilotsAsync([Lukas], timings: timings);
 

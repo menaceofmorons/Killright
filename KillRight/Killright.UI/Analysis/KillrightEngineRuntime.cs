@@ -20,13 +20,8 @@ public sealed class KillrightEngineRuntime : IKillrightEngineRuntime
 
     public KillrightEngineRuntime(
         string dllPath,
-        string databasePath,
         string settingsPath)
     {
-        Environment.SetEnvironmentVariable(
-            "KILLRIGHT_DB_PATH",
-            databasePath);
-
         _libraryHandle = NativeLibrary.Load(dllPath);
 
         _initialize = GetExport<InitializeDelegate>(

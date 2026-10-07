@@ -22,6 +22,11 @@
     "zkillRequestsPerSecond": 15,
     "maxConcurrency": 8
   },
+  "database": {
+    "memoryLimit": "1GB",
+    "threads": 4,
+    "idleCheckpointSeconds": 30
+  },
   "groupHistory": {
     "importBatchSize": 150,
     "parallelDownloadWorkers": 20,

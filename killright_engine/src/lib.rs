@@ -1,17 +1,18 @@
 use chrono::{DateTime, Duration, Utc};
+use std::collections::{HashMap, HashSet};
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 use std::panic;
-use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use std::time::Instant;
 #[path = "kr_engine.rs"]
 pub mod kr_engine;
 use kr_engine::activity_analysis::derive_activity;
 use kr_engine::contracts::{
-    DerivedActivityResponse, GroupDetectionDiagnosticsEnvelope, GroupDetectionResponse, GroupRelationshipResponse,
-    PilotAnalysisRequest, PilotAnalysisResponse, PilotsAnalysisRequest, PilotsAnalysisResponse,
-    ThreatDiagnosticsEnvelope,
+    DerivedActivityResponse, GroupDetectionDiagnosticsEnvelope, GroupDetectionResponse, GroupInputs,
+    GroupRelationshipResponse, PilotAnalysisRequest, PilotAnalysisResponse, PilotIdentitySnapshot, PilotInputs,
+    PilotsAnalysisRequest, PilotsAnalysisResponse, RecentKillmailSnapshot, ThreatDiagnosticsEnvelope,
+    ZKillStatisticsSnapshot,
 };
 use kr_engine::group_analysis::chained_relationship_analyzer::analyze_chained_relationships;
 use kr_engine::group_analysis::direct_relationship_analyzer::analyze_direct_relationships;
@@ -20,14 +21,6 @@ use kr_engine::group_analysis::group_detection_diagnostics::run_group_detection_
 use kr_engine::group_analysis::group_relationship_scoring::score_and_select_relationships;
 use kr_engine::recent_style::recent_style_analyzer::analyze_recent_style;
 use kr_engine::recent_style::{RecentKillmailInput, RecentStyleRequest};
-use kr_engine::repositories::activity_cache_repository::ActivityCacheRepository;
-use kr_engine::repositories::duckdb_database::open_connection;
-use kr_engine::repositories::killmail_relationship_repository::KillmailRelationshipRepository;
-use kr_engine::repositories::pilot_identity_repository::{PilotIdentityRepository, PilotIdentitySnapshot};
-use kr_engine::repositories::recent_killmail_repository::{RecentKillmailRepository, RecentKillmailSnapshot};
-use kr_engine::repositories::sde_npc_corporation_repository::SdeNpcCorporationRepository;
-use kr_engine::repositories::zkill_statistics_repository::{ZKillStatisticsRepository, ZKillStatisticsSnapshot};
-use kr_engine::shared::database_path::get_database_path;
 use kr_engine::shared::recent_window_configuration::RecentWindowConfiguration;
 use kr_engine::shared::settings_loader::load_engine_settings;
 use kr_engine::shared::style_configuration::StyleConfiguration;
@@ -35,7 +28,6 @@ use kr_engine::shared::timing_recorder;
 use kr_engine::threat_analysis::{analyze_intrinsic_threat, analyze_intrinsic_threat_diagnostics, ThreatConfiguration};
 pub use kr_engine::*;
 struct RuntimeState {
-    database_path: PathBuf,
     threat_configuration: ThreatConfiguration,
     recent_window_configuration: RecentWindowConfiguration,
     group_detection_configuration: GroupDetectionConfiguration,
@@ -45,10 +37,6 @@ static RUNTIME: OnceLock<Mutex<Option<RuntimeState>>> = OnceLock::new();
 #[no_mangle]
 pub extern "C" fn killright_initialize() -> i32 {
     let result = panic::catch_unwind(|| {
-        let database_path = match get_database_path() {
-            Ok(value) => value,
-            Err(_) => return 0,
-        };
         let engine_settings = match load_engine_settings() {
             Ok(value) => value,
             Err(error) => {
@@ -63,7 +51,6 @@ pub extern "C" fn killright_initialize() -> i32 {
         };
         timing_recorder::set_enabled(engine_settings.timing.enabled);
         *guard = Some(RuntimeState {
-            database_path,
             threat_configuration: engine_settings.threat,
             recent_window_configuration: engine_settings.recent_window,
             group_detection_configuration: engine_settings.group_detection,
@@ -90,7 +77,6 @@ pub extern "C" fn killright_analyze_pilot(request_json: *const c_char) -> *mut c
         };
         let timing_started = timing_recorder::begin();
         let Some((
-            database_path,
             threat_configuration,
             recent_window_configuration,
             group_detection_configuration,
@@ -99,70 +85,56 @@ pub extern "C" fn killright_analyze_pilot(request_json: *const c_char) -> *mut c
         else {
             return failure_response(request.character_id, "missing_runtime");
         };
-
-        if let Some(scanned_character_ids) = &request.scanned_character_ids {
-            return analyze_group_detection(
-                request.character_id,
-                scanned_character_ids,
-                database_path,
-                &recent_window_configuration,
-                &group_detection_configuration,
-                timing_started,
-            );
+        let total_phase = if request.scanned_character_ids.is_some() {
+            "group_total"
+        } else {
+            "pilot_total"
+        };
+        let response = respond_to_pilot_request(
+            request,
+            &recent_window_configuration,
+            &group_detection_configuration,
+            &style_configuration,
+            &threat_configuration,
+        );
+        if let Some(reason) = response.failure.clone() {
+            return failure_response(response.character_id, &reason);
         }
-
-        let recent_killmail_repository = RecentKillmailRepository::new(database_path.clone());
-        let zkill_statistics_repository = ZKillStatisticsRepository::new(database_path.clone());
-        let pilot_identity_repository = PilotIdentityRepository::new(database_path.clone());
-        let activity_cache_repository = ActivityCacheRepository::new(database_path);
-
-        let all_killmails = {
-            let _timing = timing_recorder::scope("killmails_query");
-            match recent_killmail_repository.get_for_character(request.character_id) {
-                Ok(value) => value,
-                Err(_) => return failure_response(request.character_id, "repository_read_error:killmails"),
-            }
-        };
-        let statistics = {
-            let _timing = timing_recorder::scope("statistics_query");
-            match zkill_statistics_repository.get_for_character(request.character_id) {
-                Ok(value) => value,
-                Err(_) => return failure_response(request.character_id, "repository_read_error:statistics"),
-            }
-        };
-        let identity = {
-            let _timing = timing_recorder::scope("identity_query");
-            match pilot_identity_repository.get_for_character(request.character_id) {
-                Ok(value) => value,
-                Err(_) => return failure_response(request.character_id, "repository_read_error:identity"),
-            }
-        };
-        let coverage_start_text = {
-            let _timing = timing_recorder::scope("activity_cache_query");
-            match activity_cache_repository.get_coverage_start_for_character(request.character_id) {
-                Ok(value) => value,
-                Err(_) => return failure_response(request.character_id, "repository_read_error:activity_cache"),
-            }
-        };
-        timed_response_json(
-            build_pilot_response(
-                request.character_id,
-                PilotReadInputs {
-                    all_killmails,
-                    statistics,
-                    identity,
-                    coverage_start_text,
-                },
-                &recent_window_configuration,
-                &style_configuration,
-                &threat_configuration,
-                Utc::now(),
-            ),
-            timing_started,
-            "pilot_total",
-        )
+        timed_response_json(response, timing_started, total_phase)
     });
     result.unwrap_or_else(|_| failure_response(0, "internal_error"))
+}
+
+fn respond_to_pilot_request(
+    request: PilotAnalysisRequest,
+    recent_window_configuration: &RecentWindowConfiguration,
+    group_detection_configuration: &GroupDetectionConfiguration,
+    style_configuration: &StyleConfiguration,
+    threat_configuration: &ThreatConfiguration,
+) -> PilotAnalysisResponse {
+    if let Some(scanned_character_ids) = &request.scanned_character_ids {
+        return match &request.group_inputs {
+            Some(group_inputs) => build_group_response(
+                request.character_id,
+                scanned_character_ids,
+                group_inputs,
+                recent_window_configuration,
+                group_detection_configuration,
+            ),
+            None => failed_pilot_response(request.character_id, "unreadable_request"),
+        };
+    }
+    match request.pilot {
+        Some(pilot) if pilot.character_id == request.character_id => build_pilot_response(
+            request.character_id,
+            PilotReadInputs::from(pilot),
+            recent_window_configuration,
+            style_configuration,
+            threat_configuration,
+            Utc::now(),
+        ),
+        _ => failed_pilot_response(request.character_id, "unreadable_request"),
+    }
 }
 
 struct PilotReadInputs {
@@ -170,6 +142,17 @@ struct PilotReadInputs {
     statistics: Option<ZKillStatisticsSnapshot>,
     identity: Option<PilotIdentitySnapshot>,
     coverage_start_text: Option<String>,
+}
+
+impl From<PilotInputs> for PilotReadInputs {
+    fn from(pilot: PilotInputs) -> Self {
+        Self {
+            all_killmails: pilot.killmails,
+            statistics: pilot.statistics,
+            identity: pilot.identity,
+            coverage_start_text: pilot.coverage_start_utc,
+        }
+    }
 }
 
 fn build_pilot_response(
@@ -261,55 +244,16 @@ fn failed_pilot_response(character_id: i64, reason: &str) -> PilotAnalysisRespon
     }
 }
 
-fn read_pilot_inputs(database_path: &Path, character_ids: &[i64]) -> Vec<Result<PilotReadInputs, String>> {
-    let fail_all = |reason: &str| {
-        character_ids
-            .iter()
-            .map(|_| Err(reason.to_string()))
-            .collect::<Vec<Result<PilotReadInputs, String>>>()
-    };
-    let connection = match open_connection(database_path) {
-        Ok(value) => value,
-        Err(_) => return fail_all("repository_read_error:killmails"),
-    };
-    let all_killmails = {
-        let _timing = timing_recorder::scope("killmails_query");
-        match RecentKillmailRepository::get_for_characters_on(&connection, character_ids) {
-            Ok(value) => value,
-            Err(_) => return fail_all("repository_read_error:killmails"),
-        }
-    };
-    let statistics = {
-        let _timing = timing_recorder::scope("statistics_query");
-        match ZKillStatisticsRepository::get_for_characters_on(&connection, character_ids) {
-            Ok(value) => value,
-            Err(_) => return fail_all("repository_read_error:statistics"),
-        }
-    };
-    let identities = {
-        let _timing = timing_recorder::scope("identity_query");
-        match PilotIdentityRepository::get_for_characters_on(&connection, character_ids) {
-            Ok(value) => PilotIdentityRepository::first_by_character(value),
-            Err(_) => return fail_all("repository_read_error:identity"),
-        }
-    };
-    let coverage_starts = {
-        let _timing = timing_recorder::scope("activity_cache_query");
-        match ActivityCacheRepository::get_coverage_starts_on(&connection, character_ids) {
-            Ok(value) => value,
-            Err(_) => return fail_all("repository_read_error:activity_cache"),
-        }
-    };
-    drop(connection);
+fn read_pilot_inputs(character_ids: &[i64], pilots: &[PilotInputs]) -> Vec<Result<PilotReadInputs, String>> {
+    let mut by_character: HashMap<i64, &PilotInputs> = HashMap::new();
+    for pilot in pilots {
+        by_character.entry(pilot.character_id).or_insert(pilot);
+    }
     character_ids
         .iter()
-        .map(|character_id| {
-            Ok(PilotReadInputs {
-                all_killmails: all_killmails.get(character_id).cloned().unwrap_or_default(),
-                statistics: statistics.get(character_id).cloned(),
-                identity: identities.get(character_id).cloned(),
-                coverage_start_text: coverage_starts.get(character_id).cloned(),
-            })
+        .map(|character_id| match by_character.get(character_id) {
+            Some(pilot) => Ok(PilotReadInputs::from((*pilot).clone())),
+            None => Err("unreadable_request".to_string()),
         })
         .collect()
 }
@@ -355,12 +299,12 @@ fn assemble_pilot_responses(
 
 fn analyze_pilots_batch(
     character_ids: &[i64],
-    database_path: &Path,
+    pilots: &[PilotInputs],
     recent_window_configuration: &RecentWindowConfiguration,
     style_configuration: &StyleConfiguration,
     threat_configuration: &ThreatConfiguration,
 ) -> Vec<PilotAnalysisResponse> {
-    let inputs = read_pilot_inputs(database_path, character_ids);
+    let inputs = read_pilot_inputs(character_ids, pilots);
     assemble_pilot_responses(
         character_ids,
         inputs,
@@ -388,7 +332,6 @@ pub extern "C" fn killright_analyze_pilots(request_json: *const c_char) -> *mut 
         };
         let timing_started = timing_recorder::begin();
         let Some((
-            database_path,
             threat_configuration,
             recent_window_configuration,
             _group_detection_configuration,
@@ -399,7 +342,7 @@ pub extern "C" fn killright_analyze_pilots(request_json: *const c_char) -> *mut 
         };
         let results = analyze_pilots_batch(
             &request.character_ids,
-            &database_path,
+            &request.pilots,
             &recent_window_configuration,
             &style_configuration,
             &threat_configuration,
@@ -455,57 +398,25 @@ fn pilots_response_json(response: PilotsAnalysisResponse) -> *mut c_char {
     }).into_raw()
 }
 
-fn analyze_group_detection(
+fn build_group_response(
     character_id: i64,
     scanned_character_ids: &[i64],
-    database_path: PathBuf,
+    inputs: &GroupInputs,
     recent_window_configuration: &RecentWindowConfiguration,
     group_detection_configuration: &GroupDetectionConfiguration,
-    timing_started: Option<Instant>,
-) -> *mut c_char {
-    let killmail_relationship_repository = KillmailRelationshipRepository::new(database_path.clone());
-    let pilot_identity_repository = PilotIdentityRepository::new(database_path.clone());
-    let sde_npc_corporation_repository = SdeNpcCorporationRepository::new(database_path);
-
-    let direct_evidence = {
-        let _timing = timing_recorder::scope("direct_evidence_query");
-        match killmail_relationship_repository.get_attacker_evidence_for_scan_set(scanned_character_ids) {
-            Ok(value) => value,
-            Err(_) => return failure_response(character_id, "repository_read_error:direct_evidence"),
-        }
-    };
-    let chain_evidence = {
-        let _timing = timing_recorder::scope("chain_evidence_query");
-        match killmail_relationship_repository.get_qualifying_attacker_evidence_touching_scan_set(scanned_character_ids) {
-            Ok(value) => value,
-            Err(_) => return failure_response(character_id, "repository_read_error:chain_evidence"),
-        }
-    };
-    let current_identities = {
-        let _timing = timing_recorder::scope("identities_query");
-        match pilot_identity_repository.get_for_characters(scanned_character_ids) {
-            Ok(value) => value,
-            Err(_) => return failure_response(character_id, "repository_read_error:identity"),
-        }
-    };
-    let npc_corporation_ids = {
-        let _timing = timing_recorder::scope("npc_corporations_query");
-        match sde_npc_corporation_repository.get_all_ids() {
-            Ok(value) => value,
-            Err(_) => return failure_response(character_id, "repository_read_error:npc_corporations"),
-        }
-    };
+) -> PilotAnalysisResponse {
+    let npc_corporation_ids = inputs.npc_corporation_ids.iter().copied().collect::<HashSet<i64>>();
     if timing_recorder::is_active() {
         timing_recorder::add_count("scanned_pilots", scanned_character_ids.len() as i64);
-        timing_recorder::add_count("direct_evidence_rows", direct_evidence.len() as i64);
-        timing_recorder::add_count("chain_evidence_rows", chain_evidence.len() as i64);
+        timing_recorder::add_count("direct_evidence_rows", inputs.direct_evidence.len() as i64);
+        timing_recorder::add_count("chain_evidence_rows", inputs.chain_evidence.len() as i64);
     }
 
     let direct_relationships = {
         let _timing = timing_recorder::scope("direct_analysis");
         analyze_direct_relationships(
-            &direct_evidence,
-            &current_identities,
+            &inputs.direct_evidence,
+            &inputs.identities,
             &npc_corporation_ids,
             group_detection_configuration.minimum_shared_events,
         )
@@ -513,8 +424,8 @@ fn analyze_group_detection(
     let chained_relationships = {
         let _timing = timing_recorder::scope("chain_analysis");
         analyze_chained_relationships(
-            &chain_evidence,
-            &current_identities,
+            &inputs.chain_evidence,
+            &inputs.identities,
             &npc_corporation_ids,
             group_detection_configuration.minimum_shared_events,
             recent_window_configuration.recent_window_days,
@@ -542,22 +453,114 @@ fn analyze_group_detection(
         scored_relationships.into_iter().map(GroupRelationshipResponse::from).collect()
     };
 
-    timed_response_json(
-        PilotAnalysisResponse {
-            character_id,
-            recent_style: None,
-            is_recent_podder: None,
-            threat: None,
-            group_detection: Some(GroupDetectionResponse { relationships }),
-            derived_activity: None,
-            failure: None,
-            timings_ms: None,
-            timing_counts: None,
-        },
-        timing_started,
-        "group_total",
-    )
+    PilotAnalysisResponse {
+        character_id,
+        recent_style: None,
+        is_recent_podder: None,
+        threat: None,
+        group_detection: Some(GroupDetectionResponse { relationships }),
+        derived_activity: None,
+        failure: None,
+        timings_ms: None,
+        timing_counts: None,
+    }
 }
+
+fn diagnose_group_detection(
+    request: &PilotAnalysisRequest,
+    recent_window_configuration: &RecentWindowConfiguration,
+    group_detection_configuration: &GroupDetectionConfiguration,
+) -> GroupDetectionDiagnosticsEnvelope {
+    let failure = |reason: &str| GroupDetectionDiagnosticsEnvelope {
+        character_id: request.character_id,
+        diagnostics: None,
+        failure: Some(reason.to_string()),
+    };
+    if request.scanned_character_ids.is_none() {
+        return failure("missing_scanned_character_ids");
+    }
+    let Some(inputs) = &request.group_inputs else {
+        return failure("unreadable_request");
+    };
+    let npc_corporation_ids = inputs.npc_corporation_ids.iter().copied().collect::<HashSet<i64>>();
+    let diagnostics = run_group_detection_diagnostics(
+        &inputs.direct_evidence,
+        &inputs.chain_evidence,
+        &inputs.identities,
+        group_detection_configuration,
+        &npc_corporation_ids,
+        recent_window_configuration.recent_window_days,
+        Utc::now(),
+    );
+
+    GroupDetectionDiagnosticsEnvelope {
+        character_id: request.character_id,
+        diagnostics: Some(diagnostics.into()),
+        failure: None,
+    }
+}
+
+fn diagnose_threat(
+    request: &PilotAnalysisRequest,
+    recent_window_configuration: &RecentWindowConfiguration,
+    style_configuration: &StyleConfiguration,
+    threat_configuration: &ThreatConfiguration,
+) -> ThreatDiagnosticsEnvelope {
+    let Some(pilot) = request.pilot.as_ref().filter(|pilot| pilot.character_id == request.character_id) else {
+        return ThreatDiagnosticsEnvelope {
+            character_id: request.character_id,
+            diagnostics: None,
+            failure: Some("unreadable_request".to_string()),
+        };
+    };
+    let coverage_start_utc = pilot.coverage_start_utc.as_ref().and_then(|text| {
+        DateTime::parse_from_rfc3339(text)
+            .ok()
+            .map(|value| value.with_timezone(&Utc))
+    });
+
+    let now = Utc::now();
+    let recent_window_killmails = filter_recent_window(
+        &pilot.killmails,
+        recent_window_configuration.recent_window_days,
+        now,
+    );
+
+    let recent_style_result = analyze_recent_style(
+        RecentStyleRequest {
+            character_id: request.character_id,
+            killmails: recent_window_killmails
+                .iter()
+                .map(|row| RecentKillmailInput {
+                    killmail_id: row.killmail_id,
+                    is_loss: row.is_loss,
+                    attacker_count: row.attacker_count,
+                    is_solo: row.is_solo,
+                    ship_type_id: row.ship_type_id,
+                })
+                .collect(),
+        },
+        style_configuration,
+    );
+
+    let diagnostics = analyze_intrinsic_threat_diagnostics(
+        threat_configuration,
+        pilot.statistics.as_ref(),
+        &recent_window_killmails,
+        pilot.identity.as_ref(),
+        coverage_start_utc,
+        now,
+        recent_window_configuration.recent_window_days,
+        &recent_style_result.recent_style,
+    );
+
+    ThreatDiagnosticsEnvelope {
+        character_id: request.character_id,
+        diagnostics: Some(diagnostics.into()),
+        failure: None,
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn killright_diagnose_group_detection(request_json: *const c_char) -> *mut c_char {
     let result = panic::catch_unwind(|| {
@@ -574,7 +577,6 @@ pub extern "C" fn killright_diagnose_group_detection(request_json: *const c_char
             Err(_) => return group_detection_diagnostics_failure(0, "unreadable_request"),
         };
         let Some((
-            database_path,
             _threat_configuration,
             recent_window_configuration,
             group_detection_configuration,
@@ -583,48 +585,12 @@ pub extern "C" fn killright_diagnose_group_detection(request_json: *const c_char
         else {
             return group_detection_diagnostics_failure(request.character_id, "missing_runtime");
         };
-        let Some(scanned_character_ids) = &request.scanned_character_ids else {
-            return group_detection_diagnostics_failure(request.character_id, "missing_scanned_character_ids");
-        };
 
-        let killmail_relationship_repository = KillmailRelationshipRepository::new(database_path.clone());
-        let pilot_identity_repository = PilotIdentityRepository::new(database_path.clone());
-        let sde_npc_corporation_repository = SdeNpcCorporationRepository::new(database_path);
-
-        let direct_evidence = match killmail_relationship_repository.get_attacker_evidence_for_scan_set(scanned_character_ids) {
-            Ok(value) => value,
-            Err(_) => return group_detection_diagnostics_failure(request.character_id, "repository_read_error:direct_evidence"),
-        };
-        let chain_evidence = match killmail_relationship_repository
-            .get_qualifying_attacker_evidence_touching_scan_set(scanned_character_ids)
-        {
-            Ok(value) => value,
-            Err(_) => return group_detection_diagnostics_failure(request.character_id, "repository_read_error:chain_evidence"),
-        };
-        let current_identities = match pilot_identity_repository.get_for_characters(scanned_character_ids) {
-            Ok(value) => value,
-            Err(_) => return group_detection_diagnostics_failure(request.character_id, "repository_read_error:identity"),
-        };
-        let npc_corporation_ids = match sde_npc_corporation_repository.get_all_ids() {
-            Ok(value) => value,
-            Err(_) => return group_detection_diagnostics_failure(request.character_id, "repository_read_error:npc_corporations"),
-        };
-
-        let diagnostics = run_group_detection_diagnostics(
-            &direct_evidence,
-            &chain_evidence,
-            &current_identities,
+        group_detection_diagnostics_json(diagnose_group_detection(
+            &request,
+            &recent_window_configuration,
             &group_detection_configuration,
-            &npc_corporation_ids,
-            recent_window_configuration.recent_window_days,
-            Utc::now(),
-        );
-
-        group_detection_diagnostics_json(GroupDetectionDiagnosticsEnvelope {
-            character_id: request.character_id,
-            diagnostics: Some(diagnostics.into()),
-            failure: None,
-        })
+        ))
     });
     result.unwrap_or_else(|_| group_detection_diagnostics_failure(0, "internal_error"))
 }
@@ -645,7 +611,6 @@ pub extern "C" fn killright_diagnose_threat(request_json: *const c_char) -> *mut
             Err(_) => return threat_diagnostics_failure(0, "unreadable_request"),
         };
         let Some((
-            database_path,
             threat_configuration,
             recent_window_configuration,
             _group_detection_configuration,
@@ -655,73 +620,12 @@ pub extern "C" fn killright_diagnose_threat(request_json: *const c_char) -> *mut
             return threat_diagnostics_failure(request.character_id, "missing_runtime");
         };
 
-        let recent_killmail_repository = RecentKillmailRepository::new(database_path.clone());
-        let zkill_statistics_repository = ZKillStatisticsRepository::new(database_path.clone());
-        let pilot_identity_repository = PilotIdentityRepository::new(database_path.clone());
-        let activity_cache_repository = ActivityCacheRepository::new(database_path);
-
-        let all_killmails = match recent_killmail_repository.get_for_character(request.character_id) {
-            Ok(value) => value,
-            Err(_) => return threat_diagnostics_failure(request.character_id, "repository_read_error:killmails"),
-        };
-        let statistics = match zkill_statistics_repository.get_for_character(request.character_id) {
-            Ok(value) => value,
-            Err(_) => return threat_diagnostics_failure(request.character_id, "repository_read_error:statistics"),
-        };
-        let identity = match pilot_identity_repository.get_for_character(request.character_id) {
-            Ok(value) => value,
-            Err(_) => return threat_diagnostics_failure(request.character_id, "repository_read_error:identity"),
-        };
-        let coverage_start_text = match activity_cache_repository.get_coverage_start_for_character(request.character_id) {
-            Ok(value) => value,
-            Err(_) => return threat_diagnostics_failure(request.character_id, "repository_read_error:activity_cache"),
-        };
-        let coverage_start_utc = coverage_start_text.and_then(|text| {
-            DateTime::parse_from_rfc3339(&text)
-                .ok()
-                .map(|value| value.with_timezone(&Utc))
-        });
-
-        let now = Utc::now();
-        let recent_window_killmails = filter_recent_window(
-            &all_killmails,
-            recent_window_configuration.recent_window_days,
-            now,
-        );
-
-        let recent_style_result = analyze_recent_style(
-            RecentStyleRequest {
-                character_id: request.character_id,
-                killmails: recent_window_killmails
-                    .iter()
-                    .map(|row| RecentKillmailInput {
-                        killmail_id: row.killmail_id,
-                        is_loss: row.is_loss,
-                        attacker_count: row.attacker_count,
-                        is_solo: row.is_solo,
-                        ship_type_id: row.ship_type_id,
-                    })
-                    .collect(),
-            },
+        threat_diagnostics_json(diagnose_threat(
+            &request,
+            &recent_window_configuration,
             &style_configuration,
-        );
-
-        let diagnostics = analyze_intrinsic_threat_diagnostics(
             &threat_configuration,
-            statistics.as_ref(),
-            &recent_window_killmails,
-            identity.as_ref(),
-            coverage_start_utc,
-            now,
-            recent_window_configuration.recent_window_days,
-            &recent_style_result.recent_style,
-        );
-
-        threat_diagnostics_json(ThreatDiagnosticsEnvelope {
-            character_id: request.character_id,
-            diagnostics: Some(diagnostics.into()),
-            failure: None,
-        })
+        ))
     });
     result.unwrap_or_else(|_| threat_diagnostics_failure(0, "internal_error"))
 }
@@ -781,7 +685,6 @@ pub extern "C" fn killright_free_string(value: *mut c_char) {
     }
 }
 fn get_runtime_state() -> Option<(
-    PathBuf,
     ThreatConfiguration,
     RecentWindowConfiguration,
     GroupDetectionConfiguration,
@@ -791,7 +694,6 @@ fn get_runtime_state() -> Option<(
     let guard = cell.lock().ok()?;
     let runtime = guard.as_ref()?;
     Some((
-        runtime.database_path.clone(),
         runtime.threat_configuration.clone(),
         runtime.recent_window_configuration.clone(),
         runtime.group_detection_configuration.clone(),
@@ -860,6 +762,7 @@ fn response_json(response: PilotAnalysisResponse) -> *mut c_char {
 mod tests {
     use super::*;
     use chrono::TimeZone;
+    use kr_engine::contracts::KillmailAttackerEvidence;
 
     fn snapshot(killmail_id: i64, kill_time_utc: &str) -> RecentKillmailSnapshot {
         RecentKillmailSnapshot {
@@ -911,78 +814,99 @@ mod tests {
     const TRAL: i64 = 91321792;
     const SYMPTOM: i64 = 2112625428;
 
-    fn unique_suffix() -> u128 {
-        static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-
-        nanos * 1000 + u128::from(COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst) % 1000)
-    }
-
     fn ago(days: i64) -> String {
         (Utc::now() - Duration::days(days)).to_rfc3339()
     }
 
-    fn create_batch_database() -> PathBuf {
-        let path = std::env::temp_dir().join(format!("analyze-pilots-{}.duckdb", unique_suffix()));
-        let connection = duckdb::Connection::open(&path).unwrap();
-        connection
-            .execute_batch(
-                "CREATE TABLE zkill_killmails (
-                    killmail_id BIGINT PRIMARY KEY, killmail_hash TEXT, kill_time_utc TEXT NOT NULL,
-                    system_id BIGINT NOT NULL, location_id BIGINT, victim_character_id BIGINT,
-                    victim_ship_type_id BIGINT, unique_attacker_count INTEGER NOT NULL, is_solo BOOLEAN NOT NULL,
-                    is_npc BOOLEAN NOT NULL, is_qualifying BOOLEAN NOT NULL, cached_at_utc TEXT NOT NULL
-                );
-                CREATE TABLE zkill_killmail_attackers (
-                    killmail_id BIGINT NOT NULL, character_id BIGINT NOT NULL, corporation_id BIGINT,
-                    alliance_id BIGINT, ship_type_id BIGINT, PRIMARY KEY (killmail_id, character_id)
-                );
-                CREATE TABLE zkill_statistics_cache (
-                    character_id BIGINT PRIMARY KEY, ships_destroyed INTEGER NOT NULL, solo_kills INTEGER NOT NULL,
-                    solo_ratio DOUBLE NOT NULL, avg_gang_size DOUBLE NOT NULL, ships_lost INTEGER NOT NULL,
-                    solo_losses INTEGER NOT NULL, general_style TEXT NOT NULL, checked_at_utc TEXT NOT NULL,
-                    no_history_marker BOOLEAN, pod_losses INTEGER
-                );
-                CREATE TABLE pilot_identity_cache (
-                    input_name TEXT PRIMARY KEY, character_id BIGINT, character_name TEXT, verify_status TEXT NOT NULL,
-                    security_status DOUBLE, corporation_id BIGINT, corporation_name TEXT, corporation_ticker TEXT,
-                    alliance_id BIGINT, alliance_name TEXT, alliance_ticker TEXT, cached_at_utc TIMESTAMP NOT NULL
-                );
-                CREATE TABLE zkill_activity_cache (
-                    character_id BIGINT PRIMARY KEY, has_public_activity_data BOOLEAN NOT NULL, kills_week INTEGER,
-                    solo_week INTEGER, last_active_utc TEXT, last_activity_type TEXT, checked_at_utc TEXT NOT NULL,
-                    error TEXT, last_recent_call_utc TEXT, recent_coverage_start_utc TEXT
-                );",
-            )
-            .unwrap();
+    fn fixture_killmail(
+        killmail_id: i64,
+        character_id: i64,
+        kill_time_utc: &str,
+        is_loss: bool,
+        attacker_count: i32,
+        ship_type_id: i64,
+    ) -> RecentKillmailSnapshot {
+        RecentKillmailSnapshot {
+            killmail_id,
+            killmail_hash: Some(format!("h{killmail_id}")),
+            character_id,
+            kill_time_utc: kill_time_utc.to_string(),
+            is_loss,
+            attacker_count,
+            is_solo: attacker_count == 1,
+            ship_type_id: Some(ship_type_id),
+            system_id: Some(30000142),
+            location_id: None,
+            is_npc: false,
+            cached_at_utc: kill_time_utc.to_string(),
+        }
+    }
+
+    fn fixture_pilots() -> Vec<PilotInputs> {
         let recent = ago(1);
         let older = ago(3);
         let old = ago(10);
-        connection
-            .execute_batch(&format!(
-                "INSERT INTO zkill_killmails VALUES
-                    (1, 'h1', '{recent}', 30000142, NULL, 777, 587, 1, TRUE, FALSE, FALSE, '{recent}'),
-                    (2, 'h2', '{older}', 30000142, NULL, 777, 670, 2, FALSE, FALSE, TRUE, '{older}'),
-                    (3, 'h3', '{old}', 30000142, NULL, {TRAL}, 587, 3, FALSE, FALSE, TRUE, '{old}'),
-                    (4, 'h4', '{older}', 30000142, NULL, 777, 587, 2, FALSE, FALSE, TRUE, '{older}');
-                INSERT INTO zkill_killmail_attackers VALUES
-                    (1, {LUKAS}, 98000001, NULL, 11567),
-                    (2, {LUKAS}, 98000001, NULL, 11567),
-                    (4, {LUKAS}, 98000001, NULL, 11567),
-                    (4, {SYMPTOM}, 98000002, NULL, 11567);
-                INSERT INTO zkill_statistics_cache VALUES
-                    ({LUKAS}, 120, 30, 0.25, 4.0, 12, 2, 'Gang', '{recent}', FALSE, 0);
-                INSERT INTO pilot_identity_cache VALUES
-                    ('LUKAS NAARII', {LUKAS}, 'Lukas Naarii', 'Partial', 1.5, 98000001, 'Corp One', NULL, NULL, NULL, NULL, '2026-09-20T00:00:00+00:00');
-                INSERT INTO zkill_activity_cache VALUES
-                    ({LUKAS}, TRUE, 1, 0, NULL, NULL, '{recent}', NULL, '{recent}', '{old}');"
-            ))
-            .unwrap();
-        drop(connection);
-        path
+        vec![
+            PilotInputs {
+                character_id: LUKAS,
+                killmails: vec![
+                    fixture_killmail(1, LUKAS, &recent, false, 1, 587),
+                    fixture_killmail(2, LUKAS, &older, false, 2, 670),
+                    fixture_killmail(4, LUKAS, &older, false, 2, 587),
+                ],
+                statistics: Some(ZKillStatisticsSnapshot {
+                    character_id: LUKAS,
+                    ships_destroyed: 120,
+                    solo_kills: 30,
+                    solo_ratio: 0.25,
+                    avg_gang_size: 4.0,
+                    ships_lost: 12,
+                    solo_losses: 2,
+                    general_style: "Gang".to_string(),
+                    checked_at_utc: recent.clone(),
+                    no_history_marker: false,
+                    pod_losses: 0,
+                }),
+                identity: Some(fixture_identity(LUKAS, "Lukas Naarii", 98000001, None)),
+                coverage_start_utc: Some(old.clone()),
+            },
+            PilotInputs {
+                character_id: TRAL,
+                killmails: vec![fixture_killmail(3, TRAL, &old, true, 3, 587)],
+                statistics: None,
+                identity: None,
+                coverage_start_utc: None,
+            },
+            PilotInputs {
+                character_id: SYMPTOM,
+                killmails: vec![fixture_killmail(4, SYMPTOM, &older, false, 2, 587)],
+                statistics: None,
+                identity: None,
+                coverage_start_utc: None,
+            },
+        ]
+    }
+
+    fn fixture_identity(
+        character_id: i64,
+        name: &str,
+        corporation_id: i64,
+        alliance_id: Option<i64>,
+    ) -> PilotIdentitySnapshot {
+        PilotIdentitySnapshot {
+            input_name: name.to_uppercase(),
+            character_id: Some(character_id),
+            character_name: Some(name.to_string()),
+            verify_status: "Partial".to_string(),
+            security_status: Some(1.5),
+            corporation_id: Some(corporation_id),
+            corporation_name: None,
+            corporation_ticker: None,
+            alliance_id,
+            alliance_name: None,
+            alliance_ticker: None,
+            cached_at_utc: "2026-09-20T00:00:00+00:00".to_string(),
+        }
     }
 
     fn configurations() -> (RecentWindowConfiguration, StyleConfiguration, ThreatConfiguration) {
@@ -1000,6 +924,61 @@ mod tests {
         (RecentWindowConfiguration { recent_window_days: 14 }, style, threat)
     }
 
+    fn group_configuration() -> GroupDetectionConfiguration {
+        serde_json::from_str(
+            r#"{
+                "minimumSharedEvents": 2,
+                "strengthStep": 10,
+                "gangSizeWeights": [
+                    { "maximumGangSize": 3, "weight": 1.0 },
+                    { "maximumGangSize": 5, "weight": 0.75 },
+                    { "maximumGangSize": 7, "weight": 0.5 },
+                    { "maximumGangSize": 10, "weight": 0.25 }
+                ],
+                "sampleFactor": { "minimum": 0.5, "maximum": 1.0, "saturatesAtCountedSharedKills": 10 },
+                "splitBonus": 20,
+                "chainDiscount": 0.75,
+                "intermediaryBonus": { "perAdditional": 10, "maximum": 30 }
+            }"#,
+        )
+        .unwrap()
+    }
+
+    fn evidence(
+        killmail_id: i64,
+        character_id: i64,
+        corporation_id: i64,
+        kill_time_utc: &str,
+    ) -> KillmailAttackerEvidence {
+        KillmailAttackerEvidence {
+            killmail_id,
+            character_id,
+            corporation_id: Some(corporation_id),
+            alliance_id: None,
+            kill_time_utc: kill_time_utc.to_string(),
+            unique_attacker_count: 2,
+        }
+    }
+
+    fn fixture_group_inputs() -> GroupInputs {
+        let first = ago(2);
+        let second = ago(1);
+        GroupInputs {
+            direct_evidence: vec![
+                evidence(901, LUKAS, 98000001, &first),
+                evidence(901, TRAL, 98000002, &first),
+                evidence(902, LUKAS, 98000001, &second),
+                evidence(902, TRAL, 98000002, &second),
+            ],
+            chain_evidence: Vec::new(),
+            identities: vec![
+                fixture_identity(LUKAS, "Lukas Naarii", 98000001, None),
+                fixture_identity(TRAL, "T'ral Vsengne", 98000002, None),
+            ],
+            npc_corporation_ids: vec![1000001],
+        }
+    }
+
     fn response_text(pointer: *mut c_char) -> String {
         let text = unsafe { CStr::from_ptr(pointer) }.to_str().unwrap().to_string();
         killright_free_string(pointer);
@@ -1008,12 +987,9 @@ mod tests {
 
     #[test]
     fn batch_returns_one_result_per_pilot_in_request_order() {
-        let path = create_batch_database();
         let (window, style, threat) = configurations();
 
-        let results = analyze_pilots_batch(&[SYMPTOM, LUKAS, TRAL], &path, &window, &style, &threat);
-
-        std::fs::remove_file(&path).unwrap();
+        let results = analyze_pilots_batch(&[SYMPTOM, LUKAS, TRAL], &fixture_pilots(), &window, &style, &threat);
 
         assert_eq!(
             results.iter().map(|result| result.character_id).collect::<Vec<_>>(),
@@ -1025,21 +1001,19 @@ mod tests {
 
     #[test]
     fn batch_result_equals_the_single_pilot_assembly_for_each_pilot() {
-        let path = create_batch_database();
         let (window, style, threat) = configurations();
+        let pilots = fixture_pilots();
         let ids = [LUKAS, TRAL, SYMPTOM];
         let now = Utc::now();
 
-        let batch = assemble_pilot_responses(&ids, read_pilot_inputs(&path, &ids), &window, &style, &threat, now);
+        let batch = assemble_pilot_responses(&ids, read_pilot_inputs(&ids, &pilots), &window, &style, &threat, now);
         let singles = ids
             .iter()
             .map(|id| {
-                assemble_pilot_responses(&[*id], read_pilot_inputs(&path, &[*id]), &window, &style, &threat, now)
+                assemble_pilot_responses(&[*id], read_pilot_inputs(&[*id], &pilots), &window, &style, &threat, now)
                     .remove(0)
             })
             .collect::<Vec<_>>();
-
-        std::fs::remove_file(&path).unwrap();
 
         for (from_batch, single) in batch.iter().zip(singles.iter()) {
             assert_eq!(
@@ -1051,12 +1025,9 @@ mod tests {
 
     #[test]
     fn derived_views_carry_weekly_counts_and_newest_killmail() {
-        let path = create_batch_database();
         let (window, style, threat) = configurations();
 
-        let results = analyze_pilots_batch(&[LUKAS, TRAL, SYMPTOM], &path, &window, &style, &threat);
-
-        std::fs::remove_file(&path).unwrap();
+        let results = analyze_pilots_batch(&[LUKAS, TRAL, SYMPTOM], &fixture_pilots(), &window, &style, &threat);
 
         let lukas = results[0].derived_activity.as_ref().unwrap();
         assert!(lukas.has_public_activity_data);
@@ -1103,33 +1074,35 @@ mod tests {
     }
 
     #[test]
-    fn unreadable_database_fails_every_pilot_without_failing_the_call() {
+    fn pilot_without_an_entry_in_the_request_fails_with_unreadable_request_and_the_rest_succeed() {
         let (window, style, threat) = configurations();
-        let path = std::env::temp_dir().join(format!("analyze-pilots-missing-{}", unique_suffix())).join("none.duckdb");
+        let pilots = fixture_pilots()
+            .into_iter()
+            .filter(|pilot| pilot.character_id != TRAL)
+            .collect::<Vec<_>>();
 
-        let results = analyze_pilots_batch(&[LUKAS, TRAL], &path, &window, &style, &threat);
+        let results = analyze_pilots_batch(&[LUKAS, TRAL, SYMPTOM], &pilots, &window, &style, &threat);
 
-        assert_eq!(results.len(), 2);
-        assert!(results.iter().all(|result| result.failure.as_deref() == Some("repository_read_error:killmails")));
+        assert!(results[0].failure.is_none());
+        assert_eq!(results[1].failure.as_deref(), Some("unreadable_request"));
+        assert!(results[1].recent_style.is_none());
+        assert!(results[2].failure.is_none());
     }
 
     #[test]
     fn recorder_aggregates_across_the_batch() {
-        let path = create_batch_database();
         let (window, style, threat) = configurations();
         timing_recorder::begin_forced();
 
-        analyze_pilots_batch(&[LUKAS, TRAL, SYMPTOM], &path, &window, &style, &threat);
+        analyze_pilots_batch(&[LUKAS, TRAL, SYMPTOM], &fixture_pilots(), &window, &style, &threat);
         let snapshot = timing_recorder::take().expect("recorder was active");
-
-        std::fs::remove_file(&path).unwrap();
 
         assert_eq!(snapshot.timing_counts["pilots_analyzed"], 3);
         assert_eq!(snapshot.timing_counts["pilot_failures"], 0);
-        assert!(snapshot.timings_ms.contains_key("killmails_query"));
         assert!(snapshot.timings_ms.contains_key("pilot_loop_total"));
         assert!(snapshot.timings_ms.contains_key("derived_activity"));
-        assert!(snapshot.timings_ms["open_connection"] > 0.0);
+        assert!(!snapshot.timings_ms.contains_key("open_connection"));
+        assert!(!snapshot.timings_ms.contains_key("killmails_query"));
     }
 
     #[test]
@@ -1145,5 +1118,202 @@ mod tests {
             response_text(killright_analyze_pilots(malformed.as_ptr())),
             "{\"results\":[],\"failure\":\"unreadable_request\"}"
         );
+    }
+
+    #[test]
+    fn batch_request_deserialises_with_and_without_inputs() {
+        let without = serde_json::from_str::<PilotsAnalysisRequest>("{\"character_ids\":[95465499]}").unwrap();
+        assert_eq!(without.character_ids, vec![LUKAS]);
+        assert!(without.pilots.is_empty());
+
+        let with = serde_json::from_str::<PilotsAnalysisRequest>(
+            "{\"character_ids\":[95465499],\"pilots\":[{\"character_id\":95465499,\"killmails\":[{\"killmail_id\":1,\"killmail_hash\":null,\"character_id\":95465499,\"kill_time_utc\":\"2026-09-20T00:00:00+00:00\",\"is_loss\":false,\"attacker_count\":2,\"is_solo\":false,\"ship_type_id\":587,\"system_id\":30000142,\"location_id\":null,\"is_npc\":false,\"cached_at_utc\":\"2026-09-20T00:00:00+00:00\"}],\"statistics\":null,\"identity\":null,\"coverage_start_utc\":\"2026-09-08T00:00:00+00:00\"}]}",
+        )
+        .unwrap();
+        assert_eq!(with.pilots.len(), 1);
+        assert_eq!(with.pilots[0].killmails[0].ship_type_id, Some(587));
+        assert!(with.pilots[0].statistics.is_none());
+        assert_eq!(with.pilots[0].coverage_start_utc.as_deref(), Some("2026-09-08T00:00:00+00:00"));
+    }
+
+    #[test]
+    fn pilot_request_deserialises_with_and_without_inputs() {
+        let without = serde_json::from_str::<PilotAnalysisRequest>("{\"character_id\":95465499}").unwrap();
+        assert!(without.scanned_character_ids.is_none());
+        assert!(without.pilot.is_none());
+        assert!(without.group_inputs.is_none());
+
+        let group = serde_json::from_str::<PilotAnalysisRequest>(
+            "{\"character_id\":95465499,\"scanned_character_ids\":[95465499,91321792],\"group_inputs\":{\"direct_evidence\":[{\"killmail_id\":1,\"character_id\":95465499,\"corporation_id\":98000001,\"alliance_id\":null,\"kill_time_utc\":\"2026-09-20T00:00:00+00:00\",\"unique_attacker_count\":2}],\"chain_evidence\":[],\"identities\":[],\"npc_corporation_ids\":[1000001]}}",
+        )
+        .unwrap();
+        assert_eq!(group.group_inputs.as_ref().unwrap().direct_evidence.len(), 1);
+        assert_eq!(group.group_inputs.as_ref().unwrap().npc_corporation_ids, vec![1000001]);
+    }
+
+    #[test]
+    fn single_pilot_request_over_inputs_matches_the_batch_result() {
+        let (window, style, threat) = configurations();
+        let pilots = fixture_pilots();
+        let request = PilotAnalysisRequest {
+            character_id: LUKAS,
+            scanned_character_ids: None,
+            pilot: Some(pilots[0].clone()),
+            group_inputs: None,
+        };
+
+        let single = respond_to_pilot_request(request, &window, &group_configuration(), &style, &threat);
+        let batch = analyze_pilots_batch(&[LUKAS], &pilots, &window, &style, &threat).remove(0);
+
+        assert!(single.failure.is_none());
+        assert_eq!(single.recent_style, batch.recent_style);
+        assert_eq!(single.threat, batch.threat);
+        assert_eq!(single.derived_activity, batch.derived_activity);
+    }
+
+    #[test]
+    fn single_pilot_request_without_inputs_or_with_another_pilots_inputs_is_unreadable() {
+        let (window, style, threat) = configurations();
+        let pilots = fixture_pilots();
+
+        let missing = respond_to_pilot_request(
+            PilotAnalysisRequest { character_id: LUKAS, scanned_character_ids: None, pilot: None, group_inputs: None },
+            &window,
+            &group_configuration(),
+            &style,
+            &threat,
+        );
+        let mismatched = respond_to_pilot_request(
+            PilotAnalysisRequest {
+                character_id: LUKAS,
+                scanned_character_ids: None,
+                pilot: Some(pilots[1].clone()),
+                group_inputs: None,
+            },
+            &window,
+            &group_configuration(),
+            &style,
+            &threat,
+        );
+
+        assert_eq!(missing.failure.as_deref(), Some("unreadable_request"));
+        assert_eq!(mismatched.failure.as_deref(), Some("unreadable_request"));
+    }
+
+    #[test]
+    fn group_detection_over_request_inputs_reports_the_direct_relationship() {
+        let (window, style, threat) = configurations();
+        let request = PilotAnalysisRequest {
+            character_id: LUKAS,
+            scanned_character_ids: Some(vec![LUKAS, TRAL]),
+            pilot: None,
+            group_inputs: Some(fixture_group_inputs()),
+        };
+
+        let response = respond_to_pilot_request(request, &window, &group_configuration(), &style, &threat);
+
+        assert!(response.failure.is_none());
+        let relationships = response.group_detection.unwrap().relationships;
+        assert_eq!(relationships.len(), 1);
+        assert_eq!(relationships[0].link_type, "Direct");
+        assert_eq!(relationships[0].strength, 10);
+        assert_eq!(relationships[0].confidence, 50);
+        assert_eq!(relationships[0].total_shared_kills, Some(2));
+    }
+
+    #[test]
+    fn group_detection_without_group_inputs_is_unreadable() {
+        let (window, style, threat) = configurations();
+        let request = PilotAnalysisRequest {
+            character_id: LUKAS,
+            scanned_character_ids: Some(vec![LUKAS, TRAL]),
+            pilot: None,
+            group_inputs: None,
+        };
+
+        let response = respond_to_pilot_request(request, &window, &group_configuration(), &style, &threat);
+
+        assert_eq!(response.failure.as_deref(), Some("unreadable_request"));
+        assert!(response.group_detection.is_none());
+    }
+
+    #[test]
+    fn group_detection_diagnostics_over_request_inputs_explain_the_pair() {
+        let (window, _style, _threat) = configurations();
+        let request = PilotAnalysisRequest {
+            character_id: LUKAS,
+            scanned_character_ids: Some(vec![LUKAS, TRAL]),
+            pilot: None,
+            group_inputs: Some(fixture_group_inputs()),
+        };
+
+        let envelope = diagnose_group_detection(&request, &window, &group_configuration());
+
+        assert!(envelope.failure.is_none());
+        let diagnostics = envelope.diagnostics.unwrap();
+        assert_eq!(diagnostics.direct_relationships.len(), 1);
+        assert!(diagnostics.direct_relationships[0].qualifies);
+        assert_eq!(diagnostics.direct_relationships[0].counted_shared_kills, 2);
+        assert_eq!(diagnostics.direct_relationships[0].strength, Some(10));
+    }
+
+    #[test]
+    fn group_detection_diagnostics_report_missing_scan_set_and_missing_inputs() {
+        let (window, _style, _threat) = configurations();
+        let without_scan_set = PilotAnalysisRequest {
+            character_id: LUKAS,
+            scanned_character_ids: None,
+            pilot: None,
+            group_inputs: Some(fixture_group_inputs()),
+        };
+        let without_inputs = PilotAnalysisRequest {
+            character_id: LUKAS,
+            scanned_character_ids: Some(vec![LUKAS]),
+            pilot: None,
+            group_inputs: None,
+        };
+
+        assert_eq!(
+            diagnose_group_detection(&without_scan_set, &window, &group_configuration()).failure.as_deref(),
+            Some("missing_scanned_character_ids")
+        );
+        assert_eq!(
+            diagnose_group_detection(&without_inputs, &window, &group_configuration()).failure.as_deref(),
+            Some("unreadable_request")
+        );
+    }
+
+    #[test]
+    fn threat_diagnostics_over_request_inputs_match_the_batch_threat_score() {
+        let (window, style, threat) = configurations();
+        let pilots = fixture_pilots();
+        let request = PilotAnalysisRequest {
+            character_id: LUKAS,
+            scanned_character_ids: None,
+            pilot: Some(pilots[0].clone()),
+            group_inputs: None,
+        };
+
+        let envelope = diagnose_threat(&request, &window, &style, &threat);
+        let batch = analyze_pilots_batch(&[LUKAS], &pilots, &window, &style, &threat).remove(0);
+
+        assert!(envelope.failure.is_none());
+        assert_eq!(envelope.diagnostics.unwrap().score, batch.threat.unwrap().score);
+    }
+
+    #[test]
+    fn threat_diagnostics_without_inputs_are_unreadable() {
+        let (window, style, threat) = configurations();
+        let request = PilotAnalysisRequest {
+            character_id: LUKAS,
+            scanned_character_ids: None,
+            pilot: None,
+            group_inputs: None,
+        };
+
+        let envelope = diagnose_threat(&request, &window, &style, &threat);
+
+        assert_eq!(envelope.failure.as_deref(), Some("unreadable_request"));
+        assert!(envelope.diagnostics.is_none());
     }
 }

@@ -76,13 +76,19 @@ public partial class MainWindow : Window
 
         _scanCoordinator = new ScanCoordinator(
             ResolvePilotsTimedAsync,
-            App.PurgeScheduler.ScanStarted,
+            () =>
+            {
+                App.PurgeScheduler.ScanStarted();
+                App.IdleCheckpointScheduler.ActivityStarted();
+            },
             () =>
             {
                 App.PurgeScheduler.ScanFinished();
                 _ = App.PurgeScheduler.RunPostScanPassAsync();
+                _ = App.IdleCheckpointScheduler.ActivityFinished();
             },
             exception => EngineFailureLog.Record($"scan failed: {exception}"));
+        App.ScanCoordinator = _scanCoordinator;
 
         var initial = App.UiState.Current;
         Topmost = initial.AlwaysOnTop;

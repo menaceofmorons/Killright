@@ -278,7 +278,7 @@ public partial class DiagnosticsView : UserControl
     {
         InitializeComponent();
         _service = new DiagnosticsDataService(App.Database);
-        _engineDiagnosticsClient = new EngineDiagnosticsClient(App.EngineRuntime);
+        _engineDiagnosticsClient = new EngineDiagnosticsClient(App.EngineRuntime, App.EngineInputReader);
 
         QuerySelector.ItemsSource = DiagnosticQueries.Keys;
         QuerySelector.SelectedIndex = 0;
