@@ -6,16 +6,31 @@ namespace Killright.UI.InfoSheet;
 public partial class InfoSheetWindow : Window
 {
     private bool _closeScheduled;
+    private bool _dismissArmed;
 
     public InfoSheetWindow(InfoSheetViewModel viewModel)
     {
         InitializeComponent();
         DataContext = viewModel;
+        ContentRendered += InfoSheetWindow_ContentRendered;
+    }
+
+    private void InfoSheetWindow_ContentRendered(object? sender, EventArgs e)
+    {
+        ContentRendered -= InfoSheetWindow_ContentRendered;
+
+        Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, () =>
+        {
+            _dismissArmed = true;
+
+            if (IsVisible && !IsActive)
+                Activate();
+        });
     }
 
     private void InfoSheetWindow_Deactivated(object? sender, EventArgs e)
     {
-        if (_closeScheduled)
+        if (!_dismissArmed || _closeScheduled)
             return;
 
         _closeScheduled = true;

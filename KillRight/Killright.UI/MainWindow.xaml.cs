@@ -252,7 +252,9 @@ public partial class MainWindow : Window
                 return;
             }
 
-            OpenInfoSheet(row, PointToScreen(e.GetPosition(this)));
+            e.Handled = true;
+            var screenPosition = PointToScreen(e.GetPosition(this));
+            Dispatcher.BeginInvoke(DispatcherPriority.Input, () => OpenInfoSheet(row, screenPosition));
             return;
         }
 
@@ -468,7 +470,11 @@ public partial class MainWindow : Window
             Top = screenPosition.Y / dpi.DpiScaleY
         };
 
-        infoSheet.Closed += (_, _) => _infoSheet = null;
+        infoSheet.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(_infoSheet, infoSheet))
+                _infoSheet = null;
+        };
         _infoSheet = infoSheet;
         infoSheet.Show();
 
