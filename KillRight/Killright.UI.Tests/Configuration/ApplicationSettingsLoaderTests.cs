@@ -72,21 +72,17 @@ public sealed class ApplicationSettingsLoaderTests
         Assert.Equal(11, settings.Style.FleetMinimumAverageAttackers);
     }
 
-#if HISTORIC_RELATIONSHIPS
     [Fact]
-    public void LoadOrDefault_HistoricRelationshipsBuild_PreservesEveryPropertyWhileNormalizingGroupHistory()
+    public void LoadOrDefault_RetiredSectionPresent_IgnoredAndOtherValuesIntact()
     {
-        var path = System.IO.Path.Combine(
-            System.IO.Path.GetTempPath(),
-            $"killright-settings-normalize-{System.Guid.NewGuid():N}.json");
-
+        var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"killright-settings-{Guid.NewGuid():N}.json");
         System.IO.File.WriteAllText(path, """
         {
           "recentWindowDays": 21,
           "backupRotationCount": 7,
           "highlightOpacity": 0.35,
           "groupHistory": { "importBatchSize": 200, "parallelDownloadWorkers": 12, "zkillDocumentedMaxRequestsPerSecond": 8 },
-          "style": { "blobMinimumAverageAttackers": 5, "fleetMinimumAverageAttackers": 11 }
+          "style": { "blobMinimumAverageAttackers": 6, "fleetMinimumAverageAttackers": 12 }
         }
         """);
 
@@ -97,12 +93,12 @@ public sealed class ApplicationSettingsLoaderTests
             Assert.Equal(21, settings.RecentWindowDays);
             Assert.Equal(7, settings.BackupRotationCount);
             Assert.Equal(0.35, settings.HighlightOpacity);
-            Assert.Equal(200, settings.GroupHistory.ImportBatchSize);
+            Assert.Equal(6, settings.Style.BlobMinimumAverageAttackers);
+            Assert.Equal(12, settings.Style.FleetMinimumAverageAttackers);
         }
         finally
         {
             System.IO.File.Delete(path);
         }
     }
-#endif
 }

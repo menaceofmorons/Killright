@@ -1,12 +1,7 @@
 <Project>
 
     <PropertyGroup>
-        <HistoricRelationships Condition="'$(HistoricRelationships)' == ''">false</HistoricRelationships>
         <AlphaRelease Condition="'$(AlphaRelease)' == ''">false</AlphaRelease>
-    </PropertyGroup>
-
-    <PropertyGroup Condition="'$(HistoricRelationships)' == 'true'">
-        <DefineConstants>$(DefineConstants);HISTORIC_RELATIONSHIPS</DefineConstants>
     </PropertyGroup>
 
     <PropertyGroup Condition="'$(AlphaRelease)' == 'true'">

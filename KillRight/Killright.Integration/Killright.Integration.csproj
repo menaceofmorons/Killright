@@ -11,8 +11,4 @@
       <ProjectReference Include="..\Killright.Shared\Killright.Shared.csproj" />
     </ItemGroup>
 
-    <ItemGroup Condition="'$(HistoricRelationships)' != 'true'">
-        <Compile Remove="zKill\History\**" />
-    </ItemGroup>
-
 </Project>

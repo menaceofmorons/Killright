@@ -16,8 +16,4 @@
       <PackageReference Include="DuckDB.NET.Data.Full" Version="1.5.3" />
     </ItemGroup>
 
-    <ItemGroup Condition="'$(HistoricRelationships)' != 'true'">
-        <Compile Remove="GroupHistory\**" />
-    </ItemGroup>
-
 </Project>

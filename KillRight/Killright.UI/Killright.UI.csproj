@@ -32,10 +32,4 @@
               CopyToOutputDirectory="PreserveNewest" />
     </ItemGroup>
 
-    <ItemGroup Condition="'$(HistoricRelationships)' != 'true'">
-        <Compile Remove="DeveloperTools\GroupDetectionHistoryPilot\**" />
-        <Page Remove="DeveloperTools\GroupDetectionHistoryPilot\**" />
-    </ItemGroup>
-    
-
 </Project>

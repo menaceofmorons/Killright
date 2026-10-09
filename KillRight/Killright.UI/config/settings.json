@@ -34,11 +34,6 @@
     "threads": 4,
     "idleCheckpointSeconds": 30
   },
-  "groupHistory": {
-    "importBatchSize": 150,
-    "parallelDownloadWorkers": 20,
-    "zkillDocumentedMaxRequestsPerSecond": 15
-  },
   "sde": {
     "manifestUrl": "https://developers.eveonline.com/static-data/tranquility/latest.jsonl",
     "datasetZipUrl": "https://developers.eveonline.com/static-data/eve-online-static-data-latest-jsonl.zip",

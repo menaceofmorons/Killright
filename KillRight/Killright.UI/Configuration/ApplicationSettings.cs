@@ -1,8 +1,3 @@
-#if HISTORIC_RELATIONSHIPS
-using Killright.Integration.zKill.History;
-using Killright.Storage.GroupHistory.Models;
-
-#endif
 using Killright.Shared.Killmails;
 using Killright.Storage.Database;
 
@@ -37,10 +32,6 @@ public sealed class ApplicationSettings
     public NetworkSettings Network { get; init; } = new();
 
     public DatabaseSettings Database { get; init; } = new();
-
-#if HISTORIC_RELATIONSHIPS
-    public GroupHistoryApplicationSettings GroupHistory { get; init; } = new();
-#endif
 }
 
 public sealed class ThreatBandSetting
@@ -409,26 +400,3 @@ public sealed class GroupDetectionIntermediaryBonusSetting
 
     public int Maximum { get; init; }
 }
-
-#if HISTORIC_RELATIONSHIPS
-public sealed class GroupHistoryApplicationSettings
-{
-    public int ImportBatchSize { get; init; } = GroupHistoryImportBatchOptions.DefaultBatchSize;
-
-    public int ParallelDownloadWorkers { get; init; } = ZkillHistoryParallelDownloadOptions.DefaultParallelDownloadWorkers;
-
-    public int ZkillDocumentedMaxRequestsPerSecond { get; init; } = ZkillHistoryParallelDownloadOptions.DefaultDocumentedMaxRequestsPerSecond;
-
-    public GroupHistoryImportBatchOptions ToBatchOptions()
-    {
-        return GroupHistoryImportBatchOptions.FromSingleBatchSize(ImportBatchSize);
-    }
-
-    public ZkillHistoryParallelDownloadOptions ToParallelDownloadOptions()
-    {
-        return ZkillHistoryParallelDownloadOptions.FromConfiguredValues(
-            ParallelDownloadWorkers,
-            ZkillDocumentedMaxRequestsPerSecond);
-    }
-}
-#endif

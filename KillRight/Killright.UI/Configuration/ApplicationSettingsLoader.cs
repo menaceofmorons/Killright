@@ -48,34 +48,6 @@ public static class ApplicationSettingsLoader
         var network = settings.Network.Normalized();
         var database = settings.Database.Normalized();
 
-#if HISTORIC_RELATIONSHIPS
-        var batchOptions = settings.GroupHistory.ToBatchOptions();
-        var parallelOptions = settings.GroupHistory.ToParallelDownloadOptions();
-
-        return new ApplicationSettings
-        {
-            RecentWindowDays = settings.RecentWindowDays,
-            BackupFolder = settings.BackupFolder,
-            BackupRotationCount = settings.BackupRotationCount,
-            ThreatBands = settings.ThreatBands,
-            RelationshipConfidenceBands = settings.RelationshipConfidenceBands,
-            HighlightOpacity = settings.HighlightOpacity,
-            QualificationFleetThreshold = qualificationFleetThreshold,
-            Sde = settings.Sde,
-            Threat = settings.Threat,
-            GroupDetection = settings.GroupDetection,
-            Style = settings.Style,
-            Timing = settings.Timing,
-            Network = network,
-            Database = database,
-            GroupHistory = new GroupHistoryApplicationSettings
-            {
-                ImportBatchSize = batchOptions.EvidenceInsertBatchSize,
-                ParallelDownloadWorkers = parallelOptions.ParallelDownloadWorkers,
-                ZkillDocumentedMaxRequestsPerSecond = parallelOptions.ZkillDocumentedMaxRequestsPerSecond
-            }
-        };
-#else
         return qualificationFleetThreshold == settings.QualificationFleetThreshold && network == settings.Network && database == settings.Database
             ? settings
             : new ApplicationSettings
@@ -95,6 +67,5 @@ public static class ApplicationSettingsLoader
                 Network = network,
                 Database = database
             };
-#endif
     }
 }
