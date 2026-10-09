@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.Data.Sqlite;
 using Killright.Shared.zKill;
 using Killright.Storage.Database;
@@ -266,12 +267,277 @@ public sealed class RecentKillmailCacheTests
         Assert.Null(result);
     }
 
-    private static (KillRightDatabase Database, RecentKillmailCache Cache) CreateCache(int recentWindowDays)
+    [Fact]
+    public async Task RemoveExpiredAsync_FourHundredAndOneCandidates_RunsThreeBatchesAndDeletesAll()
+    {
+        PurgePassStats? stats = null;
+        var (database, cache) = CreateCache(recentWindowDays: 14, passCompleted: value => stats = value);
+
+        InsertNonQualifyingKillmails(database, 720001, 401, DateTimeOffset.UtcNow.AddDays(-20));
+
+        await cache.RemoveExpiredAsync();
+
+        Assert.NotNull(stats);
+        Assert.Equal(401, stats!.Candidates);
+        Assert.Equal(3, stats.Batches);
+        Assert.Equal(0, CountKillmails(database));
+        Assert.Equal(0, CountAllAttackers(database));
+    }
+
+    [Fact]
+    public async Task RemoveExpiredAsync_NoCandidates_ReportsZeroBatches()
+    {
+        PurgePassStats? stats = null;
+        var (database, cache) = CreateCache(recentWindowDays: 14, passCompleted: value => stats = value);
+
+        InsertKillmail(database, 720101, DateTimeOffset.UtcNow.AddDays(-5), isQualifying: false);
+
+        await cache.RemoveExpiredAsync();
+
+        Assert.NotNull(stats);
+        Assert.Equal(0, stats!.Candidates);
+        Assert.Equal(0, stats.Batches);
+        Assert.True(KillmailExists(database, 720101));
+    }
+
+    [Fact]
+    public async Task RemoveExpiredAsync_CandidateBecomesQualifyingBeforeItsBatch_IsKept()
+    {
+        KillRightDatabase database = null!;
+        RecentKillmailCache cache;
+
+        (database, cache) = CreateCache(
+            recentWindowDays: 14,
+            beforeBatch: _ =>
+            {
+                using var connection = database.OpenConnection();
+                using var command = connection.CreateCommand();
+                command.CommandText = "UPDATE main.zkill_killmails SET is_qualifying = 1 WHERE killmail_id = 730002;";
+                command.ExecuteNonQuery();
+            });
+
+        InsertNonQualifyingKillmails(database, 730001, 3, DateTimeOffset.UtcNow.AddDays(-20));
+
+        await cache.RemoveExpiredAsync();
+
+        Assert.False(KillmailExists(database, 730001));
+        Assert.True(KillmailExists(database, 730002));
+        Assert.False(KillmailExists(database, 730003));
+        Assert.Equal(1, CountAttackers(database, 730002));
+    }
+
+    [Fact]
+    public async Task RemoveExpiredAsync_CandidateBecomesPilotsLatestKillmailBeforeItsBatch_IsKept()
+    {
+        KillRightDatabase database = null!;
+        RecentKillmailCache cache;
+
+        (database, cache) = CreateCache(
+            recentWindowDays: 14,
+            beforeBatch: _ =>
+            {
+                InsertActivityCache(database, ScannedCharacterId);
+                InsertAttacker(database, 730011, ScannedCharacterId);
+            });
+
+        InsertKillmail(database, 730011, DateTimeOffset.UtcNow.AddDays(-20), isQualifying: false);
+        InsertAttacker(database, 730011, OtherCharacterId);
+        InsertKillmail(database, 730012, DateTimeOffset.UtcNow.AddDays(-21), isQualifying: false);
+        InsertAttacker(database, 730012, OtherCharacterId);
+
+        await cache.RemoveExpiredAsync();
+
+        Assert.True(KillmailExists(database, 730011));
+        Assert.Equal(2, CountAttackers(database, 730011));
+        Assert.False(KillmailExists(database, 730012));
+    }
+
+    [Fact]
+    public async Task RemoveExpiredAsync_DeletedKillmails_RemoveOnlyTheirOwnAttackerRows()
+    {
+        var (database, cache) = CreateCache(recentWindowDays: 14);
+
+        InsertKillmail(database, 730021, DateTimeOffset.UtcNow.AddDays(-20), isQualifying: false);
+        InsertAttacker(database, 730021, OtherCharacterId);
+        InsertAttacker(database, 730021, ScannedCharacterId);
+        InsertKillmail(database, 730022, DateTimeOffset.UtcNow.AddDays(-20), isQualifying: true);
+        InsertAttacker(database, 730022, OtherCharacterId);
+        InsertAttacker(database, 730022, ScannedCharacterId);
+        InsertKillmail(database, 730023, DateTimeOffset.UtcNow.AddDays(-2), isQualifying: false);
+        InsertAttacker(database, 730023, OtherCharacterId);
+
+        await cache.RemoveExpiredAsync();
+
+        Assert.Equal(0, CountAttackers(database, 730021));
+        Assert.Equal(2, CountAttackers(database, 730022));
+        Assert.Equal(1, CountAttackers(database, 730023));
+        Assert.Equal(3, CountAllAttackers(database));
+    }
+
+    [Fact]
+    public async Task RemoveExpiredAsync_WriteStartedDuringPass_WaitsForAtMostOneBatch()
+    {
+        using var firstBatchEntered = new ManualResetEventSlim();
+
+        var (database, cache) = CreateCache(
+            recentWindowDays: 14,
+            beforeBatch: _ => Thread.Sleep(50),
+            insideBatch: _ =>
+            {
+                firstBatchEntered.Set();
+                Thread.Sleep(400);
+            });
+
+        InsertNonQualifyingKillmails(database, 740001, 401, DateTimeOffset.UtcNow.AddDays(-20));
+
+        var pass = Task.Run(() => cache.RemoveExpiredAsync());
+
+        Assert.True(firstBatchEntered.Wait(TimeSpan.FromSeconds(10)));
+
+        var stopwatch = Stopwatch.StartNew();
+
+        using (database.BeginWrite())
+        {
+        }
+
+        stopwatch.Stop();
+
+        Assert.True(stopwatch.ElapsedMilliseconds < 800, $"Write waited {stopwatch.ElapsedMilliseconds} ms.");
+        Assert.False(pass.IsCompleted);
+
+        await pass;
+    }
+
+    [Fact]
+    public async Task RemoveExpiredAsync_CancelledAfterFirstBatch_LeavesRemainingCandidatesUntouched()
+    {
+        using var cancellation = new CancellationTokenSource();
+
+        var (database, cache) = CreateCache(
+            recentWindowDays: 14,
+            insideBatch: index =>
+            {
+                if (index == 0)
+                    cancellation.Cancel();
+            });
+
+        InsertNonQualifyingKillmails(database, 750001, 401, DateTimeOffset.UtcNow.AddDays(-20));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => cache.RemoveExpiredAsync(cancellation.Token));
+
+        Assert.False(KillmailExists(database, 750001));
+        Assert.False(KillmailExists(database, 750200));
+        Assert.True(KillmailExists(database, 750201));
+        Assert.True(KillmailExists(database, 750401));
+        Assert.Equal(201, CountKillmails(database));
+        Assert.Equal(201, CountAllAttackers(database));
+    }
+
+    [Fact]
+    public async Task RemoveExpiredAsync_AfterLastBatch_VacuumReducesFreelist()
+    {
+        KillRightDatabase database = null!;
+        RecentKillmailCache cache;
+        long freelistBeforeLastBatch = -1;
+
+        (database, cache) = CreateCache(
+            recentWindowDays: 14,
+            beforeBatch: index =>
+            {
+                if (index == 2)
+                    freelistBeforeLastBatch = FreelistCount(database);
+            });
+
+        InsertNonQualifyingKillmails(database, 760001, 401, DateTimeOffset.UtcNow.AddDays(-20));
+
+        await cache.RemoveExpiredAsync();
+
+        Assert.True(freelistBeforeLastBatch > 0);
+        Assert.True(FreelistCount(database) < freelistBeforeLastBatch);
+    }
+
+    private static (KillRightDatabase Database, RecentKillmailCache Cache) CreateCache(
+        int recentWindowDays,
+        Action<PurgePassStats>? passCompleted = null,
+        Action<int>? beforeBatch = null,
+        Action<int>? insideBatch = null)
     {
         var path = Path.Combine(Path.GetTempPath(), $"recentKillmailCache.{Guid.NewGuid():N}.db");
         var database = new KillRightDatabase(new KillRightDatabaseOptions { DatabasePath = path });
         database.EnsureCreated();
-        return (database, new RecentKillmailCache(database, recentWindowDays));
+
+        return (database, new RecentKillmailCache(database, recentWindowDays, passCompleted)
+        {
+            BeforeBatch = beforeBatch,
+            InsideBatch = insideBatch
+        });
+    }
+
+    private static void InsertNonQualifyingKillmails(
+        KillRightDatabase database,
+        long firstKillmailId,
+        int count,
+        DateTimeOffset killTimeUtc)
+    {
+        using var connection = database.OpenConnection();
+        using var transaction = connection.BeginTransaction();
+
+        for (var offset = 0; offset < count; offset++)
+        {
+            var killmailId = firstKillmailId + offset;
+
+            using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = $"""
+                                  INSERT INTO main.zkill_killmails (
+                                      killmail_id, killmail_hash, kill_time_utc, system_id, location_id,
+                                      victim_character_id, victim_ship_type_id, unique_attacker_count,
+                                      is_solo, is_npc, is_qualifying, cached_at_utc
+                                  ) VALUES (
+                                      {killmailId}, 'hash{killmailId}', {killTimeUtc.ToUnixTimeSeconds()}, 30000142, 40000001,
+                                      NULL, 587, 1,
+                                      0, 0, 0, {DateTimeOffset.UtcNow.ToUnixTimeSeconds()}
+                                  );
+                                  INSERT INTO main.zkill_killmail_attackers (
+                                      killmail_id, character_id, corporation_id, alliance_id, ship_type_id, weapon_type_id
+                                  ) VALUES (
+                                      {killmailId}, {OtherCharacterId}, 98000001, NULL, 11567, NULL
+                                  );
+                                  """;
+            command.ExecuteNonQuery();
+        }
+
+        transaction.Commit();
+    }
+
+    private static long FreelistCount(KillRightDatabase database)
+    {
+        using var connection = database.OpenConnection();
+
+        using var command = connection.CreateCommand();
+        command.CommandText = "PRAGMA freelist_count;";
+
+        return Convert.ToInt64(command.ExecuteScalar()!);
+    }
+
+    private static int CountKillmails(KillRightDatabase database)
+    {
+        using var connection = database.OpenConnection();
+
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM main.zkill_killmails;";
+
+        return Convert.ToInt32(command.ExecuteScalar()!);
+    }
+
+    private static int CountAllAttackers(KillRightDatabase database)
+    {
+        using var connection = database.OpenConnection();
+
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM main.zkill_killmail_attackers;";
+
+        return Convert.ToInt32(command.ExecuteScalar()!);
     }
 
     private static void InsertActivityCache(KillRightDatabase database, long characterId)

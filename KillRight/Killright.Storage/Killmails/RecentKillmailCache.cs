@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.Data.Sqlite;
 using Killright.Integration.zKill;
 using Killright.Shared.Data;
@@ -10,16 +11,27 @@ namespace Killright.Storage.Killmails;
 
 public sealed class RecentKillmailCache : IRecentKillmailCache
 {
+    private const int BatchSize = 200;
+
     private static readonly string PodShipTypeIdList = KillmailQualification.PodShipTypeIdSqlList;
 
     private readonly KillRightDatabase _database;
     private readonly int _recentWindowDays;
+    private readonly Action<PurgePassStats>? _passCompleted;
 
-    public RecentKillmailCache(KillRightDatabase database, int recentWindowDays)
+    public RecentKillmailCache(
+        KillRightDatabase database,
+        int recentWindowDays,
+        Action<PurgePassStats>? passCompleted = null)
     {
         _database = database;
         _recentWindowDays = recentWindowDays;
+        _passCompleted = passCompleted;
     }
+
+    internal Action<int>? BeforeBatch { get; init; }
+
+    internal Action<int>? InsideBatch { get; init; }
 
     public Task<PilotRecentKillmail?> GetMostRecentKillmailAsync(
         long characterId,
@@ -74,98 +86,175 @@ public sealed class RecentKillmailCache : IRecentKillmailCache
 
     public Task RemoveExpiredAsync(CancellationToken cancellationToken = default)
     {
+        try
+        {
+            RemoveExpired(cancellationToken);
+
+            return Task.CompletedTask;
+        }
+        catch (OperationCanceledException)
+        {
+            return Task.FromCanceled(cancellationToken);
+        }
+    }
+
+    private void RemoveExpired(CancellationToken cancellationToken)
+    {
         var cutoffUtc = ApplicationClock.UtcNow.AddDays(-_recentWindowDays);
+        var candidates = ReadCandidates(cutoffUtc);
+        var batches = 0;
 
-        using var scope = _database.BeginWrite();
-
-        using (var dropStaleProtectedFloor = scope.Connection.CreateCommand())
+        for (var offset = 0; offset < candidates.Count; offset += BatchSize)
         {
-            dropStaleProtectedFloor.Transaction = scope.Transaction;
-            dropStaleProtectedFloor.CommandText = "DROP TABLE IF EXISTS temp.protected_killmail_ids;";
-            dropStaleProtectedFloor.ExecuteNonQuery();
-        }
+            cancellationToken.ThrowIfCancellationRequested();
 
-        using (var buildProtectedFloor = scope.Connection.CreateCommand())
-        {
-            buildProtectedFloor.Transaction = scope.Transaction;
-            buildProtectedFloor.CommandText = $"""
-                                CREATE TEMP TABLE protected_killmail_ids AS
-                                WITH scanned_pilots AS (
-                                    SELECT character_id
-                                    FROM main.zkill_activity_cache
-                                ),
-                                pilot_kill_times AS (
-                                    SELECT victim_character_id AS character_id, kill_time_utc
-                                    FROM main.zkill_killmails
-                                    WHERE victim_character_id IN (SELECT character_id FROM scanned_pilots)
-                                      AND (victim_ship_type_id IS NULL OR victim_ship_type_id NOT IN ({PodShipTypeIdList}))
-                                    UNION ALL
-                                    SELECT a.character_id, k.kill_time_utc
-                                    FROM main.zkill_killmail_attackers a
-                                    JOIN main.zkill_killmails k ON k.killmail_id = a.killmail_id
-                                    WHERE a.character_id IN (SELECT character_id FROM scanned_pilots)
-                                      AND (k.victim_ship_type_id IS NULL OR k.victim_ship_type_id NOT IN ({PodShipTypeIdList}))
-                                ),
-                                pilot_floor AS (
-                                    SELECT character_id, MAX(kill_time_utc) AS floor_kill_time_utc
-                                    FROM pilot_kill_times
-                                    GROUP BY character_id
-                                )
-                                SELECT k.killmail_id
-                                FROM main.zkill_killmails k
-                                JOIN pilot_floor pf
-                                  ON k.victim_character_id = pf.character_id
-                                 AND k.kill_time_utc = pf.floor_kill_time_utc
-                                WHERE k.victim_ship_type_id IS NULL OR k.victim_ship_type_id NOT IN ({PodShipTypeIdList})
-                                UNION
-                                SELECT k.killmail_id
-                                FROM main.zkill_killmail_attackers a
-                                JOIN main.zkill_killmails k ON k.killmail_id = a.killmail_id
-                                JOIN pilot_floor pf
-                                  ON a.character_id = pf.character_id
-                                 AND k.kill_time_utc = pf.floor_kill_time_utc
-                                WHERE k.victim_ship_type_id IS NULL OR k.victim_ship_type_id NOT IN ({PodShipTypeIdList});
-                                """;
-            buildProtectedFloor.ExecuteNonQuery();
-        }
+            BeforeBatch?.Invoke(batches);
 
-        using (var deleteAttackers = scope.Connection.CreateCommand())
-        {
-            deleteAttackers.Transaction = scope.Transaction;
-            deleteAttackers.CommandText = $"""
-                                DELETE FROM main.zkill_killmail_attackers
-                                WHERE killmail_id IN (
-                                    SELECT killmail_id
-                                    FROM main.zkill_killmails
-                                    WHERE is_qualifying = 0
-                                      AND kill_time_utc < {SqlValueFormatter.Date(cutoffUtc)}
-                                      AND killmail_id NOT IN (SELECT killmail_id FROM protected_killmail_ids)
-                                );
-                                """;
-            deleteAttackers.ExecuteNonQuery();
-        }
+            var idList = string.Join(",", candidates.Skip(offset).Take(BatchSize));
 
-        using (var deleteKillmails = scope.Connection.CreateCommand())
-        {
-            deleteKillmails.Transaction = scope.Transaction;
-            deleteKillmails.CommandText = $"""
+            using var scope = _database.BeginWrite();
+
+            using (var deleteBatch = scope.Connection.CreateCommand())
+            {
+                deleteBatch.Transaction = scope.Transaction;
+                deleteBatch.CommandText = $"""
+                                WITH {BuildProtectedFloorCtes(idList)}
                                 DELETE FROM main.zkill_killmails
-                                WHERE is_qualifying = 0
-                                  AND kill_time_utc < {SqlValueFormatter.Date(cutoffUtc)}
+                                WHERE killmail_id IN ({idList})
+                                  AND is_qualifying = 0
                                   AND killmail_id NOT IN (SELECT killmail_id FROM protected_killmail_ids);
                                 """;
-            deleteKillmails.ExecuteNonQuery();
+                deleteBatch.ExecuteNonQuery();
+            }
+
+            InsideBatch?.Invoke(batches);
+
+            scope.Commit();
+            batches++;
         }
 
-        using (var dropProtectedFloor = scope.Connection.CreateCommand())
+        var vacuumTimestamp = Stopwatch.GetTimestamp();
+
+        using (var vacuumScope = _database.BeginWrite())
         {
-            dropProtectedFloor.Transaction = scope.Transaction;
-            dropProtectedFloor.CommandText = "DROP TABLE IF EXISTS temp.protected_killmail_ids;";
-            dropProtectedFloor.ExecuteNonQuery();
+            using var vacuum = vacuumScope.Connection.CreateCommand();
+            vacuum.Transaction = vacuumScope.Transaction;
+            vacuum.CommandText = "PRAGMA incremental_vacuum;";
+            vacuum.ExecuteNonQuery();
+
+            vacuumScope.Commit();
         }
 
-        scope.Commit();
+        ReportPass(new PurgePassStats(
+            candidates.Count,
+            batches,
+            Stopwatch.GetElapsedTime(vacuumTimestamp).TotalMilliseconds));
+    }
 
-        return Task.CompletedTask;
+    private List<long> ReadCandidates(DateTimeOffset cutoffUtc)
+    {
+        using var connection = _database.OpenConnection();
+
+        using var command = connection.CreateCommand();
+        command.CommandText = $"""
+                              WITH {BuildProtectedFloorCtes(null)}
+                              SELECT killmail_id
+                              FROM main.zkill_killmails
+                              WHERE is_qualifying = 0
+                                AND kill_time_utc < {SqlValueFormatter.Date(cutoffUtc)}
+                                AND killmail_id NOT IN (SELECT killmail_id FROM protected_killmail_ids)
+                              ORDER BY killmail_id;
+                              """;
+
+        var candidates = new List<long>();
+
+        using var reader = command.ExecuteReader();
+
+        while (reader.Read())
+            candidates.Add(reader.GetInt64(0));
+
+        return candidates;
+    }
+
+    private static string BuildProtectedFloorCtes(string? batchIdList)
+    {
+        var batchPilots = batchIdList is null
+            ? string.Empty
+            : $"""
+               batch_pilots AS (
+                   SELECT victim_character_id AS character_id
+                   FROM main.zkill_killmails
+                   WHERE killmail_id IN ({batchIdList})
+                   UNION
+                   SELECT character_id
+                   FROM main.zkill_killmail_attackers
+                   WHERE killmail_id IN ({batchIdList})
+               ),
+               """;
+
+        var pilotFilter = batchIdList is null
+            ? string.Empty
+            : "WHERE character_id IN (SELECT character_id FROM batch_pilots)";
+
+        var killmailFilter = batchIdList is null
+            ? string.Empty
+            : $"AND k.killmail_id IN ({batchIdList})";
+
+        return $"""
+                {batchPilots}
+                scanned_pilots AS (
+                    SELECT character_id
+                    FROM main.zkill_activity_cache
+                    {pilotFilter}
+                ),
+                pilot_kill_times AS (
+                    SELECT victim_character_id AS character_id, kill_time_utc
+                    FROM main.zkill_killmails
+                    WHERE victim_character_id IN (SELECT character_id FROM scanned_pilots)
+                      AND (victim_ship_type_id IS NULL OR victim_ship_type_id NOT IN ({PodShipTypeIdList}))
+                    UNION ALL
+                    SELECT a.character_id, k.kill_time_utc
+                    FROM main.zkill_killmail_attackers a
+                    JOIN main.zkill_killmails k ON k.killmail_id = a.killmail_id
+                    WHERE a.character_id IN (SELECT character_id FROM scanned_pilots)
+                      AND (k.victim_ship_type_id IS NULL OR k.victim_ship_type_id NOT IN ({PodShipTypeIdList}))
+                ),
+                pilot_floor AS (
+                    SELECT character_id, MAX(kill_time_utc) AS floor_kill_time_utc
+                    FROM pilot_kill_times
+                    GROUP BY character_id
+                ),
+                protected_killmail_ids AS (
+                    SELECT k.killmail_id
+                    FROM main.zkill_killmails k
+                    JOIN pilot_floor pf
+                      ON k.victim_character_id = pf.character_id
+                     AND k.kill_time_utc = pf.floor_kill_time_utc
+                    WHERE (k.victim_ship_type_id IS NULL OR k.victim_ship_type_id NOT IN ({PodShipTypeIdList}))
+                      {killmailFilter}
+                    UNION
+                    SELECT k.killmail_id
+                    FROM main.zkill_killmail_attackers a
+                    JOIN main.zkill_killmails k ON k.killmail_id = a.killmail_id
+                    JOIN pilot_floor pf
+                      ON a.character_id = pf.character_id
+                     AND k.kill_time_utc = pf.floor_kill_time_utc
+                    WHERE (k.victim_ship_type_id IS NULL OR k.victim_ship_type_id NOT IN ({PodShipTypeIdList}))
+                      {killmailFilter}
+                )
+                """;
+    }
+
+    private void ReportPass(PurgePassStats stats)
+    {
+        try
+        {
+            _passCompleted?.Invoke(stats);
+        }
+        catch
+        {
+        }
     }
 }
+
+public sealed record PurgePassStats(int Candidates, int Batches, double VacuumMilliseconds);

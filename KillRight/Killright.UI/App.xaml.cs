@@ -176,7 +176,7 @@ public partial class App : Application
         zKillActivityCache =
             new zKillActivityCache(database);
         RecentKillmailCache =
-            new RecentKillmailCache(database, Settings.RecentWindowDays);
+            new RecentKillmailCache(database, Settings.RecentWindowDays, RecordPurgeStatsTiming);
         PilotLastKillmailCache =
             new PilotLastKillmailCache(database);
         KillmailStore =
@@ -329,6 +329,18 @@ public partial class App : Application
 
         var timings = new ScanTimings();
         timings.Record(ScanTimings.ScanLevel, "purge_pass", milliseconds, null, tag);
+        timings.Flush();
+    }
+
+    private static void RecordPurgeStatsTiming(PurgePassStats stats)
+    {
+        if (!Settings.Timing.Enabled)
+            return;
+
+        var timings = new ScanTimings();
+        timings.Record(ScanTimings.ScanLevel, "purge_candidates", stats.Candidates, null, "purge");
+        timings.Record(ScanTimings.ScanLevel, "purge_batches", stats.Batches, null, "purge");
+        timings.Record(ScanTimings.ScanLevel, "purge_vacuum", stats.VacuumMilliseconds, null, "purge");
         timings.Flush();
     }
 

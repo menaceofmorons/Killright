@@ -16,4 +16,8 @@
       <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.20" />
     </ItemGroup>
 
+    <ItemGroup>
+      <InternalsVisibleTo Include="Killright.Storage.Tests" />
+    </ItemGroup>
+
 </Project>
