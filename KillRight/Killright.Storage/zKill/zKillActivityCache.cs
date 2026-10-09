@@ -1,4 +1,4 @@
-using DuckDB.NET.Data;
+using Microsoft.Data.Sqlite;
 using Killright.Integration.zKill;
 using Killright.Shared.Data;
 using Killright.Shared.zKill;
@@ -7,19 +7,18 @@ using Killright.Storage.Database;
 namespace Killright.Storage.zKill;
 
 
-public sealed class DuckDbzKillActivityCache : IzKillActivityCache
+public sealed class zKillActivityCache : IzKillActivityCache
 {
     private readonly KillRightDatabase _database;
 
-    public DuckDbzKillActivityCache(KillRightDatabase database)
+    public zKillActivityCache(KillRightDatabase database)
     {
         _database = database;
     }
 
     public Task<zKillActivity?> GetAsync(long characterId, CancellationToken cancellationToken = default)
     {
-        using var connection = new DuckDBConnection(_database.ConnectionString);
-        connection.Open();
+        using var connection = _database.OpenConnection();
 
         using var command = connection.CreateCommand();
         command.CommandText = $"""
@@ -44,7 +43,7 @@ public sealed class DuckDbzKillActivityCache : IzKillActivityCache
         if (!reader.Read())
             return Task.FromResult<zKillActivity?>(null);
 
-        var checkedAtUtc = reader.GetDateTimeOffset(6);
+        var checkedAtUtc = reader.GetUtcDateTimeOffset(6);
 
         var record = new zKillActivityCacheRecord
         {
@@ -108,7 +107,7 @@ public sealed class DuckDbzKillActivityCache : IzKillActivityCache
                     SoloWeek = reader.GetNullableInt32(3),
                     LastActiveUtc = reader.GetNullableDateTimeOffset(4),
                     LastActivityType = ReadActivityTypeOrNull(reader.GetNullableString(5)),
-                    CheckedAtUtc = reader.GetDateTimeOffset(6),
+                    CheckedAtUtc = reader.GetUtcDateTimeOffset(6),
                     Error = reader.GetNullableString(7),
                     LastSuccessfulRecentCallUtc = reader.GetNullableDateTimeOffset(8),
                     RecentCoverageStartUtc = reader.GetNullableDateTimeOffset(9),
@@ -126,17 +125,18 @@ public sealed class DuckDbzKillActivityCache : IzKillActivityCache
     {
         var record = zKillActivityCacheRecord.FromActivity(activity);
 
-        using var connection = new DuckDBConnection(_database.ConnectionString);
-        connection.Open();
+        using var scope = _database.BeginWrite();
 
-        using (var deleteCommand = connection.CreateCommand())
+        using (var deleteCommand = scope.Connection.CreateCommand())
         {
+            deleteCommand.Transaction = scope.Transaction;
             deleteCommand.CommandText = $"DELETE FROM zkill_activity_cache WHERE character_id = {record.CharacterId};";
             deleteCommand.ExecuteNonQuery();
         }
 
-        using (var insertCommand = connection.CreateCommand())
+        using (var insertCommand = scope.Connection.CreateCommand())
         {
+            insertCommand.Transaction = scope.Transaction;
             insertCommand.CommandText = $"""
                                         INSERT INTO zkill_activity_cache (
                                             character_id,
@@ -166,6 +166,8 @@ public sealed class DuckDbzKillActivityCache : IzKillActivityCache
                                         """;
             insertCommand.ExecuteNonQuery();
         }
+
+        scope.Commit();
 
         return Task.CompletedTask;
     }

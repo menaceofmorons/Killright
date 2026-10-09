@@ -1,6 +1,7 @@
-using DuckDB.NET.Data;
+using Microsoft.Data.Sqlite;
 using Killright.Shared.Data;
 using Killright.Storage.Database;
+using Killright.Storage.Diagnostics;
 using Killright.Storage.Identity;
 using Killright.Storage.Killmails;
 using Killright.Storage.zKill;
@@ -15,36 +16,31 @@ public static class ScanWriter
         ScanDatabaseSession session,
         ScanWriteBatch batch,
         int qualificationFleetThreshold,
-        DateTimeOffset cachedAtUtc)
+        DateTimeOffset cachedAtUtc,
+        ScanTimings? timings = null,
+        string? tag = null)
     {
         if (batch.IsEmpty)
             return;
 
-        try
-        {
-            var connection = session.Connection;
+        using var scope = session.BeginWrite(timings, tag);
 
-            using var transaction = connection.BeginTransaction();
+        var connection = scope.Connection;
+        var transaction = scope.Transaction;
 
-            WriteIdentities(connection, transaction, batch.Identities);
-            WriteEntityNames(connection, transaction, batch.EntityNames);
-            WriteStatistics(connection, transaction, batch.Statistics);
-            KillmailBulkWriter.Write(connection, transaction, batch.Killmails, qualificationFleetThreshold, cachedAtUtc);
-            ClearNoHistoryMarkers(connection, transaction, batch.NoHistoryClears);
-            WriteActivities(connection, transaction, batch.Activities);
+        WriteIdentities(connection, transaction, batch.Identities);
+        WriteEntityNames(connection, transaction, batch.EntityNames);
+        WriteStatistics(connection, transaction, batch.Statistics);
+        KillmailBulkWriter.Write(connection, transaction, batch.Killmails, qualificationFleetThreshold, cachedAtUtc);
+        ClearNoHistoryMarkers(connection, transaction, batch.NoHistoryClears);
+        WriteActivities(connection, transaction, batch.Activities);
 
-            transaction.Commit();
-        }
-        catch (Exception exception)
-        {
-            session.ReportFailure(exception);
-            throw;
-        }
+        scope.Commit();
     }
 
     private static void WriteIdentities(
-        DuckDBConnection connection,
-        DuckDBTransaction transaction,
+        SqliteConnection connection,
+        SqliteTransaction transaction,
         IReadOnlyList<PilotIdentityCacheRecord> records)
     {
         foreach (var chunk in records.Chunk(ChunkSize))
@@ -69,8 +65,8 @@ public static class ScanWriter
     }
 
     private static void WriteEntityNames(
-        DuckDBConnection connection,
-        DuckDBTransaction transaction,
+        SqliteConnection connection,
+        SqliteTransaction transaction,
         IReadOnlyList<EsiEntityName> names)
     {
         foreach (var chunk in names.Chunk(ChunkSize))
@@ -87,8 +83,8 @@ public static class ScanWriter
     }
 
     private static void WriteStatistics(
-        DuckDBConnection connection,
-        DuckDBTransaction transaction,
+        SqliteConnection connection,
+        SqliteTransaction transaction,
         IReadOnlyList<PendingStatistics> statistics)
     {
         foreach (var chunk in statistics.Chunk(ChunkSize))
@@ -121,8 +117,8 @@ public static class ScanWriter
     }
 
     private static void ClearNoHistoryMarkers(
-        DuckDBConnection connection,
-        DuckDBTransaction transaction,
+        SqliteConnection connection,
+        SqliteTransaction transaction,
         IReadOnlyList<long> characterIds)
     {
         foreach (var chunk in characterIds.Chunk(ChunkSize))
@@ -130,13 +126,13 @@ public static class ScanWriter
             Execute(
                 connection,
                 transaction,
-                $"UPDATE main.zkill_statistics_cache SET no_history_marker = FALSE WHERE character_id IN ({string.Join(", ", chunk)});");
+                $"UPDATE main.zkill_statistics_cache SET no_history_marker = 0 WHERE character_id IN ({string.Join(", ", chunk)});");
         }
     }
 
     private static void WriteActivities(
-        DuckDBConnection connection,
-        DuckDBTransaction transaction,
+        SqliteConnection connection,
+        SqliteTransaction transaction,
         IReadOnlyList<Killright.Integration.zKill.zKillActivity> activities)
     {
         foreach (var chunk in activities.Chunk(ChunkSize))
@@ -163,7 +159,7 @@ public static class ScanWriter
         }
     }
 
-    private static void Execute(DuckDBConnection connection, DuckDBTransaction transaction, string sql)
+    private static void Execute(SqliteConnection connection, SqliteTransaction transaction, string sql)
     {
         using var command = connection.CreateCommand();
         command.Transaction = transaction;

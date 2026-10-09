@@ -1,5 +1,5 @@
 using System.Text;
-using DuckDB.NET.Data;
+using Microsoft.Data.Sqlite;
 using Killright.Shared.Data;
 using Killright.Shared.Killmails;
 using Killright.Storage.Scan;
@@ -11,8 +11,8 @@ internal static class KillmailBulkWriter
     private const int ChunkSize = 500;
 
     public static void Write(
-        DuckDBConnection connection,
-        DuckDBTransaction transaction,
+        SqliteConnection connection,
+        SqliteTransaction transaction,
         IReadOnlyList<PendingKillmails> pending,
         int qualificationFleetThreshold,
         DateTimeOffset cachedAtUtc)
@@ -71,8 +71,8 @@ internal static class KillmailBulkWriter
     }
 
     private static Dictionary<long, bool> ReadExistingQualifyingFlags(
-        DuckDBConnection connection,
-        DuckDBTransaction transaction,
+        SqliteConnection connection,
+        SqliteTransaction transaction,
         IReadOnlyList<long> killmailIds)
     {
         var known = new Dictionary<long, bool>();
@@ -97,8 +97,8 @@ internal static class KillmailBulkWriter
     }
 
     private static void InsertKillmails(
-        DuckDBConnection connection,
-        DuckDBTransaction transaction,
+        SqliteConnection connection,
+        SqliteTransaction transaction,
         IReadOnlyList<(RawKillmail Killmail, int UniqueAttackerCount, bool IsQualifying)> newKillmails,
         DateTimeOffset cachedAtUtc)
     {
@@ -130,8 +130,8 @@ internal static class KillmailBulkWriter
     }
 
     private static void SetQualifying(
-        DuckDBConnection connection,
-        DuckDBTransaction transaction,
+        SqliteConnection connection,
+        SqliteTransaction transaction,
         IReadOnlyCollection<long> killmailIds)
     {
         foreach (var chunk in killmailIds.Chunk(ChunkSize))
@@ -140,7 +140,7 @@ internal static class KillmailBulkWriter
             command.Transaction = transaction;
             command.CommandText = $"""
                                   UPDATE main.zkill_killmails
-                                  SET is_qualifying = TRUE
+                                  SET is_qualifying = 1
                                   WHERE killmail_id IN ({string.Join(", ", chunk)});
                                   """;
             command.ExecuteNonQuery();
@@ -148,8 +148,8 @@ internal static class KillmailBulkWriter
     }
 
     private static void InsertAttackers(
-        DuckDBConnection connection,
-        DuckDBTransaction transaction,
+        SqliteConnection connection,
+        SqliteTransaction transaction,
         IReadOnlyDictionary<(long KillmailId, long CharacterId), KillmailAttacker> attackers)
     {
         foreach (var chunk in attackers.Chunk(ChunkSize))

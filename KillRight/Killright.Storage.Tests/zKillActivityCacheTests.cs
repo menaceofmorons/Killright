@@ -6,7 +6,7 @@ using Xunit;
 
 namespace Killright.Storage.Tests;
 
-public sealed class DuckDbzKillActivityCacheTests
+public sealed class zKillActivityCacheTests
 {
     [Fact]
     public async Task UpsertThenGet_RoundTripsStoredActivity()
@@ -128,11 +128,11 @@ public sealed class DuckDbzKillActivityCacheTests
         Assert.Equal(activity.LastActiveUtc, cached!.LastActiveUtc);
     }
 
-    private static (KillRightDatabase Database, DuckDbzKillActivityCache Cache) CreateCache()
+    private static (KillRightDatabase Database, zKillActivityCache Cache) CreateCache()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"zkillActivity.{Guid.NewGuid():N}.duckdb");
+        var path = Path.Combine(Path.GetTempPath(), $"zkillActivity.{Guid.NewGuid():N}.db");
         var database = new KillRightDatabase(new KillRightDatabaseOptions { DatabasePath = path });
         database.EnsureCreated();
-        return (database, new DuckDbzKillActivityCache(database));
+        return (database, new zKillActivityCache(database));
     }
 }

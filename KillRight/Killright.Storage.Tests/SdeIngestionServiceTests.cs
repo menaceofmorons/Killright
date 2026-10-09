@@ -248,12 +248,12 @@ public sealed class SdeIngestionServiceTests
         writer.Write(contents);
     }
 
-    private static (KillRightDatabase Database, DuckDbSdeReferenceDataStore Store) CreateStore()
+    private static (KillRightDatabase Database, SdeReferenceDataStore Store) CreateStore()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"sdeIngestion.{Guid.NewGuid():N}.duckdb");
+        var path = Path.Combine(Path.GetTempPath(), $"sdeIngestion.{Guid.NewGuid():N}.db");
         var database = new KillRightDatabase(new KillRightDatabaseOptions { DatabasePath = path });
         database.EnsureCreated();
-        return (database, new DuckDbSdeReferenceDataStore(database));
+        return (database, new SdeReferenceDataStore(database));
     }
 
     private sealed class FakeSdeClient : ISdeClient

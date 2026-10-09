@@ -1,4 +1,4 @@
-using DuckDB.NET.Data;
+using Microsoft.Data.Sqlite;
 using Killright.Storage.Database;
 using Xunit;
 
@@ -89,48 +89,44 @@ public sealed class SchemaVersionGateTests
     }
 
     [Fact]
-    public void CheckOnStartup_LockedVersionTwo_MigratesToThreeCreatesTableAndKeepsKillmails()
+    public void CheckOnStartup_LockedAndStoredVersionOneBehind_RefusesWithNoMigrationPathAndKeepsKillmails()
     {
         var database = CreateDatabase();
-        DropPilotLastKillmailCache(database);
         InsertKillmailRow(database, 900003);
         database.SetAlphaLock();
-        database.SetSchemaVersion(2);
+        database.SetSchemaVersion(KillRightDatabase.CurrentSchemaVersion - 1);
 
         var result = SchemaVersionGate.CheckOnStartup(database, isAlphaRelease: false);
 
-        Assert.Equal(SchemaVersionCheckOutcome.Ok, result.Outcome);
-        Assert.Equal(3, database.GetSchemaVersion());
-        Assert.Equal(0, CountPilotLastKillmailRows(database));
+        Assert.Equal(SchemaVersionCheckOutcome.RefusedNoMigrationPath, result.Outcome);
         Assert.Equal(1, CountKillmails(database));
     }
 
     [Fact]
-    public void CheckOnStartup_NotLockedVersionTwo_FollowsTheRebuildRule()
+    public void CheckOnStartup_NotLockedRebuild_RecreatesKillmailTablesAsStrictWithCascade()
     {
         var database = CreateDatabase();
         InsertKillmailRow(database, 900004);
-        database.SetSchemaVersion(2);
+        database.SetSchemaVersion(KillRightDatabase.CurrentSchemaVersion - 1);
 
-        var result = SchemaVersionGate.CheckOnStartup(database, isAlphaRelease: false);
+        SchemaVersionGate.CheckOnStartup(database, isAlphaRelease: false);
 
-        Assert.Equal(SchemaVersionCheckOutcome.Ok, result.Outcome);
-        Assert.Equal(3, database.GetSchemaVersion());
-        Assert.Equal(0, CountKillmails(database));
+        using var connection = database.OpenConnection();
+
+        Assert.Equal(2L, ScalarLong(connection, "SELECT COUNT(*) FROM pragma_table_list WHERE schema = 'main' AND name IN ('zkill_killmails', 'zkill_killmail_attackers') AND strict = 1;"));
+        Assert.Equal(1L, ScalarLong(connection, "SELECT COUNT(*) FROM pragma_foreign_key_list('zkill_killmail_attackers') WHERE on_delete = 'CASCADE';"));
+        Assert.Equal(3L, ScalarLong(connection, "SELECT COUNT(*) FROM sqlite_schema WHERE type = 'index' AND name LIKE 'ix_zkill_%';"));
     }
 
     [Fact]
-    public void Migrations_HaveOneStepFromTwoToThree()
+    public void Migrations_AreEmpty()
     {
-        var migration = Assert.Single(SchemaVersionGate.Migrations);
-
-        Assert.Equal(2, migration.FromVersion);
-        Assert.Equal(3, migration.ToVersion);
+        Assert.Empty(SchemaVersionGate.Migrations);
     }
 
     private static KillRightDatabase CreateDatabase()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"schemaVersionGate.{Guid.NewGuid():N}.duckdb");
+        var path = Path.Combine(Path.GetTempPath(), $"schemaVersionGate.{Guid.NewGuid():N}.db");
         var database = new KillRightDatabase(new KillRightDatabaseOptions { DatabasePath = path });
         database.EnsureCreated();
         return database;
@@ -138,8 +134,7 @@ public sealed class SchemaVersionGateTests
 
     private static void InsertKillmailRow(KillRightDatabase database, long killmailId)
     {
-        using var connection = new DuckDBConnection(database.ConnectionString);
-        connection.Open();
+        using var connection = database.OpenConnection();
 
         using var command = connection.CreateCommand();
         command.CommandText = $"""
@@ -147,37 +142,23 @@ public sealed class SchemaVersionGateTests
                 (killmail_id, killmail_hash, kill_time_utc, system_id, location_id, victim_character_id,
                  victim_ship_type_id, unique_attacker_count, is_solo, is_npc, is_qualifying, cached_at_utc)
             VALUES
-                ({killmailId}, 'hash', '2026-09-28T00:00:00Z', 30000142, NULL, 95465499,
-                 587, 1, TRUE, FALSE, FALSE, '2026-09-28T00:00:00Z');
+                ({killmailId}, 'hash', 1790553600, 30000142, NULL, 95465499,
+                 587, 1, 1, 0, 0, 1790553600);
             """;
         command.ExecuteNonQuery();
     }
 
-    private static void DropPilotLastKillmailCache(KillRightDatabase database)
+    private static long ScalarLong(SqliteConnection connection, string sql)
     {
-        using var connection = new DuckDBConnection(database.ConnectionString);
-        connection.Open();
-
         using var command = connection.CreateCommand();
-        command.CommandText = "DROP TABLE main.pilot_last_killmail_cache;";
-        command.ExecuteNonQuery();
-    }
+        command.CommandText = sql;
 
-    private static int CountPilotLastKillmailRows(KillRightDatabase database)
-    {
-        using var connection = new DuckDBConnection(database.ConnectionString);
-        connection.Open();
-
-        using var command = connection.CreateCommand();
-        command.CommandText = "SELECT COUNT(*) FROM main.pilot_last_killmail_cache;";
-
-        return Convert.ToInt32(command.ExecuteScalar());
+        return Convert.ToInt64(command.ExecuteScalar());
     }
 
     private static int CountKillmails(KillRightDatabase database)
     {
-        using var connection = new DuckDBConnection(database.ConnectionString);
-        connection.Open();
+        using var connection = database.OpenConnection();
 
         using var command = connection.CreateCommand();
         command.CommandText = "SELECT COUNT(*) FROM main.zkill_killmails;";

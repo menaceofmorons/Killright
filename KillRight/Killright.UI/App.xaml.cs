@@ -51,7 +51,7 @@ public partial class App : Application
     public static IdleCheckpointScheduler IdleCheckpointScheduler { get; private set; } = null!;
     public static IEngineInputReader EngineInputReader { get; private set; } = null!;
     public static ScanCoordinator? ScanCoordinator { get; set; }
-    public static IKillmailBackupService KillmailBackupService { get; private set; } = null!;
+    public static IDatabaseBackupService BackupService { get; private set; } = null!;
     public static bool SkipBackupOnClose { get; set; }
 
     private static readonly TimeSpan ShutdownWaitTimeout = TimeSpan.FromSeconds(5);
@@ -100,47 +100,38 @@ public partial class App : Application
             Environment.GetFolderPath(
                 Environment.SpecialFolder.LocalApplicationData),
             "KillRight",
-            "KillRight.duckdb");
-
-        var databaseFileExistedBeforeStartup = File.Exists(databasePath);
+            "KillRight.db");
 
         var database =
             new KillRightDatabase(
                 new KillRightDatabaseOptions
                 {
                     DatabasePath = databasePath,
-                    MemoryLimit = Settings.Database.MemoryLimit,
-                    Threads = Settings.Database.Threads
+                    BusyTimeoutSeconds = Settings.Database.BusyTimeoutSeconds,
+                    PageCacheMegabytes = Settings.Database.PageCacheMegabytes
                 });
 
         Database = database;
 
-        var wasRecovered = database.EnsureCreatedWithRecovery(reason =>
+        database.QuarantineIfCorrupt(reason =>
             EngineFailureLog.Record($"Operational database was corrupt at startup and has been rebuilt. {reason}"));
 
         var backupFolder = Settings.BackupFolder
             ?? Path.Combine(Path.GetDirectoryName(databasePath)!, KillmailBackupDefaults.DefaultBackupFolderName);
 
-        KillmailBackupService =
-            new DuckDbKillmailBackupService(
+        BackupService =
+            new DatabaseBackupService(
                 database,
                 backupFolder,
                 Settings.BackupRotationCount);
 
-        if (wasRecovered || !databaseFileExistedBeforeStartup)
-        {
-            var restored = KillmailBackupService.TryRestoreAsync().GetAwaiter().GetResult();
-
-            if (restored)
-                EngineFailureLog.Record("Restored killmail and attacker tables from the latest backup.");
-        }
-
         try
         {
-            database.Open();
+            if (!File.Exists(databasePath) && BackupService.TryRestore())
+                EngineFailureLog.Record("Restored the database from the latest backup.");
 
-            if (!database.VerifySharedInstance())
-                EngineFailureLog.Record("Database instance self-check failed: a second connection did not report the settings applied to the held instance.");
+            database.EnsureCreated();
+            database.Open();
         }
         catch (Exception exception)
         {
@@ -179,21 +170,21 @@ public partial class App : Application
         KillmailQualificationRequalifier.RequalifyOnStartup(database, Settings.QualificationFleetThreshold);
 
         PilotIdentityCache =
-            new DuckDbPilotIdentityCache(database);
+            new PilotIdentityCache(database);
         EsiEntityNameCache =
-            new DuckDbEsiEntityNameCache(database);
+            new EsiEntityNameCache(database);
         zKillActivityCache =
-            new DuckDbzKillActivityCache(database);
+            new zKillActivityCache(database);
         RecentKillmailCache =
-            new DuckDbRecentKillmailCache(database, Settings.RecentWindowDays);
+            new RecentKillmailCache(database, Settings.RecentWindowDays);
         PilotLastKillmailCache =
-            new DuckDbPilotLastKillmailCache(database);
+            new PilotLastKillmailCache(database);
         KillmailStore =
-            new DuckDbKillmailStore(database, Settings.QualificationFleetThreshold);
+            new KillmailStore(database, Settings.QualificationFleetThreshold);
         zKillStatisticsCache =
-            new DuckDbzKillStatisticsCache(database);
+            new zKillStatisticsCache(database);
         SdeReferenceDataStore =
-            new DuckDbSdeReferenceDataStore(database);
+            new SdeReferenceDataStore(database);
 
         var sdeHttpClient =
             new HttpClient
@@ -386,7 +377,7 @@ public partial class App : Application
             {
                 try
                 {
-                    KillmailBackupService?.BackupAsync().GetAwaiter().GetResult();
+                    BackupService?.BackupAsync().GetAwaiter().GetResult();
                 }
                 catch (Exception ex)
                 {

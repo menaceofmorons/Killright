@@ -1,5 +1,5 @@
 using System.Globalization;
-using DuckDB.NET.Data;
+using Microsoft.Data.Sqlite;
 using Killright.Shared.Data;
 using Killright.Storage.Database;
 using Killright.Storage.Diagnostics;
@@ -50,7 +50,7 @@ public sealed class EngineInputReader : IEngineInputReader
 
         using (timings.Measure(ScanTimings.EngineLevel, "engine_input_read"))
         {
-            DuckDBConnection connection;
+            SqliteConnection connection;
 
             try
             {
@@ -127,7 +127,7 @@ public sealed class EngineInputReader : IEngineInputReader
     {
         using (timings.Measure(ScanTimings.EngineLevel, "group_input_read"))
         {
-            DuckDBConnection connection;
+            SqliteConnection connection;
 
             try
             {
@@ -210,8 +210,6 @@ public sealed class EngineInputReader : IEngineInputReader
 
     private void Log(string reason, Exception exception)
     {
-        _database.NotifyFailure(exception);
-
         try
         {
             _logFailure?.Invoke($"engine input read failed ({reason}): {exception.Message}");
@@ -221,13 +219,18 @@ public sealed class EngineInputReader : IEngineInputReader
         }
     }
 
+    private static string FormatEngineTime(DateTimeOffset value)
+    {
+        return value.UtcDateTime.ToString("O", CultureInfo.InvariantCulture);
+    }
+
     private static string IdList(IReadOnlyList<long> characterIds)
     {
         return string.Join(",", characterIds.Select(characterId => characterId.ToString(CultureInfo.InvariantCulture)));
     }
 
     private static Dictionary<long, List<EngineKillmailRow>> ReadKillmails(
-        DuckDBConnection connection,
+        SqliteConnection connection,
         IReadOnlyList<long> characterIds)
     {
         var grouped = new Dictionary<long, List<EngineKillmailRow>>();
@@ -236,13 +239,13 @@ public sealed class EngineInputReader : IEngineInputReader
         using var command = connection.CreateCommand();
         command.CommandText = $"""
                                SELECT victim_character_id AS character_id, killmail_id, killmail_hash, kill_time_utc,
-                                      TRUE AS is_loss, unique_attacker_count, is_solo, victim_ship_type_id, system_id,
+                                      1 AS is_loss, unique_attacker_count, is_solo, victim_ship_type_id, system_id,
                                       location_id, is_npc, cached_at_utc
                                FROM main.zkill_killmails
                                WHERE victim_character_id IN ({ids})
                                UNION ALL
                                SELECT a.character_id, k.killmail_id, k.killmail_hash, k.kill_time_utc,
-                                      FALSE AS is_loss, k.unique_attacker_count, k.is_solo, k.victim_ship_type_id, k.system_id,
+                                      0 AS is_loss, k.unique_attacker_count, k.is_solo, k.victim_ship_type_id, k.system_id,
                                       k.location_id, k.is_npc, k.cached_at_utc
                                FROM main.zkill_killmail_attackers a
                                JOIN main.zkill_killmails k ON k.killmail_id = a.killmail_id
@@ -258,7 +261,7 @@ public sealed class EngineInputReader : IEngineInputReader
                 KillmailId: reader.GetInt64(1),
                 KillmailHash: reader.GetNullableString(2),
                 CharacterId: reader.GetInt64(0),
-                KillTimeUtc: reader.GetString(3),
+                KillTimeUtc: FormatEngineTime(reader.GetUtcDateTimeOffset(3)),
                 IsLoss: reader.GetBoolean(4),
                 AttackerCount: reader.GetInt32(5),
                 IsSolo: reader.GetBoolean(6),
@@ -266,7 +269,7 @@ public sealed class EngineInputReader : IEngineInputReader
                 SystemId: reader.GetNullableInt64(8),
                 LocationId: reader.GetNullableInt64(9),
                 IsNpc: reader.GetBoolean(10),
-                CachedAtUtc: reader.GetString(11));
+                CachedAtUtc: FormatEngineTime(reader.GetUtcDateTimeOffset(11)));
 
             if (!grouped.TryGetValue(row.CharacterId, out var rows))
             {
@@ -281,7 +284,7 @@ public sealed class EngineInputReader : IEngineInputReader
     }
 
     private static Dictionary<long, EngineStatisticsRow> ReadStatistics(
-        DuckDBConnection connection,
+        SqliteConnection connection,
         IReadOnlyList<long> characterIds)
     {
         var results = new Dictionary<long, EngineStatisticsRow>();
@@ -307,7 +310,7 @@ public sealed class EngineInputReader : IEngineInputReader
                 ShipsLost: reader.GetInt32(5),
                 SoloLosses: reader.GetInt32(6),
                 GeneralStyle: reader.GetString(7),
-                CheckedAtUtc: reader.GetString(8),
+                CheckedAtUtc: FormatEngineTime(reader.GetUtcDateTimeOffset(8)),
                 NoHistoryMarker: reader.GetNullableBoolean(9) ?? false,
                 PodLosses: reader.GetNullableInt32(10) ?? 0);
 
@@ -318,7 +321,7 @@ public sealed class EngineInputReader : IEngineInputReader
     }
 
     private static List<EngineIdentityRow> ReadIdentities(
-        DuckDBConnection connection,
+        SqliteConnection connection,
         IReadOnlyList<long> characterIds)
     {
         var results = new List<EngineIdentityRow>();
@@ -338,7 +341,7 @@ public sealed class EngineInputReader : IEngineInputReader
 
         while (reader.Read())
         {
-            var cachedAtUtc = new DateTimeOffset(DateTime.SpecifyKind(reader.GetDateTime(11), DateTimeKind.Utc));
+            var cachedAtUtc = reader.GetUtcDateTimeOffset(11);
 
             results.Add(new EngineIdentityRow(
                 InputName: reader.GetString(0),
@@ -372,7 +375,7 @@ public sealed class EngineInputReader : IEngineInputReader
     }
 
     private static Dictionary<long, string> ReadCoverageStarts(
-        DuckDBConnection connection,
+        SqliteConnection connection,
         IReadOnlyList<long> characterIds)
     {
         var results = new Dictionary<long, string>();
@@ -388,15 +391,15 @@ public sealed class EngineInputReader : IEngineInputReader
 
         while (reader.Read())
         {
-            if (reader.GetNullableString(1) is { } coverageStartUtc)
-                results[reader.GetInt64(0)] = coverageStartUtc;
+            if (reader.GetNullableDateTimeOffset(1) is { } coverageStartUtc)
+                results[reader.GetInt64(0)] = FormatEngineTime(coverageStartUtc);
         }
 
         return results;
     }
 
     private static List<EngineAttackerEvidenceRow> ReadAttackerEvidence(
-        DuckDBConnection connection,
+        SqliteConnection connection,
         IReadOnlyList<long> characterIds,
         bool qualifyingOnly)
     {
@@ -413,7 +416,7 @@ public sealed class EngineInputReader : IEngineInputReader
                SELECT a.killmail_id, a.character_id, a.corporation_id, a.alliance_id, k.kill_time_utc, k.unique_attacker_count
                FROM main.zkill_killmail_attackers a
                JOIN main.zkill_killmails k ON k.killmail_id = a.killmail_id
-               WHERE k.is_qualifying = TRUE
+               WHERE k.is_qualifying = 1
                AND a.killmail_id IN (
                    SELECT DISTINCT killmail_id FROM main.zkill_killmail_attackers WHERE character_id IN ({ids})
                )
@@ -436,7 +439,7 @@ public sealed class EngineInputReader : IEngineInputReader
                 CharacterId: reader.GetInt64(1),
                 CorporationId: reader.GetNullableInt64(2),
                 AllianceId: reader.GetNullableInt64(3),
-                KillTimeUtc: reader.GetString(4),
+                KillTimeUtc: FormatEngineTime(reader.GetUtcDateTimeOffset(4)),
                 UniqueAttackerCount: reader.GetInt32(5)));
         }
 

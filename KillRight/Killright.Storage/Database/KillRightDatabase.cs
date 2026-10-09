@@ -1,22 +1,28 @@
-using DuckDB.NET.Data;
 using Killright.Shared.Data;
+using Killright.Storage.Diagnostics;
+using Microsoft.Data.Sqlite;
 
 namespace Killright.Storage.Database;
 
 public sealed class KillRightDatabase
 {
-    public const int CurrentSchemaVersion = 3;
+    public const int CurrentSchemaVersion = 4;
+
+    private const int SqliteCorrupt = 11;
+    private const int SqliteNotADatabase = 26;
+
+    private static readonly SemaphoreSlim WriteGate = new(1, 1);
 
     private readonly KillRightDatabaseOptions _options;
-    private readonly object _instanceGate = new();
-    private DuckDBConnection? _anchor;
+    private readonly string _connectionString;
+    private readonly object _stateGate = new();
     private InstanceState _state = InstanceState.NeverOpened;
-    private int _instanceGeneration;
     private int _connectionsOpened;
 
     public KillRightDatabase(KillRightDatabaseOptions options)
     {
         _options = options;
+        _connectionString = BuildConnectionString(options, SqliteOpenMode.ReadWriteCreate, pooling: true);
     }
 
     private enum InstanceState
@@ -26,179 +32,137 @@ public sealed class KillRightDatabase
         Closed
     }
 
-    public string ConnectionString => $"Data Source={_options.DatabasePath}";
+    public string DatabasePath => _options.DatabasePath;
+
+    public string ConnectionString => _connectionString;
 
     public int ConnectionsOpened => Volatile.Read(ref _connectionsOpened);
-
-    public int InstanceGeneration => Volatile.Read(ref _instanceGeneration);
 
     public bool IsOpen
     {
         get
         {
-            lock (_instanceGate)
+            lock (_stateGate)
                 return _state == InstanceState.Open;
         }
     }
 
     public void Open()
     {
-        lock (_instanceGate)
+        lock (_stateGate)
         {
             if (_state == InstanceState.Open)
                 return;
-
-            OpenAnchorLocked();
         }
+
+        using (var connection = CreateConnection())
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = "PRAGMA journal_mode = WAL;";
+
+            var mode = Convert.ToString(command.ExecuteScalar());
+
+            if (!string.Equals(mode, "wal", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException($"The database could not enter WAL journal mode (reported '{mode}').");
+        }
+
+        lock (_stateGate)
+            _state = InstanceState.Open;
     }
 
     public void Close()
     {
-        lock (_instanceGate)
-        {
-            _anchor?.Dispose();
-            _anchor = null;
+        lock (_stateGate)
             _state = InstanceState.Closed;
-        }
-    }
 
-    public void Reopen()
-    {
-        lock (_instanceGate)
-        {
-            _anchor?.Dispose();
-            _anchor = null;
-            OpenAnchorLocked();
-        }
-    }
-
-    public bool VerifySharedInstance()
-    {
-        lock (_instanceGate)
-        {
-            if (_anchor is null)
-                return false;
-
-            using var other = OpenConnection();
-
-            return ReadSetting(_anchor, "memory_limit") == ReadSetting(other, "memory_limit")
-                && ReadSetting(_anchor, "threads") == ReadSetting(other, "threads");
-        }
+        SqliteConnection.ClearAllPools();
     }
 
     public void Checkpoint()
     {
+        WriteGate.Wait();
+
         try
         {
             using var connection = OpenConnection();
             using var command = connection.CreateCommand();
-            command.CommandText = "CHECKPOINT;";
+            command.CommandText = "PRAGMA wal_checkpoint(TRUNCATE);";
             command.ExecuteNonQuery();
         }
-        catch (Exception exception)
+        finally
         {
-            NotifyFailure(exception);
-            throw;
+            WriteGate.Release();
         }
     }
 
     public bool HasPendingWal()
     {
-        var wal = new FileInfo(_options.DatabasePath + ".wal");
+        var wal = new FileInfo(_options.DatabasePath + "-wal");
 
         return wal.Exists && wal.Length > 0;
     }
 
-    public static bool IsInvalidatedFailure(Exception? exception)
+    public SqliteConnection OpenConnection()
     {
-        for (var current = exception; current is not null; current = current.InnerException)
-        {
-            if (current.Message.Contains("invalidated", StringComparison.OrdinalIgnoreCase))
-                return true;
-        }
-
-        return false;
-    }
-
-    public void NotifyFailure(Exception exception)
-    {
-        if (!IsInvalidatedFailure(exception))
-            return;
-
-        try
-        {
-            Reopen();
-        }
-        catch
-        {
-        }
-    }
-
-    public DuckDBConnection OpenConnection()
-    {
-        lock (_instanceGate)
+        lock (_stateGate)
         {
             if (_state == InstanceState.Closed)
                 throw new InvalidOperationException("The database instance is closed.");
         }
 
-        var connection = new DuckDBConnection(ConnectionString);
-
-        try
-        {
-            connection.Open();
-        }
-        catch (Exception exception)
-        {
-            connection.Dispose();
-            NotifyFailure(exception);
-            throw;
-        }
-
-        Interlocked.Increment(ref _connectionsOpened);
-
-        return connection;
+        return CreateConnection();
     }
 
     public ScanDatabaseSession OpenScanSession()
     {
-        return new ScanDatabaseSession(OpenConnection(), NotifyFailure);
+        return new ScanDatabaseSession(this, OpenConnection());
     }
 
-    private void OpenAnchorLocked()
+    public WriteScope BeginWrite(SqliteConnection? connection = null, ScanTimings? timings = null, string? tag = null)
     {
-        var connection = new DuckDBConnection(ConnectionString);
+        using (timings.Measure(ScanTimings.ScanLevel, "write_gate_wait", null, tag))
+            WriteGate.Wait();
+
+        return StartWriteScope(connection);
+    }
+
+    public async Task<WriteScope> BeginWriteAsync(SqliteConnection? connection = null, CancellationToken cancellationToken = default)
+    {
+        await WriteGate.WaitAsync(cancellationToken);
+
+        return StartWriteScope(connection);
+    }
+
+    public bool QuarantineIfCorrupt(Action<string>? onCorruptionDetected = null)
+    {
+        if (!File.Exists(_options.DatabasePath))
+            return false;
 
         try
         {
+            using var connection = new SqliteConnection(BuildConnectionString(_options, SqliteOpenMode.ReadOnly, pooling: false));
             connection.Open();
-            ExecuteNonQuery(connection, $"SET memory_limit='{KillRightDatabaseOptions.NormalizeMemoryLimit(_options.MemoryLimit)}';");
-            ExecuteNonQuery(connection, $"SET threads={KillRightDatabaseOptions.NormalizeThreads(_options.Threads)};");
+
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT COUNT(*) FROM sqlite_schema;";
+            command.ExecuteScalar();
+
+            return false;
         }
-        catch
+        catch (SqliteException exception) when (exception.SqliteErrorCode is SqliteCorrupt or SqliteNotADatabase)
         {
-            connection.Dispose();
-            throw;
+            onCorruptionDetected?.Invoke(exception.Message);
+
+            var quarantineSuffix = $".corrupt-{DateTimeOffset.UtcNow:yyyyMMddHHmmss}";
+
+            foreach (var path in new[] { _options.DatabasePath, _options.DatabasePath + "-wal", _options.DatabasePath + "-shm" })
+            {
+                if (File.Exists(path))
+                    File.Move(path, path + quarantineSuffix, overwrite: true);
+            }
+
+            return true;
         }
-
-        _anchor = connection;
-        _state = InstanceState.Open;
-        Interlocked.Increment(ref _instanceGeneration);
-    }
-
-    private static void ExecuteNonQuery(DuckDBConnection connection, string sql)
-    {
-        using var command = connection.CreateCommand();
-        command.CommandText = sql;
-        command.ExecuteNonQuery();
-    }
-
-    private static string? ReadSetting(DuckDBConnection connection, string name)
-    {
-        using var command = connection.CreateCommand();
-        command.CommandText = $"SELECT current_setting('{name}');";
-
-        return Convert.ToString(command.ExecuteScalar());
     }
 
     public void EnsureCreated()
@@ -208,8 +172,13 @@ public sealed class KillRightDatabase
         if (!string.IsNullOrWhiteSpace(directory))
             Directory.CreateDirectory(directory);
 
-        using var connection = new DuckDBConnection(ConnectionString);
-        connection.Open();
+        using var connection = CreateConnection();
+
+        if (ReadScalarLong(connection, "SELECT COUNT(*) FROM sqlite_schema;") == 0)
+        {
+            ExecuteNonQuery(connection, "PRAGMA auto_vacuum = INCREMENTAL;");
+            ExecuteNonQuery(connection, "PRAGMA journal_mode = WAL;");
+        }
 
         CreatePilotIdentityCache(connection);
         CreateEsiEntityNameCache(connection);
@@ -220,22 +189,6 @@ public sealed class KillRightDatabase
         CreateSdeTables(connection);
         CreateSdeMetadata(connection);
         CreateSchemaMetadata(connection);
-    }
-
-    public bool EnsureCreatedWithRecovery(Action<string>? onCorruptionDetected = null)
-    {
-        try
-        {
-            EnsureCreated();
-            return false;
-        }
-        catch (Exception ex)
-        {
-            onCorruptionDetected?.Invoke(ex.Message);
-            QuarantineExistingDatabaseFiles();
-            EnsureCreated();
-            return true;
-        }
     }
 
     public int GetSchemaVersion()
@@ -262,11 +215,7 @@ public sealed class KillRightDatabase
 
     public void SetLastAppliedQualificationFleetThreshold(int threshold)
     {
-        using var connection = OpenConnection();
-
-        using var command = connection.CreateCommand();
-        command.CommandText = $"UPDATE main.schema_metadata SET last_qualification_fleet_threshold = {threshold};";
-        command.ExecuteNonQuery();
+        ExecuteWrite($"UPDATE main.schema_metadata SET last_qualification_fleet_threshold = {threshold};");
     }
 
     public bool GetAlphaLock()
@@ -281,362 +230,354 @@ public sealed class KillRightDatabase
 
     public void SetAlphaLock()
     {
-        using var connection = OpenConnection();
-
-        using var command = connection.CreateCommand();
-        command.CommandText = "UPDATE main.schema_metadata SET alpha_lock = TRUE;";
-        command.ExecuteNonQuery();
+        ExecuteWrite("UPDATE main.schema_metadata SET alpha_lock = 1;");
     }
 
     public void SetSchemaVersion(int version)
     {
-        using var connection = OpenConnection();
-
-        using var command = connection.CreateCommand();
-        command.CommandText = $"UPDATE main.schema_metadata SET schema_version = {version};";
-        command.ExecuteNonQuery();
-    }
-
-    public void EnsurePilotLastKillmailCache()
-    {
-        using var connection = OpenConnection();
-
-        CreatePilotLastKillmailCache(connection);
+        ExecuteWrite($"UPDATE main.schema_metadata SET schema_version = {version};");
     }
 
     public void RebuildKillmailAndAttackerTables()
     {
-        using var connection = OpenConnection();
+        using var scope = BeginWrite();
 
-        using (var dropAttackers = connection.CreateCommand())
+        ExecuteNonQuery(scope.Connection, scope.Transaction, "DROP TABLE IF EXISTS main.zkill_killmail_attackers;");
+        ExecuteNonQuery(scope.Connection, scope.Transaction, "DROP TABLE IF EXISTS main.zkill_killmails;");
+
+        CreateZkillKillmailsTables(scope.Connection, scope.Transaction);
+
+        scope.Commit();
+    }
+
+    private static string BuildConnectionString(KillRightDatabaseOptions options, SqliteOpenMode mode, bool pooling)
+    {
+        return new SqliteConnectionStringBuilder
         {
-            dropAttackers.CommandText = "DROP TABLE IF EXISTS main.zkill_killmail_attackers;";
-            dropAttackers.ExecuteNonQuery();
+            DataSource = options.DatabasePath,
+            Mode = mode,
+            Cache = SqliteCacheMode.Private,
+            Pooling = pooling,
+            DefaultTimeout = KillRightDatabaseOptions.NormalizeBusyTimeoutSeconds(options.BusyTimeoutSeconds)
+        }.ToString();
+    }
+
+    private SqliteConnection CreateConnection()
+    {
+        var connection = new SqliteConnection(_connectionString);
+
+        try
+        {
+            connection.Open();
+
+            var busyTimeoutMilliseconds = KillRightDatabaseOptions.NormalizeBusyTimeoutSeconds(_options.BusyTimeoutSeconds) * 1000;
+            var cacheKibibytes = KillRightDatabaseOptions.NormalizePageCacheMegabytes(_options.PageCacheMegabytes) * 1024;
+
+            ExecuteNonQuery(
+                connection,
+                $"""
+                PRAGMA foreign_keys = ON;
+                PRAGMA synchronous = NORMAL;
+                PRAGMA busy_timeout = {busyTimeoutMilliseconds};
+                PRAGMA cache_size = -{cacheKibibytes};
+                PRAGMA temp_store = MEMORY;
+                """);
+        }
+        catch
+        {
+            connection.Dispose();
+            throw;
         }
 
-        using (var dropKillmails = connection.CreateCommand())
+        Interlocked.Increment(ref _connectionsOpened);
+
+        return connection;
+    }
+
+    private WriteScope StartWriteScope(SqliteConnection? connection)
+    {
+        SqliteConnection? ownedConnection = null;
+
+        try
         {
-            dropKillmails.CommandText = "DROP TABLE IF EXISTS main.zkill_killmails;";
-            dropKillmails.ExecuteNonQuery();
+            ownedConnection = connection is null ? OpenConnection() : null;
+            var target = connection ?? ownedConnection!;
+            var transaction = target.BeginTransaction(deferred: false);
+
+            return new WriteScope(target, transaction, ownedConnection, WriteGate);
         }
-
-        CreateZkillKillmailsTables(connection);
+        catch
+        {
+            ownedConnection?.Dispose();
+            WriteGate.Release();
+            throw;
+        }
     }
 
-    private void QuarantineExistingDatabaseFiles()
+    private void ExecuteWrite(string sql)
     {
-        if (!File.Exists(_options.DatabasePath))
-            return;
+        using var scope = BeginWrite();
 
-        var quarantineSuffix = $".corrupt-{DateTimeOffset.UtcNow:yyyyMMddHHmmss}";
+        ExecuteNonQuery(scope.Connection, scope.Transaction, sql);
 
-        File.Move(_options.DatabasePath, _options.DatabasePath + quarantineSuffix, overwrite: true);
-
-        var walPath = _options.DatabasePath + ".wal";
-
-        if (File.Exists(walPath))
-            File.Move(walPath, walPath + quarantineSuffix, overwrite: true);
+        scope.Commit();
     }
 
-    private static void CreatePilotIdentityCache(DuckDBConnection connection)
+    private static void ExecuteNonQuery(SqliteConnection connection, string sql)
     {
         using var command = connection.CreateCommand();
-        command.CommandText = """
-                              CREATE TABLE IF NOT EXISTS main.pilot_identity_cache (
-                                  input_name TEXT PRIMARY KEY,
-                                  character_id BIGINT,
-                                  character_name TEXT,
-                                  verify_status TEXT NOT NULL,
-                                  security_status DOUBLE,
-                                  corporation_id BIGINT,
-                                  corporation_name TEXT,
-                                  corporation_ticker TEXT,
-                                  alliance_id BIGINT,
-                                  alliance_name TEXT,
-                                  alliance_ticker TEXT,
-                                  cached_at_utc TIMESTAMP NOT NULL
-                              );
-                              """;
-        command.ExecuteNonQuery();
-
-        using var checkFactionId = connection.CreateCommand();
-        checkFactionId.CommandText = """
-                              SELECT COUNT(*)
-                              FROM information_schema.columns
-                              WHERE table_schema = 'main'
-                                AND table_name = 'pilot_identity_cache'
-                                AND column_name = 'faction_id';
-                              """;
-        var factionIdColumnExisted = Convert.ToInt64(checkFactionId.ExecuteScalar()) > 0;
-
-        using var addBirthday = connection.CreateCommand();
-        addBirthday.CommandText = "ALTER TABLE main.pilot_identity_cache ADD COLUMN IF NOT EXISTS birthday DATE;";
-        addBirthday.ExecuteNonQuery();
-
-        using var addSecurityStatusAtUtc = connection.CreateCommand();
-        addSecurityStatusAtUtc.CommandText = "ALTER TABLE main.pilot_identity_cache ADD COLUMN IF NOT EXISTS security_status_at_utc TIMESTAMP;";
-        addSecurityStatusAtUtc.ExecuteNonQuery();
-
-        using var migrateSecurityStatusAtUtc = connection.CreateCommand();
-        migrateSecurityStatusAtUtc.CommandText = """
-                              UPDATE main.pilot_identity_cache
-                              SET security_status_at_utc = cached_at_utc
-                              WHERE security_status_at_utc IS NULL AND security_status IS NOT NULL;
-                              """;
-        migrateSecurityStatusAtUtc.ExecuteNonQuery();
-
-        using var addFactionId = connection.CreateCommand();
-        addFactionId.CommandText = "ALTER TABLE main.pilot_identity_cache ADD COLUMN IF NOT EXISTS faction_id BIGINT;";
-        addFactionId.ExecuteNonQuery();
-
-        if (factionIdColumnExisted)
-            return;
-
-        using var resetSecurityStatusAtUtc = connection.CreateCommand();
-        resetSecurityStatusAtUtc.CommandText = "UPDATE main.pilot_identity_cache SET security_status_at_utc = NULL;";
-        resetSecurityStatusAtUtc.ExecuteNonQuery();
-    }
-
-    private static void CreateEsiEntityNameCache(DuckDBConnection connection)
-    {
-        using var command = connection.CreateCommand();
-        command.CommandText = """
-                              CREATE TABLE IF NOT EXISTS main.esi_entity_name_cache (
-                                  entity_id BIGINT PRIMARY KEY,
-                                  entity_type TEXT NOT NULL,
-                                  name TEXT NOT NULL
-                              );
-                              """;
+        command.CommandText = sql;
         command.ExecuteNonQuery();
     }
 
-    private static void CreatezKillActivityCache(DuckDBConnection connection)
+    private static void ExecuteNonQuery(SqliteConnection connection, SqliteTransaction transaction, string sql)
     {
         using var command = connection.CreateCommand();
-        command.CommandText = """
-                              CREATE TABLE IF NOT EXISTS main.zkill_activity_cache (
-                                  character_id BIGINT PRIMARY KEY,
-                                  has_public_activity_data BOOLEAN NOT NULL,
-                                  kills_week INTEGER,
-                                  solo_week INTEGER,
-                                  last_active_utc TEXT,
-                                  last_activity_type TEXT,
-                                  checked_at_utc TEXT NOT NULL,
-                                  error TEXT
-                              );
-                              """;
-        command.ExecuteNonQuery();
-
-        using var addLastRecentCallUtc = connection.CreateCommand();
-        addLastRecentCallUtc.CommandText = "ALTER TABLE main.zkill_activity_cache ADD COLUMN IF NOT EXISTS last_recent_call_utc TEXT;";
-        addLastRecentCallUtc.ExecuteNonQuery();
-
-        using var addRecentCoverageStartUtc = connection.CreateCommand();
-        addRecentCoverageStartUtc.CommandText = "ALTER TABLE main.zkill_activity_cache ADD COLUMN IF NOT EXISTS recent_coverage_start_utc TEXT;";
-        addRecentCoverageStartUtc.ExecuteNonQuery();
-
-        using var addLastKillUtc = connection.CreateCommand();
-        addLastKillUtc.CommandText = "ALTER TABLE main.zkill_activity_cache ADD COLUMN IF NOT EXISTS last_kill_utc TEXT;";
-        addLastKillUtc.ExecuteNonQuery();
-    }
-
-    private static void CreatezKillStatisticsCache(DuckDBConnection connection)
-    {
-        using var command = connection.CreateCommand();
-        command.CommandText = """
-                              CREATE TABLE IF NOT EXISTS main.zkill_statistics_cache (
-                                  character_id BIGINT PRIMARY KEY,
-                                  ships_destroyed INTEGER NOT NULL,
-                                  solo_kills INTEGER NOT NULL,
-                                  solo_ratio DOUBLE NOT NULL,
-                                  avg_gang_size DOUBLE NOT NULL,
-                                  ships_lost INTEGER NOT NULL,
-                                  solo_losses INTEGER NOT NULL,
-                                  general_style TEXT NOT NULL,
-                                  checked_at_utc TEXT NOT NULL
-                              );
-                              """;
-        command.ExecuteNonQuery();
-
-        using var addMonthsProcessed = connection.CreateCommand();
-        addMonthsProcessed.CommandText = "ALTER TABLE main.zkill_statistics_cache ADD COLUMN IF NOT EXISTS months_processed BOOLEAN;";
-        addMonthsProcessed.ExecuteNonQuery();
-
-        using var addNoHistoryMarker = connection.CreateCommand();
-        addNoHistoryMarker.CommandText = "ALTER TABLE main.zkill_statistics_cache ADD COLUMN IF NOT EXISTS no_history_marker BOOLEAN;";
-        addNoHistoryMarker.ExecuteNonQuery();
-
-        using var addPodKills = connection.CreateCommand();
-        addPodKills.CommandText = "ALTER TABLE main.zkill_statistics_cache ADD COLUMN IF NOT EXISTS pod_kills INTEGER;";
-        addPodKills.ExecuteNonQuery();
-
-        using var addPodLosses = connection.CreateCommand();
-        addPodLosses.CommandText = "ALTER TABLE main.zkill_statistics_cache ADD COLUMN IF NOT EXISTS pod_losses INTEGER;";
-        addPodLosses.ExecuteNonQuery();
-    }
-
-    private static void CreatePilotLastKillmailCache(DuckDBConnection connection)
-    {
-        using var command = connection.CreateCommand();
-        command.CommandText = """
-                              CREATE TABLE IF NOT EXISTS main.pilot_last_killmail_cache (
-                                  character_id BIGINT PRIMARY KEY,
-                                  has_killmail BOOLEAN NOT NULL,
-                                  killmail_id BIGINT,
-                                  kill_time_utc TEXT,
-                                  activity_type TEXT,
-                                  system_id BIGINT,
-                                  ship_type_id BIGINT,
-                                  victim_ship_type_id BIGINT,
-                                  attacker_count INTEGER,
-                                  weapon_type_id BIGINT,
-                                  checked_at_utc TEXT NOT NULL
-                              );
-                              """;
+        command.Transaction = transaction;
+        command.CommandText = sql;
         command.ExecuteNonQuery();
     }
 
-    private static void CreateZkillKillmailsTables(DuckDBConnection connection)
+    private static long ReadScalarLong(SqliteConnection connection, string sql)
     {
-        using var killmailsCommand = connection.CreateCommand();
-        killmailsCommand.CommandText = """
-                              CREATE TABLE IF NOT EXISTS main.zkill_killmails (
-                                  killmail_id BIGINT PRIMARY KEY,
-                                  killmail_hash TEXT,
-                                  kill_time_utc TEXT NOT NULL,
-                                  system_id BIGINT NOT NULL,
-                                  location_id BIGINT,
-                                  victim_character_id BIGINT,
-                                  victim_ship_type_id BIGINT,
-                                  unique_attacker_count INTEGER NOT NULL,
-                                  is_solo BOOLEAN NOT NULL,
-                                  is_npc BOOLEAN NOT NULL,
-                                  is_qualifying BOOLEAN NOT NULL,
-                                  cached_at_utc TEXT NOT NULL
-                              );
-                              """;
-        killmailsCommand.ExecuteNonQuery();
+        using var command = connection.CreateCommand();
+        command.CommandText = sql;
 
-        using var attackersCommand = connection.CreateCommand();
-        attackersCommand.CommandText = """
-                              CREATE TABLE IF NOT EXISTS main.zkill_killmail_attackers (
-                                  killmail_id BIGINT NOT NULL,
-                                  character_id BIGINT NOT NULL,
-                                  corporation_id BIGINT,
-                                  alliance_id BIGINT,
-                                  ship_type_id BIGINT,
-                                  PRIMARY KEY (killmail_id, character_id)
-                              );
-                              """;
-        attackersCommand.ExecuteNonQuery();
-
-        using var addWeaponTypeId = connection.CreateCommand();
-        addWeaponTypeId.CommandText = "ALTER TABLE main.zkill_killmail_attackers ADD COLUMN IF NOT EXISTS weapon_type_id BIGINT;";
-        addWeaponTypeId.ExecuteNonQuery();
+        return Convert.ToInt64(command.ExecuteScalar());
     }
 
-    private static void CreateSdeTables(DuckDBConnection connection)
+    private static void CreatePilotIdentityCache(SqliteConnection connection)
     {
-        using (var command = connection.CreateCommand())
-        {
-            command.CommandText = """
-                                  CREATE TABLE IF NOT EXISTS main.sde_types (
-                                      type_id BIGINT PRIMARY KEY,
-                                      name TEXT NOT NULL
-                                  );
-                                  """;
-            command.ExecuteNonQuery();
-        }
+        ExecuteNonQuery(
+            connection,
+            """
+            CREATE TABLE IF NOT EXISTS main.pilot_identity_cache (
+                input_name TEXT NOT NULL PRIMARY KEY,
+                character_id INTEGER,
+                character_name TEXT,
+                verify_status TEXT NOT NULL,
+                security_status REAL,
+                corporation_id INTEGER,
+                corporation_name TEXT,
+                corporation_ticker TEXT,
+                alliance_id INTEGER,
+                alliance_name TEXT,
+                alliance_ticker TEXT,
+                cached_at_utc INTEGER NOT NULL,
+                birthday INTEGER,
+                security_status_at_utc INTEGER,
+                faction_id INTEGER
+            ) STRICT;
+            """);
+    }
 
-        using (var command = connection.CreateCommand())
-        {
-            command.CommandText = """
-                                  CREATE TABLE IF NOT EXISTS main.sde_solar_systems (
-                                      system_id BIGINT PRIMARY KEY,
-                                      name TEXT NOT NULL
-                                  );
-                                  """;
-            command.ExecuteNonQuery();
-        }
+    private static void CreateEsiEntityNameCache(SqliteConnection connection)
+    {
+        ExecuteNonQuery(
+            connection,
+            """
+            CREATE TABLE IF NOT EXISTS main.esi_entity_name_cache (
+                entity_id INTEGER NOT NULL PRIMARY KEY,
+                entity_type TEXT NOT NULL,
+                name TEXT NOT NULL
+            ) STRICT;
+            """);
+    }
 
-        using (var command = connection.CreateCommand())
-        {
-            command.CommandText = """
-                                  CREATE TABLE IF NOT EXISTS main.sde_npc_corporations (
-                                      corporation_id BIGINT PRIMARY KEY
-                                  );
-                                  """;
-            command.ExecuteNonQuery();
-        }
+    private static void CreatezKillActivityCache(SqliteConnection connection)
+    {
+        ExecuteNonQuery(
+            connection,
+            """
+            CREATE TABLE IF NOT EXISTS main.zkill_activity_cache (
+                character_id INTEGER NOT NULL PRIMARY KEY,
+                has_public_activity_data INTEGER NOT NULL CHECK (has_public_activity_data IN (0, 1)),
+                kills_week INTEGER,
+                solo_week INTEGER,
+                last_active_utc INTEGER,
+                last_activity_type TEXT,
+                checked_at_utc INTEGER NOT NULL,
+                error TEXT,
+                last_recent_call_utc INTEGER,
+                recent_coverage_start_utc INTEGER,
+                last_kill_utc INTEGER
+            ) STRICT;
+            """);
+    }
 
-        using (var command = connection.CreateCommand())
+    private static void CreatezKillStatisticsCache(SqliteConnection connection)
+    {
+        ExecuteNonQuery(
+            connection,
+            """
+            CREATE TABLE IF NOT EXISTS main.zkill_statistics_cache (
+                character_id INTEGER NOT NULL PRIMARY KEY,
+                ships_destroyed INTEGER NOT NULL,
+                solo_kills INTEGER NOT NULL,
+                solo_ratio REAL NOT NULL,
+                avg_gang_size REAL NOT NULL,
+                ships_lost INTEGER NOT NULL,
+                solo_losses INTEGER NOT NULL,
+                general_style TEXT NOT NULL,
+                checked_at_utc INTEGER NOT NULL,
+                months_processed INTEGER CHECK (months_processed IN (0, 1)),
+                no_history_marker INTEGER CHECK (no_history_marker IN (0, 1)),
+                pod_kills INTEGER,
+                pod_losses INTEGER
+            ) STRICT;
+            """);
+    }
+
+    private static void CreatePilotLastKillmailCache(SqliteConnection connection)
+    {
+        ExecuteNonQuery(
+            connection,
+            """
+            CREATE TABLE IF NOT EXISTS main.pilot_last_killmail_cache (
+                character_id INTEGER NOT NULL PRIMARY KEY,
+                has_killmail INTEGER NOT NULL CHECK (has_killmail IN (0, 1)),
+                killmail_id INTEGER,
+                kill_time_utc INTEGER,
+                activity_type TEXT,
+                system_id INTEGER,
+                ship_type_id INTEGER,
+                victim_ship_type_id INTEGER,
+                attacker_count INTEGER,
+                weapon_type_id INTEGER,
+                checked_at_utc INTEGER NOT NULL
+            ) STRICT;
+            """);
+    }
+
+    private static void CreateZkillKillmailsTables(SqliteConnection connection, SqliteTransaction? transaction = null)
+    {
+        const string killmails = """
+            CREATE TABLE IF NOT EXISTS main.zkill_killmails (
+                killmail_id INTEGER NOT NULL PRIMARY KEY,
+                killmail_hash TEXT,
+                kill_time_utc INTEGER NOT NULL,
+                system_id INTEGER NOT NULL,
+                location_id INTEGER,
+                victim_character_id INTEGER,
+                victim_ship_type_id INTEGER,
+                unique_attacker_count INTEGER NOT NULL,
+                is_solo INTEGER NOT NULL CHECK (is_solo IN (0, 1)),
+                is_npc INTEGER NOT NULL CHECK (is_npc IN (0, 1)),
+                is_qualifying INTEGER NOT NULL CHECK (is_qualifying IN (0, 1)),
+                cached_at_utc INTEGER NOT NULL
+            ) STRICT;
+            """;
+
+        const string attackers = """
+            CREATE TABLE IF NOT EXISTS main.zkill_killmail_attackers (
+                killmail_id INTEGER NOT NULL,
+                character_id INTEGER NOT NULL,
+                corporation_id INTEGER,
+                alliance_id INTEGER,
+                ship_type_id INTEGER,
+                weapon_type_id INTEGER,
+                PRIMARY KEY (killmail_id, character_id),
+                FOREIGN KEY (killmail_id) REFERENCES zkill_killmails (killmail_id) ON DELETE CASCADE
+            ) STRICT;
+            """;
+
+        string[] statements =
+        [
+            killmails,
+            attackers,
+            "CREATE INDEX IF NOT EXISTS main.ix_zkill_killmail_attackers_character_id ON zkill_killmail_attackers (character_id);",
+            "CREATE INDEX IF NOT EXISTS main.ix_zkill_killmails_victim_character_id ON zkill_killmails (victim_character_id);",
+            "CREATE INDEX IF NOT EXISTS main.ix_zkill_killmails_kill_time_utc ON zkill_killmails (kill_time_utc);"
+        ];
+
+        foreach (var statement in statements)
         {
-            command.CommandText = """
-                                  CREATE TABLE IF NOT EXISTS main.sde_factions (
-                                      faction_id BIGINT PRIMARY KEY,
-                                      name TEXT
-                                  );
-                                  """;
-            command.ExecuteNonQuery();
+            if (transaction is null)
+                ExecuteNonQuery(connection, statement);
+            else
+                ExecuteNonQuery(connection, transaction, statement);
         }
     }
 
-    private static void CreateSdeMetadata(DuckDBConnection connection)
+    private static void CreateSdeTables(SqliteConnection connection)
     {
-        using (var createTable = connection.CreateCommand())
-        {
-            createTable.CommandText = """
-                                  CREATE TABLE IF NOT EXISTS main.sde_metadata (
-                                      build_number BIGINT,
-                                      last_checked_utc TEXT,
-                                      last_updated_utc TEXT,
-                                      last_check_result TEXT
-                                  );
-                                  """;
-            createTable.ExecuteNonQuery();
-        }
+        ExecuteNonQuery(
+            connection,
+            """
+            CREATE TABLE IF NOT EXISTS main.sde_types (
+                type_id INTEGER NOT NULL PRIMARY KEY,
+                name TEXT NOT NULL
+            ) STRICT;
+            """);
 
-        using (var addLastAttemptUtc = connection.CreateCommand())
-        {
-            addLastAttemptUtc.CommandText = "ALTER TABLE main.sde_metadata ADD COLUMN IF NOT EXISTS last_attempt_utc TEXT;";
-            addLastAttemptUtc.ExecuteNonQuery();
-        }
+        ExecuteNonQuery(
+            connection,
+            """
+            CREATE TABLE IF NOT EXISTS main.sde_solar_systems (
+                system_id INTEGER NOT NULL PRIMARY KEY,
+                name TEXT NOT NULL
+            ) STRICT;
+            """);
 
-        using (var insertIfAbsent = connection.CreateCommand())
-        {
-            insertIfAbsent.CommandText = """
-                                  INSERT INTO main.sde_metadata (build_number, last_checked_utc, last_updated_utc, last_check_result)
-                                  SELECT NULL, NULL, NULL, NULL
-                                  WHERE NOT EXISTS (SELECT 1 FROM main.sde_metadata);
-                                  """;
-            insertIfAbsent.ExecuteNonQuery();
-        }
+        ExecuteNonQuery(
+            connection,
+            """
+            CREATE TABLE IF NOT EXISTS main.sde_npc_corporations (
+                corporation_id INTEGER NOT NULL PRIMARY KEY
+            ) STRICT;
+            """);
+
+        ExecuteNonQuery(
+            connection,
+            """
+            CREATE TABLE IF NOT EXISTS main.sde_factions (
+                faction_id INTEGER NOT NULL PRIMARY KEY,
+                name TEXT
+            ) STRICT;
+            """);
     }
 
-    private static void CreateSchemaMetadata(DuckDBConnection connection)
+    private static void CreateSdeMetadata(SqliteConnection connection)
     {
-        using var createTable = connection.CreateCommand();
-        createTable.CommandText = """
-                              CREATE TABLE IF NOT EXISTS main.schema_metadata (
-                                  schema_version INTEGER NOT NULL
-                              );
-                              """;
-        createTable.ExecuteNonQuery();
+        ExecuteNonQuery(
+            connection,
+            """
+            CREATE TABLE IF NOT EXISTS main.sde_metadata (
+                build_number INTEGER,
+                last_checked_utc INTEGER,
+                last_updated_utc INTEGER,
+                last_check_result TEXT,
+                last_attempt_utc INTEGER
+            ) STRICT;
+            """);
 
-        using var addLastQualificationFleetThreshold = connection.CreateCommand();
-        addLastQualificationFleetThreshold.CommandText = "ALTER TABLE main.schema_metadata ADD COLUMN IF NOT EXISTS last_qualification_fleet_threshold INTEGER;";
-        addLastQualificationFleetThreshold.ExecuteNonQuery();
+        ExecuteNonQuery(
+            connection,
+            """
+            INSERT INTO main.sde_metadata (build_number, last_checked_utc, last_updated_utc, last_check_result, last_attempt_utc)
+            SELECT NULL, NULL, NULL, NULL, NULL
+            WHERE NOT EXISTS (SELECT 1 FROM main.sde_metadata);
+            """);
+    }
 
-        using var addAlphaLock = connection.CreateCommand();
-        addAlphaLock.CommandText = "ALTER TABLE main.schema_metadata ADD COLUMN IF NOT EXISTS alpha_lock BOOLEAN DEFAULT FALSE;";
-        addAlphaLock.ExecuteNonQuery();
+    private static void CreateSchemaMetadata(SqliteConnection connection)
+    {
+        ExecuteNonQuery(
+            connection,
+            """
+            CREATE TABLE IF NOT EXISTS main.schema_metadata (
+                schema_version INTEGER NOT NULL,
+                last_qualification_fleet_threshold INTEGER,
+                alpha_lock INTEGER NOT NULL DEFAULT 0 CHECK (alpha_lock IN (0, 1))
+            ) STRICT;
+            """);
 
-        using var insertIfAbsent = connection.CreateCommand();
-        insertIfAbsent.CommandText = $"""
-                              INSERT INTO main.schema_metadata (schema_version)
-                              SELECT {CurrentSchemaVersion}
-                              WHERE NOT EXISTS (SELECT 1 FROM main.schema_metadata);
-                              """;
-        insertIfAbsent.ExecuteNonQuery();
+        ExecuteNonQuery(
+            connection,
+            $"""
+            INSERT INTO main.schema_metadata (schema_version)
+            SELECT {CurrentSchemaVersion}
+            WHERE NOT EXISTS (SELECT 1 FROM main.schema_metadata);
+            """);
     }
 }

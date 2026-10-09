@@ -1105,7 +1105,9 @@ public partial class MainWindow : Window
                     session ?? ownedSession!,
                     batch,
                     App.Settings.QualificationFleetThreshold,
-                    ApplicationClock.UtcNow);
+                    ApplicationClock.UtcNow,
+                    timings,
+                    tag);
             }
         }
         catch (Exception exception)

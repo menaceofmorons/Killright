@@ -6,7 +6,7 @@ public static class SqlValueFormatter
 {
     public static string Bool(bool value)
     {
-        return value ? "TRUE" : "FALSE";
+        return value ? "1" : "0";
     }
 
     public static string Int(int? value)
@@ -31,17 +31,19 @@ public static class SqlValueFormatter
 
     public static string Date(DateTimeOffset? value)
     {
-        return value is null ? "NULL" : $"'{value.Value.UtcDateTime:O}'";
+        return value is null ? "NULL" : value.Value.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
     }
 
     public static string Date(DateTime value)
     {
-        return $"'{value.ToUniversalTime():O}'";
+        return new DateTimeOffset(value.ToUniversalTime()).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
     }
 
     public static string Date(DateOnly? value)
     {
-        return value is null ? "NULL" : $"'{value.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}'";
+        return value is null
+            ? "NULL"
+            : new DateTimeOffset(value.Value.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
     }
 
     public static string Escape(string value)

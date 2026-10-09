@@ -1,5 +1,4 @@
 using System.Data;
-using System.Globalization;
 
 namespace Killright.Shared.Data;
 
@@ -30,18 +29,23 @@ public static class DataRecordExtensions
         return reader.IsDBNull(ordinal) ? null : reader.GetBoolean(ordinal);
     }
 
-    public static DateTimeOffset GetDateTimeOffset(this IDataRecord reader, int ordinal)
+    public static DateTimeOffset GetUtcDateTimeOffset(this IDataRecord reader, int ordinal)
     {
-        var value = reader.GetString(ordinal);
-        return DateTimeOffset.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal);
+        return DateTimeOffset.FromUnixTimeSeconds(reader.GetInt64(ordinal));
     }
 
     public static DateTimeOffset? GetNullableDateTimeOffset(this IDataRecord reader, int ordinal)
     {
-        if (reader.IsDBNull(ordinal))
-            return null;
+        return reader.IsDBNull(ordinal) ? null : DateTimeOffset.FromUnixTimeSeconds(reader.GetInt64(ordinal));
+    }
 
-        var value = reader.GetString(ordinal);
-        return DateTimeOffset.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal);
+    public static DateOnly GetDateOnly(this IDataRecord reader, int ordinal)
+    {
+        return DateOnly.FromDateTime(DateTimeOffset.FromUnixTimeSeconds(reader.GetInt64(ordinal)).UtcDateTime);
+    }
+
+    public static DateOnly? GetNullableDateOnly(this IDataRecord reader, int ordinal)
+    {
+        return reader.IsDBNull(ordinal) ? null : reader.GetDateOnly(ordinal);
     }
 }

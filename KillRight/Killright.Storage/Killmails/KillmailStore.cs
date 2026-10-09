@@ -5,12 +5,12 @@ using Killright.Storage.Scan;
 
 namespace Killright.Storage.Killmails;
 
-public sealed class DuckDbKillmailStore : IKillmailStore
+public sealed class KillmailStore : IKillmailStore
 {
     private readonly KillRightDatabase _database;
     private readonly int _qualificationFleetThreshold;
 
-    public DuckDbKillmailStore(KillRightDatabase database, int qualificationFleetThreshold)
+    public KillmailStore(KillRightDatabase database, int qualificationFleetThreshold)
     {
         _database = database;
         _qualificationFleetThreshold = qualificationFleetThreshold;
@@ -24,17 +24,16 @@ public sealed class DuckDbKillmailStore : IKillmailStore
         if (killmails.Count == 0)
             return Task.CompletedTask;
 
-        using var connection = _database.OpenConnection();
-        using var transaction = connection.BeginTransaction();
+        using var scope = _database.BeginWrite();
 
         KillmailBulkWriter.Write(
-            connection,
-            transaction,
+            scope.Connection,
+            scope.Transaction,
             [new PendingKillmails(0, characterId, killmails)],
             _qualificationFleetThreshold,
             ApplicationClock.UtcNow);
 
-        transaction.Commit();
+        scope.Commit();
 
         return Task.CompletedTask;
     }

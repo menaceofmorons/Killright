@@ -2,18 +2,55 @@ using System.Data;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
+using Killright.Shared.Data;
 using Killright.Shared.Time;
 
 namespace Killright.UI.Diagnostics;
 
 public partial class DiagnosticsView : UserControl
 {
+    private const string IdentityColumns = """
+        input_name, character_id, character_name, verify_status, security_status,
+               corporation_id, corporation_name, corporation_ticker,
+               alliance_id, alliance_name, alliance_ticker,
+               datetime(cached_at_utc, 'unixepoch') AS cached_at_utc,
+               date(birthday, 'unixepoch') AS birthday,
+               datetime(security_status_at_utc, 'unixepoch') AS security_status_at_utc,
+               faction_id
+        """;
+
+    private const string ActivityColumns = """
+        character_id, has_public_activity_data, kills_week, solo_week,
+               datetime(last_active_utc, 'unixepoch') AS last_active_utc,
+               last_activity_type,
+               datetime(checked_at_utc, 'unixepoch') AS checked_at_utc,
+               error,
+               datetime(last_recent_call_utc, 'unixepoch') AS last_recent_call_utc,
+               datetime(recent_coverage_start_utc, 'unixepoch') AS recent_coverage_start_utc,
+               datetime(last_kill_utc, 'unixepoch') AS last_kill_utc
+        """;
+
+    private const string KillmailColumns = """
+        killmail_id, killmail_hash,
+               datetime(kill_time_utc, 'unixepoch') AS kill_time_utc,
+               system_id, location_id, victim_character_id, victim_ship_type_id,
+               unique_attacker_count, is_solo, is_npc, is_qualifying,
+               datetime(cached_at_utc, 'unixepoch') AS cached_at_utc
+        """;
+
+    private const string StatisticsColumns = """
+        character_id, ships_destroyed, solo_kills, solo_ratio, avg_gang_size,
+               ships_lost, solo_losses, general_style, months_processed, no_history_marker,
+               datetime(checked_at_utc, 'unixepoch') AS checked_at_utc,
+               pod_kills, pod_losses
+        """;
+
     private static readonly Dictionary<string, string> DiagnosticQueries = new()
     {
         ["Pilot Refresh Status"] = """
             SELECT character_id,
-                   MAX(kill_time_utc) AS latest_killmail_utc,
-                   MAX(cached_at_utc) AS latest_cache_write_utc,
+                   datetime(MAX(kill_time_utc), 'unixepoch') AS latest_killmail_utc,
+                   datetime(MAX(cached_at_utc), 'unixepoch') AS latest_cache_write_utc,
                    COUNT(*) AS cached_killmails
             FROM (
                 SELECT victim_character_id AS character_id, kill_time_utc, cached_at_utc
@@ -30,7 +67,7 @@ public partial class DiagnosticsView : UserControl
 
         ["Latest Killmail Per Pilot"] = """
             SELECT character_id,
-                   MAX(kill_time_utc) AS latest_killmail_utc
+                   datetime(MAX(kill_time_utc), 'unixepoch') AS latest_killmail_utc
             FROM (
                 SELECT victim_character_id AS character_id, kill_time_utc
                 FROM main.zkill_killmails
@@ -67,16 +104,16 @@ public partial class DiagnosticsView : UserControl
             HAVING COUNT(*) > 1;
             """,
 
-        ["Expired Killmail Check"] = """
-            SELECT *
+        ["Expired Killmail Check"] = "SELECT " + KillmailColumns + """
+
             FROM main.zkill_killmails
-            WHERE is_qualifying = FALSE
-              AND kill_time_utc < '{{RecentWindowCutoffUtc}}'
+            WHERE is_qualifying = 0
+              AND kill_time_utc < {{RecentWindowCutoffUtc}}
             ORDER BY kill_time_utc DESC;
             """,
 
-        ["Recent Killmail Rows"] = """
-            SELECT *
+        ["Recent Killmail Rows"] = "SELECT " + KillmailColumns + """
+
             FROM main.zkill_killmails
             ORDER BY kill_time_utc DESC
             LIMIT 100;
@@ -89,7 +126,7 @@ public partial class DiagnosticsView : UserControl
                    victim_ship_type_id,
                    unique_attacker_count,
                    is_solo,
-                   kill_time_utc
+                   datetime(kill_time_utc, 'unixepoch') AS kill_time_utc
             FROM main.zkill_killmails
             WHERE victim_ship_type_id IS NOT NULL
             ORDER BY kill_time_utc DESC
@@ -107,8 +144,8 @@ public partial class DiagnosticsView : UserControl
             LIMIT 100;
             """,
 
-        ["zKill Statistics Cache Rows"] = """
-            SELECT *
+        ["zKill Statistics Cache Rows"] = "SELECT " + StatisticsColumns + """
+
             FROM main.zkill_statistics_cache
             ORDER BY checked_at_utc DESC;
             """,
@@ -118,32 +155,32 @@ public partial class DiagnosticsView : UserControl
             FROM main.zkill_statistics_cache;
             """,
 
-        ["Expired zKill Statistics Cache Rows"] = """
-            SELECT *
+        ["Expired zKill Statistics Cache Rows"] = "SELECT " + StatisticsColumns + """
+
             FROM main.zkill_statistics_cache
-            WHERE checked_at_utc < CAST((CURRENT_TIMESTAMP - INTERVAL '30 days') AS TEXT)
+            WHERE checked_at_utc < unixepoch('now', '-30 days')
             ORDER BY checked_at_utc DESC;
             """,
 
-        ["Activity Cache Rows"] = """
-            SELECT *
+        ["Activity Cache Rows"] = "SELECT " + ActivityColumns + """
+
             FROM main.zkill_activity_cache
             ORDER BY checked_at_utc DESC
             LIMIT 100;
             """,
 
-        ["Identity Cache Rows"] = """
-            SELECT *
+        ["Identity Cache Rows"] = "SELECT " + IdentityColumns + """
+
             FROM main.pilot_identity_cache
             ORDER BY cached_at_utc DESC
             LIMIT 100;
             """,
 
         ["Group Detection: Pairs By Shared Kill Count"] = """
-            SELECT LEAST(a.character_id, b.character_id) AS pilot_a,
-                   GREATEST(a.character_id, b.character_id) AS pilot_b,
+            SELECT min(a.character_id, b.character_id) AS pilot_a,
+                   max(a.character_id, b.character_id) AS pilot_b,
                    COUNT(DISTINCT a.killmail_id) AS shared_kills,
-                   MAX(k.kill_time_utc) AS last_shared_kill_utc
+                   datetime(MAX(k.kill_time_utc), 'unixepoch') AS last_shared_kill_utc
             FROM main.zkill_killmail_attackers a
             JOIN main.zkill_killmail_attackers b
               ON a.killmail_id = b.killmail_id AND a.character_id < b.character_id
@@ -155,8 +192,8 @@ public partial class DiagnosticsView : UserControl
 
         ["Group Detection: After-Split Candidate Pairs"] = """
             WITH shared AS (
-                SELECT LEAST(a.character_id, b.character_id) AS pilot_a,
-                       GREATEST(a.character_id, b.character_id) AS pilot_b,
+                SELECT min(a.character_id, b.character_id) AS pilot_a,
+                       max(a.character_id, b.character_id) AS pilot_b,
                        k.kill_time_utc,
                        (a.alliance_id IS NOT NULL AND a.alliance_id = b.alliance_id)
                            OR (a.corporation_id IS NOT NULL AND a.corporation_id = b.corporation_id) AS is_same_corp_or_alliance
@@ -167,8 +204,8 @@ public partial class DiagnosticsView : UserControl
             )
             SELECT pilot_a,
                    pilot_b,
-                   MIN(CASE WHEN is_same_corp_or_alliance THEN kill_time_utc END) AS earliest_same_corp_kill_utc,
-                   MAX(CASE WHEN NOT is_same_corp_or_alliance THEN kill_time_utc END) AS latest_not_same_kill_utc
+                   datetime(MIN(CASE WHEN is_same_corp_or_alliance THEN kill_time_utc END), 'unixepoch') AS earliest_same_corp_kill_utc,
+                   datetime(MAX(CASE WHEN NOT is_same_corp_or_alliance THEN kill_time_utc END), 'unixepoch') AS latest_not_same_kill_utc
             FROM shared
             GROUP BY pilot_a, pilot_b
             HAVING MIN(CASE WHEN is_same_corp_or_alliance THEN kill_time_utc END) IS NOT NULL
@@ -180,8 +217,8 @@ public partial class DiagnosticsView : UserControl
 
         ["Group Detection: Gated-Out Pairs (Current Same Corp/Alliance)"] = """
             WITH shared AS (
-                SELECT LEAST(a.character_id, b.character_id) AS pilot_a,
-                       GREATEST(a.character_id, b.character_id) AS pilot_b,
+                SELECT min(a.character_id, b.character_id) AS pilot_a,
+                       max(a.character_id, b.character_id) AS pilot_b,
                        COUNT(DISTINCT a.killmail_id) AS shared_kills
                 FROM main.zkill_killmail_attackers a
                 JOIN main.zkill_killmail_attackers b
@@ -239,8 +276,8 @@ public partial class DiagnosticsView : UserControl
             ),
             pairs AS (
                 SELECT n1.intermediary_character_id,
-                       LEAST(n1.neighbor_character_id, n2.neighbor_character_id) AS pilot_a,
-                       GREATEST(n1.neighbor_character_id, n2.neighbor_character_id) AS pilot_b
+                       min(n1.neighbor_character_id, n2.neighbor_character_id) AS pilot_a,
+                       max(n1.neighbor_character_id, n2.neighbor_character_id) AS pilot_b
                 FROM neighbors n1
                 JOIN neighbors n2
                   ON n1.intermediary_character_id = n2.intermediary_character_id
@@ -314,20 +351,20 @@ public partial class DiagnosticsView : UserControl
             $"SDE Last Updated UTC:     {summary.SdeLastUpdatedUtc:yyyy-MM-dd HH:mm:ss} UTC\n" +
             $"SDE Last Check Result:    {summary.SdeLastCheckResult ?? "(none)"}";
 
-        IdentityGrid.ItemsSource = _service.LoadRows("""
-            SELECT *
+        IdentityGrid.ItemsSource = _service.LoadRows("SELECT " + IdentityColumns + """
+
             FROM main.pilot_identity_cache
             ORDER BY cached_at_utc DESC;
             """).DefaultView;
 
-        ActivityGrid.ItemsSource = _service.LoadRows("""
-            SELECT *
+        ActivityGrid.ItemsSource = _service.LoadRows("SELECT " + ActivityColumns + """
+
             FROM main.zkill_activity_cache
             ORDER BY checked_at_utc DESC;
             """).DefaultView;
 
-        KillmailGrid.ItemsSource = _service.LoadRows("""
-            SELECT *
+        KillmailGrid.ItemsSource = _service.LoadRows("SELECT " + KillmailColumns + """
+
             FROM main.zkill_killmails
             ORDER BY kill_time_utc DESC
             LIMIT 500;
@@ -370,7 +407,7 @@ public partial class DiagnosticsView : UserControl
         if (!DiagnosticQueries.TryGetValue(selected, out var sql))
             return;
 
-        sql = sql.Replace("{{RecentWindowCutoffUtc}}", ApplicationClock.UtcNow.AddDays(-14).UtcDateTime.ToString("O"));
+        sql = sql.Replace("{{RecentWindowCutoffUtc}}", SqlValueFormatter.Date(ApplicationClock.UtcNow.AddDays(-14)));
 
         QueryText.Text = sql;
         _lastQueryRows = _service.LoadRows(sql);
@@ -616,10 +653,10 @@ public partial class DiagnosticsView : UserControl
             WHERE killmail_id IN (
                 SELECT killmail_id
                 FROM main.zkill_killmails
-                WHERE is_qualifying = FALSE
+                WHERE is_qualifying = 0
             );
             """);
-        _service.ExecuteNonQuery("DELETE FROM main.zkill_killmails WHERE is_qualifying = FALSE;");
+        _service.ExecuteNonQuery("DELETE FROM main.zkill_killmails WHERE is_qualifying = 0;");
         _service.ExecuteNonQuery("UPDATE main.zkill_activity_cache SET last_recent_call_utc = NULL;");
     }
 

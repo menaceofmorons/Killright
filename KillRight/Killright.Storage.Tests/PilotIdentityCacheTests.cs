@@ -6,7 +6,7 @@ using Xunit;
 
 namespace Killright.Storage.Tests;
 
-public sealed class DuckDbPilotIdentityCacheTests
+public sealed class PilotIdentityCacheTests
 {
     [Fact]
     public async Task UpsertAsync_NoMatch_IsCached()
@@ -179,11 +179,11 @@ public sealed class DuckDbPilotIdentityCacheTests
         Assert.Null(birthday);
     }
 
-    private static (KillRightDatabase Database, DuckDbPilotIdentityCache Cache) CreateCache()
+    private static (KillRightDatabase Database, PilotIdentityCache Cache) CreateCache()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"pilotIdentity.{Guid.NewGuid():N}.duckdb");
+        var path = Path.Combine(Path.GetTempPath(), $"pilotIdentity.{Guid.NewGuid():N}.db");
         var database = new KillRightDatabase(new KillRightDatabaseOptions { DatabasePath = path });
         database.EnsureCreated();
-        return (database, new DuckDbPilotIdentityCache(database));
+        return (database, new PilotIdentityCache(database));
     }
 }

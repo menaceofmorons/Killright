@@ -13,10 +13,7 @@ public sealed record SchemaMigration(int FromVersion, int ToVersion, Action<Kill
 
 public static class SchemaVersionGate
 {
-    public static readonly IReadOnlyList<SchemaMigration> Migrations =
-    [
-        new SchemaMigration(2, 3, database => database.EnsurePilotLastKillmailCache())
-    ];
+    public static readonly IReadOnlyList<SchemaMigration> Migrations = [];
 
     public static SchemaVersionCheckResult CheckOnStartup(KillRightDatabase database, bool isAlphaRelease)
     {

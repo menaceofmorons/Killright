@@ -1,4 +1,4 @@
-using DuckDB.NET.Data;
+using Microsoft.Data.Sqlite;
 using Killright.Core.Models;
 using Killright.Shared;
 using Killright.Shared.Data;
@@ -6,11 +6,11 @@ using Killright.Storage.Database;
 
 namespace Killright.Storage.Identity;
 
-public sealed class DuckDbPilotIdentityCache : IPilotIdentityCache
+public sealed class PilotIdentityCache : IPilotIdentityCache
 {
     private readonly KillRightDatabase _database;
 
-    public DuckDbPilotIdentityCache(KillRightDatabase database)
+    public PilotIdentityCache(KillRightDatabase database)
     {
         _database = database;
     }
@@ -19,8 +19,7 @@ public sealed class DuckDbPilotIdentityCache : IPilotIdentityCache
     {
         var normalizedInputName = PilotIdentityCacheRecord.NormalizeInputName(inputName);
 
-        using var connection = new DuckDBConnection(_database.ConnectionString);
-        connection.Open();
+        using var connection = _database.OpenConnection();
 
         using var command = connection.CreateCommand();
         command.CommandText = $"""
@@ -48,7 +47,7 @@ public sealed class DuckDbPilotIdentityCache : IPilotIdentityCache
         if (!reader.Read())
             return Task.FromResult<Pilot?>(null);
 
-        var cachedAtUtc = reader.GetDateTime(11);
+        var cachedAtUtc = reader.GetUtcDateTimeOffset(11).UtcDateTime;
 
         if (DateTime.UtcNow - cachedAtUtc > maximumAge)
             return Task.FromResult<Pilot?>(null);
@@ -67,7 +66,7 @@ public sealed class DuckDbPilotIdentityCache : IPilotIdentityCache
             AllianceName = reader.GetNullableString(9),
             AllianceTicker = reader.GetNullableString(10),
             CachedAtUtc = cachedAtUtc,
-            Birthday = reader.IsDBNull(12) ? null : DateOnly.FromDateTime(reader.GetDateTime(12)),
+            Birthday = reader.GetNullableDateOnly(12),
             FactionId = reader.GetNullableInt64(13)
         };
 
@@ -78,8 +77,7 @@ public sealed class DuckDbPilotIdentityCache : IPilotIdentityCache
     {
         var normalizedInputName = PilotIdentityCacheRecord.NormalizeInputName(inputName);
 
-        using var connection = new DuckDBConnection(_database.ConnectionString);
-        connection.Open();
+        using var connection = _database.OpenConnection();
 
         using var command = connection.CreateCommand();
         command.CommandText = $"""
@@ -94,7 +92,7 @@ public sealed class DuckDbPilotIdentityCache : IPilotIdentityCache
         if (!reader.Read() || reader.IsDBNull(0))
             return Task.FromResult<DateOnly?>(null);
 
-        return Task.FromResult<DateOnly?>(DateOnly.FromDateTime(reader.GetDateTime(0)));
+        return Task.FromResult<DateOnly?>(reader.GetDateOnly(0));
     }
 
     public Task<IReadOnlyDictionary<string, PilotIdentityCacheRecord>> GetRecordsAsync(
@@ -154,9 +152,9 @@ public sealed class DuckDbPilotIdentityCache : IPilotIdentityCache
                     AllianceId = reader.GetNullableInt64(8),
                     AllianceName = reader.GetNullableString(9),
                     AllianceTicker = reader.GetNullableString(10),
-                    CachedAtUtc = reader.GetDateTime(11),
-                    Birthday = reader.IsDBNull(12) ? null : DateOnly.FromDateTime(reader.GetDateTime(12)),
-                    SecurityStatusAtUtc = reader.IsDBNull(13) ? null : reader.GetDateTime(13),
+                    CachedAtUtc = reader.GetUtcDateTimeOffset(11).UtcDateTime,
+                    Birthday = reader.GetNullableDateOnly(12),
+                    SecurityStatusAtUtc = reader.GetNullableDateTimeOffset(13)?.UtcDateTime,
                     FactionId = reader.GetNullableInt64(14)
                 };
 
@@ -171,8 +169,7 @@ public sealed class DuckDbPilotIdentityCache : IPilotIdentityCache
     {
         var normalizedInputName = PilotIdentityCacheRecord.NormalizeInputName(inputName);
 
-        using var connection = new DuckDBConnection(_database.ConnectionString);
-        connection.Open();
+        using var connection = _database.OpenConnection();
 
         using var command = connection.CreateCommand();
         command.CommandText = $"""
@@ -214,9 +211,9 @@ public sealed class DuckDbPilotIdentityCache : IPilotIdentityCache
             AllianceId = reader.GetNullableInt64(8),
             AllianceName = reader.GetNullableString(9),
             AllianceTicker = reader.GetNullableString(10),
-            CachedAtUtc = reader.GetDateTime(11),
-            Birthday = reader.IsDBNull(12) ? null : DateOnly.FromDateTime(reader.GetDateTime(12)),
-            SecurityStatusAtUtc = reader.IsDBNull(13) ? null : reader.GetDateTime(13),
+            CachedAtUtc = reader.GetUtcDateTimeOffset(11).UtcDateTime,
+            Birthday = reader.GetNullableDateOnly(12),
+            SecurityStatusAtUtc = reader.GetNullableDateTimeOffset(13)?.UtcDateTime,
             FactionId = reader.GetNullableInt64(14)
         };
 
@@ -233,17 +230,18 @@ public sealed class DuckDbPilotIdentityCache : IPilotIdentityCache
 
     public Task UpsertRecordAsync(PilotIdentityCacheRecord record, CancellationToken cancellationToken = default)
     {
-        using var connection = new DuckDBConnection(_database.ConnectionString);
-        connection.Open();
+        using var scope = _database.BeginWrite();
 
-        using (var deleteCommand = connection.CreateCommand())
+        using (var deleteCommand = scope.Connection.CreateCommand())
         {
+            deleteCommand.Transaction = scope.Transaction;
             deleteCommand.CommandText = $"DELETE FROM pilot_identity_cache WHERE input_name = {SqlValueFormatter.String(record.InputName)};";
             deleteCommand.ExecuteNonQuery();
         }
 
-        using (var insertCommand = connection.CreateCommand())
+        using (var insertCommand = scope.Connection.CreateCommand())
         {
+            insertCommand.Transaction = scope.Transaction;
             insertCommand.CommandText = $"""
                                         INSERT INTO pilot_identity_cache (
                                             input_name,
@@ -281,6 +279,8 @@ public sealed class DuckDbPilotIdentityCache : IPilotIdentityCache
                                         """;
             insertCommand.ExecuteNonQuery();
         }
+
+        scope.Commit();
 
         return Task.CompletedTask;
     }

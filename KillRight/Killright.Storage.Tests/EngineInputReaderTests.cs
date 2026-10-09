@@ -1,5 +1,5 @@
 using System.Text.Json;
-using DuckDB.NET.Data;
+using Microsoft.Data.Sqlite;
 using Killright.Storage.Database;
 using Killright.Storage.Diagnostics;
 using Killright.Storage.Engine;
@@ -21,9 +21,9 @@ public sealed class EngineInputReaderTests
         var fixture = CreateFixture();
         Execute(fixture.Database, $"""
             INSERT INTO main.zkill_killmails (killmail_id, killmail_hash, kill_time_utc, system_id, location_id, victim_character_id, victim_ship_type_id, unique_attacker_count, is_solo, is_npc, is_qualifying, cached_at_utc) VALUES
-                (1, 'hash1', '2026-09-20T00:00:00+00:00', 30000142, 40000001, {Tral}, 587, 2, FALSE, FALSE, TRUE, '2026-09-20T00:00:00+00:00'),
-                (2, 'hash2', '2026-09-22T00:00:00+00:00', 30000142, 40000001, {Lukas}, 670, 3, FALSE, FALSE, TRUE, '2026-09-22T00:00:00+00:00'),
-                (3, 'hash3', '2026-09-21T00:00:00+00:00', 30000142, NULL, 777, 587, 1, TRUE, FALSE, FALSE, '2026-09-21T00:00:00+00:00');
+                (1, 'hash1', 1789862400, 30000142, 40000001, {Tral}, 587, 2, 0, 0, 1, 1789862400),
+                (2, 'hash2', 1790035200, 30000142, 40000001, {Lukas}, 670, 3, 0, 0, 1, 1790035200),
+                (3, 'hash3', 1789948800, 30000142, NULL, 777, 587, 1, 1, 0, 0, 1789948800);
             INSERT INTO main.zkill_killmail_attackers (killmail_id, character_id, corporation_id, alliance_id, ship_type_id) VALUES
                 (1, {Lukas}, 98000001, NULL, 11567),
                 (3, {Lukas}, 98000001, NULL, 11567);
@@ -83,7 +83,7 @@ public sealed class EngineInputReaderTests
         Assert.Null(lukas.Identity.AllianceId);
         Assert.Equal(1.2, lukas.Identity.SecurityStatus);
         Assert.Equal("2026-09-20T00:00:00+00:00", lukas.Identity.CachedAtUtc);
-        Assert.Equal("2026-09-08T00:00:00+00:00", lukas.CoverageStartUtc);
+        Assert.Equal("2026-09-08T00:00:00.0000000Z", lukas.CoverageStartUtc);
 
         var tral = results[1].Inputs!;
         Assert.Equal(0, tral.Statistics!.PodLosses);
@@ -104,8 +104,8 @@ public sealed class EngineInputReaderTests
         var fixture = CreateFixture();
         Execute(fixture.Database, $"""
             INSERT INTO main.pilot_identity_cache (input_name, character_id, character_name, verify_status, security_status, corporation_id, cached_at_utc) VALUES
-                ('Lukas Naarii', {Lukas}, 'Lukas Naarii', 'Verified', 1.2, 98000001, '2026-09-20T00:00:00'),
-                ('LUKAS NAARII', {Lukas}, 'Lukas Naarii', 'Verified', 1.2, 98000009, '2026-09-21T00:00:00');
+                ('Lukas Naarii', {Lukas}, 'Lukas Naarii', 'Verified', 1.2, 98000001, 1789862400),
+                ('LUKAS NAARII', {Lukas}, 'Lukas Naarii', 'Verified', 1.2, 98000009, 1789948800);
             """);
 
         var results = await fixture.Reader.ReadPilotInputsAsync([Lukas]);
@@ -144,8 +144,8 @@ public sealed class EngineInputReaderTests
         var fixture = CreateFixture();
         Execute(fixture.Database, $"""
             INSERT INTO main.zkill_killmails (killmail_id, killmail_hash, kill_time_utc, system_id, location_id, victim_character_id, victim_ship_type_id, unique_attacker_count, is_solo, is_npc, is_qualifying, cached_at_utc) VALUES
-                (7, 'h7', '2026-09-21T00:00:00+00:00', 30000142, NULL, 999, 587, 3, FALSE, FALSE, TRUE, '2026-09-21T00:00:00+00:00'),
-                (5, 'h5', '2026-09-20T00:00:00+00:00', 30000142, NULL, 999, 587, 2, FALSE, FALSE, TRUE, '2026-09-20T00:00:00+00:00');
+                (7, 'h7', 1789948800, 30000142, NULL, 999, 587, 3, 0, 0, 1, 1789948800),
+                (5, 'h5', 1789862400, 30000142, NULL, 999, 587, 2, 0, 0, 1, 1789862400);
             INSERT INTO main.zkill_killmail_attackers (killmail_id, character_id, corporation_id, alliance_id, ship_type_id) VALUES
                 (7, {Lukas}, 98000001, NULL, 11567),
                 (7, {Tral}, 98000002, 99000001, 17738),
@@ -160,7 +160,7 @@ public sealed class EngineInputReaderTests
         Assert.DoesNotContain(evidence, row => row.CharacterId == Outsider);
         Assert.Equal(99000001, evidence.Single(row => row.CharacterId == Tral).AllianceId);
         Assert.Equal(3L, evidence.First(row => row.KillmailId == 7).UniqueAttackerCount);
-        Assert.Equal("2026-09-20T00:00:00+00:00", evidence[0].KillTimeUtc);
+        Assert.Equal("2026-09-20T00:00:00.0000000Z", evidence[0].KillTimeUtc);
     }
 
     [Fact]
@@ -169,9 +169,9 @@ public sealed class EngineInputReaderTests
         var fixture = CreateFixture();
         Execute(fixture.Database, $"""
             INSERT INTO main.zkill_killmails (killmail_id, killmail_hash, kill_time_utc, system_id, location_id, victim_character_id, victim_ship_type_id, unique_attacker_count, is_solo, is_npc, is_qualifying, cached_at_utc) VALUES
-                (1, 'h1', '2026-09-20T00:00:00+00:00', 30000142, NULL, 999, 587, 2, FALSE, FALSE, TRUE, '2026-09-20T00:00:00+00:00'),
-                (2, 'h2', '2026-09-20T00:00:00+00:00', 30000142, NULL, 999, 587, 1, TRUE, FALSE, FALSE, '2026-09-20T00:00:00+00:00'),
-                (3, 'h3', '2026-09-20T00:00:00+00:00', 30000142, NULL, 999, 587, 2, FALSE, FALSE, TRUE, '2026-09-20T00:00:00+00:00');
+                (1, 'h1', 1789862400, 30000142, NULL, 999, 587, 2, 0, 0, 1, 1789862400),
+                (2, 'h2', 1789862400, 30000142, NULL, 999, 587, 1, 1, 0, 0, 1789862400),
+                (3, 'h3', 1789862400, 30000142, NULL, 999, 587, 2, 0, 0, 1, 1789862400);
             INSERT INTO main.zkill_killmail_attackers (killmail_id, character_id, corporation_id, alliance_id, ship_type_id) VALUES
                 (1, {Lukas}, 98000001, NULL, 11567),
                 (1, {Outsider}, 98000003, NULL, 670),
@@ -262,40 +262,39 @@ public sealed class EngineInputReaderTests
 
     private static Fixture CreateFixture(Action<string>? log = null)
     {
-        var path = Path.Combine(Path.GetTempPath(), $"engineInput.{Guid.NewGuid():N}.duckdb");
+        var path = Path.Combine(Path.GetTempPath(), $"engineInput.{Guid.NewGuid():N}.db");
         var database = new KillRightDatabase(new KillRightDatabaseOptions { DatabasePath = path });
         database.EnsureCreated();
 
-        return new Fixture(database, new EngineInputReader(database, new DuckDbSdeReferenceDataStore(database), log));
+        return new Fixture(database, new EngineInputReader(database, new SdeReferenceDataStore(database), log));
     }
 
     private static void SeedBatchData(KillRightDatabase database)
     {
         Execute(database, $"""
             INSERT INTO main.zkill_killmails (killmail_id, killmail_hash, kill_time_utc, system_id, location_id, victim_character_id, victim_ship_type_id, unique_attacker_count, is_solo, is_npc, is_qualifying, cached_at_utc) VALUES
-                (1, 'hash1', '2026-09-20T00:00:00+00:00', 30000142, 40000001, {Tral}, 587, 2, FALSE, FALSE, TRUE, '2026-09-20T00:00:00+00:00'),
-                (2, 'hash2', '2026-09-21T00:00:00+00:00', 30000142, 40000001, {Lukas}, 670, 3, FALSE, FALSE, TRUE, '2026-09-21T00:00:00+00:00'),
-                (3, 'hash3', '2026-09-22T00:00:00+00:00', 30000142, 40000001, 777, 587, 1, TRUE, FALSE, FALSE, '2026-09-22T00:00:00+00:00');
+                (1, 'hash1', 1789862400, 30000142, 40000001, {Tral}, 587, 2, 0, 0, 1, 1789862400),
+                (2, 'hash2', 1789948800, 30000142, 40000001, {Lukas}, 670, 3, 0, 0, 1, 1789948800),
+                (3, 'hash3', 1790035200, 30000142, 40000001, 777, 587, 1, 1, 0, 0, 1790035200);
             INSERT INTO main.zkill_killmail_attackers (killmail_id, character_id, corporation_id, alliance_id, ship_type_id) VALUES
                 (1, {Lukas}, 98000001, NULL, 11567),
                 (3, {Symptom}, 98000002, NULL, 11567);
             INSERT INTO main.zkill_statistics_cache (character_id, ships_destroyed, solo_kills, solo_ratio, avg_gang_size, ships_lost, solo_losses, general_style, checked_at_utc, no_history_marker, pod_losses) VALUES
-                ({Lukas}, 100, 20, 0.25, 4.5, 10, 1, 'Gang', '2026-09-20T00:00:00+00:00', FALSE, 3);
+                ({Lukas}, 100, 20, 0.25, 4.5, 10, 1, 'Gang', 1789862400, 0, 3);
             INSERT INTO main.zkill_statistics_cache (character_id, ships_destroyed, solo_kills, solo_ratio, avg_gang_size, ships_lost, solo_losses, general_style, checked_at_utc) VALUES
-                ({Tral}, 5, 0, 0.0, 6.0, 1, 0, 'Fleet', '2026-09-20T00:00:00+00:00');
+                ({Tral}, 5, 0, 0.0, 6.0, 1, 0, 'Fleet', 1789862400);
             INSERT INTO main.pilot_identity_cache (input_name, character_id, character_name, verify_status, security_status, corporation_id, corporation_name, corporation_ticker, alliance_id, alliance_name, alliance_ticker, cached_at_utc) VALUES
-                ('Lukas Naarii', {Lukas}, 'Lukas Naarii', 'Verified', 1.2, 98000001, 'Corp One', 'ONE', NULL, NULL, NULL, '2026-09-20T00:00:00'),
-                ('T''ral Vsengne', {Tral}, 'T''ral Vsengne', 'Verified', 0.4, 98000002, 'Corp Two', 'TWO', 99000001, 'Alliance Two', 'ATWO', '2026-09-20T00:00:00');
+                ('Lukas Naarii', {Lukas}, 'Lukas Naarii', 'Verified', 1.2, 98000001, 'Corp One', 'ONE', NULL, NULL, NULL, 1789862400),
+                ('T''ral Vsengne', {Tral}, 'T''ral Vsengne', 'Verified', 0.4, 98000002, 'Corp Two', 'TWO', 99000001, 'Alliance Two', 'ATWO', 1789862400);
             INSERT INTO main.zkill_activity_cache (character_id, has_public_activity_data, checked_at_utc, recent_coverage_start_utc) VALUES
-                ({Lukas}, TRUE, '2026-09-22T00:00:00+00:00', '2026-09-08T00:00:00+00:00'),
-                ({Tral}, TRUE, '2026-09-22T00:00:00+00:00', NULL);
+                ({Lukas}, 1, 1790035200, 1788825600),
+                ({Tral}, 1, 1790035200, NULL);
             """);
     }
 
     private static void Execute(KillRightDatabase database, string sql)
     {
-        using var connection = new DuckDBConnection(database.ConnectionString);
-        connection.Open();
+        using var connection = database.OpenConnection();
 
         using var command = connection.CreateCommand();
         command.CommandText = sql;

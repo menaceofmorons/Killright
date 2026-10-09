@@ -13,7 +13,7 @@
     </ItemGroup>
 
     <ItemGroup>
-      <PackageReference Include="DuckDB.NET.Data.Full" Version="1.5.3" />
+      <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.20" />
     </ItemGroup>
 
 </Project>

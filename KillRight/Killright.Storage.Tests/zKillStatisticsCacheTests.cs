@@ -1,4 +1,4 @@
-using DuckDB.NET.Data;
+using Microsoft.Data.Sqlite;
 using Killright.Shared.zKill;
 using Killright.Storage.Database;
 using Killright.Storage.zKill;
@@ -6,7 +6,7 @@ using Xunit;
 
 namespace Killright.Storage.Tests;
 
-public sealed class DuckDbzKillStatisticsCacheTests
+public sealed class zKillStatisticsCacheTests
 {
     [Fact]
     public async Task UpsertThenGet_RoundTripsStatisticsFields()
@@ -134,8 +134,7 @@ public sealed class DuckDbzKillStatisticsCacheTests
 
     private static void InsertLegacyRowWithoutMonthsProcessedFlag(KillRightDatabase database, long characterId)
     {
-        using var connection = new DuckDBConnection(database.ConnectionString);
-        connection.Open();
+        using var connection = database.OpenConnection();
 
         using var command = connection.CreateCommand();
         command.CommandText = $"""
@@ -143,7 +142,7 @@ public sealed class DuckDbzKillStatisticsCacheTests
                 character_id, ships_destroyed, solo_kills, solo_ratio, avg_gang_size,
                 ships_lost, solo_losses, general_style, checked_at_utc
             ) VALUES (
-                {characterId}, 1, 0, 0.0, 0.0, 0, 0, 'Solo', now()
+                {characterId}, 1, 0, 0.0, 0.0, 0, 0, 'Solo', unixepoch()
             );
             """;
         command.ExecuteNonQuery();
@@ -151,8 +150,7 @@ public sealed class DuckDbzKillStatisticsCacheTests
 
     private static void InsertRowWithoutPodKills(KillRightDatabase database, long characterId)
     {
-        using var connection = new DuckDBConnection(database.ConnectionString);
-        connection.Open();
+        using var connection = database.OpenConnection();
 
         using var command = connection.CreateCommand();
         command.CommandText = $"""
@@ -160,7 +158,7 @@ public sealed class DuckDbzKillStatisticsCacheTests
                 character_id, ships_destroyed, solo_kills, solo_ratio, avg_gang_size,
                 ships_lost, solo_losses, general_style, months_processed, no_history_marker, checked_at_utc, pod_losses
             ) VALUES (
-                {characterId}, 40, 10, 60.0, 3.0, 5, 2, 'Solo', TRUE, FALSE, now(), 0
+                {characterId}, 40, 10, 60.0, 3.0, 5, 2, 'Solo', 1, 0, unixepoch(), 0
             );
             """;
         command.ExecuteNonQuery();
@@ -168,8 +166,7 @@ public sealed class DuckDbzKillStatisticsCacheTests
 
     private static void InsertRowWithoutPodLosses(KillRightDatabase database, long characterId)
     {
-        using var connection = new DuckDBConnection(database.ConnectionString);
-        connection.Open();
+        using var connection = database.OpenConnection();
 
         using var command = connection.CreateCommand();
         command.CommandText = $"""
@@ -177,17 +174,17 @@ public sealed class DuckDbzKillStatisticsCacheTests
                 character_id, ships_destroyed, solo_kills, solo_ratio, avg_gang_size,
                 ships_lost, solo_losses, general_style, months_processed, no_history_marker, checked_at_utc, pod_kills
             ) VALUES (
-                {characterId}, 40, 10, 60.0, 3.0, 5, 2, 'Solo', TRUE, FALSE, now(), 1
+                {characterId}, 40, 10, 60.0, 3.0, 5, 2, 'Solo', 1, 0, unixepoch(), 1
             );
             """;
         command.ExecuteNonQuery();
     }
 
-    private static (KillRightDatabase Database, DuckDbzKillStatisticsCache Cache) CreateCache()
+    private static (KillRightDatabase Database, zKillStatisticsCache Cache) CreateCache()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"zkillStatistics.{Guid.NewGuid():N}.duckdb");
+        var path = Path.Combine(Path.GetTempPath(), $"zkillStatistics.{Guid.NewGuid():N}.db");
         var database = new KillRightDatabase(new KillRightDatabaseOptions { DatabasePath = path });
         database.EnsureCreated();
-        return (database, new DuckDbzKillStatisticsCache(database));
+        return (database, new zKillStatisticsCache(database));
     }
 }

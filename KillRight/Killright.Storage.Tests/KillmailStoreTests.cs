@@ -1,4 +1,4 @@
-using DuckDB.NET.Data;
+using Microsoft.Data.Sqlite;
 using Killright.Shared.Killmails;
 using Killright.Storage.Database;
 using Killright.Storage.Killmails;
@@ -6,7 +6,7 @@ using Xunit;
 
 namespace Killright.Storage.Tests;
 
-public sealed class DuckDbKillmailStoreTests
+public sealed class KillmailStoreTests
 {
     private const long ScannedCharacterId = 95465499;
 
@@ -213,10 +213,10 @@ public sealed class DuckDbKillmailStoreTests
     [Fact]
     public async Task UpsertAsync_ConfiguredThresholdBelowDefault_AppliesConfiguredThreshold()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"killmailStore.{Guid.NewGuid():N}.duckdb");
+        var path = Path.Combine(Path.GetTempPath(), $"killmailStore.{Guid.NewGuid():N}.db");
         var database = new KillRightDatabase(new KillRightDatabaseOptions { DatabasePath = path });
         database.EnsureCreated();
-        var store = new DuckDbKillmailStore(database, qualificationFleetThreshold: 3);
+        var store = new KillmailStore(database, qualificationFleetThreshold: 3);
 
         var killmail = new RawKillmail(
             723456,
@@ -240,18 +240,17 @@ public sealed class DuckDbKillmailStoreTests
         Assert.False(isQualifying);
     }
 
-    private static (KillRightDatabase Database, DuckDbKillmailStore Store) CreateStore()
+    private static (KillRightDatabase Database, KillmailStore Store) CreateStore()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"killmailStore.{Guid.NewGuid():N}.duckdb");
+        var path = Path.Combine(Path.GetTempPath(), $"killmailStore.{Guid.NewGuid():N}.db");
         var database = new KillRightDatabase(new KillRightDatabaseOptions { DatabasePath = path });
         database.EnsureCreated();
-        return (database, new DuckDbKillmailStore(database, qualificationFleetThreshold: 11));
+        return (database, new KillmailStore(database, qualificationFleetThreshold: 11));
     }
 
     private static (int UniqueAttackerCount, bool IsQualifying) ReadKillmail(KillRightDatabase database, long killmailId)
     {
-        using var connection = new DuckDBConnection(database.ConnectionString);
-        connection.Open();
+        using var connection = database.OpenConnection();
 
         using var command = connection.CreateCommand();
         command.CommandText = $"""
@@ -268,8 +267,7 @@ public sealed class DuckDbKillmailStoreTests
 
     private static int CountAttackers(KillRightDatabase database, long killmailId)
     {
-        using var connection = new DuckDBConnection(database.ConnectionString);
-        connection.Open();
+        using var connection = database.OpenConnection();
 
         using var command = connection.CreateCommand();
         command.CommandText = $"""
@@ -283,8 +281,7 @@ public sealed class DuckDbKillmailStoreTests
 
     private static long? ReadAttackerWeaponTypeId(KillRightDatabase database, long killmailId, long characterId)
     {
-        using var connection = new DuckDBConnection(database.ConnectionString);
-        connection.Open();
+        using var connection = database.OpenConnection();
 
         using var command = connection.CreateCommand();
         command.CommandText = $"""
@@ -300,8 +297,7 @@ public sealed class DuckDbKillmailStoreTests
 
     private static List<string> ReadDistinctCachedAtUtc(KillRightDatabase database, long killmailId)
     {
-        using var connection = new DuckDBConnection(database.ConnectionString);
-        connection.Open();
+        using var connection = database.OpenConnection();
 
         using var command = connection.CreateCommand();
         command.CommandText = $"""

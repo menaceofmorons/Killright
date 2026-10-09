@@ -1,4 +1,4 @@
-using DuckDB.NET.Data;
+using Microsoft.Data.Sqlite;
 using Killright.Shared.zKill;
 using Killright.Shared.Data;
 using Killright.Shared.Time;
@@ -6,11 +6,11 @@ using Killright.Storage.Database;
 
 namespace Killright.Storage.zKill;
 
-public sealed class DuckDbzKillStatisticsCache : IzKillStatisticsCache
+public sealed class zKillStatisticsCache : IzKillStatisticsCache
 {
     private readonly KillRightDatabase _database;
 
-    public DuckDbzKillStatisticsCache(KillRightDatabase database)
+    public zKillStatisticsCache(KillRightDatabase database)
     {
         _database = database;
     }
@@ -20,8 +20,7 @@ public sealed class DuckDbzKillStatisticsCache : IzKillStatisticsCache
         TimeSpan maximumAge,
         CancellationToken cancellationToken = default)
     {
-        using var connection = new DuckDBConnection(_database.ConnectionString);
-        connection.Open();
+        using var connection = _database.OpenConnection();
 
         using var command = connection.CreateCommand();
         command.CommandText = $"""
@@ -56,7 +55,7 @@ public sealed class DuckDbzKillStatisticsCache : IzKillStatisticsCache
         if (reader.GetNullableInt32(12) is null)
             return Task.FromResult<zKillStatistics?>(null);
 
-        var checkedAtUtc = reader.GetDateTimeOffset(10);
+        var checkedAtUtc = reader.GetUtcDateTimeOffset(10);
 
         if (ApplicationClock.UtcNow - checkedAtUtc > maximumAge)
             return Task.FromResult<zKillStatistics?>(null);
@@ -125,7 +124,7 @@ public sealed class DuckDbzKillStatisticsCache : IzKillStatisticsCache
                 if (reader.GetNullableInt32(12) is null)
                     continue;
 
-                var checkedAtUtc = reader.GetDateTimeOffset(10);
+                var checkedAtUtc = reader.GetUtcDateTimeOffset(10);
 
                 if (ApplicationClock.UtcNow - checkedAtUtc > maximumAge)
                     continue;
@@ -167,16 +166,17 @@ public sealed class DuckDbzKillStatisticsCache : IzKillStatisticsCache
             noHistory,
             ApplicationClock.UtcNow);
 
-        using var connection = new DuckDBConnection(_database.ConnectionString);
-        connection.Open();
+        using var scope = _database.BeginWrite();
 
-        using (var deleteCommand = connection.CreateCommand())
+        using (var deleteCommand = scope.Connection.CreateCommand())
         {
+            deleteCommand.Transaction = scope.Transaction;
             deleteCommand.CommandText = $"DELETE FROM main.zkill_statistics_cache WHERE character_id = {record.CharacterId};";
             deleteCommand.ExecuteNonQuery();
         }
 
-        using var insertCommand = connection.CreateCommand();
+        using var insertCommand = scope.Connection.CreateCommand();
+        insertCommand.Transaction = scope.Transaction;
         insertCommand.CommandText = $"""
             INSERT INTO main.zkill_statistics_cache (
                 character_id,
@@ -210,6 +210,8 @@ public sealed class DuckDbzKillStatisticsCache : IzKillStatisticsCache
             """;
         insertCommand.ExecuteNonQuery();
 
+        scope.Commit();
+
         return Task.CompletedTask;
     }
 
@@ -217,16 +219,18 @@ public sealed class DuckDbzKillStatisticsCache : IzKillStatisticsCache
         long characterId,
         CancellationToken cancellationToken = default)
     {
-        using var connection = new DuckDBConnection(_database.ConnectionString);
-        connection.Open();
+        using var scope = _database.BeginWrite();
 
-        using var command = connection.CreateCommand();
+        using var command = scope.Connection.CreateCommand();
+        command.Transaction = scope.Transaction;
         command.CommandText = $"""
             UPDATE main.zkill_statistics_cache
-            SET no_history_marker = FALSE
+            SET no_history_marker = 0
             WHERE character_id = {characterId};
             """;
         command.ExecuteNonQuery();
+
+        scope.Commit();
 
         return Task.CompletedTask;
     }

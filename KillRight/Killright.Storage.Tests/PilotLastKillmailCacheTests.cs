@@ -6,7 +6,7 @@ using Xunit;
 
 namespace Killright.Storage.Tests;
 
-public sealed class DuckDbPilotLastKillmailCacheTests
+public sealed class PilotLastKillmailCacheTests
 {
     private const long Lukas = 2116955190;
     private static readonly DateTimeOffset Checked = new(2026, 9, 30, 12, 0, 0, TimeSpan.Zero);
@@ -95,11 +95,11 @@ public sealed class DuckDbPilotLastKillmailCacheTests
         Assert.False((await cache.GetAsync(91321792))!.HasKillmail);
     }
 
-    private static DuckDbPilotLastKillmailCache CreateCache()
+    private static PilotLastKillmailCache CreateCache()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"pilotLastKillmail.{Guid.NewGuid():N}.duckdb");
+        var path = Path.Combine(Path.GetTempPath(), $"pilotLastKillmail.{Guid.NewGuid():N}.db");
         var database = new KillRightDatabase(new KillRightDatabaseOptions { DatabasePath = path });
         database.EnsureCreated();
-        return new DuckDbPilotLastKillmailCache(database);
+        return new PilotLastKillmailCache(database);
     }
 }

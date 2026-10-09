@@ -1,14 +1,14 @@
-using DuckDB.NET.Data;
+using Microsoft.Data.Sqlite;
 using Killright.Shared.Data;
 using Killright.Storage.Database;
 
 namespace Killright.Storage.Identity;
 
-public sealed class DuckDbEsiEntityNameCache : IEsiEntityNameCache
+public sealed class EsiEntityNameCache : IEsiEntityNameCache
 {
     private readonly KillRightDatabase _database;
 
-    public DuckDbEsiEntityNameCache(KillRightDatabase database)
+    public EsiEntityNameCache(KillRightDatabase database)
     {
         _database = database;
     }
@@ -60,21 +60,18 @@ public sealed class DuckDbEsiEntityNameCache : IEsiEntityNameCache
             .Select(group => group.Last())
             .ToList();
 
-        using var connection = new DuckDBConnection(_database.ConnectionString);
-        connection.Open();
+        using var scope = _database.BeginWrite();
 
-        using var transaction = connection.BeginTransaction();
-
-        using (var deleteCommand = connection.CreateCommand())
+        using (var deleteCommand = scope.Connection.CreateCommand())
         {
-            deleteCommand.Transaction = transaction;
+            deleteCommand.Transaction = scope.Transaction;
             deleteCommand.CommandText = $"DELETE FROM esi_entity_name_cache WHERE entity_id IN ({string.Join(", ", distinctNames.Select(name => name.EntityId))});";
             deleteCommand.ExecuteNonQuery();
         }
 
-        using (var insertCommand = connection.CreateCommand())
+        using (var insertCommand = scope.Connection.CreateCommand())
         {
-            insertCommand.Transaction = transaction;
+            insertCommand.Transaction = scope.Transaction;
             insertCommand.CommandText = $"""
                                         INSERT INTO esi_entity_name_cache (entity_id, entity_type, name)
                                         VALUES {string.Join(", ", distinctNames.Select(name => $"({name.EntityId}, {SqlValueFormatter.String(name.EntityType)}, {SqlValueFormatter.String(name.Name)})"))};
@@ -82,7 +79,7 @@ public sealed class DuckDbEsiEntityNameCache : IEsiEntityNameCache
             insertCommand.ExecuteNonQuery();
         }
 
-        transaction.Commit();
+        scope.Commit();
 
         return Task.CompletedTask;
     }

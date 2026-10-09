@@ -4,7 +4,7 @@ using Xunit;
 
 namespace Killright.Storage.Tests;
 
-public sealed class DuckDbEsiEntityNameCacheTests
+public sealed class EsiEntityNameCacheTests
 {
     [Fact]
     public async Task UpsertAsync_CorporationAndAlliance_AreReadBackById()
@@ -69,11 +69,11 @@ public sealed class DuckDbEsiEntityNameCacheTests
         Assert.Equal("T'ral's Corp", names[98765]);
     }
 
-    private static DuckDbEsiEntityNameCache CreateCache()
+    private static EsiEntityNameCache CreateCache()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"esiEntityNames.{Guid.NewGuid():N}.duckdb");
+        var path = Path.Combine(Path.GetTempPath(), $"esiEntityNames.{Guid.NewGuid():N}.db");
         var database = new KillRightDatabase(new KillRightDatabaseOptions { DatabasePath = path });
         database.EnsureCreated();
-        return new DuckDbEsiEntityNameCache(database);
+        return new EsiEntityNameCache(database);
     }
 }

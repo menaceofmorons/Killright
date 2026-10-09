@@ -1,4 +1,4 @@
-using DuckDB.NET.Data;
+using Microsoft.Data.Sqlite;
 using Killright.Shared.Killmails;
 using Killright.Storage.Database;
 using Killright.Storage.Killmails;
@@ -24,7 +24,7 @@ public sealed class KillmailQualificationRequalifierTests
     public async Task RequalifyOnStartup_ConfiguredLowerThanStored_SetsQualifyingFalseAtOrAboveNewThreshold()
     {
         var database = CreateDatabase();
-        var store = new DuckDbKillmailStore(database, qualificationFleetThreshold: 11);
+        var store = new KillmailStore(database, qualificationFleetThreshold: 11);
 
         await store.UpsertAsync(ScannedCharacterId, [BuildKillmail(823456, attackerCount: 5)]);
         await store.UpsertAsync(ScannedCharacterId, [BuildKillmail(823457, attackerCount: 2)]);
@@ -50,7 +50,7 @@ public sealed class KillmailQualificationRequalifierTests
 
     private static KillRightDatabase CreateDatabase()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"requalifier.{Guid.NewGuid():N}.duckdb");
+        var path = Path.Combine(Path.GetTempPath(), $"requalifier.{Guid.NewGuid():N}.db");
         var database = new KillRightDatabase(new KillRightDatabaseOptions { DatabasePath = path });
         database.EnsureCreated();
         return database;
@@ -78,8 +78,7 @@ public sealed class KillmailQualificationRequalifierTests
 
     private static bool ReadIsQualifying(KillRightDatabase database, long killmailId)
     {
-        using var connection = new DuckDBConnection(database.ConnectionString);
-        connection.Open();
+        using var connection = database.OpenConnection();
 
         using var command = connection.CreateCommand();
         command.CommandText = $"SELECT is_qualifying FROM main.zkill_killmails WHERE killmail_id = {killmailId};";

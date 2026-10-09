@@ -284,7 +284,7 @@ public sealed class PilotIdentityResolverTests
             Assert.Equal(expected.SecurityStatusAtUtc, actual.SecurityStatusAtUtc);
         }
 
-        var names = await new DuckDbEsiEntityNameCache(buffered.Database).GetNamesAsync([98765, 98766, 99001]);
+        var names = await new EsiEntityNameCache(buffered.Database).GetNamesAsync([98765, 98766, 99001]);
         Assert.Equal(3, names.Count);
     }
 
@@ -375,9 +375,8 @@ public sealed class PilotIdentityResolverTests
         fixture.Esi.Reset();
         fixture.Esi.FactionIds[95465499] = 500003;
 
-        using (var connection = new DuckDB.NET.Data.DuckDBConnection(fixture.Database.ConnectionString))
+        using (var connection = fixture.Database.OpenConnection())
         {
-            connection.Open();
             using var command = connection.CreateCommand();
             command.CommandText = "UPDATE main.pilot_identity_cache SET security_status_at_utc = NULL;";
             command.ExecuteNonQuery();
@@ -391,14 +390,14 @@ public sealed class PilotIdentityResolverTests
 
     private static Fixture CreateFixture(int maxConcurrency = 8)
     {
-        var path = Path.Combine(Path.GetTempPath(), $"identityResolver.{Guid.NewGuid():N}.duckdb");
+        var path = Path.Combine(Path.GetTempPath(), $"identityResolver.{Guid.NewGuid():N}.db");
         var database = new KillRightDatabase(new KillRightDatabaseOptions { DatabasePath = path });
         database.EnsureCreated();
 
         var clock = new Clock(new DateTime(2026, 9, 30, 12, 0, 0, DateTimeKind.Utc));
         var esi = new FakeEsiClient();
-        var identityCache = new DuckDbPilotIdentityCache(database);
-        var nameCache = new DuckDbEsiEntityNameCache(database);
+        var identityCache = new PilotIdentityCache(database);
+        var nameCache = new EsiEntityNameCache(database);
 
         return new Fixture(
             new PilotIdentityResolver(esi, identityCache, nameCache, maxConcurrency, () => clock.Now),
@@ -408,7 +407,7 @@ public sealed class PilotIdentityResolverTests
             database);
     }
 
-    private sealed record Fixture(PilotIdentityResolver Resolver, FakeEsiClient Esi, DuckDbPilotIdentityCache IdentityCache, Clock Clock, KillRightDatabase Database);
+    private sealed record Fixture(PilotIdentityResolver Resolver, FakeEsiClient Esi, PilotIdentityCache IdentityCache, Clock Clock, KillRightDatabase Database);
 
     private sealed class Clock
     {

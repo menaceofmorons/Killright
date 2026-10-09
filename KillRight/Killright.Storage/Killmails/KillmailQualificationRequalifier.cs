@@ -1,4 +1,3 @@
-using DuckDB.NET.Data;
 using Killright.Storage.Database;
 
 namespace Killright.Storage.Killmails;
@@ -17,17 +16,20 @@ public static class KillmailQualificationRequalifier
 
         if (configuredThreshold < storedThreshold.Value)
         {
-            using var connection = new DuckDBConnection(database.ConnectionString);
-            connection.Open();
+            using (var scope = database.BeginWrite())
+            {
+                using var command = scope.Connection.CreateCommand();
+                command.Transaction = scope.Transaction;
+                command.CommandText = $"""
+                                      UPDATE main.zkill_killmails
+                                      SET is_qualifying = 0
+                                      WHERE is_qualifying = 1
+                                        AND unique_attacker_count >= {configuredThreshold};
+                                      """;
+                command.ExecuteNonQuery();
 
-            using var command = connection.CreateCommand();
-            command.CommandText = $"""
-                                  UPDATE main.zkill_killmails
-                                  SET is_qualifying = FALSE
-                                  WHERE is_qualifying = TRUE
-                                    AND unique_attacker_count >= {configuredThreshold};
-                                  """;
-            command.ExecuteNonQuery();
+                scope.Commit();
+            }
 
             database.SetLastAppliedQualificationFleetThreshold(configuredThreshold);
             return;

@@ -1,5 +1,4 @@
 using System.Data;
-using DuckDB.NET.Data;
 using Killright.Shared.Data;
 using Killright.Shared.Time;
 using Killright.Storage.Database;
@@ -40,8 +39,8 @@ public sealed class DiagnosticsDataService
             ExpiredKillmailRows = ExecuteScalarInt($"""
                 SELECT COUNT(*)
                 FROM main.zkill_killmails
-                WHERE is_qualifying = FALSE
-                  AND kill_time_utc < '{ApplicationClock.UtcNow.AddDays(-14).UtcDateTime:O}';
+                WHERE is_qualifying = 0
+                  AND kill_time_utc < {SqlValueFormatter.Date(ApplicationClock.UtcNow.AddDays(-14))};
                 """),
             CurrentUtc = DateTimeOffset.UtcNow,
             EffectiveUtc = ApplicationClock.UtcNow,
@@ -55,8 +54,7 @@ public sealed class DiagnosticsDataService
 
     public DataTable LoadRows(string sql)
     {
-        using var connection = new DuckDBConnection(_database.ConnectionString);
-        connection.Open();
+        using var connection = _database.OpenConnection();
 
         using var command = connection.CreateCommand();
         command.CommandText = sql;
@@ -71,18 +69,19 @@ public sealed class DiagnosticsDataService
 
     public void ExecuteNonQuery(string sql)
     {
-        using var connection = new DuckDBConnection(_database.ConnectionString);
-        connection.Open();
+        using var scope = _database.BeginWrite();
 
-        using var command = connection.CreateCommand();
+        using var command = scope.Connection.CreateCommand();
+        command.Transaction = scope.Transaction;
         command.CommandText = sql;
         command.ExecuteNonQuery();
+
+        scope.Commit();
     }
 
     private (long? buildNumber, DateTimeOffset? lastCheckedUtc, DateTimeOffset? lastUpdatedUtc, string? lastCheckResult) LoadSdeMetadata()
     {
-        using var connection = new DuckDBConnection(_database.ConnectionString);
-        connection.Open();
+        using var connection = _database.OpenConnection();
 
         using var command = connection.CreateCommand();
         command.CommandText = """
@@ -105,8 +104,7 @@ public sealed class DiagnosticsDataService
 
     private int ExecuteScalarInt(string sql)
     {
-        using var connection = new DuckDBConnection(_database.ConnectionString);
-        connection.Open();
+        using var connection = _database.OpenConnection();
 
         using var command = connection.CreateCommand();
         command.CommandText = sql;

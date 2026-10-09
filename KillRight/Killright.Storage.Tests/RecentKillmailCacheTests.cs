@@ -1,4 +1,4 @@
-using DuckDB.NET.Data;
+using Microsoft.Data.Sqlite;
 using Killright.Shared.zKill;
 using Killright.Storage.Database;
 using Killright.Storage.Killmails;
@@ -6,7 +6,7 @@ using Xunit;
 
 namespace Killright.Storage.Tests;
 
-public sealed class DuckDbRecentKillmailCacheTests
+public sealed class RecentKillmailCacheTests
 {
     private const long ScannedCharacterId = 95465499;
     private const long OtherCharacterId = 91321792;
@@ -266,18 +266,17 @@ public sealed class DuckDbRecentKillmailCacheTests
         Assert.Null(result);
     }
 
-    private static (KillRightDatabase Database, DuckDbRecentKillmailCache Cache) CreateCache(int recentWindowDays)
+    private static (KillRightDatabase Database, RecentKillmailCache Cache) CreateCache(int recentWindowDays)
     {
-        var path = Path.Combine(Path.GetTempPath(), $"recentKillmailCache.{Guid.NewGuid():N}.duckdb");
+        var path = Path.Combine(Path.GetTempPath(), $"recentKillmailCache.{Guid.NewGuid():N}.db");
         var database = new KillRightDatabase(new KillRightDatabaseOptions { DatabasePath = path });
         database.EnsureCreated();
-        return (database, new DuckDbRecentKillmailCache(database, recentWindowDays));
+        return (database, new RecentKillmailCache(database, recentWindowDays));
     }
 
     private static void InsertActivityCache(KillRightDatabase database, long characterId)
     {
-        using var connection = new DuckDBConnection(database.ConnectionString);
-        connection.Open();
+        using var connection = database.OpenConnection();
 
         using var command = connection.CreateCommand();
         command.CommandText = $"""
@@ -287,8 +286,8 @@ public sealed class DuckDbRecentKillmailCacheTests
                                   checked_at_utc
                               ) VALUES (
                                   {characterId},
-                                  TRUE,
-                                  '{DateTimeOffset.UtcNow.UtcDateTime:O}'
+                                  1,
+                                  {DateTimeOffset.UtcNow.ToUnixTimeSeconds()}
                               );
                               """;
         command.ExecuteNonQuery();
@@ -303,8 +302,7 @@ public sealed class DuckDbRecentKillmailCacheTests
         long? victimCharacterId = null,
         long victimShipTypeId = 587)
     {
-        using var connection = new DuckDBConnection(database.ConnectionString);
-        connection.Open();
+        using var connection = database.OpenConnection();
 
         using var command = connection.CreateCommand();
         command.CommandText = $"""
@@ -324,16 +322,16 @@ public sealed class DuckDbRecentKillmailCacheTests
                               ) VALUES (
                                   {killmailId},
                                   'hash{killmailId}',
-                                  '{killTimeUtc.UtcDateTime:O}',
+                                  {killTimeUtc.ToUnixTimeSeconds()},
                                   30000142,
                                   40000001,
                                   {(victimCharacterId?.ToString() ?? "NULL")},
                                   {victimShipTypeId},
                                   2,
-                                  {(isSolo ? "TRUE" : "FALSE")},
-                                  FALSE,
-                                  {(isQualifying ? "TRUE" : "FALSE")},
-                                  '{DateTimeOffset.UtcNow.UtcDateTime:O}'
+                                  {(isSolo ? "1" : "0")},
+                                  0,
+                                  {(isQualifying ? "1" : "0")},
+                                  {DateTimeOffset.UtcNow.ToUnixTimeSeconds()}
                               );
                               """;
         command.ExecuteNonQuery();
@@ -341,8 +339,7 @@ public sealed class DuckDbRecentKillmailCacheTests
 
     private static void InsertAttacker(KillRightDatabase database, long killmailId, long characterId, long? weaponTypeId = null)
     {
-        using var connection = new DuckDBConnection(database.ConnectionString);
-        connection.Open();
+        using var connection = database.OpenConnection();
 
         using var command = connection.CreateCommand();
         command.CommandText = $"""
@@ -367,8 +364,7 @@ public sealed class DuckDbRecentKillmailCacheTests
 
     private static bool KillmailExists(KillRightDatabase database, long killmailId)
     {
-        using var connection = new DuckDBConnection(database.ConnectionString);
-        connection.Open();
+        using var connection = database.OpenConnection();
 
         using var command = connection.CreateCommand();
         command.CommandText = $"SELECT COUNT(*) FROM main.zkill_killmails WHERE killmail_id = {killmailId};";
@@ -378,8 +374,7 @@ public sealed class DuckDbRecentKillmailCacheTests
 
     private static int CountAttackers(KillRightDatabase database, long killmailId)
     {
-        using var connection = new DuckDBConnection(database.ConnectionString);
-        connection.Open();
+        using var connection = database.OpenConnection();
 
         using var command = connection.CreateCommand();
         command.CommandText = $"SELECT COUNT(*) FROM main.zkill_killmail_attackers WHERE killmail_id = {killmailId};";

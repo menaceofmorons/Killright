@@ -1,5 +1,5 @@
 using System.Collections.Concurrent;
-using DuckDB.NET.Data;
+using Microsoft.Data.Sqlite;
 using Killright.Shared.Data;
 using Killright.Shared.Sde;
 using Killright.Storage.Database;
@@ -7,7 +7,7 @@ using Killright.Storage.Diagnostics;
 
 namespace Killright.Storage.Sde;
 
-public sealed class DuckDbSdeReferenceDataStore : ISdeReferenceDataStore
+public sealed class SdeReferenceDataStore : ISdeReferenceDataStore
 {
     private const int InsertBatchSize = 2000;
 
@@ -17,7 +17,7 @@ public sealed class DuckDbSdeReferenceDataStore : ISdeReferenceDataStore
     private IReadOnlyDictionary<long, string>? _factionNames;
     private IReadOnlySet<long>? _npcCorporationIds;
 
-    public DuckDbSdeReferenceDataStore(KillRightDatabase database)
+    public SdeReferenceDataStore(KillRightDatabase database)
     {
         _database = database;
     }
@@ -27,8 +27,7 @@ public sealed class DuckDbSdeReferenceDataStore : ISdeReferenceDataStore
         if (_typeNames.TryGetValue(typeId, out var cached))
             return cached;
 
-        using var connection = new DuckDBConnection(_database.ConnectionString);
-        connection.Open();
+        using var connection = _database.OpenConnection();
 
         using var command = connection.CreateCommand();
         command.CommandText = $"SELECT name FROM main.sde_types WHERE type_id = {typeId} LIMIT 1;";
@@ -46,8 +45,7 @@ public sealed class DuckDbSdeReferenceDataStore : ISdeReferenceDataStore
         if (_solarSystemNames.TryGetValue(systemId, out var cached))
             return cached;
 
-        using var connection = new DuckDBConnection(_database.ConnectionString);
-        connection.Open();
+        using var connection = _database.OpenConnection();
 
         using var command = connection.CreateCommand();
         command.CommandText = $"SELECT name FROM main.sde_solar_systems WHERE system_id = {systemId} LIMIT 1;";
@@ -68,8 +66,7 @@ public sealed class DuckDbSdeReferenceDataStore : ISdeReferenceDataStore
         {
             try
             {
-                using var connection = new DuckDBConnection(_database.ConnectionString);
-                connection.Open();
+                using var connection = _database.OpenConnection();
 
                 using var command = connection.CreateCommand();
                 command.CommandText = "SELECT faction_id, name FROM main.sde_factions;";
@@ -101,8 +98,7 @@ public sealed class DuckDbSdeReferenceDataStore : ISdeReferenceDataStore
 
     public bool IsNpcCorporation(long corporationId)
     {
-        using var connection = new DuckDBConnection(_database.ConnectionString);
-        connection.Open();
+        using var connection = _database.OpenConnection();
 
         using var command = connection.CreateCommand();
         command.CommandText = $"SELECT 1 FROM main.sde_npc_corporations WHERE corporation_id = {corporationId} LIMIT 1;";
@@ -119,8 +115,7 @@ public sealed class DuckDbSdeReferenceDataStore : ISdeReferenceDataStore
 
         try
         {
-            using var connection = new DuckDBConnection(_database.ConnectionString);
-            connection.Open();
+            using var connection = _database.OpenConnection();
 
             using var command = connection.CreateCommand();
             command.CommandText = "SELECT corporation_id FROM main.sde_npc_corporations;";
@@ -145,8 +140,7 @@ public sealed class DuckDbSdeReferenceDataStore : ISdeReferenceDataStore
 
     public Task<bool> HasReferenceDataAsync(CancellationToken cancellationToken = default)
     {
-        using var connection = new DuckDBConnection(_database.ConnectionString);
-        connection.Open();
+        using var connection = _database.OpenConnection();
 
         using var command = connection.CreateCommand();
         command.CommandText = """
@@ -161,8 +155,7 @@ public sealed class DuckDbSdeReferenceDataStore : ISdeReferenceDataStore
 
     public Task<SdeMetadata> GetMetadataAsync(CancellationToken cancellationToken = default)
     {
-        using var connection = new DuckDBConnection(_database.ConnectionString);
-        connection.Open();
+        using var connection = _database.OpenConnection();
 
         using var command = connection.CreateCommand();
         command.CommandText = """
@@ -186,21 +179,21 @@ public sealed class DuckDbSdeReferenceDataStore : ISdeReferenceDataStore
 
     public Task ReplaceTablesAsync(SdeReplacementData data, CancellationToken cancellationToken = default)
     {
-        using var connection = new DuckDBConnection(_database.ConnectionString);
-        connection.Open();
+        using var scope = _database.BeginWrite();
 
-        using var transaction = connection.BeginTransaction();
+        var connection = scope.Connection;
+        var transaction = scope.Transaction;
 
-        CreateStagingTable(connection, transaction, "sde_types_staging", "type_id BIGINT PRIMARY KEY, name TEXT NOT NULL");
+        CreateStagingTable(connection, transaction, "sde_types_staging", "type_id INTEGER NOT NULL PRIMARY KEY, name TEXT NOT NULL");
         InsertTypes(connection, transaction, "sde_types_staging", data.Types);
 
-        CreateStagingTable(connection, transaction, "sde_solar_systems_staging", "system_id BIGINT PRIMARY KEY, name TEXT NOT NULL");
+        CreateStagingTable(connection, transaction, "sde_solar_systems_staging", "system_id INTEGER NOT NULL PRIMARY KEY, name TEXT NOT NULL");
         InsertSolarSystems(connection, transaction, "sde_solar_systems_staging", data.SolarSystems);
 
-        CreateStagingTable(connection, transaction, "sde_npc_corporations_staging", "corporation_id BIGINT PRIMARY KEY");
+        CreateStagingTable(connection, transaction, "sde_npc_corporations_staging", "corporation_id INTEGER NOT NULL PRIMARY KEY");
         InsertNpcCorporationIds(connection, transaction, "sde_npc_corporations_staging", data.NpcCorporationIds);
 
-        CreateStagingTable(connection, transaction, "sde_factions_staging", "faction_id BIGINT PRIMARY KEY, name TEXT");
+        CreateStagingTable(connection, transaction, "sde_factions_staging", "faction_id INTEGER NOT NULL PRIMARY KEY, name TEXT");
         InsertFactions(connection, transaction, "sde_factions_staging", data.Factions ?? []);
 
         SwapStagingTable(connection, transaction, "sde_types");
@@ -222,7 +215,7 @@ public sealed class DuckDbSdeReferenceDataStore : ISdeReferenceDataStore
             updateMetadata.ExecuteNonQuery();
         }
 
-        transaction.Commit();
+        scope.Commit();
 
         _typeNames.Clear();
         _solarSystemNames.Clear();
@@ -234,10 +227,10 @@ public sealed class DuckDbSdeReferenceDataStore : ISdeReferenceDataStore
 
     public Task RecordCheckAsync(DateTimeOffset attemptedUtc, string checkResult, bool succeeded, CancellationToken cancellationToken = default)
     {
-        using var connection = new DuckDBConnection(_database.ConnectionString);
-        connection.Open();
+        using var scope = _database.BeginWrite();
 
-        using var command = connection.CreateCommand();
+        using var command = scope.Connection.CreateCommand();
+        command.Transaction = scope.Transaction;
         command.CommandText = succeeded
             ? $"""
               UPDATE main.sde_metadata
@@ -252,24 +245,29 @@ public sealed class DuckDbSdeReferenceDataStore : ISdeReferenceDataStore
               """;
         command.ExecuteNonQuery();
 
+        scope.Commit();
+
         return Task.CompletedTask;
     }
 
     private static void CreateStagingTable(
-        DuckDBConnection connection,
-        DuckDBTransaction transaction,
+        SqliteConnection connection,
+        SqliteTransaction transaction,
         string tableName,
         string columns)
     {
         using var command = connection.CreateCommand();
         command.Transaction = transaction;
-        command.CommandText = $"CREATE OR REPLACE TABLE main.{tableName} ({columns});";
+        command.CommandText = $"DROP TABLE IF EXISTS main.{tableName};";
+        command.ExecuteNonQuery();
+
+        command.CommandText = $"CREATE TABLE main.{tableName} ({columns}) STRICT;";
         command.ExecuteNonQuery();
     }
 
     private static void SwapStagingTable(
-        DuckDBConnection connection,
-        DuckDBTransaction transaction,
+        SqliteConnection connection,
+        SqliteTransaction transaction,
         string tableName)
     {
         using (var drop = connection.CreateCommand())
@@ -288,8 +286,8 @@ public sealed class DuckDbSdeReferenceDataStore : ISdeReferenceDataStore
     }
 
     private static void InsertTypes(
-        DuckDBConnection connection,
-        DuckDBTransaction transaction,
+        SqliteConnection connection,
+        SqliteTransaction transaction,
         string tableName,
         IReadOnlyList<SdeType> types)
     {
@@ -311,8 +309,8 @@ public sealed class DuckDbSdeReferenceDataStore : ISdeReferenceDataStore
     }
 
     private static void InsertSolarSystems(
-        DuckDBConnection connection,
-        DuckDBTransaction transaction,
+        SqliteConnection connection,
+        SqliteTransaction transaction,
         string tableName,
         IReadOnlyList<SdeSolarSystem> solarSystems)
     {
@@ -334,8 +332,8 @@ public sealed class DuckDbSdeReferenceDataStore : ISdeReferenceDataStore
     }
 
     private static void InsertFactions(
-        DuckDBConnection connection,
-        DuckDBTransaction transaction,
+        SqliteConnection connection,
+        SqliteTransaction transaction,
         string tableName,
         IReadOnlyList<SdeFaction> factions)
     {
@@ -357,8 +355,8 @@ public sealed class DuckDbSdeReferenceDataStore : ISdeReferenceDataStore
     }
 
     private static void InsertNpcCorporationIds(
-        DuckDBConnection connection,
-        DuckDBTransaction transaction,
+        SqliteConnection connection,
+        SqliteTransaction transaction,
         string tableName,
         IReadOnlyList<long> corporationIds)
     {

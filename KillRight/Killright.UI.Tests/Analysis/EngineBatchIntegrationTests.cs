@@ -25,7 +25,7 @@ public sealed class EngineBatchIntegrationTests
         if (dllPath is null)
             return;
 
-        var databasePath = Path.Combine(Path.GetTempPath(), $"engineBatch.{Guid.NewGuid():N}.duckdb");
+        var databasePath = Path.Combine(Path.GetTempPath(), $"engineBatch.{Guid.NewGuid():N}.db");
         var database = new KillRightDatabase(new KillRightDatabaseOptions { DatabasePath = databasePath });
         database.EnsureCreated();
         database.Open();
@@ -61,7 +61,7 @@ public sealed class EngineBatchIntegrationTests
         using var runtime = new KillrightEngineRuntime(dllPath, settingsPath);
         Assert.True(runtime.IsAvailable);
 
-        var reader = new EngineInputReader(database, new DuckDbSdeReferenceDataStore(database));
+        var reader = new EngineInputReader(database, new SdeReferenceDataStore(database));
         var results = await new RustRecentStyleClient(runtime, reader).AnalyzePilotsAsync([Lukas, Tral]);
 
         Assert.Equal(2, results.Count);

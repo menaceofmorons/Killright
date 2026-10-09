@@ -1,4 +1,4 @@
-using DuckDB.NET.Data;
+using Microsoft.Data.Sqlite;
 using Killright.Shared.Data;
 using Killright.Shared.zKill;
 using Killright.Storage.Database;
@@ -6,19 +6,18 @@ using Killright.Storage.Killmails;
 
 namespace Killright.Storage.zKill;
 
-public sealed class DuckDbPilotLastKillmailCache : IPilotLastKillmailCache
+public sealed class PilotLastKillmailCache : IPilotLastKillmailCache
 {
     private readonly KillRightDatabase _database;
 
-    public DuckDbPilotLastKillmailCache(KillRightDatabase database)
+    public PilotLastKillmailCache(KillRightDatabase database)
     {
         _database = database;
     }
 
     public Task<PilotLastKillmailRecord?> GetAsync(long characterId, CancellationToken cancellationToken = default)
     {
-        using var connection = new DuckDBConnection(_database.ConnectionString);
-        connection.Open();
+        using var connection = _database.OpenConnection();
 
         using var command = connection.CreateCommand();
         command.CommandText = $"""
@@ -42,7 +41,7 @@ public sealed class DuckDbPilotLastKillmailCache : IPilotLastKillmailCache
         if (!reader.Read())
             return Task.FromResult<PilotLastKillmailRecord?>(null);
 
-        var checkedAtUtc = reader.GetDateTimeOffset(9);
+        var checkedAtUtc = reader.GetUtcDateTimeOffset(9);
 
         if (!reader.GetBoolean(0))
             return Task.FromResult<PilotLastKillmailRecord?>(
@@ -53,7 +52,7 @@ public sealed class DuckDbPilotLastKillmailCache : IPilotLastKillmailCache
             : zKillActivityType.Kill;
 
         var killmail = new PilotRecentKillmail(
-            reader.GetDateTimeOffset(2),
+            reader.GetUtcDateTimeOffset(2),
             activityType,
             reader.GetInt64(4),
             reader.GetNullableInt64(5),
@@ -67,19 +66,20 @@ public sealed class DuckDbPilotLastKillmailCache : IPilotLastKillmailCache
 
     public Task UpsertAsync(PilotLastKillmailRecord record, CancellationToken cancellationToken = default)
     {
-        using var connection = new DuckDBConnection(_database.ConnectionString);
-        connection.Open();
+        using var scope = _database.BeginWrite();
 
-        using (var deleteCommand = connection.CreateCommand())
+        using (var deleteCommand = scope.Connection.CreateCommand())
         {
+            deleteCommand.Transaction = scope.Transaction;
             deleteCommand.CommandText = $"DELETE FROM main.pilot_last_killmail_cache WHERE character_id = {record.CharacterId};";
             deleteCommand.ExecuteNonQuery();
         }
 
         var killmail = record.HasKillmail ? record.Killmail : null;
 
-        using (var insertCommand = connection.CreateCommand())
+        using (var insertCommand = scope.Connection.CreateCommand())
         {
+            insertCommand.Transaction = scope.Transaction;
             insertCommand.CommandText = $"""
                                         INSERT INTO main.pilot_last_killmail_cache (
                                             character_id,
@@ -109,6 +109,8 @@ public sealed class DuckDbPilotLastKillmailCache : IPilotLastKillmailCache
                                         """;
             insertCommand.ExecuteNonQuery();
         }
+
+        scope.Commit();
 
         return Task.CompletedTask;
     }

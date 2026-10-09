@@ -30,8 +30,8 @@
     }
   },
   "database": {
-    "memoryLimit": "1GB",
-    "threads": 4,
+    "busyTimeoutSeconds": 5,
+    "pageCacheMegabytes": 64,
     "idleCheckpointSeconds": 30
   },
   "sde": {

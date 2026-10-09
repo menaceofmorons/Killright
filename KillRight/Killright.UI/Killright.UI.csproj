@@ -18,13 +18,6 @@
     </ItemGroup>
 
     <ItemGroup>
-      <PackageReference Include="DuckDB.NET.Data.Full" Version="1.5.3" />
-    </ItemGroup>
-
-    <ItemGroup>
-        <None Include="$(NuGetPackageRoot)duckdb.net.bindings.full\1.5.3\runtimes\win-x64\native\duckdb.dll"
-              Link="duckdb.dll"
-              CopyToOutputDirectory="PreserveNewest" />
         <None Include="config\settings.json"
               CopyToOutputDirectory="PreserveNewest" />
         <None Include="..\..\killright_engine\target\debug\killright_engine.dll"

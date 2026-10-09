@@ -177,9 +177,9 @@ public sealed record ZkillSettings
 
 public sealed record DatabaseSettings
 {
-    public string MemoryLimit { get; init; } = KillRightDatabaseOptions.DefaultMemoryLimit;
+    public int BusyTimeoutSeconds { get; init; } = KillRightDatabaseOptions.DefaultBusyTimeoutSeconds;
 
-    public int Threads { get; init; } = KillRightDatabaseOptions.DefaultThreads;
+    public int PageCacheMegabytes { get; init; } = KillRightDatabaseOptions.DefaultPageCacheMegabytes;
 
     public int IdleCheckpointSeconds { get; init; } = KillRightDatabaseOptions.DefaultIdleCheckpointSeconds;
 
@@ -187,11 +187,9 @@ public sealed record DatabaseSettings
     {
         return new DatabaseSettings
         {
-            MemoryLimit = KillRightDatabaseOptions.NormalizeMemoryLimit(MemoryLimit),
-            Threads = KillRightDatabaseOptions.NormalizeThreads(Threads),
-            IdleCheckpointSeconds = IdleCheckpointSeconds >= 1
-                ? IdleCheckpointSeconds
-                : KillRightDatabaseOptions.DefaultIdleCheckpointSeconds
+            BusyTimeoutSeconds = KillRightDatabaseOptions.NormalizeBusyTimeoutSeconds(BusyTimeoutSeconds),
+            PageCacheMegabytes = KillRightDatabaseOptions.NormalizePageCacheMegabytes(PageCacheMegabytes),
+            IdleCheckpointSeconds = KillRightDatabaseOptions.NormalizeIdleCheckpointSeconds(IdleCheckpointSeconds)
         };
     }
 }

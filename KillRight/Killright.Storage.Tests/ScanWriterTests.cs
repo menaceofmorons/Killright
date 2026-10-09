@@ -1,4 +1,4 @@
-using DuckDB.NET.Data;
+using Microsoft.Data.Sqlite;
 using Killright.Integration.zKill;
 using Killright.Shared;
 using Killright.Shared.Killmails;
@@ -33,10 +33,10 @@ public sealed class ScanWriterTests
         using (var session = database.OpenScanSession())
             ScanWriter.Commit(session, batch, Threshold, Now);
 
-        var identity = await new DuckDbPilotIdentityCache(database).GetRecordAsync("Lukas Naarii");
-        var names = await new DuckDbEsiEntityNameCache(database).GetNamesAsync([98000001]);
-        var statistics = await new DuckDbzKillStatisticsCache(database).GetAsync(Lukas, TimeSpan.FromDays(30));
-        var activity = await new DuckDbzKillActivityCache(database).GetAsync(Lukas);
+        var identity = await new PilotIdentityCache(database).GetRecordAsync("Lukas Naarii");
+        var names = await new EsiEntityNameCache(database).GetNamesAsync([98000001]);
+        var statistics = await new zKillStatisticsCache(database).GetAsync(Lukas, TimeSpan.FromDays(30));
+        var activity = await new zKillActivityCache(database).GetAsync(Lukas);
 
         Assert.Equal(Lukas, identity!.CharacterId);
         Assert.Equal("Test Corp", names[98000001]);
@@ -64,8 +64,8 @@ public sealed class ScanWriterTests
             ScanWriter.Commit(session, second, Threshold, Now);
         }
 
-        var identity = await new DuckDbPilotIdentityCache(database).GetRecordAsync("Lukas Naarii");
-        var statistics = await new DuckDbzKillStatisticsCache(database).GetAsync(Lukas, TimeSpan.FromDays(30));
+        var identity = await new PilotIdentityCache(database).GetRecordAsync("Lukas Naarii");
+        var statistics = await new zKillStatisticsCache(database).GetAsync(Lukas, TimeSpan.FromDays(30));
 
         Assert.Equal(2, identity!.CorporationId);
         Assert.Equal(20, statistics!.shipsDestroyed);
@@ -85,7 +85,7 @@ public sealed class ScanWriterTests
         using (var session = database.OpenScanSession())
             ScanWriter.Commit(session, batch, Threshold, Now);
 
-        var statistics = await new DuckDbzKillStatisticsCache(database).GetAsync(Lukas, TimeSpan.FromDays(30));
+        var statistics = await new zKillStatisticsCache(database).GetAsync(Lukas, TimeSpan.FromDays(30));
 
         Assert.False(statistics!.NoHistory);
     }
@@ -229,10 +229,10 @@ public sealed class ScanWriterTests
 
         using (var session = database.OpenScanSession())
         {
-            var identities = await new DuckDbPilotIdentityCache(database).GetRecordsAsync(["Lukas Naarii", "Nobody"], session);
-            var names = await new DuckDbEsiEntityNameCache(database).GetNamesAsync([98000001], session);
-            var statistics = await new DuckDbzKillStatisticsCache(database).GetManyAsync([Lukas, Tral], TimeSpan.FromDays(30), session);
-            var activities = await new DuckDbzKillActivityCache(database).GetManyAsync([Lukas, Tral], session);
+            var identities = await new PilotIdentityCache(database).GetRecordsAsync(["Lukas Naarii", "Nobody"], session);
+            var names = await new EsiEntityNameCache(database).GetNamesAsync([98000001], session);
+            var statistics = await new zKillStatisticsCache(database).GetManyAsync([Lukas, Tral], TimeSpan.FromDays(30), session);
+            var activities = await new zKillActivityCache(database).GetManyAsync([Lukas, Tral], session);
             ScanWriter.Commit(session, write, Threshold, Now);
 
             Assert.Single(identities);
@@ -248,7 +248,7 @@ public sealed class ScanWriterTests
     public async Task GetRecordsAsync_MatchesPerNameReadsAndKeysByNormalizedName()
     {
         var database = CreateDatabase();
-        var cache = new DuckDbPilotIdentityCache(database);
+        var cache = new PilotIdentityCache(database);
         await cache.UpsertRecordAsync(Identity("LUKAS NAARII", Lukas, birthday: new DateOnly(2015, 6, 12)));
         await cache.UpsertRecordAsync(Identity("T'RAL VSENGNE", Tral));
 
@@ -267,14 +267,14 @@ public sealed class ScanWriterTests
     public async Task GetManyAsync_Statistics_HonoursMaximumAgeAndMonthsProcessed()
     {
         var database = CreateDatabase();
-        var cache = new DuckDbzKillStatisticsCache(database);
+        var cache = new zKillStatisticsCache(database);
         await cache.UpsertAsync(Lukas, Statistics(), "Gang", false);
         await cache.UpsertAsync(Tral, Statistics(shipsDestroyed: 5), "Solo", false);
 
         using (var connection = database.OpenConnection())
         {
             using var command = connection.CreateCommand();
-            command.CommandText = $"UPDATE main.zkill_statistics_cache SET checked_at_utc = '2020-01-01T00:00:00.0000000Z' WHERE character_id = {Tral};";
+            command.CommandText = $"UPDATE main.zkill_statistics_cache SET checked_at_utc = 1577836800 WHERE character_id = {Tral};";
             command.ExecuteNonQuery();
         }
 
@@ -294,7 +294,7 @@ public sealed class ScanWriterTests
         first.AddActivity(new zKillActivity(Lukas, true, 0, 0, Now, zKillActivityType.Loss, Now, LastKillUtc: Now.AddDays(-40)));
         var second = new ScanWriteBatch();
         second.AddActivity(new zKillActivity(Lukas, true, 0, 0, Now, zKillActivityType.Loss, Now, LastKillUtc: Now.AddDays(-10)));
-        var cache = new DuckDbzKillActivityCache(database);
+        var cache = new zKillActivityCache(database);
 
         using (var session = database.OpenScanSession())
             ScanWriter.Commit(session, first, Threshold, Now);
@@ -309,27 +309,22 @@ public sealed class ScanWriterTests
     }
 
     [Fact]
-    public async Task EnsureCreated_ActivityTableWithoutLastKillColumn_GainsTheColumnAndKeepsItsRows()
+    public async Task GetAsync_ActivityRowWithoutOptionalTimes_ReturnsNullTimes()
     {
         var database = CreateDatabase();
 
         using (var connection = database.OpenConnection())
         {
-            using var drop = connection.CreateCommand();
-            drop.CommandText = "ALTER TABLE main.zkill_activity_cache DROP COLUMN last_kill_utc;";
-            drop.ExecuteNonQuery();
-
             using var insert = connection.CreateCommand();
-            insert.CommandText = $"INSERT INTO main.zkill_activity_cache (character_id, has_public_activity_data, checked_at_utc) VALUES ({Lukas}, TRUE, '2026-09-30T12:00:00.0000000Z');";
+            insert.CommandText = $"INSERT INTO main.zkill_activity_cache (character_id, has_public_activity_data, checked_at_utc) VALUES ({Lukas}, 1, 1790769600);";
             insert.ExecuteNonQuery();
         }
 
-        database.EnsureCreated();
-
-        var activity = await new DuckDbzKillActivityCache(database).GetAsync(Lukas);
+        var activity = await new zKillActivityCache(database).GetAsync(Lukas);
 
         Assert.NotNull(activity);
         Assert.Null(activity!.LastKillUtc);
+        Assert.Null(activity.LastActiveUtc);
         Assert.Equal(1, CountRows(database, "zkill_activity_cache"));
     }
 
@@ -337,7 +332,7 @@ public sealed class ScanWriterTests
     public async Task GetManyAsync_Activity_MatchesPerPilotReads()
     {
         var database = CreateDatabase();
-        var cache = new DuckDbzKillActivityCache(database);
+        var cache = new zKillActivityCache(database);
         await cache.UpsertAsync(new zKillActivity(Lukas, true, 3, 1, Now, zKillActivityType.Loss, Now, null, Now, Now.AddDays(-7)));
 
         var many = await cache.GetManyAsync([Lukas, Tral]);
@@ -349,7 +344,7 @@ public sealed class ScanWriterTests
 
     private static KillRightDatabase CreateDatabase()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"scanWriter.{Guid.NewGuid():N}.duckdb");
+        var path = Path.Combine(Path.GetTempPath(), $"scanWriter.{Guid.NewGuid():N}.db");
         var database = new KillRightDatabase(new KillRightDatabaseOptions { DatabasePath = path });
         database.EnsureCreated();
 
@@ -430,6 +425,6 @@ public sealed class ScanWriterTests
         using var command = connection.CreateCommand();
         command.CommandText = $"SELECT cached_at_utc FROM main.zkill_killmails WHERE killmail_id = {killmailId};";
 
-        return DateTimeOffset.Parse(Convert.ToString(command.ExecuteScalar())!, null, System.Globalization.DateTimeStyles.AssumeUniversal);
+        return DateTimeOffset.FromUnixTimeSeconds(Convert.ToInt64(command.ExecuteScalar()));
     }
 }

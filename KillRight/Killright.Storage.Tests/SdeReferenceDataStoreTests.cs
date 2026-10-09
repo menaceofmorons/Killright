@@ -1,4 +1,4 @@
-using DuckDB.NET.Data;
+using Microsoft.Data.Sqlite;
 using Killright.Shared.Sde;
 using Killright.Storage.Database;
 using Killright.Storage.Sde;
@@ -6,7 +6,7 @@ using Xunit;
 
 namespace Killright.Storage.Tests;
 
-public sealed class DuckDbSdeReferenceDataStoreTests
+public sealed class SdeReferenceDataStoreTests
 {
     [Fact]
     public async Task GetMetadataAsync_FreshDatabase_ReturnsAllNullFields()
@@ -142,9 +142,8 @@ public sealed class DuckDbSdeReferenceDataStoreTests
     {
         var (database, store) = CreateStore();
 
-        using (var connection = new DuckDBConnection(database.ConnectionString))
+        using (var connection = database.OpenConnection())
         {
-            connection.Open();
             using var command = connection.CreateCommand();
             command.CommandText = "DROP TABLE main.sde_npc_corporations;";
             command.ExecuteNonQuery();
@@ -217,6 +216,45 @@ public sealed class DuckDbSdeReferenceDataStoreTests
 
         var metadata = await store.GetMetadataAsync();
         Assert.Equal(2, metadata.BuildNumber);
+    }
+
+    [Fact]
+    public async Task ReplaceTablesAsync_FailureMidWay_LeavesThePreviousTablesIntact()
+    {
+        var (database, store) = CreateStore();
+
+        await store.ReplaceTablesAsync(new SdeReplacementData(
+            Types: [new SdeType(587, "Rifter")],
+            SolarSystems: [new SdeSolarSystem(30000142, "Jita")],
+            NpcCorporationIds: [1000001],
+            BuildNumber: 1,
+            UpdatedUtc: DateTimeOffset.UtcNow,
+            Factions: [new SdeFaction(500004, "Gallente Federation")]));
+
+        await Assert.ThrowsAnyAsync<Exception>(() => store.ReplaceTablesAsync(new SdeReplacementData(
+            Types: [new SdeType(11567, "Crow")],
+            SolarSystems: [new SdeSolarSystem(30000144, "Perimeter"), new SdeSolarSystem(30000144, "Perimeter Again")],
+            NpcCorporationIds: [1000132],
+            BuildNumber: 2,
+            UpdatedUtc: DateTimeOffset.UtcNow)));
+
+        Assert.Equal("Rifter", store.GetTypeName(587));
+        Assert.Null(store.GetTypeName(11567));
+        Assert.Equal("Jita", store.GetSolarSystemName(30000142));
+        Assert.True(store.IsNpcCorporation(1000001));
+        Assert.Equal("Gallente Federation", store.GetFactionName(500004));
+        Assert.Equal(1, (await store.GetMetadataAsync()).BuildNumber);
+        Assert.Equal(0, CountRows(database, "sqlite_schema WHERE name LIKE '%_staging'"));
+    }
+
+    [Fact]
+    public async Task ReplaceTablesAsync_ReplacedTables_StayStrict()
+    {
+        var (database, store) = CreateStore();
+
+        await store.ReplaceTablesAsync(SdeData(types: [new SdeType(587, "Rifter")], factions: [new SdeFaction(500004, "Gallente Federation")]));
+
+        Assert.Equal(4, CountRows(database, "pragma_table_list WHERE schema = 'main' AND strict = 1 AND name IN ('sde_types', 'sde_solar_systems', 'sde_npc_corporations', 'sde_factions')"));
     }
 
     [Fact]
@@ -398,8 +436,7 @@ public sealed class DuckDbSdeReferenceDataStoreTests
 
     private static long CountRows(KillRightDatabase database, string table)
     {
-        using var connection = new DuckDBConnection(database.ConnectionString);
-        connection.Open();
+        using var connection = database.OpenConnection();
 
         using var command = connection.CreateCommand();
         command.CommandText = $"SELECT COUNT(*) FROM {table};";
@@ -409,19 +446,18 @@ public sealed class DuckDbSdeReferenceDataStoreTests
 
     private static void ExecuteNonQuery(KillRightDatabase database, string sql)
     {
-        using var connection = new DuckDBConnection(database.ConnectionString);
-        connection.Open();
+        using var connection = database.OpenConnection();
 
         using var command = connection.CreateCommand();
         command.CommandText = sql;
         command.ExecuteNonQuery();
     }
 
-    private static (KillRightDatabase Database, DuckDbSdeReferenceDataStore Store) CreateStore()
+    private static (KillRightDatabase Database, SdeReferenceDataStore Store) CreateStore()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"sdeReferenceData.{Guid.NewGuid():N}.duckdb");
+        var path = Path.Combine(Path.GetTempPath(), $"sdeReferenceData.{Guid.NewGuid():N}.db");
         var database = new KillRightDatabase(new KillRightDatabaseOptions { DatabasePath = path });
         database.EnsureCreated();
-        return (database, new DuckDbSdeReferenceDataStore(database));
+        return (database, new SdeReferenceDataStore(database));
     }
 }

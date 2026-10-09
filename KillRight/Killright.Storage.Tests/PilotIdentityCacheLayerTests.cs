@@ -1,4 +1,4 @@
-using DuckDB.NET.Data;
+using Microsoft.Data.Sqlite;
 using Killright.Core.Models;
 using Killright.Shared;
 using Killright.Storage.Database;
@@ -7,7 +7,7 @@ using Xunit;
 
 namespace Killright.Storage.Tests;
 
-public sealed class DuckDbPilotIdentityCacheLayerTests
+public sealed class PilotIdentityCacheLayerTests
 {
     [Fact]
     public async Task UpsertRecordAsync_LayeredRecord_RoundTripsThroughGetRecordAsync()
@@ -120,41 +120,11 @@ public sealed class DuckDbPilotIdentityCacheLayerTests
         Assert.NotNull(record!.SecurityStatusAtUtc);
     }
 
-    [Fact]
-    public void EnsureCreated_LegacyRowWithoutSecurityStatusTimestamp_UsesCachedTimeAsSecurityStatusTime()
+    private static (KillRightDatabase Database, PilotIdentityCache Cache) CreateCache()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"pilotIdentityMigration.{Guid.NewGuid():N}.duckdb");
+        var path = Path.Combine(Path.GetTempPath(), $"pilotIdentityLayers.{Guid.NewGuid():N}.db");
         var database = new KillRightDatabase(new KillRightDatabaseOptions { DatabasePath = path });
         database.EnsureCreated();
-
-        using (var connection = new DuckDBConnection(database.ConnectionString))
-        {
-            connection.Open();
-
-            using var command = connection.CreateCommand();
-            command.CommandText = """
-                                  INSERT INTO main.pilot_identity_cache (input_name, character_id, character_name, verify_status, security_status, cached_at_utc, security_status_at_utc)
-                                  VALUES ('LEGACY WITH STATUS', 1, 'Legacy With Status', 'Partial', 0.5, '2026-09-01T10:00:00Z', NULL),
-                                         ('LEGACY NO STATUS', 2, 'Legacy No Status', 'Partial', NULL, '2026-09-01T10:00:00Z', NULL);
-                                  """;
-            command.ExecuteNonQuery();
-        }
-
-        database.EnsureCreated();
-
-        var cache = new DuckDbPilotIdentityCache(database);
-        var withStatus = cache.GetRecordAsync("Legacy With Status").GetAwaiter().GetResult();
-        var withoutStatus = cache.GetRecordAsync("Legacy No Status").GetAwaiter().GetResult();
-
-        Assert.Equal(new DateTime(2026, 9, 1, 10, 0, 0), withStatus!.SecurityStatusAtUtc);
-        Assert.Null(withoutStatus!.SecurityStatusAtUtc);
-    }
-
-    private static (KillRightDatabase Database, DuckDbPilotIdentityCache Cache) CreateCache()
-    {
-        var path = Path.Combine(Path.GetTempPath(), $"pilotIdentityLayers.{Guid.NewGuid():N}.duckdb");
-        var database = new KillRightDatabase(new KillRightDatabaseOptions { DatabasePath = path });
-        database.EnsureCreated();
-        return (database, new DuckDbPilotIdentityCache(database));
+        return (database, new PilotIdentityCache(database));
     }
 }
