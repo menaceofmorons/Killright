@@ -1,0 +1,11 @@
+{
+  "worktree": {
+    "baseRef": "head"
+  },
+  "permissions": {
+    "deny": []
+  },
+  "enabledPlugins": {
+    "devfw@devframework": true
+  }
+}

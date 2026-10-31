@@ -1,0 +1,22 @@
+# >>> devframework (managed; edit in DevFramework) >>>
+# --- Agent team ---
+# Claude Code worktrees (Desktop session worktrees and subagent worktrees)
+.claude/worktrees/
+# Team Lead run marker (activates the lead guard hook in that worktree only)
+.claude/tlo-active
+# Personal settings
+.claude/settings.local.json
+
+# Dependencies and test output, wherever an agent leaves them (worktree root included)
+node_modules/
+test-results/
+# <<< devframework <<<
+
+# --- KillRight ---
+bin/
+obj/
+target/
+Packaging/out/
+*.db
+*.db-wal
+*.db-shm
