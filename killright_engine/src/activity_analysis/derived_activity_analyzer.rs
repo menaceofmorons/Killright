@@ -37,7 +37,7 @@ pub fn derive_activity(
         .filter(|(timestamp, _)| *timestamp >= cutoff)
         .collect::<Vec<_>>();
 
-    window.sort_by(|left, right| right.0.cmp(&left.0));
+    window.sort_by_key(|entry| std::cmp::Reverse(entry.0));
 
     let newest_non_pod_kill_time_utc = killmails
         .iter()

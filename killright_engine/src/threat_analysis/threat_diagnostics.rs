@@ -27,6 +27,10 @@ pub struct ThreatDiagnostics {
     pub floor_applied: bool,
 }
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "public engine API; signature is fixed by its callers"
+)]
 pub fn analyze_intrinsic_threat_diagnostics(
     configuration: &ThreatConfiguration,
     statistics: Option<&ZKillStatisticsSnapshot>,

@@ -360,7 +360,6 @@ mod tests {
     }
 
     #[test]
-    #[test]
     fn load_engine_settings_from_path_rejects_invalid_style_boundaries() {
         let path = std::env::temp_dir().join(format!(
             "killright-settings-invalid-style-{}.json",

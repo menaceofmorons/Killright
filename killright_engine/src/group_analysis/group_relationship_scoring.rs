@@ -302,9 +302,7 @@ pub(crate) fn chain_strength(
     let window = recent_window_days.max(1) as f64;
     let age_decay = (1.0 - chain_age_days / window).max(0.0);
 
-    (weaker_link_strength * chain_discount * age_decay)
-        .min(100.0)
-        .max(0.0)
+    (weaker_link_strength * chain_discount * age_decay).clamp(0.0, 100.0)
 }
 
 pub(crate) fn intermediary_bonus(

@@ -38,6 +38,10 @@ pub(crate) struct ThreatGate {
     pub cap: Option<i32>,
 }
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "public engine API; signature is fixed by its callers"
+)]
 pub fn analyze_intrinsic_threat(
     configuration: &ThreatConfiguration,
     statistics: Option<&ZKillStatisticsSnapshot>,
