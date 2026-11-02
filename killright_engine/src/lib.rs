@@ -1,3 +1,7 @@
+#![allow(
+    clippy::not_unsafe_ptr_arg_deref,
+    reason = "extern \"C\" entry points are the FFI surface; signatures are fixed by the managed caller"
+)]
 use chrono::{DateTime, Duration, Utc};
 use std::collections::{HashMap, HashSet};
 use std::ffi::{CStr, CString};
