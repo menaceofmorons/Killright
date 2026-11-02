@@ -2,6 +2,7 @@ using Microsoft.Data.Sqlite;
 using Killright.Integration.zKill;
 using Killright.Shared;
 using Killright.Shared.Killmails;
+using Killright.Shared.Time;
 using Killright.Shared.zKill;
 using Killright.Storage.Database;
 using Killright.Storage.Identity;
@@ -17,7 +18,7 @@ public sealed class ScanWriterTests
     private const long Tral = 91321792;
     private const long Symptom = 2112625428;
     private const int Threshold = 11;
-    private static readonly DateTimeOffset Now = new(2026, 9, 30, 12, 0, 0, TimeSpan.Zero);
+    private static readonly DateTimeOffset Now = TruncateToSecond(ApplicationClock.UtcNow);
 
     [Fact]
     public async Task Commit_WritesEveryTableInOneTransaction_AndReadsBackThroughTheCaches()
@@ -367,9 +368,14 @@ public sealed class ScanWriterTests
             CorporationId = corporationId,
             AllianceId = 99001,
             Birthday = birthday ?? new DateOnly(2015, 6, 12),
-            SecurityStatusAtUtc = new DateTime(2026, 9, 30, 11, 0, 0, DateTimeKind.Utc),
-            CachedAtUtc = new DateTime(2026, 9, 30, 11, 0, 0, DateTimeKind.Utc)
+            SecurityStatusAtUtc = Now.UtcDateTime.AddHours(-1),
+            CachedAtUtc = Now.UtcDateTime.AddHours(-1)
         };
+    }
+
+    private static DateTimeOffset TruncateToSecond(DateTimeOffset value)
+    {
+        return new DateTimeOffset(value.Ticks - value.Ticks % TimeSpan.TicksPerSecond, value.Offset);
     }
 
     private static zKillStatistics Statistics(int shipsDestroyed = 120)
@@ -391,7 +397,7 @@ public sealed class ScanWriterTests
         return new RawKillmail(
             killmailId,
             $"hash{killmailId}",
-            new DateTimeOffset(2026, 9, 29, 10, 0, 0, TimeSpan.Zero),
+            Now.AddHours(-26),
             30000142,
             40000001,
             999,
