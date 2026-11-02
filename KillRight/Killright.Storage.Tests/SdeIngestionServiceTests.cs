@@ -196,14 +196,19 @@ public sealed class SdeIngestionServiceTests
             client,
             store,
             checkIntervalHours: 24,
-            initialRetryDelay: TimeSpan.FromMilliseconds(5),
-            maximumRetryDelay: TimeSpan.FromMilliseconds(20));
+            initialRetryDelay: TimeSpan.Zero,
+            maximumRetryDelay: TimeSpan.Zero);
 
-        using var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromMilliseconds(500));
+        using var cancellationTokenSource = new CancellationTokenSource();
+        client.OnManifestCall = callCount =>
+        {
+            if (callCount == 3)
+                cancellationTokenSource.Cancel();
+        };
 
         await service.RunCheckWithRetryAsync(cancellationTokenSource.Token);
 
-        Assert.True(client.ManifestCallCount > 1);
+        Assert.Equal(3, client.ManifestCallCount);
 
         var metadata = await store.GetMetadataAsync();
         Assert.Equal("ManifestFailure", metadata.LastCheckResult);
@@ -274,11 +279,14 @@ public sealed class SdeIngestionServiceTests
 
         public int ManifestCallCount { get; private set; }
 
+        public Action<int>? OnManifestCall { get; set; }
+
         public int DownloadCallCount { get; private set; }
 
         public Task<SdeManifestResult> GetManifestAsync(CancellationToken cancellationToken = default)
         {
             ManifestCallCount++;
+            OnManifestCall?.Invoke(ManifestCallCount);
 
             var buildNumber = _manifestBuildNumbers.Count > 1
                 ? _manifestBuildNumbers.Dequeue()
