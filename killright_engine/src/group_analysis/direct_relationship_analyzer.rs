@@ -1,11 +1,11 @@
 use std::collections::HashSet;
 
+use crate::contracts::KillmailAttackerEvidence;
+use crate::contracts::PilotIdentitySnapshot;
 use crate::group_analysis::shared_relationship_evidence::{
     apply_after_split_rule, build_current_identity_index, build_shared_events_by_pair,
     group_attackers_by_killmail, is_currently_same_corporation_or_alliance,
 };
-use crate::contracts::KillmailAttackerEvidence;
-use crate::contracts::PilotIdentitySnapshot;
 use crate::shared::timing_recorder;
 
 pub const PROVISIONAL_MINIMUM_SHARED_EVENTS: i64 = 2;
@@ -38,7 +38,10 @@ pub fn analyze_direct_relationships(
     if timing_recorder::is_active() {
         timing_recorder::add_count(
             "direct_pair_events",
-            shared_events_by_pair.values().map(|events| events.len() as i64).sum(),
+            shared_events_by_pair
+                .values()
+                .map(|events| events.len() as i64)
+                .sum(),
         );
     }
 
@@ -117,7 +120,11 @@ mod tests {
         }
     }
 
-    fn identity(character_id: i64, corporation_id: Option<i64>, alliance_id: Option<i64>) -> PilotIdentitySnapshot {
+    fn identity(
+        character_id: i64,
+        corporation_id: Option<i64>,
+        alliance_id: Option<i64>,
+    ) -> PilotIdentitySnapshot {
         PilotIdentitySnapshot {
             input_name: character_id.to_string(),
             character_id: Some(character_id),
@@ -163,7 +170,10 @@ mod tests {
             evidence(2, 100, Some(1), None, "2026-09-12T00:00:00+00:00"),
             evidence(2, 200, Some(2), None, "2026-09-12T00:00:00+00:00"),
         ];
-        let identities = vec![identity(100, Some(GATE_CORP), None), identity(200, Some(GATE_CORP), None)];
+        let identities = vec![
+            identity(100, Some(GATE_CORP), None),
+            identity(200, Some(GATE_CORP), None),
+        ];
 
         let relationships = analyze_direct_relationships(
             &evidence_rows,
@@ -196,7 +206,10 @@ mod tests {
 
         assert_eq!(relationships.len(), 1);
         assert_eq!(relationships[0].counted_shared_kills, 3);
-        assert_eq!(relationships[0].last_counted_kill_time_utc, "2026-09-15T00:00:00+00:00");
+        assert_eq!(
+            relationships[0].last_counted_kill_time_utc,
+            "2026-09-15T00:00:00+00:00"
+        );
     }
 
     #[test]
@@ -220,7 +233,10 @@ mod tests {
 
         assert_eq!(relationships.len(), 1);
         assert_eq!(relationships[0].counted_shared_kills, 2);
-        assert_eq!(relationships[0].last_counted_kill_time_utc, "2026-09-03T00:00:00+00:00");
+        assert_eq!(
+            relationships[0].last_counted_kill_time_utc,
+            "2026-09-03T00:00:00+00:00"
+        );
     }
 
     #[test]
@@ -251,7 +267,10 @@ mod tests {
             evidence(2, 100, Some(1000), None, "2026-09-12T00:00:00+00:00"),
             evidence(2, 200, Some(1000), None, "2026-09-12T00:00:00+00:00"),
         ];
-        let identities = vec![identity(100, Some(1000), None), identity(200, Some(1000), None)];
+        let identities = vec![
+            identity(100, Some(1000), None),
+            identity(200, Some(1000), None),
+        ];
 
         let relationships = analyze_direct_relationships(
             &evidence_rows,

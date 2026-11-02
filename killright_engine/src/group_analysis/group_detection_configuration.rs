@@ -43,7 +43,9 @@ pub struct IntermediaryBonusConfiguration {
     pub maximum: i32,
 }
 
-pub fn load_group_detection_configuration(path: &Path) -> Result<GroupDetectionConfiguration, String> {
+pub fn load_group_detection_configuration(
+    path: &Path,
+) -> Result<GroupDetectionConfiguration, String> {
     let text = fs::read_to_string(path)
         .map_err(|error| format!("failed to read {}: {}", path.display(), error))?;
 
@@ -63,7 +65,9 @@ pub fn load_group_detection_configuration(path: &Path) -> Result<GroupDetectionC
     Ok(configuration)
 }
 
-pub(crate) fn validate_group_detection_configuration(configuration: &GroupDetectionConfiguration) -> Result<(), String> {
+pub(crate) fn validate_group_detection_configuration(
+    configuration: &GroupDetectionConfiguration,
+) -> Result<(), String> {
     validate_weights_and_factors(configuration)?;
     validate_steps_and_saturation(configuration)?;
 
@@ -82,7 +86,9 @@ fn validate_weights_and_factors(configuration: &GroupDetectionConfiguration) -> 
 
     let sample_factor = &configuration.sample_factor;
 
-    if !(0.0..=1.0).contains(&sample_factor.minimum) || !(0.0..=1.0).contains(&sample_factor.maximum) {
+    if !(0.0..=1.0).contains(&sample_factor.minimum)
+        || !(0.0..=1.0).contains(&sample_factor.maximum)
+    {
         return Err(format!(
             "sampleFactor minimum {} and maximum {} must both be within 0-1",
             sample_factor.minimum, sample_factor.maximum
@@ -106,7 +112,9 @@ fn validate_weights_and_factors(configuration: &GroupDetectionConfiguration) -> 
     Ok(())
 }
 
-fn validate_steps_and_saturation(configuration: &GroupDetectionConfiguration) -> Result<(), String> {
+fn validate_steps_and_saturation(
+    configuration: &GroupDetectionConfiguration,
+) -> Result<(), String> {
     if configuration.strength_step <= 0 {
         return Err(format!(
             "strengthStep must be positive; actual value was {}",
@@ -114,10 +122,16 @@ fn validate_steps_and_saturation(configuration: &GroupDetectionConfiguration) ->
         ));
     }
 
-    if configuration.sample_factor.saturates_at_counted_shared_kills <= 0 {
+    if configuration
+        .sample_factor
+        .saturates_at_counted_shared_kills
+        <= 0
+    {
         return Err(format!(
             "sampleFactor.saturatesAtCountedSharedKills must be positive; actual value was {}",
-            configuration.sample_factor.saturates_at_counted_shared_kills
+            configuration
+                .sample_factor
+                .saturates_at_counted_shared_kills
         ));
     }
 
@@ -173,7 +187,10 @@ mod tests {
 
     #[test]
     fn load_group_detection_configuration_rejects_weight_outside_zero_one() {
-        let path = std::env::temp_dir().join(format!("group-detection-invalid-weight-{}.json", unique_suffix()));
+        let path = std::env::temp_dir().join(format!(
+            "group-detection-invalid-weight-{}.json",
+            unique_suffix()
+        ));
         let json = valid_configuration_json().replace("\"weight\": 1.0", "\"weight\": 1.5");
         fs::write(&path, json).unwrap();
 
@@ -185,8 +202,14 @@ mod tests {
 
     #[test]
     fn load_group_detection_configuration_rejects_non_positive_saturation() {
-        let path = std::env::temp_dir().join(format!("group-detection-invalid-saturation-{}.json", unique_suffix()));
-        let json = valid_configuration_json().replace("\"saturatesAtCountedSharedKills\": 10", "\"saturatesAtCountedSharedKills\": 0");
+        let path = std::env::temp_dir().join(format!(
+            "group-detection-invalid-saturation-{}.json",
+            unique_suffix()
+        ));
+        let json = valid_configuration_json().replace(
+            "\"saturatesAtCountedSharedKills\": 10",
+            "\"saturatesAtCountedSharedKills\": 0",
+        );
         fs::write(&path, json).unwrap();
 
         let result = load_group_detection_configuration(&path);

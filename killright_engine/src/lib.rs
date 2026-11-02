@@ -9,10 +9,10 @@ use std::time::Instant;
 pub mod kr_engine;
 use kr_engine::activity_analysis::derive_activity;
 use kr_engine::contracts::{
-    DerivedActivityResponse, GroupDetectionDiagnosticsEnvelope, GroupDetectionResponse, GroupInputs,
-    GroupRelationshipResponse, PilotAnalysisRequest, PilotAnalysisResponse, PilotIdentitySnapshot, PilotInputs,
-    PilotsAnalysisRequest, PilotsAnalysisResponse, RecentKillmailSnapshot, ThreatDiagnosticsEnvelope,
-    ZKillStatisticsSnapshot,
+    DerivedActivityResponse, GroupDetectionDiagnosticsEnvelope, GroupDetectionResponse,
+    GroupInputs, GroupRelationshipResponse, PilotAnalysisRequest, PilotAnalysisResponse,
+    PilotIdentitySnapshot, PilotInputs, PilotsAnalysisRequest, PilotsAnalysisResponse,
+    RecentKillmailSnapshot, ThreatDiagnosticsEnvelope, ZKillStatisticsSnapshot,
 };
 use kr_engine::group_analysis::chained_relationship_analyzer::analyze_chained_relationships;
 use kr_engine::group_analysis::direct_relationship_analyzer::analyze_direct_relationships;
@@ -25,7 +25,9 @@ use kr_engine::shared::recent_window_configuration::RecentWindowConfiguration;
 use kr_engine::shared::settings_loader::load_engine_settings;
 use kr_engine::shared::style_configuration::StyleConfiguration;
 use kr_engine::shared::timing_recorder;
-use kr_engine::threat_analysis::{analyze_intrinsic_threat, analyze_intrinsic_threat_diagnostics, ThreatConfiguration};
+use kr_engine::threat_analysis::{
+    analyze_intrinsic_threat, analyze_intrinsic_threat_diagnostics, ThreatConfiguration,
+};
 pub use kr_engine::*;
 struct RuntimeState {
     threat_configuration: ThreatConfiguration,
@@ -178,7 +180,10 @@ fn build_pilot_response(
     };
     if timing_recorder::is_active() {
         timing_recorder::add_count("killmail_rows", inputs.all_killmails.len() as i64);
-        timing_recorder::add_count("recent_window_killmail_rows", recent_window_killmails.len() as i64);
+        timing_recorder::add_count(
+            "recent_window_killmail_rows",
+            recent_window_killmails.len() as i64,
+        );
     }
     let killmails = recent_window_killmails
         .iter()
@@ -244,7 +249,10 @@ fn failed_pilot_response(character_id: i64, reason: &str) -> PilotAnalysisRespon
     }
 }
 
-fn read_pilot_inputs(character_ids: &[i64], pilots: &[PilotInputs]) -> Vec<Result<PilotReadInputs, String>> {
+fn read_pilot_inputs(
+    character_ids: &[i64],
+    pilots: &[PilotInputs],
+) -> Vec<Result<PilotReadInputs, String>> {
     let mut by_character: HashMap<i64, &PilotInputs> = HashMap::new();
     for pilot in pilots {
         by_character.entry(pilot.character_id).or_insert(pilot);
@@ -379,7 +387,10 @@ fn timed_pilots_response_json(
     if let Some(started) = timing_started {
         let serialize_started = Instant::now();
         let _ = serde_json::to_string(&response);
-        timing_recorder::record_ms("response_build", serialize_started.elapsed().as_secs_f64() * 1000.0);
+        timing_recorder::record_ms(
+            "response_build",
+            serialize_started.elapsed().as_secs_f64() * 1000.0,
+        );
         timing_recorder::record_ms(total_phase, started.elapsed().as_secs_f64() * 1000.0);
         if let Some(snapshot) = timing_recorder::take() {
             response.timings_ms = Some(snapshot.timings_ms);
@@ -390,12 +401,13 @@ fn timed_pilots_response_json(
 }
 
 fn pilots_response_json(response: PilotsAnalysisResponse) -> *mut c_char {
-    let json = serde_json::to_string(&response).unwrap_or_else(|_| {
-        "{\"results\":[],\"failure\":\"internal_error\"}".to_string()
-    });
-    CString::new(json).unwrap_or_else(|_| {
-        CString::new("{\"results\":[],\"failure\":\"internal_error\"}").unwrap()
-    }).into_raw()
+    let json = serde_json::to_string(&response)
+        .unwrap_or_else(|_| "{\"results\":[],\"failure\":\"internal_error\"}".to_string());
+    CString::new(json)
+        .unwrap_or_else(|_| {
+            CString::new("{\"results\":[],\"failure\":\"internal_error\"}").unwrap()
+        })
+        .into_raw()
 }
 
 fn build_group_response(
@@ -405,7 +417,11 @@ fn build_group_response(
     recent_window_configuration: &RecentWindowConfiguration,
     group_detection_configuration: &GroupDetectionConfiguration,
 ) -> PilotAnalysisResponse {
-    let npc_corporation_ids = inputs.npc_corporation_ids.iter().copied().collect::<HashSet<i64>>();
+    let npc_corporation_ids = inputs
+        .npc_corporation_ids
+        .iter()
+        .copied()
+        .collect::<HashSet<i64>>();
     if timing_recorder::is_active() {
         timing_recorder::add_count("scanned_pilots", scanned_character_ids.len() as i64);
         timing_recorder::add_count("direct_evidence_rows", inputs.direct_evidence.len() as i64);
@@ -450,7 +466,10 @@ fn build_group_response(
 
     let relationships: Vec<GroupRelationshipResponse> = {
         let _timing = timing_recorder::scope("response_build");
-        scored_relationships.into_iter().map(GroupRelationshipResponse::from).collect()
+        scored_relationships
+            .into_iter()
+            .map(GroupRelationshipResponse::from)
+            .collect()
     };
 
     PilotAnalysisResponse {
@@ -482,7 +501,11 @@ fn diagnose_group_detection(
     let Some(inputs) = &request.group_inputs else {
         return failure("unreadable_request");
     };
-    let npc_corporation_ids = inputs.npc_corporation_ids.iter().copied().collect::<HashSet<i64>>();
+    let npc_corporation_ids = inputs
+        .npc_corporation_ids
+        .iter()
+        .copied()
+        .collect::<HashSet<i64>>();
     let diagnostics = run_group_detection_diagnostics(
         &inputs.direct_evidence,
         &inputs.chain_evidence,
@@ -506,7 +529,11 @@ fn diagnose_threat(
     style_configuration: &StyleConfiguration,
     threat_configuration: &ThreatConfiguration,
 ) -> ThreatDiagnosticsEnvelope {
-    let Some(pilot) = request.pilot.as_ref().filter(|pilot| pilot.character_id == request.character_id) else {
+    let Some(pilot) = request
+        .pilot
+        .as_ref()
+        .filter(|pilot| pilot.character_id == request.character_id)
+    else {
         return ThreatDiagnosticsEnvelope {
             character_id: request.character_id,
             diagnostics: None,
@@ -639,12 +666,13 @@ fn group_detection_diagnostics_failure(character_id: i64, reason: &str) -> *mut 
 }
 
 fn group_detection_diagnostics_json(envelope: GroupDetectionDiagnosticsEnvelope) -> *mut c_char {
-    let json = serde_json::to_string(&envelope).unwrap_or_else(|_| {
-        "{\"character_id\":0,\"failure\":\"internal_error\"}".to_string()
-    });
-    CString::new(json).unwrap_or_else(|_| {
-        CString::new("{\"character_id\":0,\"failure\":\"internal_error\"}").unwrap()
-    }).into_raw()
+    let json = serde_json::to_string(&envelope)
+        .unwrap_or_else(|_| "{\"character_id\":0,\"failure\":\"internal_error\"}".to_string());
+    CString::new(json)
+        .unwrap_or_else(|_| {
+            CString::new("{\"character_id\":0,\"failure\":\"internal_error\"}").unwrap()
+        })
+        .into_raw()
 }
 
 fn threat_diagnostics_failure(character_id: i64, reason: &str) -> *mut c_char {
@@ -656,12 +684,13 @@ fn threat_diagnostics_failure(character_id: i64, reason: &str) -> *mut c_char {
 }
 
 fn threat_diagnostics_json(envelope: ThreatDiagnosticsEnvelope) -> *mut c_char {
-    let json = serde_json::to_string(&envelope).unwrap_or_else(|_| {
-        "{\"character_id\":0,\"failure\":\"internal_error\"}".to_string()
-    });
-    CString::new(json).unwrap_or_else(|_| {
-        CString::new("{\"character_id\":0,\"failure\":\"internal_error\"}").unwrap()
-    }).into_raw()
+    let json = serde_json::to_string(&envelope)
+        .unwrap_or_else(|_| "{\"character_id\":0,\"failure\":\"internal_error\"}".to_string());
+    CString::new(json)
+        .unwrap_or_else(|_| {
+            CString::new("{\"character_id\":0,\"failure\":\"internal_error\"}").unwrap()
+        })
+        .into_raw()
 }
 
 #[no_mangle]
@@ -740,7 +769,10 @@ fn timed_response_json(
     if let Some(started) = timing_started {
         let serialize_started = Instant::now();
         let _ = serde_json::to_string(&response);
-        timing_recorder::record_ms("response_build", serialize_started.elapsed().as_secs_f64() * 1000.0);
+        timing_recorder::record_ms(
+            "response_build",
+            serialize_started.elapsed().as_secs_f64() * 1000.0,
+        );
         timing_recorder::record_ms(total_phase, started.elapsed().as_secs_f64() * 1000.0);
         if let Some(snapshot) = timing_recorder::take() {
             response.timings_ms = Some(snapshot.timings_ms);
@@ -750,12 +782,13 @@ fn timed_response_json(
     response_json(response)
 }
 fn response_json(response: PilotAnalysisResponse) -> *mut c_char {
-    let json = serde_json::to_string(&response).unwrap_or_else(|_| {
-        "{\"character_id\":0,\"failure\":\"internal_error\"}".to_string()
-    });
-    CString::new(json).unwrap_or_else(|_| {
-        CString::new("{\"character_id\":0,\"failure\":\"internal_error\"}").unwrap()
-    }).into_raw()
+    let json = serde_json::to_string(&response)
+        .unwrap_or_else(|_| "{\"character_id\":0,\"failure\":\"internal_error\"}".to_string());
+    CString::new(json)
+        .unwrap_or_else(|_| {
+            CString::new("{\"character_id\":0,\"failure\":\"internal_error\"}").unwrap()
+        })
+        .into_raw()
 }
 
 #[cfg(test)]
@@ -909,7 +942,11 @@ mod tests {
         }
     }
 
-    fn configurations() -> (RecentWindowConfiguration, StyleConfiguration, ThreatConfiguration) {
+    fn configurations() -> (
+        RecentWindowConfiguration,
+        StyleConfiguration,
+        ThreatConfiguration,
+    ) {
         let threat = serde_json::from_str(
             crate::kr_engine::threat_analysis::threat_test_fixtures::THREAT_CONFIGURATION_JSON,
         )
@@ -921,7 +958,13 @@ mod tests {
             podder_minimum_kill_count: 5,
         };
 
-        (RecentWindowConfiguration { recent_window_days: 14 }, style, threat)
+        (
+            RecentWindowConfiguration {
+                recent_window_days: 14,
+            },
+            style,
+            threat,
+        )
     }
 
     fn group_configuration() -> GroupDetectionConfiguration {
@@ -980,7 +1023,10 @@ mod tests {
     }
 
     fn response_text(pointer: *mut c_char) -> String {
-        let text = unsafe { CStr::from_ptr(pointer) }.to_str().unwrap().to_string();
+        let text = unsafe { CStr::from_ptr(pointer) }
+            .to_str()
+            .unwrap()
+            .to_string();
         killright_free_string(pointer);
         text
     }
@@ -989,14 +1035,25 @@ mod tests {
     fn batch_returns_one_result_per_pilot_in_request_order() {
         let (window, style, threat) = configurations();
 
-        let results = analyze_pilots_batch(&[SYMPTOM, LUKAS, TRAL], &fixture_pilots(), &window, &style, &threat);
+        let results = analyze_pilots_batch(
+            &[SYMPTOM, LUKAS, TRAL],
+            &fixture_pilots(),
+            &window,
+            &style,
+            &threat,
+        );
 
         assert_eq!(
-            results.iter().map(|result| result.character_id).collect::<Vec<_>>(),
+            results
+                .iter()
+                .map(|result| result.character_id)
+                .collect::<Vec<_>>(),
             vec![SYMPTOM, LUKAS, TRAL]
         );
         assert!(results.iter().all(|result| result.failure.is_none()));
-        assert!(results.iter().all(|result| result.derived_activity.is_some()));
+        assert!(results
+            .iter()
+            .all(|result| result.derived_activity.is_some()));
     }
 
     #[test]
@@ -1006,12 +1063,26 @@ mod tests {
         let ids = [LUKAS, TRAL, SYMPTOM];
         let now = Utc::now();
 
-        let batch = assemble_pilot_responses(&ids, read_pilot_inputs(&ids, &pilots), &window, &style, &threat, now);
+        let batch = assemble_pilot_responses(
+            &ids,
+            read_pilot_inputs(&ids, &pilots),
+            &window,
+            &style,
+            &threat,
+            now,
+        );
         let singles = ids
             .iter()
             .map(|id| {
-                assemble_pilot_responses(&[*id], read_pilot_inputs(&[*id], &pilots), &window, &style, &threat, now)
-                    .remove(0)
+                assemble_pilot_responses(
+                    &[*id],
+                    read_pilot_inputs(&[*id], &pilots),
+                    &window,
+                    &style,
+                    &threat,
+                    now,
+                )
+                .remove(0)
             })
             .collect::<Vec<_>>();
 
@@ -1027,13 +1098,26 @@ mod tests {
     fn derived_views_carry_weekly_counts_and_newest_killmail() {
         let (window, style, threat) = configurations();
 
-        let results = analyze_pilots_batch(&[LUKAS, TRAL, SYMPTOM], &fixture_pilots(), &window, &style, &threat);
+        let results = analyze_pilots_batch(
+            &[LUKAS, TRAL, SYMPTOM],
+            &fixture_pilots(),
+            &window,
+            &style,
+            &threat,
+        );
 
         let lukas = results[0].derived_activity.as_ref().unwrap();
         assert!(lukas.has_public_activity_data);
         assert_eq!(lukas.kills_week, Some(2));
         assert_eq!(lukas.solo_week, Some(1));
-        assert_eq!(lukas.newest_non_pod_killmail.as_ref().unwrap().activity_type, "Kill");
+        assert_eq!(
+            lukas
+                .newest_non_pod_killmail
+                .as_ref()
+                .unwrap()
+                .activity_type,
+            "Kill"
+        );
 
         let tral = results[1].derived_activity.as_ref().unwrap();
         assert!(!tral.has_public_activity_data);
@@ -1064,10 +1148,20 @@ mod tests {
             }),
         ];
 
-        let results = assemble_pilot_responses(&[LUKAS, TRAL, SYMPTOM], inputs, &window, &style, &threat, Utc::now());
+        let results = assemble_pilot_responses(
+            &[LUKAS, TRAL, SYMPTOM],
+            inputs,
+            &window,
+            &style,
+            &threat,
+            Utc::now(),
+        );
 
         assert!(results[0].failure.is_none());
-        assert_eq!(results[1].failure.as_deref(), Some("repository_read_error:killmails"));
+        assert_eq!(
+            results[1].failure.as_deref(),
+            Some("repository_read_error:killmails")
+        );
         assert!(results[1].recent_style.is_none());
         assert!(results[1].derived_activity.is_none());
         assert!(results[2].failure.is_none());
@@ -1081,7 +1175,8 @@ mod tests {
             .filter(|pilot| pilot.character_id != TRAL)
             .collect::<Vec<_>>();
 
-        let results = analyze_pilots_batch(&[LUKAS, TRAL, SYMPTOM], &pilots, &window, &style, &threat);
+        let results =
+            analyze_pilots_batch(&[LUKAS, TRAL, SYMPTOM], &pilots, &window, &style, &threat);
 
         assert!(results[0].failure.is_none());
         assert_eq!(results[1].failure.as_deref(), Some("unreadable_request"));
@@ -1094,7 +1189,13 @@ mod tests {
         let (window, style, threat) = configurations();
         timing_recorder::begin_forced();
 
-        analyze_pilots_batch(&[LUKAS, TRAL, SYMPTOM], &fixture_pilots(), &window, &style, &threat);
+        analyze_pilots_batch(
+            &[LUKAS, TRAL, SYMPTOM],
+            &fixture_pilots(),
+            &window,
+            &style,
+            &threat,
+        );
         let snapshot = timing_recorder::take().expect("recorder was active");
 
         assert_eq!(snapshot.timing_counts["pilots_analyzed"], 3);
@@ -1122,7 +1223,9 @@ mod tests {
 
     #[test]
     fn batch_request_deserialises_with_and_without_inputs() {
-        let without = serde_json::from_str::<PilotsAnalysisRequest>("{\"character_ids\":[95465499]}").unwrap();
+        let without =
+            serde_json::from_str::<PilotsAnalysisRequest>("{\"character_ids\":[95465499]}")
+                .unwrap();
         assert_eq!(without.character_ids, vec![LUKAS]);
         assert!(without.pilots.is_empty());
 
@@ -1133,12 +1236,16 @@ mod tests {
         assert_eq!(with.pilots.len(), 1);
         assert_eq!(with.pilots[0].killmails[0].ship_type_id, Some(587));
         assert!(with.pilots[0].statistics.is_none());
-        assert_eq!(with.pilots[0].coverage_start_utc.as_deref(), Some("2026-09-08T00:00:00+00:00"));
+        assert_eq!(
+            with.pilots[0].coverage_start_utc.as_deref(),
+            Some("2026-09-08T00:00:00+00:00")
+        );
     }
 
     #[test]
     fn pilot_request_deserialises_with_and_without_inputs() {
-        let without = serde_json::from_str::<PilotAnalysisRequest>("{\"character_id\":95465499}").unwrap();
+        let without =
+            serde_json::from_str::<PilotAnalysisRequest>("{\"character_id\":95465499}").unwrap();
         assert!(without.scanned_character_ids.is_none());
         assert!(without.pilot.is_none());
         assert!(without.group_inputs.is_none());
@@ -1147,8 +1254,14 @@ mod tests {
             "{\"character_id\":95465499,\"scanned_character_ids\":[95465499,91321792],\"group_inputs\":{\"direct_evidence\":[{\"killmail_id\":1,\"character_id\":95465499,\"corporation_id\":98000001,\"alliance_id\":null,\"kill_time_utc\":\"2026-09-20T00:00:00+00:00\",\"unique_attacker_count\":2}],\"chain_evidence\":[],\"identities\":[],\"npc_corporation_ids\":[1000001]}}",
         )
         .unwrap();
-        assert_eq!(group.group_inputs.as_ref().unwrap().direct_evidence.len(), 1);
-        assert_eq!(group.group_inputs.as_ref().unwrap().npc_corporation_ids, vec![1000001]);
+        assert_eq!(
+            group.group_inputs.as_ref().unwrap().direct_evidence.len(),
+            1
+        );
+        assert_eq!(
+            group.group_inputs.as_ref().unwrap().npc_corporation_ids,
+            vec![1000001]
+        );
     }
 
     #[test]
@@ -1162,7 +1275,8 @@ mod tests {
             group_inputs: None,
         };
 
-        let single = respond_to_pilot_request(request, &window, &group_configuration(), &style, &threat);
+        let single =
+            respond_to_pilot_request(request, &window, &group_configuration(), &style, &threat);
         let batch = analyze_pilots_batch(&[LUKAS], &pilots, &window, &style, &threat).remove(0);
 
         assert!(single.failure.is_none());
@@ -1177,7 +1291,12 @@ mod tests {
         let pilots = fixture_pilots();
 
         let missing = respond_to_pilot_request(
-            PilotAnalysisRequest { character_id: LUKAS, scanned_character_ids: None, pilot: None, group_inputs: None },
+            PilotAnalysisRequest {
+                character_id: LUKAS,
+                scanned_character_ids: None,
+                pilot: None,
+                group_inputs: None,
+            },
             &window,
             &group_configuration(),
             &style,
@@ -1210,7 +1329,8 @@ mod tests {
             group_inputs: Some(fixture_group_inputs()),
         };
 
-        let response = respond_to_pilot_request(request, &window, &group_configuration(), &style, &threat);
+        let response =
+            respond_to_pilot_request(request, &window, &group_configuration(), &style, &threat);
 
         assert!(response.failure.is_none());
         let relationships = response.group_detection.unwrap().relationships;
@@ -1231,7 +1351,8 @@ mod tests {
             group_inputs: None,
         };
 
-        let response = respond_to_pilot_request(request, &window, &group_configuration(), &style, &threat);
+        let response =
+            respond_to_pilot_request(request, &window, &group_configuration(), &style, &threat);
 
         assert_eq!(response.failure.as_deref(), Some("unreadable_request"));
         assert!(response.group_detection.is_none());
@@ -1274,11 +1395,15 @@ mod tests {
         };
 
         assert_eq!(
-            diagnose_group_detection(&without_scan_set, &window, &group_configuration()).failure.as_deref(),
+            diagnose_group_detection(&without_scan_set, &window, &group_configuration())
+                .failure
+                .as_deref(),
             Some("missing_scanned_character_ids")
         );
         assert_eq!(
-            diagnose_group_detection(&without_inputs, &window, &group_configuration()).failure.as_deref(),
+            diagnose_group_detection(&without_inputs, &window, &group_configuration())
+                .failure
+                .as_deref(),
             Some("unreadable_request")
         );
     }
@@ -1298,7 +1423,10 @@ mod tests {
         let batch = analyze_pilots_batch(&[LUKAS], &pilots, &window, &style, &threat).remove(0);
 
         assert!(envelope.failure.is_none());
-        assert_eq!(envelope.diagnostics.unwrap().score, batch.threat.unwrap().score);
+        assert_eq!(
+            envelope.diagnostics.unwrap().score,
+            batch.threat.unwrap().score
+        );
     }
 
     #[test]

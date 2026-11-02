@@ -5,8 +5,8 @@ use crate::contracts::RecentKillmailSnapshot;
 use crate::contracts::ZKillStatisticsSnapshot;
 use crate::threat_analysis::threat_analyzer::{
     calculate_historical_capability_score, calculate_loss_quality_score,
-    calculate_recent_activity_diagnostics, calculate_security_modifier, calculate_survivability_score,
-    evaluate_threat_gate, finalize_threat_score, GateRule,
+    calculate_recent_activity_diagnostics, calculate_security_modifier,
+    calculate_survivability_score, evaluate_threat_gate, finalize_threat_score, GateRule,
 };
 use crate::threat_analysis::threat_configuration_models::ThreatConfiguration;
 
@@ -45,7 +45,12 @@ pub fn analyze_intrinsic_threat_diagnostics(
         recent_window_days,
     );
 
-    let gate = evaluate_threat_gate(&configuration.gating, statistics, recent_killmails, recent_style);
+    let gate = evaluate_threat_gate(
+        &configuration.gating,
+        statistics,
+        recent_killmails,
+        recent_style,
+    );
 
     if matches!(gate.rule, GateRule::NoData | GateRule::NonCombatNone) {
         return ThreatDiagnostics {
@@ -104,15 +109,21 @@ mod tests {
     use chrono::TimeZone;
 
     fn configuration() -> ThreatConfiguration {
-        serde_json::from_str(crate::threat_analysis::threat_test_fixtures::THREAT_CONFIGURATION_JSON)
-            .expect("test threat configuration must parse")
+        serde_json::from_str(
+            crate::threat_analysis::threat_test_fixtures::THREAT_CONFIGURATION_JSON,
+        )
+        .expect("test threat configuration must parse")
     }
 
     fn now() -> DateTime<Utc> {
         Utc.with_ymd_and_hms(2026, 9, 22, 0, 0, 0).unwrap()
     }
 
-    fn statistics(ships_destroyed: i32, ships_lost: i32, no_history_marker: bool) -> ZKillStatisticsSnapshot {
+    fn statistics(
+        ships_destroyed: i32,
+        ships_lost: i32,
+        no_history_marker: bool,
+    ) -> ZKillStatisticsSnapshot {
         ZKillStatisticsSnapshot {
             character_id: 1,
             ships_destroyed,
@@ -149,7 +160,16 @@ mod tests {
     fn none_pilot_returns_zeroed_components() {
         let stats = statistics(0, 0, true);
 
-        let diagnostics = analyze_intrinsic_threat_diagnostics(&configuration(), Some(&stats), &[], None, None, now(), 14, "Solo");
+        let diagnostics = analyze_intrinsic_threat_diagnostics(
+            &configuration(),
+            Some(&stats),
+            &[],
+            None,
+            None,
+            now(),
+            14,
+            "Solo",
+        );
 
         assert_eq!(diagnostics.score, 0);
         assert_eq!(diagnostics.historical_capability, 0);
@@ -162,7 +182,16 @@ mod tests {
     fn real_kill_history_components_sum_to_reported_score() {
         let stats = statistics(500, 50, false);
 
-        let diagnostics = analyze_intrinsic_threat_diagnostics(&configuration(), Some(&stats), &[], None, None, now(), 14, "Solo");
+        let diagnostics = analyze_intrinsic_threat_diagnostics(
+            &configuration(),
+            Some(&stats),
+            &[],
+            None,
+            None,
+            now(),
+            14,
+            "Solo",
+        );
 
         let expected_score = (diagnostics.historical_capability as f64
             + diagnostics.survivability as f64
@@ -206,13 +235,26 @@ mod tests {
     fn missing_coverage_start_reports_not_present() {
         let stats = statistics(10, 0, false);
 
-        let diagnostics = analyze_intrinsic_threat_diagnostics(&configuration(), Some(&stats), &[], None, None, now(), 14, "Solo");
+        let diagnostics = analyze_intrinsic_threat_diagnostics(
+            &configuration(),
+            Some(&stats),
+            &[],
+            None,
+            None,
+            now(),
+            14,
+            "Solo",
+        );
 
         assert!(!diagnostics.coverage_start_present);
         assert_eq!(diagnostics.recent_activity_modifier, 0.0);
     }
 
-    fn statistics_with_style(ships_destroyed: i32, ships_lost: i32, general_style: &str) -> ZKillStatisticsSnapshot {
+    fn statistics_with_style(
+        ships_destroyed: i32,
+        ships_lost: i32,
+        general_style: &str,
+    ) -> ZKillStatisticsSnapshot {
         let mut value = statistics(ships_destroyed, ships_lost, false);
         value.general_style = general_style.to_string();
         value
@@ -222,7 +264,16 @@ mod tests {
     fn non_combat_gate_reports_rule_and_zeroed_components() {
         let stats = statistics_with_style(1, 42, "Vict");
 
-        let diagnostics = analyze_intrinsic_threat_diagnostics(&configuration(), Some(&stats), &[], None, None, now(), 14, "Inactive");
+        let diagnostics = analyze_intrinsic_threat_diagnostics(
+            &configuration(),
+            Some(&stats),
+            &[],
+            None,
+            None,
+            now(),
+            14,
+            "Inactive",
+        );
 
         assert_eq!(diagnostics.score, 0);
         assert_eq!(diagnostics.gate_rule, "non_combat_none");
@@ -234,7 +285,16 @@ mod tests {
     fn no_history_reports_no_data_rule() {
         let stats = statistics(0, 0, true);
 
-        let diagnostics = analyze_intrinsic_threat_diagnostics(&configuration(), Some(&stats), &[], None, None, now(), 14, "Solo");
+        let diagnostics = analyze_intrinsic_threat_diagnostics(
+            &configuration(),
+            Some(&stats),
+            &[],
+            None,
+            None,
+            now(),
+            14,
+            "Solo",
+        );
 
         assert_eq!(diagnostics.gate_rule, "no_data");
     }
@@ -278,7 +338,16 @@ mod tests {
     fn floor_applied_is_reported() {
         let stats = statistics_with_style(0, 42, "Vict");
 
-        let diagnostics = analyze_intrinsic_threat_diagnostics(&configuration(), Some(&stats), &[], None, None, now(), 14, "Gang");
+        let diagnostics = analyze_intrinsic_threat_diagnostics(
+            &configuration(),
+            Some(&stats),
+            &[],
+            None,
+            None,
+            now(),
+            14,
+            "Gang",
+        );
 
         assert_eq!(diagnostics.score, 1);
         assert!(diagnostics.floor_applied);

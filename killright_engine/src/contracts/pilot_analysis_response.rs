@@ -64,7 +64,9 @@ mod tests {
     #[test]
     fn serialises_derived_activity_only_when_set() {
         let mut value = response();
-        assert!(!serde_json::to_string(&value).unwrap().contains("derived_activity"));
+        assert!(!serde_json::to_string(&value)
+            .unwrap()
+            .contains("derived_activity"));
 
         value.derived_activity = Some(DerivedActivityResponse {
             has_public_activity_data: false,
@@ -75,7 +77,9 @@ mod tests {
             newest_non_pod_kill_time_utc: None,
         });
 
-        assert!(serde_json::to_string(&value).unwrap().contains("\"derived_activity\":{\"has_public_activity_data\":false}"));
+        assert!(serde_json::to_string(&value)
+            .unwrap()
+            .contains("\"derived_activity\":{\"has_public_activity_data\":false}"));
     }
 
     #[test]

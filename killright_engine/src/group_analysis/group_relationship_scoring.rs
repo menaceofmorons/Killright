@@ -2,7 +2,9 @@ use std::collections::{HashMap, HashSet};
 
 use crate::group_analysis::chained_relationship_analyzer::ChainedRelationship;
 use crate::group_analysis::direct_relationship_analyzer::DirectRelationship;
-use crate::group_analysis::group_detection_configuration::{GangSizeWeight, GroupDetectionConfiguration};
+use crate::group_analysis::group_detection_configuration::{
+    GangSizeWeight, GroupDetectionConfiguration,
+};
 use crate::group_analysis::shared_relationship_evidence::ordered_pair;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -71,7 +73,9 @@ pub fn score_and_select_relationships(
         });
 
         let chain_wins = match (direct_strength_raw, &best_chain) {
-            (Some(direct_strength), Some((chain_strength, _, _))) => *chain_strength > direct_strength,
+            (Some(direct_strength), Some((chain_strength, _, _))) => {
+                *chain_strength > direct_strength
+            }
             (None, Some(_)) => true,
             _ => false,
         };
@@ -115,7 +119,11 @@ pub fn score_and_select_relationships(
         }
     }
 
-    relationships.sort_by(|left, right| left.pilot_a.cmp(&right.pilot_a).then(left.pilot_b.cmp(&right.pilot_b)));
+    relationships.sort_by(|left, right| {
+        left.pilot_a
+            .cmp(&right.pilot_a)
+            .then(left.pilot_b.cmp(&right.pilot_b))
+    });
     relationships
 }
 
@@ -152,7 +160,11 @@ fn best_chain_for_pair<'a>(
 
             (strength, weaker_confidence, *chain)
         })
-        .max_by(|left, right| left.0.partial_cmp(&right.0).expect("chain strength is never NaN"))
+        .max_by(|left, right| {
+            left.0
+                .partial_cmp(&right.0)
+                .expect("chain strength is never NaN")
+        })
         .map(|(strength, weaker_confidence, chain)| {
             let distinct_intermediary_count = candidates.len() as i64;
             let confidence = chain_confidence(
@@ -200,7 +212,11 @@ fn score_link(
     }
 }
 
-pub(crate) fn direct_strength(counted_shared_kills: i64, minimum_shared_events: i64, strength_step: i32) -> f64 {
+pub(crate) fn direct_strength(
+    counted_shared_kills: i64,
+    minimum_shared_events: i64,
+    strength_step: i32,
+) -> f64 {
     let levels_above_minimum = counted_shared_kills - minimum_shared_events + 1;
     (strength_step as f64 * levels_above_minimum as f64).min(100.0)
 }
@@ -212,15 +228,25 @@ pub(crate) fn direct_confidence(
     minimum_shared_events: i64,
     configuration: &GroupDetectionConfiguration,
 ) -> f64 {
-    let gang_quality = 100.0 * average_gang_size_weight(counted_shared_kill_gang_sizes, &configuration.gang_size_weights);
+    let gang_quality = 100.0
+        * average_gang_size_weight(
+            counted_shared_kill_gang_sizes,
+            &configuration.gang_size_weights,
+        );
     let sample = sample_factor(
         counted_shared_kills,
         minimum_shared_events,
         configuration.sample_factor.minimum,
         configuration.sample_factor.maximum,
-        configuration.sample_factor.saturates_at_counted_shared_kills,
+        configuration
+            .sample_factor
+            .saturates_at_counted_shared_kills,
     );
-    let bonus = if split_bonus_applied { configuration.split_bonus as f64 } else { 0.0 };
+    let bonus = if split_bonus_applied {
+        configuration.split_bonus as f64
+    } else {
+        0.0
+    };
 
     (gang_quality * sample + bonus).min(100.0)
 }
@@ -230,7 +256,10 @@ pub(crate) fn average_gang_size_weight(gang_sizes: &[i64], weights: &[GangSizeWe
         return 0.0;
     }
 
-    let total: f64 = gang_sizes.iter().map(|gang_size| gang_size_weight(*gang_size, weights)).sum();
+    let total: f64 = gang_sizes
+        .iter()
+        .map(|gang_size| gang_size_weight(*gang_size, weights))
+        .sum();
     total / gang_sizes.len() as f64
 }
 
@@ -264,20 +293,38 @@ pub(crate) fn sample_factor(
     minimum + (maximum - minimum) * progress
 }
 
-pub(crate) fn chain_strength(weaker_link_strength: f64, chain_discount: f64, chain_age_days: f64, recent_window_days: i64) -> f64 {
+pub(crate) fn chain_strength(
+    weaker_link_strength: f64,
+    chain_discount: f64,
+    chain_age_days: f64,
+    recent_window_days: i64,
+) -> f64 {
     let window = recent_window_days.max(1) as f64;
     let age_decay = (1.0 - chain_age_days / window).max(0.0);
 
-    (weaker_link_strength * chain_discount * age_decay).min(100.0).max(0.0)
+    (weaker_link_strength * chain_discount * age_decay)
+        .min(100.0)
+        .max(0.0)
 }
 
-pub(crate) fn intermediary_bonus(distinct_intermediary_count: i64, per_additional: i32, maximum_bonus: i32) -> f64 {
+pub(crate) fn intermediary_bonus(
+    distinct_intermediary_count: i64,
+    per_additional: i32,
+    maximum_bonus: i32,
+) -> f64 {
     let additional = (distinct_intermediary_count - 1).max(0);
     (additional as f64 * per_additional as f64).min(maximum_bonus as f64)
 }
 
-pub(crate) fn chain_confidence(weaker_link_confidence: f64, distinct_intermediary_count: i64, per_additional: i32, maximum_bonus: i32) -> f64 {
-    (weaker_link_confidence + intermediary_bonus(distinct_intermediary_count, per_additional, maximum_bonus)).min(100.0)
+pub(crate) fn chain_confidence(
+    weaker_link_confidence: f64,
+    distinct_intermediary_count: i64,
+    per_additional: i32,
+    maximum_bonus: i32,
+) -> f64 {
+    (weaker_link_confidence
+        + intermediary_bonus(distinct_intermediary_count, per_additional, maximum_bonus))
+    .min(100.0)
 }
 
 pub(crate) fn round_to_integer(value: f64) -> i32 {
@@ -296,19 +343,44 @@ mod tests {
             minimum_shared_events: 2,
             strength_step: 10,
             gang_size_weights: vec![
-                GangSizeWeight { maximum_gang_size: 3, weight: 1.0 },
-                GangSizeWeight { maximum_gang_size: 5, weight: 0.75 },
-                GangSizeWeight { maximum_gang_size: 7, weight: 0.5 },
-                GangSizeWeight { maximum_gang_size: 10, weight: 0.25 },
+                GangSizeWeight {
+                    maximum_gang_size: 3,
+                    weight: 1.0,
+                },
+                GangSizeWeight {
+                    maximum_gang_size: 5,
+                    weight: 0.75,
+                },
+                GangSizeWeight {
+                    maximum_gang_size: 7,
+                    weight: 0.5,
+                },
+                GangSizeWeight {
+                    maximum_gang_size: 10,
+                    weight: 0.25,
+                },
             ],
-            sample_factor: SampleFactorConfiguration { minimum: 0.5, maximum: 1.0, saturates_at_counted_shared_kills: 10 },
+            sample_factor: SampleFactorConfiguration {
+                minimum: 0.5,
+                maximum: 1.0,
+                saturates_at_counted_shared_kills: 10,
+            },
             split_bonus: 20,
             chain_discount: 0.75,
-            intermediary_bonus: IntermediaryBonusConfiguration { per_additional: 10, maximum: 30 },
+            intermediary_bonus: IntermediaryBonusConfiguration {
+                per_additional: 10,
+                maximum: 30,
+            },
         }
     }
 
-    fn direct(pilot_a: i64, pilot_b: i64, counted_shared_kills: i64, gang_sizes: Vec<i64>, split_bonus_applied: bool) -> DirectRelationship {
+    fn direct(
+        pilot_a: i64,
+        pilot_b: i64,
+        counted_shared_kills: i64,
+        gang_sizes: Vec<i64>,
+        split_bonus_applied: bool,
+    ) -> DirectRelationship {
         DirectRelationship {
             pilot_a,
             pilot_b,
@@ -371,7 +443,8 @@ mod tests {
     }
 
     #[test]
-    fn direct_confidence_ex_corporation_pair_four_kills_four_to_five_attackers_split_is_sixty_six() {
+    fn direct_confidence_ex_corporation_pair_four_kills_four_to_five_attackers_split_is_sixty_six()
+    {
         let confidence = direct_confidence(&[4, 4, 4, 4], true, 4, 2, &configuration());
         assert_eq!(round_to_integer(confidence), 66);
     }
@@ -400,7 +473,8 @@ mod tests {
     fn direct_pair_with_no_chain_reports_direct() {
         let direct_relationships = vec![direct(100, 200, 5, vec![3, 3, 3, 3, 3], false)];
 
-        let relationships = score_and_select_relationships(&direct_relationships, &[], &configuration(), 14);
+        let relationships =
+            score_and_select_relationships(&direct_relationships, &[], &configuration(), 14);
 
         assert_eq!(relationships.len(), 1);
         assert_eq!(relationships[0].link_type, RelationshipLinkType::Direct);
@@ -409,10 +483,12 @@ mod tests {
     }
 
     #[test]
-    fn chain_only_pair_at_saturated_link_strength_reports_chain_strength_seventy_five_confidence_one_hundred() {
+    fn chain_only_pair_at_saturated_link_strength_reports_chain_strength_seventy_five_confidence_one_hundred(
+    ) {
         let chained_relationships = vec![chain(100, 300, 200, true, 11, vec![2; 11], 0.0)];
 
-        let relationships = score_and_select_relationships(&[], &chained_relationships, &configuration(), 14);
+        let relationships =
+            score_and_select_relationships(&[], &chained_relationships, &configuration(), 14);
 
         assert_eq!(relationships.len(), 1);
         assert_eq!(relationships[0].link_type, RelationshipLinkType::Chain);
@@ -427,8 +503,12 @@ mod tests {
         let direct_relationships = vec![direct(100, 300, 2, vec![9, 9], false)];
         let chained_relationships = vec![chain(100, 300, 200, false, 10, vec![2; 10], 0.0)];
 
-        let relationships =
-            score_and_select_relationships(&direct_relationships, &chained_relationships, &configuration(), 14);
+        let relationships = score_and_select_relationships(
+            &direct_relationships,
+            &chained_relationships,
+            &configuration(),
+            14,
+        );
 
         assert_eq!(relationships.len(), 1);
         assert_eq!(relationships[0].link_type, RelationshipLinkType::Chain);
@@ -439,15 +519,20 @@ mod tests {
         let direct_relationships = vec![direct(100, 300, 2, vec![2, 2], false)];
         let chained_relationships = vec![chain(100, 300, 200, false, 2, vec![2, 2], 0.0)];
 
-        let relationships =
-            score_and_select_relationships(&direct_relationships, &chained_relationships, &configuration(), 14);
+        let relationships = score_and_select_relationships(
+            &direct_relationships,
+            &chained_relationships,
+            &configuration(),
+            14,
+        );
 
         assert_eq!(relationships.len(), 1);
         assert_eq!(relationships[0].link_type, RelationshipLinkType::Direct);
     }
 
     #[test]
-    fn chain_confidence_with_five_intermediaries_adds_capped_thirty_point_bonus_to_weaker_link_confidence_fifty() {
+    fn chain_confidence_with_five_intermediaries_adds_capped_thirty_point_bonus_to_weaker_link_confidence_fifty(
+    ) {
         let chained_relationships = vec![
             chain(100, 300, 200, true, 10, vec![6; 10], 0.0),
             chain(100, 300, 400, false, 10, vec![6; 10], 0.0),
@@ -456,7 +541,8 @@ mod tests {
             chain(100, 300, 700, false, 10, vec![6; 10], 0.0),
         ];
 
-        let relationships = score_and_select_relationships(&[], &chained_relationships, &configuration(), 14);
+        let relationships =
+            score_and_select_relationships(&[], &chained_relationships, &configuration(), 14);
 
         assert_eq!(relationships.len(), 1);
         assert_eq!(relationships[0].confidence, 80);

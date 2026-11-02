@@ -3,18 +3,20 @@ use std::time::Instant;
 
 use chrono::{DateTime, Utc};
 
-use crate::group_analysis::chained_relationship_analyzer::{analyze_chained_relationships, ChainedRelationship};
+use crate::contracts::KillmailAttackerEvidence;
+use crate::contracts::PilotIdentitySnapshot;
+use crate::group_analysis::chained_relationship_analyzer::{
+    analyze_chained_relationships, ChainedRelationship,
+};
 use crate::group_analysis::group_detection_configuration::GroupDetectionConfiguration;
 use crate::group_analysis::group_relationship_scoring::{
-    chain_confidence, chain_strength, direct_confidence, direct_strength, intermediary_bonus, round_to_integer,
-    sample_factor as compute_sample_factor,
+    chain_confidence, chain_strength, direct_confidence, direct_strength, intermediary_bonus,
+    round_to_integer, sample_factor as compute_sample_factor,
 };
 use crate::group_analysis::shared_relationship_evidence::{
     apply_after_split_rule, build_current_identity_index, build_shared_events_by_pair,
     group_attackers_by_killmail, is_currently_same_corporation_or_alliance, SharedKillEvent,
 };
-use crate::contracts::KillmailAttackerEvidence;
-use crate::contracts::PilotIdentitySnapshot;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AfterSplitBranch {
@@ -74,7 +76,10 @@ pub fn diagnose_direct_relationships(
         .map(|((pilot_a, pilot_b), mut events)| {
             events.sort_by(|left, right| left.kill_time_utc.cmp(&right.kill_time_utc));
 
-            let contributing_killmails = events.iter().map(ContributingKillmail::from).collect::<Vec<_>>();
+            let contributing_killmails = events
+                .iter()
+                .map(ContributingKillmail::from)
+                .collect::<Vec<_>>();
 
             let gated_by_current_membership = is_currently_same_corporation_or_alliance(
                 &current_identity_by_character,
@@ -91,17 +96,22 @@ pub fn diagnose_direct_relationships(
             };
 
             let counted_shared_kills = counted_events.len() as i64;
-            let qualifies =
-                !gated_by_current_membership && counted_shared_kills >= configuration.minimum_shared_events;
+            let qualifies = !gated_by_current_membership
+                && counted_shared_kills >= configuration.minimum_shared_events;
 
-            let last_counted_kill_time_utc = counted_events.iter().map(|event| event.kill_time_utc.clone()).max();
+            let last_counted_kill_time_utc = counted_events
+                .iter()
+                .map(|event| event.kill_time_utc.clone())
+                .max();
 
             let (gang_quality, sample_factor, strength, confidence) = if qualifies {
-                let gang_sizes: Vec<i64> =
-                    counted_events.iter().map(|event| event.unique_attacker_count).collect();
+                let gang_sizes: Vec<i64> = counted_events
+                    .iter()
+                    .map(|event| event.unique_attacker_count)
+                    .collect();
 
-                let gang_quality =
-                    100.0 * crate::group_analysis::group_relationship_scoring::average_gang_size_weight(
+                let gang_quality = 100.0
+                    * crate::group_analysis::group_relationship_scoring::average_gang_size_weight(
                         &gang_sizes,
                         &configuration.gang_size_weights,
                     );
@@ -110,7 +120,9 @@ pub fn diagnose_direct_relationships(
                     configuration.minimum_shared_events,
                     configuration.sample_factor.minimum,
                     configuration.sample_factor.maximum,
-                    configuration.sample_factor.saturates_at_counted_shared_kills,
+                    configuration
+                        .sample_factor
+                        .saturates_at_counted_shared_kills,
                 );
                 let strength = round_to_integer(direct_strength(
                     counted_shared_kills,
@@ -125,7 +137,12 @@ pub fn diagnose_direct_relationships(
                     configuration,
                 ));
 
-                (Some(gang_quality), Some(sample_factor), Some(strength), Some(confidence))
+                (
+                    Some(gang_quality),
+                    Some(sample_factor),
+                    Some(strength),
+                    Some(confidence),
+                )
             } else {
                 (None, None, None, None)
             };
@@ -148,7 +165,11 @@ pub fn diagnose_direct_relationships(
         })
         .collect();
 
-    diagnostics.sort_by(|left, right| left.pilot_a.cmp(&right.pilot_a).then(left.pilot_b.cmp(&right.pilot_b)));
+    diagnostics.sort_by(|left, right| {
+        left.pilot_a
+            .cmp(&right.pilot_a)
+            .then(left.pilot_b.cmp(&right.pilot_b))
+    });
     diagnostics
 }
 
@@ -205,7 +226,10 @@ pub fn diagnose_chained_relationships(
 
     let mut by_pair: HashMap<(i64, i64), Vec<&ChainedRelationship>> = HashMap::new();
     for chain in &base_chains {
-        by_pair.entry((chain.pilot_a, chain.pilot_c)).or_default().push(chain);
+        by_pair
+            .entry((chain.pilot_a, chain.pilot_c))
+            .or_default()
+            .push(chain);
     }
 
     let mut diagnostics = Vec::new();
@@ -304,8 +328,10 @@ pub fn diagnose_chained_relationships(
                 link_cb_strength: candidate.link_cb_strength,
                 link_cb_confidence: candidate.link_cb_confidence,
                 chain_age_days: candidate.chain.chain_age_days,
-                chain_strength_for_this_intermediary: candidate.chain_strength_for_this_intermediary,
-                is_strongest_intermediary_for_pair: candidate.chain_strength_for_this_intermediary == strongest,
+                chain_strength_for_this_intermediary: candidate
+                    .chain_strength_for_this_intermediary,
+                is_strongest_intermediary_for_pair: candidate.chain_strength_for_this_intermediary
+                    == strongest,
                 pair_distinct_intermediary_count: distinct_intermediary_count,
                 pair_intermediary_bonus,
                 pair_chain_confidence,
@@ -329,7 +355,9 @@ pub struct IntermediaryHubSummary {
     pub scanned_pilots_linked_count: i64,
 }
 
-pub fn summarize_intermediary_hubs(chains: &[ChainedRelationshipDiagnostic]) -> Vec<IntermediaryHubSummary> {
+pub fn summarize_intermediary_hubs(
+    chains: &[ChainedRelationshipDiagnostic],
+) -> Vec<IntermediaryHubSummary> {
     let mut linked_by_intermediary: HashMap<i64, (bool, HashSet<i64>)> = HashMap::new();
 
     for chain in chains {
@@ -342,14 +370,20 @@ pub fn summarize_intermediary_hubs(chains: &[ChainedRelationshipDiagnostic]) -> 
 
     let mut hubs: Vec<IntermediaryHubSummary> = linked_by_intermediary
         .into_iter()
-        .map(|(intermediary_pilot_id, (intermediary_in_scan, linked))| IntermediaryHubSummary {
-            intermediary_pilot_id,
-            intermediary_in_scan,
-            scanned_pilots_linked_count: linked.len() as i64,
-        })
+        .map(
+            |(intermediary_pilot_id, (intermediary_in_scan, linked))| IntermediaryHubSummary {
+                intermediary_pilot_id,
+                intermediary_in_scan,
+                scanned_pilots_linked_count: linked.len() as i64,
+            },
+        )
         .collect();
 
-    hubs.sort_by(|left, right| right.scanned_pilots_linked_count.cmp(&left.scanned_pilots_linked_count));
+    hubs.sort_by(|left, right| {
+        right
+            .scanned_pilots_linked_count
+            .cmp(&left.scanned_pilots_linked_count)
+    });
     hubs
 }
 
@@ -372,8 +406,12 @@ pub fn run_group_detection_diagnostics(
     now: DateTime<Utc>,
 ) -> GroupDetectionDiagnostics {
     let direct_started_at = Instant::now();
-    let direct_relationships =
-        diagnose_direct_relationships(direct_evidence, current_identities, configuration, npc_corporation_ids);
+    let direct_relationships = diagnose_direct_relationships(
+        direct_evidence,
+        current_identities,
+        configuration,
+        npc_corporation_ids,
+    );
     let direct_analysis_duration_ms = direct_started_at.elapsed().as_millis() as i64;
 
     let chain_started_at = Instant::now();
@@ -419,15 +457,34 @@ mod tests {
             minimum_shared_events: MINIMUM_SHARED_EVENTS,
             strength_step: 10,
             gang_size_weights: vec![
-                GangSizeWeight { maximum_gang_size: 3, weight: 1.0 },
-                GangSizeWeight { maximum_gang_size: 5, weight: 0.75 },
-                GangSizeWeight { maximum_gang_size: 7, weight: 0.5 },
-                GangSizeWeight { maximum_gang_size: 10, weight: 0.25 },
+                GangSizeWeight {
+                    maximum_gang_size: 3,
+                    weight: 1.0,
+                },
+                GangSizeWeight {
+                    maximum_gang_size: 5,
+                    weight: 0.75,
+                },
+                GangSizeWeight {
+                    maximum_gang_size: 7,
+                    weight: 0.5,
+                },
+                GangSizeWeight {
+                    maximum_gang_size: 10,
+                    weight: 0.25,
+                },
             ],
-            sample_factor: SampleFactorConfiguration { minimum: 0.5, maximum: 1.0, saturates_at_counted_shared_kills: 10 },
+            sample_factor: SampleFactorConfiguration {
+                minimum: 0.5,
+                maximum: 1.0,
+                saturates_at_counted_shared_kills: 10,
+            },
             split_bonus: 20,
             chain_discount: 0.75,
-            intermediary_bonus: IntermediaryBonusConfiguration { per_additional: 10, maximum: 30 },
+            intermediary_bonus: IntermediaryBonusConfiguration {
+                per_additional: 10,
+                maximum: 30,
+            },
         }
     }
 
@@ -476,10 +533,17 @@ mod tests {
             evidence(2, 100, Some(1), "2026-09-12T00:00:00+00:00"),
             evidence(2, 200, Some(2), "2026-09-12T00:00:00+00:00"),
         ];
-        let identities = vec![identity(100, Some(GATE_CORP)), identity(200, Some(GATE_CORP))];
+        let identities = vec![
+            identity(100, Some(GATE_CORP)),
+            identity(200, Some(GATE_CORP)),
+        ];
 
-        let diagnostics =
-            diagnose_direct_relationships(&evidence_rows, &identities, &configuration(), &npc_corporation_ids());
+        let diagnostics = diagnose_direct_relationships(
+            &evidence_rows,
+            &identities,
+            &configuration(),
+            &npc_corporation_ids(),
+        );
 
         assert_eq!(diagnostics.len(), 1);
         assert!(diagnostics[0].gated_by_current_membership);
@@ -496,8 +560,12 @@ mod tests {
         ];
         let identities = vec![identity(100, Some(1)), identity(200, Some(2))];
 
-        let diagnostics =
-            diagnose_direct_relationships(&evidence_rows, &identities, &configuration(), &npc_corporation_ids());
+        let diagnostics = diagnose_direct_relationships(
+            &evidence_rows,
+            &identities,
+            &configuration(),
+            &npc_corporation_ids(),
+        );
 
         assert_eq!(diagnostics.len(), 1);
         assert!(!diagnostics[0].gated_by_current_membership);
@@ -515,8 +583,12 @@ mod tests {
         ];
         let identities = vec![identity(100, Some(1)), identity(200, Some(2))];
 
-        let diagnostics =
-            diagnose_direct_relationships(&evidence_rows, &identities, &configuration(), &npc_corporation_ids());
+        let diagnostics = diagnose_direct_relationships(
+            &evidence_rows,
+            &identities,
+            &configuration(),
+            &npc_corporation_ids(),
+        );
 
         assert_eq!(diagnostics.len(), 1);
         let relationship = &diagnostics[0];

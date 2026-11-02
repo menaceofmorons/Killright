@@ -167,21 +167,32 @@ mod tests {
 
     #[test]
     fn load_engine_settings_from_path_parses_all_sections() {
-        let path = std::env::temp_dir().join(format!("killright-settings-{}.json", unique_suffix()));
+        let path =
+            std::env::temp_dir().join(format!("killright-settings-{}.json", unique_suffix()));
         fs::write(&path, valid_settings_json()).unwrap();
 
         let settings = load_engine_settings_from_path(&path).unwrap();
 
         fs::remove_file(&path).unwrap();
         assert_eq!(settings.recent_window.recent_window_days, 14);
-        assert_eq!(settings.threat.component_weights.historical_capability.maximum_score, 40);
+        assert_eq!(
+            settings
+                .threat
+                .component_weights
+                .historical_capability
+                .maximum_score,
+            40
+        );
         assert_eq!(settings.group_detection.minimum_shared_events, 2);
         assert_eq!(settings.style.blob_minimum_average_attackers, 5.0);
     }
 
     #[test]
     fn load_engine_settings_from_path_defaults_timing_to_disabled_when_section_absent() {
-        let path = std::env::temp_dir().join(format!("killright-settings-no-timing-{}.json", unique_suffix()));
+        let path = std::env::temp_dir().join(format!(
+            "killright-settings-no-timing-{}.json",
+            unique_suffix()
+        ));
         fs::write(&path, valid_settings_json()).unwrap();
 
         let settings = load_engine_settings_from_path(&path).unwrap();
@@ -192,7 +203,10 @@ mod tests {
 
     #[test]
     fn load_engine_settings_from_path_reads_timing_enabled() {
-        let path = std::env::temp_dir().join(format!("killright-settings-timing-{}.json", unique_suffix()));
+        let path = std::env::temp_dir().join(format!(
+            "killright-settings-timing-{}.json",
+            unique_suffix()
+        ));
         let json = valid_settings_json().replacen(
             "\"backupRotationCount\": 5,",
             "\"backupRotationCount\": 5, \"timing\": {\"enabled\": true},",
@@ -208,7 +222,10 @@ mod tests {
 
     #[test]
     fn load_engine_settings_from_path_ignores_unknown_top_level_keys() {
-        let path = std::env::temp_dir().join(format!("killright-settings-unknown-{}.json", unique_suffix()));
+        let path = std::env::temp_dir().join(format!(
+            "killright-settings-unknown-{}.json",
+            unique_suffix()
+        ));
         let json = valid_settings_json().replacen(
             "\"backupRotationCount\": 5,",
             "\"backupRotationCount\": 5, \"someFutureKey\": {\"nested\": true},",
@@ -224,8 +241,12 @@ mod tests {
 
     #[test]
     fn load_engine_settings_from_path_rejects_invalid_recent_window() {
-        let path = std::env::temp_dir().join(format!("killright-settings-invalid-window-{}.json", unique_suffix()));
-        let json = valid_settings_json().replace("\"recentWindowDays\": 14,", "\"recentWindowDays\": 0,");
+        let path = std::env::temp_dir().join(format!(
+            "killright-settings-invalid-window-{}.json",
+            unique_suffix()
+        ));
+        let json =
+            valid_settings_json().replace("\"recentWindowDays\": 14,", "\"recentWindowDays\": 0,");
         fs::write(&path, json).unwrap();
 
         let result = load_engine_settings_from_path(&path);
@@ -235,7 +256,11 @@ mod tests {
     }
 
     fn load_with_replacement(label: &str, from: &str, to: &str) -> Result<EngineSettings, String> {
-        let path = std::env::temp_dir().join(format!("killright-settings-{}-{}.json", label, unique_suffix()));
+        let path = std::env::temp_dir().join(format!(
+            "killright-settings-{}-{}.json",
+            label,
+            unique_suffix()
+        ));
         let json = valid_settings_json().replace(from, to);
         assert_ne!(json, valid_settings_json());
         fs::write(&path, json).unwrap();
@@ -248,7 +273,10 @@ mod tests {
 
     #[test]
     fn load_engine_settings_from_path_reads_gating() {
-        let path = std::env::temp_dir().join(format!("killright-settings-gating-{}.json", unique_suffix()));
+        let path = std::env::temp_dir().join(format!(
+            "killright-settings-gating-{}.json",
+            unique_suffix()
+        ));
         fs::write(&path, valid_settings_json()).unwrap();
 
         let settings = load_engine_settings_from_path(&path).unwrap();
@@ -263,7 +291,9 @@ mod tests {
 
     #[test]
     fn load_engine_settings_from_path_rejects_cap_out_of_range() {
-        assert!(load_with_replacement("cap-high", "\"mediumCap\": 40", "\"mediumCap\": 101").is_err());
+        assert!(
+            load_with_replacement("cap-high", "\"mediumCap\": 40", "\"mediumCap\": 101").is_err()
+        );
         assert!(load_with_replacement("cap-low", "\"highCap\": 60", "\"highCap\": 0").is_err());
         assert!(load_with_replacement("floor-low", "\"floor\": 1", "\"floor\": 0").is_err());
     }
@@ -280,8 +310,18 @@ mod tests {
 
     #[test]
     fn load_engine_settings_from_path_rejects_ratio_thresholds_out_of_order() {
-        assert!(load_with_replacement("ratio-order", "\"highRatioBelow\": 1.0", "\"highRatioBelow\": 0.4").is_err());
-        assert!(load_with_replacement("ratio-equal", "\"highRatioBelow\": 1.0", "\"highRatioBelow\": 0.5").is_err());
+        assert!(load_with_replacement(
+            "ratio-order",
+            "\"highRatioBelow\": 1.0",
+            "\"highRatioBelow\": 0.4"
+        )
+        .is_err());
+        assert!(load_with_replacement(
+            "ratio-equal",
+            "\"highRatioBelow\": 1.0",
+            "\"highRatioBelow\": 0.5"
+        )
+        .is_err());
     }
 
     #[test]
@@ -289,7 +329,10 @@ mod tests {
         let from = ",\n                \"gating\": {\"mediumCap\": 40, \"highCap\": 60, \"mediumRatioMaximum\": 0.5, \"highRatioBelow\": 1.0, \"floor\": 1}";
         let json = valid_settings_json().replace("\r\n", "\n");
         assert!(json.contains(from));
-        let path = std::env::temp_dir().join(format!("killright-settings-no-gating-{}.json", unique_suffix()));
+        let path = std::env::temp_dir().join(format!(
+            "killright-settings-no-gating-{}.json",
+            unique_suffix()
+        ));
         fs::write(&path, json.replace(from, "")).unwrap();
 
         let result = load_engine_settings_from_path(&path);
@@ -300,7 +343,10 @@ mod tests {
 
     #[test]
     fn load_engine_settings_from_path_rejects_old_security_band_field() {
-        assert!(load_with_replacement("old-band", "belowSecurityStatus", "minimumSecurityStatus").is_err());
+        assert!(
+            load_with_replacement("old-band", "belowSecurityStatus", "minimumSecurityStatus")
+                .is_err()
+        );
     }
 
     #[test]
@@ -316,7 +362,10 @@ mod tests {
     #[test]
     #[test]
     fn load_engine_settings_from_path_rejects_invalid_style_boundaries() {
-        let path = std::env::temp_dir().join(format!("killright-settings-invalid-style-{}.json", unique_suffix()));
+        let path = std::env::temp_dir().join(format!(
+            "killright-settings-invalid-style-{}.json",
+            unique_suffix()
+        ));
         let json = valid_settings_json().replace(
             "\"style\": {\"blobMinimumAverageAttackers\": 5, \"fleetMinimumAverageAttackers\": 11, \"podderMinimumSharePercent\": 35, \"podderMinimumKillCount\": 5}",
             "\"style\": {\"blobMinimumAverageAttackers\": 11, \"fleetMinimumAverageAttackers\": 11, \"podderMinimumSharePercent\": 35, \"podderMinimumKillCount\": 5}",

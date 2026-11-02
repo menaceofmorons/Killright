@@ -37,9 +37,15 @@ impl From<DerivedActivity> for DerivedActivityResponse {
             kills_week: has_data.then_some(activity.kills_week),
             solo_week: has_data.then_some(activity.solo_week),
             info_week_losses: has_data.then_some(activity.info_week_losses),
-            newest_non_pod_killmail: activity.newest_non_pod_killmail.map(|killmail| NewestKillmailResponse {
-                kill_time_utc: killmail.kill_time_utc,
-                activity_type: if killmail.is_loss { "Loss".to_string() } else { "Kill".to_string() },
+            newest_non_pod_killmail: activity.newest_non_pod_killmail.map(|killmail| {
+                NewestKillmailResponse {
+                    kill_time_utc: killmail.kill_time_utc,
+                    activity_type: if killmail.is_loss {
+                        "Loss".to_string()
+                    } else {
+                        "Kill".to_string()
+                    },
+                }
             }),
             newest_non_pod_kill_time_utc: activity.newest_non_pod_kill_time_utc,
         }
@@ -62,7 +68,10 @@ mod tests {
             newest_non_pod_kill_time_utc: None,
         });
 
-        assert_eq!(serde_json::to_string(&response).unwrap(), "{\"has_public_activity_data\":false}");
+        assert_eq!(
+            serde_json::to_string(&response).unwrap(),
+            "{\"has_public_activity_data\":false}"
+        );
     }
 
     #[test]

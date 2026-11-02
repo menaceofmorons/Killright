@@ -21,7 +21,10 @@ pub struct DerivedActivity {
     pub newest_non_pod_kill_time_utc: Option<String>,
 }
 
-pub fn derive_activity(killmails: &[RecentKillmailSnapshot], now: DateTime<Utc>) -> DerivedActivity {
+pub fn derive_activity(
+    killmails: &[RecentKillmailSnapshot],
+    now: DateTime<Utc>,
+) -> DerivedActivity {
     let cutoff = now - Duration::days(WEEKLY_WINDOW_DAYS);
 
     let mut window = killmails
@@ -91,7 +94,13 @@ mod tests {
         Utc.with_ymd_and_hms(2026, 9, 29, 12, 0, 0).unwrap()
     }
 
-    fn row(killmail_id: i64, kill_time_utc: &str, is_loss: bool, is_solo: bool, ship_type_id: Option<i64>) -> RecentKillmailSnapshot {
+    fn row(
+        killmail_id: i64,
+        kill_time_utc: &str,
+        is_loss: bool,
+        is_solo: bool,
+        ship_type_id: Option<i64>,
+    ) -> RecentKillmailSnapshot {
         RecentKillmailSnapshot {
             killmail_id,
             killmail_hash: None,
@@ -163,7 +172,10 @@ mod tests {
                 is_loss: false,
             })
         );
-        assert_eq!(derived.newest_non_pod_kill_time_utc.as_deref(), Some("2026-09-28T00:00:00+00:00"));
+        assert_eq!(
+            derived.newest_non_pod_kill_time_utc.as_deref(),
+            Some("2026-09-28T00:00:00+00:00")
+        );
     }
 
     #[test]
@@ -183,7 +195,10 @@ mod tests {
             })
         );
         assert_eq!(derived.kills_week, 1);
-        assert_eq!(derived.newest_non_pod_kill_time_utc.as_deref(), Some("2026-09-28T00:00:00+00:00"));
+        assert_eq!(
+            derived.newest_non_pod_kill_time_utc.as_deref(),
+            Some("2026-09-28T00:00:00+00:00")
+        );
     }
 
     #[test]
@@ -207,7 +222,10 @@ mod tests {
         assert!(!derived.has_public_activity_data);
         assert_eq!(derived.kills_week, 0);
         assert!(derived.newest_non_pod_killmail.is_none());
-        assert_eq!(derived.newest_non_pod_kill_time_utc.as_deref(), Some("2026-09-09T00:00:00+00:00"));
+        assert_eq!(
+            derived.newest_non_pod_kill_time_utc.as_deref(),
+            Some("2026-09-09T00:00:00+00:00")
+        );
     }
 
     #[test]
@@ -219,7 +237,10 @@ mod tests {
 
         let derived = derive_activity(&rows, now());
 
-        assert_eq!(derived.newest_non_pod_kill_time_utc.as_deref(), Some("2026-09-09T00:00:00+00:00"));
+        assert_eq!(
+            derived.newest_non_pod_kill_time_utc.as_deref(),
+            Some("2026-09-09T00:00:00+00:00")
+        );
         assert_eq!(
             derived.newest_non_pod_killmail,
             Some(NewestKillmail {
@@ -241,7 +262,10 @@ mod tests {
 
         let derived = derive_activity(&rows, now());
 
-        assert_eq!(derived.newest_non_pod_kill_time_utc.as_deref(), Some("2026-07-15T00:00:00+00:00"));
+        assert_eq!(
+            derived.newest_non_pod_kill_time_utc.as_deref(),
+            Some("2026-07-15T00:00:00+00:00")
+        );
     }
 
     #[test]
@@ -265,7 +289,10 @@ mod tests {
         let mut descending = ascending.clone();
         descending.reverse();
 
-        assert_eq!(derive_activity(&ascending, now()), derive_activity(&descending, now()));
+        assert_eq!(
+            derive_activity(&ascending, now()),
+            derive_activity(&descending, now())
+        );
     }
 
     #[test]

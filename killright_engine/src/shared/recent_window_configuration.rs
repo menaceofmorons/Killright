@@ -29,7 +29,9 @@ pub fn load_recent_window_configuration(path: &Path) -> Result<RecentWindowConfi
     Ok(configuration)
 }
 
-pub(crate) fn validate_recent_window_configuration(configuration: &RecentWindowConfiguration) -> Result<(), String> {
+pub(crate) fn validate_recent_window_configuration(
+    configuration: &RecentWindowConfiguration,
+) -> Result<(), String> {
     if configuration.recent_window_days <= 0 {
         return Err(format!(
             "recentWindowDays must be positive; actual value was {}",

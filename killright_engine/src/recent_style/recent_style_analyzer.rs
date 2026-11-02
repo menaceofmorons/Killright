@@ -4,7 +4,10 @@ use crate::shared::pod_kill::is_pod_kill;
 use crate::shared::recent_style_contract::*;
 use crate::shared::style_configuration::StyleConfiguration;
 
-pub fn analyze_recent_style(request: RecentStyleRequest, style_configuration: &StyleConfiguration) -> RecentStyleResult {
+pub fn analyze_recent_style(
+    request: RecentStyleRequest,
+    style_configuration: &StyleConfiguration,
+) -> RecentStyleResult {
     let analyzed_killmails = request.killmails.len();
 
     let kills: Vec<RecentKillmailInput> = request
@@ -70,7 +73,9 @@ fn is_recent_podder(
         return false;
     }
 
-    if non_pod_kill_count == 0 || (pod_kill_count as i64) < style_configuration.podder_minimum_kill_count {
+    if non_pod_kill_count == 0
+        || (pod_kill_count as i64) < style_configuration.podder_minimum_kill_count
+    {
         return false;
     }
 
@@ -150,7 +155,10 @@ mod tests {
 
     #[test]
     fn solo_kill_returns_solo_contract_value() {
-        let result = analyze_recent_style(request(vec![kill(1, 1, true, Some(33468))]), &style_configuration());
+        let result = analyze_recent_style(
+            request(vec![kill(1, 1, true, Some(33468))]),
+            &style_configuration(),
+        );
 
         assert_eq!(result.recent_style, STYLE_SOLO);
         assert_eq!(result.kills, 1);
@@ -176,7 +184,10 @@ mod tests {
     #[test]
     fn victim_rule_returns_victim_without_subtype_lookup_for_mining_ship_losses() {
         let result = analyze_recent_style(
-            request(vec![loss(1, 1, true, Some(32880)), loss(2, 1, true, Some(32880))]),
+            request(vec![
+                loss(1, 1, true, Some(32880)),
+                loss(2, 1, true, Some(32880)),
+            ]),
             &style_configuration(),
         );
 
@@ -203,7 +214,11 @@ mod tests {
     #[test]
     fn only_pod_losses_in_window_gives_no_victim() {
         let result = analyze_recent_style(
-            request(vec![loss(1, 1, true, Some(670)), loss(2, 1, true, Some(670)), loss(3, 1, true, Some(33328))]),
+            request(vec![
+                loss(1, 1, true, Some(670)),
+                loss(2, 1, true, Some(670)),
+                loss(3, 1, true, Some(33328)),
+            ]),
             &style_configuration(),
         );
 
@@ -309,7 +324,10 @@ mod tests {
     #[test]
     fn only_pod_kills_in_window_never_resolves_to_solo_gang_or_blob() {
         let result = analyze_recent_style(
-            request(vec![kill(1, 1, true, Some(670)), kill(2, 1, true, Some(33328))]),
+            request(vec![
+                kill(1, 1, true, Some(670)),
+                kill(2, 1, true, Some(33328)),
+            ]),
             &style_configuration(),
         );
 

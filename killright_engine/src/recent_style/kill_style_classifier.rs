@@ -2,7 +2,10 @@ use crate::recent_style::RecentKillmailInput;
 use crate::shared::recent_style_contract::*;
 use crate::shared::style_configuration::StyleConfiguration;
 
-pub fn classify_kill_style(kills: &[RecentKillmailInput], style_configuration: &StyleConfiguration) -> String {
+pub fn classify_kill_style(
+    kills: &[RecentKillmailInput],
+    style_configuration: &StyleConfiguration,
+) -> String {
     if kills.is_empty() {
         return STYLE_UNKNOWN.to_string();
     }
@@ -58,7 +61,10 @@ mod tests {
 
     #[test]
     fn solo_heavy_kills_return_solo() {
-        let result = classify_kill_style(&[kill(1, true), kill(1, true), kill(3, false)], &style_configuration());
+        let result = classify_kill_style(
+            &[kill(1, true), kill(1, true), kill(3, false)],
+            &style_configuration(),
+        );
 
         assert_eq!(result, STYLE_SOLO);
     }
@@ -79,7 +85,8 @@ mod tests {
 
     #[test]
     fn large_average_gang_returns_fleet() {
-        let result = classify_kill_style(&[kill(12, false), kill(20, false)], &style_configuration());
+        let result =
+            classify_kill_style(&[kill(12, false), kill(20, false)], &style_configuration());
 
         assert_eq!(result, STYLE_FLEET);
     }

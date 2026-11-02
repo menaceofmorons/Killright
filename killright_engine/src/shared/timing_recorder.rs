@@ -94,7 +94,11 @@ pub struct PhaseGuard {
 pub fn scope(phase: &'static str) -> PhaseGuard {
     PhaseGuard {
         phase,
-        started: if is_active() { Some(Instant::now()) } else { None },
+        started: if is_active() {
+            Some(Instant::now())
+        } else {
+            None
+        },
     }
 }
 

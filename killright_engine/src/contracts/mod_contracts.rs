@@ -11,10 +11,13 @@ pub mod threat_diagnostics_response;
 
 pub use derived_activity_response::{DerivedActivityResponse, NewestKillmailResponse};
 pub use engine_inputs::{GroupInputs, PilotInputs};
-pub use group_detection_diagnostics_response::{GroupDetectionDiagnosticsEnvelope, GroupDetectionDiagnosticsResponse};
+pub use group_detection_diagnostics_response::{
+    GroupDetectionDiagnosticsEnvelope, GroupDetectionDiagnosticsResponse,
+};
 pub use group_detection_response::{GroupDetectionResponse, GroupRelationshipResponse};
 pub use input_snapshots::{
-    KillmailAttackerEvidence, PilotIdentitySnapshot, RecentKillmailSnapshot, ZKillStatisticsSnapshot,
+    KillmailAttackerEvidence, PilotIdentitySnapshot, RecentKillmailSnapshot,
+    ZKillStatisticsSnapshot,
 };
 pub use pilot_analysis_request::PilotAnalysisRequest;
 pub use pilot_analysis_response::PilotAnalysisResponse;

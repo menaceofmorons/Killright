@@ -1,8 +1,8 @@
 use serde::Serialize;
 
 use crate::group_analysis::group_detection_diagnostics::{
-    AfterSplitBranch, ChainedRelationshipDiagnostic, ContributingKillmail, DirectRelationshipDiagnostic,
-    GroupDetectionDiagnostics, IntermediaryHubSummary,
+    AfterSplitBranch, ChainedRelationshipDiagnostic, ContributingKillmail,
+    DirectRelationshipDiagnostic, GroupDetectionDiagnostics, IntermediaryHubSummary,
 };
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -94,7 +94,11 @@ pub struct IntermediaryHubSummaryResponse {
 impl From<GroupDetectionDiagnostics> for GroupDetectionDiagnosticsResponse {
     fn from(diagnostics: GroupDetectionDiagnostics) -> Self {
         Self {
-            direct_relationships: diagnostics.direct_relationships.into_iter().map(Into::into).collect(),
+            direct_relationships: diagnostics
+                .direct_relationships
+                .into_iter()
+                .map(Into::into)
+                .collect(),
             chains: diagnostics.chains.into_iter().map(Into::into).collect(),
             hubs: diagnostics.hubs.into_iter().map(Into::into).collect(),
             direct_analysis_duration_ms: diagnostics.direct_analysis_duration_ms,
@@ -124,7 +128,11 @@ impl From<DirectRelationshipDiagnostic> for DirectRelationshipDiagnosticResponse
                 AfterSplitBranch::AllCountedSinceSplit => "AllCountedSinceSplit".to_string(),
                 AfterSplitBranch::NotSameOnly => "NotSameOnly".to_string(),
             },
-            contributing_killmails: value.contributing_killmails.into_iter().map(Into::into).collect(),
+            contributing_killmails: value
+                .contributing_killmails
+                .into_iter()
+                .map(Into::into)
+                .collect(),
             counted_shared_kills: value.counted_shared_kills,
             split_bonus_applied: value.split_bonus_applied,
             qualifies: value.qualifies,
@@ -145,12 +153,14 @@ impl From<ChainedRelationshipDiagnostic> for ChainedRelationshipDiagnosticRespon
             intermediary_pilot_character_id: value.intermediary_pilot_b,
             intermediary_in_scan: value.intermediary_in_scan,
             link_ab_counted_shared_kills: value.link_ab_counted_shared_kills,
-            link_ab_most_recent_in_window_kill_time_utc: value.link_ab_most_recent_in_window_kill_time_utc,
+            link_ab_most_recent_in_window_kill_time_utc: value
+                .link_ab_most_recent_in_window_kill_time_utc,
             link_ab_split_bonus_applied: value.link_ab_split_bonus_applied,
             link_ab_strength: value.link_ab_strength,
             link_ab_confidence: value.link_ab_confidence,
             link_cb_counted_shared_kills: value.link_cb_counted_shared_kills,
-            link_cb_most_recent_in_window_kill_time_utc: value.link_cb_most_recent_in_window_kill_time_utc,
+            link_cb_most_recent_in_window_kill_time_utc: value
+                .link_cb_most_recent_in_window_kill_time_utc,
             link_cb_split_bonus_applied: value.link_cb_split_bonus_applied,
             link_cb_strength: value.link_cb_strength,
             link_cb_confidence: value.link_cb_confidence,

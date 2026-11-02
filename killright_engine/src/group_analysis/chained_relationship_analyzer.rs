@@ -2,12 +2,13 @@ use std::collections::{HashMap, HashSet};
 
 use chrono::{DateTime, Duration, Utc};
 
-use crate::group_analysis::shared_relationship_evidence::{
-    apply_after_split_rule, build_current_identity_index, build_shared_events_by_pair,
-    group_attackers_by_killmail, is_currently_same_corporation_or_alliance, ordered_pair, SharedKillEvent,
-};
 use crate::contracts::KillmailAttackerEvidence;
 use crate::contracts::PilotIdentitySnapshot;
+use crate::group_analysis::shared_relationship_evidence::{
+    apply_after_split_rule, build_current_identity_index, build_shared_events_by_pair,
+    group_attackers_by_killmail, is_currently_same_corporation_or_alliance, ordered_pair,
+    SharedKillEvent,
+};
 use crate::shared::timing_recorder;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -44,7 +45,8 @@ pub fn analyze_chained_relationships(
     now: DateTime<Utc>,
 ) -> Vec<ChainedRelationship> {
     let current_identity_by_character = build_current_identity_index(current_identities);
-    let scanned_character_ids: HashSet<i64> = current_identity_by_character.keys().copied().collect();
+    let scanned_character_ids: HashSet<i64> =
+        current_identity_by_character.keys().copied().collect();
     let attackers_by_killmail = {
         let _timing = timing_recorder::scope("chain_group_by_killmail");
         group_attackers_by_killmail(evidence)
@@ -57,13 +59,20 @@ pub fn analyze_chained_relationships(
 
     let candidates = {
         let _timing = timing_recorder::scope("chain_candidate_search");
-        find_candidate_intermediaries(&attackers_by_killmail, &scanned_character_ids, window_cutoff)
+        find_candidate_intermediaries(
+            &attackers_by_killmail,
+            &scanned_character_ids,
+            window_cutoff,
+        )
     };
     if timing_recorder::is_active() {
         timing_recorder::add_count("chain_killmails", attackers_by_killmail.len() as i64);
         timing_recorder::add_count(
             "chain_pair_events",
-            shared_events_by_pair.values().map(|events| events.len() as i64).sum(),
+            shared_events_by_pair
+                .values()
+                .map(|events| events.len() as i64)
+                .sum(),
         );
         timing_recorder::add_count("chain_candidates", candidates.len() as i64);
     }
@@ -111,7 +120,8 @@ pub fn analyze_chained_relationships(
                 let older_within_window_time = link_ab
                     .most_recent_within_window
                     .min(link_cb.most_recent_within_window);
-                let chain_age_days = ((now - older_within_window_time).num_seconds() as f64 / 86400.0).max(0.0);
+                let chain_age_days =
+                    ((now - older_within_window_time).num_seconds() as f64 / 86400.0).max(0.0);
 
                 relationships.push(ChainedRelationship {
                     pilot_a: pair_key.0,
@@ -119,11 +129,13 @@ pub fn analyze_chained_relationships(
                     intermediary_pilot_b,
                     intermediary_in_scan: scanned_character_ids.contains(&intermediary_pilot_b),
                     link_ab_counted_shared_kills: link_ab.counted_shared_kills,
-                    link_ab_most_recent_in_window_kill_time_utc: link_ab.most_recent_within_window_kill_time_utc,
+                    link_ab_most_recent_in_window_kill_time_utc: link_ab
+                        .most_recent_within_window_kill_time_utc,
                     link_ab_split_bonus_applied: link_ab.split_bonus_applied,
                     link_ab_counted_shared_kill_gang_sizes: link_ab.counted_shared_kill_gang_sizes,
                     link_cb_counted_shared_kills: link_cb.counted_shared_kills,
-                    link_cb_most_recent_in_window_kill_time_utc: link_cb.most_recent_within_window_kill_time_utc,
+                    link_cb_most_recent_in_window_kill_time_utc: link_cb
+                        .most_recent_within_window_kill_time_utc,
                     link_cb_split_bonus_applied: link_cb.split_bonus_applied,
                     link_cb_counted_shared_kill_gang_sizes: link_cb.counted_shared_kill_gang_sizes,
                     chain_age_days,
@@ -149,7 +161,10 @@ fn find_candidate_intermediaries(
     let mut candidates: HashMap<i64, HashSet<i64>> = HashMap::new();
 
     for attackers in attackers_by_killmail.values() {
-        let Some(kill_time) = attackers.first().and_then(|row| parse_kill_time(&row.kill_time_utc)) else {
+        let Some(kill_time) = attackers
+            .first()
+            .and_then(|row| parse_kill_time(&row.kill_time_utc))
+        else {
             continue;
         };
 
@@ -173,7 +188,10 @@ fn find_candidate_intermediaries(
                     continue;
                 }
 
-                candidates.entry(attacker.character_id).or_default().insert(scanned_pilot);
+                candidates
+                    .entry(attacker.character_id)
+                    .or_default()
+                    .insert(scanned_pilot);
             }
         }
     }
@@ -201,7 +219,9 @@ fn evaluate_link(
 
     let (most_recent_within_window, most_recent_within_window_kill_time_utc) = counted_events
         .iter()
-        .filter_map(|event| parse_kill_time(&event.kill_time_utc).map(|time| (time, event.kill_time_utc.clone())))
+        .filter_map(|event| {
+            parse_kill_time(&event.kill_time_utc).map(|time| (time, event.kill_time_utc.clone()))
+        })
         .filter(|(time, _)| *time >= window_cutoff)
         .max_by_key(|(time, _)| *time)?;
 
@@ -308,9 +328,15 @@ mod tests {
         assert_eq!(chain.intermediary_pilot_b, 200);
         assert!(!chain.intermediary_in_scan);
         assert_eq!(chain.link_ab_counted_shared_kills, 2);
-        assert_eq!(chain.link_ab_most_recent_in_window_kill_time_utc, "2026-09-21T00:00:00+00:00");
+        assert_eq!(
+            chain.link_ab_most_recent_in_window_kill_time_utc,
+            "2026-09-21T00:00:00+00:00"
+        );
         assert_eq!(chain.link_cb_counted_shared_kills, 2);
-        assert_eq!(chain.link_cb_most_recent_in_window_kill_time_utc, "2026-09-17T00:00:00+00:00");
+        assert_eq!(
+            chain.link_cb_most_recent_in_window_kill_time_utc,
+            "2026-09-17T00:00:00+00:00"
+        );
         assert!((chain.chain_age_days - 6.0).abs() < 1e-9);
     }
 
@@ -476,7 +502,10 @@ mod tests {
             .collect();
 
         assert_eq!(pair_chains.len(), 2);
-        let intermediaries: HashSet<i64> = pair_chains.iter().map(|chain| chain.intermediary_pilot_b).collect();
+        let intermediaries: HashSet<i64> = pair_chains
+            .iter()
+            .map(|chain| chain.intermediary_pilot_b)
+            .collect();
         assert_eq!(intermediaries, HashSet::from([200, 500]));
     }
 }

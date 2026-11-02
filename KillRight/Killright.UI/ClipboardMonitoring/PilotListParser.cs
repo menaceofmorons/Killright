@@ -15,7 +15,7 @@ public static class PilotListParser
 
     private static bool IsValidEveCharacterName(string input)
     {
-    
+
         if (string.IsNullOrWhiteSpace(input))
             return false;
 

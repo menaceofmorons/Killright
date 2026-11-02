@@ -1,7 +1,8 @@
 use serde::Deserialize;
 
 use super::input_snapshots::{
-    KillmailAttackerEvidence, PilotIdentitySnapshot, RecentKillmailSnapshot, ZKillStatisticsSnapshot,
+    KillmailAttackerEvidence, PilotIdentitySnapshot, RecentKillmailSnapshot,
+    ZKillStatisticsSnapshot,
 };
 
 #[derive(Debug, Clone, Deserialize)]

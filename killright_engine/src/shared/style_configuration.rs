@@ -12,7 +12,9 @@ pub struct StyleConfiguration {
     pub podder_minimum_kill_count: i64,
 }
 
-pub(crate) fn validate_style_configuration(configuration: &StyleConfiguration) -> Result<(), String> {
+pub(crate) fn validate_style_configuration(
+    configuration: &StyleConfiguration,
+) -> Result<(), String> {
     if configuration.blob_minimum_average_attackers <= 0.0 {
         return Err(format!(
             "blobMinimumAverageAttackers must be positive; actual value was {}",
@@ -20,10 +22,12 @@ pub(crate) fn validate_style_configuration(configuration: &StyleConfiguration) -
         ));
     }
 
-    if configuration.fleet_minimum_average_attackers <= configuration.blob_minimum_average_attackers {
+    if configuration.fleet_minimum_average_attackers <= configuration.blob_minimum_average_attackers
+    {
         return Err(format!(
             "fleetMinimumAverageAttackers {} must exceed blobMinimumAverageAttackers {}",
-            configuration.fleet_minimum_average_attackers, configuration.blob_minimum_average_attackers
+            configuration.fleet_minimum_average_attackers,
+            configuration.blob_minimum_average_attackers
         ));
     }
 

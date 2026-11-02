@@ -23,7 +23,9 @@ pub fn load_threat_configuration(path: &Path) -> Result<ThreatConfiguration, Str
     Ok(configuration)
 }
 
-pub(crate) fn validate_threat_configuration(configuration: &ThreatConfiguration) -> Result<(), String> {
+pub(crate) fn validate_threat_configuration(
+    configuration: &ThreatConfiguration,
+) -> Result<(), String> {
     validate_component_weights(configuration)?;
     validate_non_negative_scores(configuration)?;
     validate_recent_activity_points(configuration)?;
@@ -54,7 +56,8 @@ fn validate_gating(configuration: &ThreatConfiguration) -> Result<(), String> {
         return Err("gating.floor must not exceed gating.mediumCap".to_string());
     }
 
-    if !(gating.medium_ratio_maximum > 0.0 && gating.medium_ratio_maximum < gating.high_ratio_below) {
+    if !(gating.medium_ratio_maximum > 0.0 && gating.medium_ratio_maximum < gating.high_ratio_below)
+    {
         return Err(
             "gating.mediumRatioMaximum must be above 0 and below gating.highRatioBelow".to_string(),
         );
@@ -89,17 +92,24 @@ fn validate_recent_activity_points(configuration: &ThreatConfiguration) -> Resul
         return Err("recentActivity.points must not be empty".to_string());
     }
 
-    let maximum_score = configuration.component_weights.recent_activity.maximum_score as f64;
+    let maximum_score = configuration
+        .component_weights
+        .recent_activity
+        .maximum_score as f64;
     let mut previous_rate = f64::MIN;
     let mut previous_score = f64::MIN;
 
     for point in points {
         if point.daily_rate <= previous_rate {
-            return Err("recentActivity.points must be strictly ordered by ascending dailyRate".to_string());
+            return Err(
+                "recentActivity.points must be strictly ordered by ascending dailyRate".to_string(),
+            );
         }
 
         if point.score < previous_score {
-            return Err("recentActivity.points scores must be non-decreasing by dailyRate".to_string());
+            return Err(
+                "recentActivity.points scores must be non-decreasing by dailyRate".to_string(),
+            );
         }
 
         if point.score < 0.0 || point.score > maximum_score {
@@ -117,7 +127,10 @@ fn validate_recent_activity_points(configuration: &ThreatConfiguration) -> Resul
 }
 
 fn validate_security_status_bounds(configuration: &ThreatConfiguration) -> Result<(), String> {
-    let maximum_score = configuration.component_weights.security_status.maximum_score;
+    let maximum_score = configuration
+        .component_weights
+        .security_status
+        .maximum_score;
 
     for band in &configuration.security_status.bands {
         if band.score < 0 || band.score > maximum_score {

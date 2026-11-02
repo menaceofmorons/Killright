@@ -2,6 +2,7 @@ using Killright.Integration.zKill;
 using Killright.Storage.Database;
 
 namespace Killright.Storage.zKill;
+
 using Killright.Shared.zKill;
 
 public interface IzKillStatisticsCache
