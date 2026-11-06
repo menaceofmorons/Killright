@@ -33,6 +33,13 @@ Run by every agent in a fresh worktree, and by `health-check` before checks. Com
 | deps-backend | `cargo fetch --manifest-path killright_engine/Cargo.toml` | `killright_engine/Cargo.toml` |
 | deps-app | `dotnet restore KillRight/KillRight.sln` | `KillRight/KillRight.sln` |
 
+## Build Cache (health-check, pkg-integrator)
+Every worktree builds in its own checkout, so a toolchain that keeps its build output or cache per checkout starts cold in each one. One row per compiled toolchain. `Redirect` is what the Developer sets once per machine (`Machine-Setup.md`, Build caches): a machine-wide folder outside any synced folder. `Check` is a command that exits 0 when the redirect is in effect. Rules: `project-rules` (Build cache).
+
+| Toolchain | Redirect | Check | Requires |
+| --- | --- | --- | --- |
+| Rust | user variable `CARGO_TARGET_DIR` set to a folder outside any synced folder (`C:/BuildCache/cargo`) | `py -c "import os, sys; sys.exit(0 if os.environ.get('CARGO_TARGET_DIR') else 1)"` | `killright_engine/Cargo.toml` |
+
 ## Package Test Commands (package agents / test-runner)
 | Purpose | Command | Requires |
 | --- | --- | --- |
