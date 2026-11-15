@@ -52,15 +52,15 @@ Every worktree builds in its own checkout, so a toolchain that keeps its build o
 ## Health Checks (health-check)
 Scopes: `wave` per T-TLO §2.6; `full` per §2.7 and §3. A check must pass on a clean checkout.
 
-| Name | Command | Requires | Scope |
-| --- | --- | --- | --- |
-| build-engine | `cargo build --manifest-path killright_engine/Cargo.toml --all-targets` | `killright_engine/Cargo.toml` | wave, full |
-| build-app | `dotnet build KillRight/KillRight.sln --no-restore` | `KillRight/KillRight.sln` | wave, full |
-| lint-engine | `cargo clippy --manifest-path killright_engine/Cargo.toml --all-targets -- -D warnings` | `killright_engine/Cargo.toml` | wave, full |
-| format-engine | `cargo fmt --manifest-path killright_engine/Cargo.toml --check` | `killright_engine/Cargo.toml` | wave, full |
-| format-app | `dotnet format whitespace KillRight/KillRight.sln --verify-no-changes` | `KillRight/KillRight.sln` | wave, full |
-| unit-engine | `cargo test --manifest-path killright_engine/Cargo.toml` | `killright_engine/Cargo.toml` | full |
-| unit-app | `dotnet test KillRight/KillRight.sln --no-restore` | `KillRight/KillRight.sln` | full |
+| Name | Command | Requires | Scope | Paths |
+| --- | --- | --- | --- | --- |
+| build-engine | `cargo build --manifest-path killright_engine/Cargo.toml --all-targets` | `killright_engine/Cargo.toml` | full | `killright_engine/` |
+| build-app | `dotnet build KillRight/KillRight.sln --no-restore` | `KillRight/KillRight.sln` | wave, full | `KillRight/` |
+| lint-engine | `cargo clippy --manifest-path killright_engine/Cargo.toml --all-targets -- -D warnings` | `killright_engine/Cargo.toml` | wave, full | `killright_engine/` |
+| format-engine | `cargo fmt --manifest-path killright_engine/Cargo.toml --check` | `killright_engine/Cargo.toml` | wave, full | `killright_engine/` |
+| format-app | `dotnet format whitespace KillRight/KillRight.sln --verify-no-changes` | `KillRight/KillRight.sln` | wave, full | `KillRight/` |
+| unit-engine | `cargo test --manifest-path killright_engine/Cargo.toml` | `killright_engine/Cargo.toml` | full | `killright_engine/` |
+| unit-app | `dotnet test KillRight/KillRight.sln --no-restore` | `KillRight/KillRight.sln` | full | `KillRight/, killright_engine/` |
 
 ## Release (`#T-REL`, `#T-RS`)
 | Var | Value | Notes |
