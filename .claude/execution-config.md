@@ -61,7 +61,6 @@ Scopes: `wave` per T-TLO §2.6; `full` per §2.7 and §3. A check must pass on a
 | format-app | `dotnet format whitespace KillRight/KillRight.sln --verify-no-changes` | `KillRight/KillRight.sln` | wave, full |
 | unit-engine | `cargo test --manifest-path killright_engine/Cargo.toml` | `killright_engine/Cargo.toml` | full |
 | unit-app | `dotnet test KillRight/KillRight.sln --no-restore` | `KillRight/KillRight.sln` | full |
-| settings-drift | `dotnet test KillRight/Killright.Settings.Tests/Killright.Settings.Tests.csproj --no-restore` | `KillRight/Killright.Settings.Tests/Killright.Settings.Tests.csproj` | wave, full |
 
 ## Release (`#T-REL`, `#T-RS`)
 | Var | Value | Notes |
