@@ -17,10 +17,15 @@
       <ProjectReference Include="..\Killright.Storage\Killright.Storage.csproj" />
     </ItemGroup>
 
+    <PropertyGroup>
+        <EngineTargetDir Condition="'$(CARGO_TARGET_DIR)' != ''">$([MSBuild]::EnsureTrailingSlash('$(CARGO_TARGET_DIR)'))</EngineTargetDir>
+        <EngineTargetDir Condition="'$(EngineTargetDir)' == ''">$(MSBuildThisFileDirectory)..\..\killright_engine\target\</EngineTargetDir>
+    </PropertyGroup>
+
     <ItemGroup>
         <None Include="config\settings.json"
               CopyToOutputDirectory="PreserveNewest" />
-        <None Include="..\..\killright_engine\target\debug\killright_engine.dll"
+        <None Include="$(EngineTargetDir)debug\killright_engine.dll"
               Link="killright_engine.dll"
               CopyToOutputDirectory="PreserveNewest" />
     </ItemGroup>
