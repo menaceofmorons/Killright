@@ -25,5 +25,5 @@ metadata:
 
 ### Gotchas
 - zKillboard API calls (killmails, statistics, prices, posting, history dumps, R2Z2 feed): the official wiki https://github.com/zKillboard/zKillboard/wiki and its API sub-pages are the source; consult them before implementing or changing any zKill integration, never rely on assumptions (pre-framework)
-- With `CARGO_TARGET_DIR` set (Build Cache redirect), `Killright.UI.csproj` cannot find `killright_engine.dll`: it hard-codes `killright_engine\target\debug\`, so the app build fails with MSB3030 (WS-1.1)
+- The engine dll location is resolved from `CARGO_TARGET_DIR`, falling back to `killright_engine/target` (`EngineTargetDir` in `Killright.UI.csproj`, same rule in `Build-Package.ps1`); never hard-code a cargo output path in a project, script or test (WS-1.1)
 - `Killright.UI.csproj` copies the engine dll from the cargo output and silently skips a missing file; check the app output folder for `killright_engine.dll` rather than trusting a green build (WS-1.1)
