@@ -25,3 +25,4 @@ metadata:
 
 ### Gotchas
 - zKillboard API calls (killmails, statistics, prices, posting, history dumps, R2Z2 feed): the official wiki https://github.com/zKillboard/zKillboard/wiki and its API sub-pages are the source; consult them before implementing or changing any zKill integration, never rely on assumptions (pre-framework)
+- With `CARGO_TARGET_DIR` set (Build Cache redirect), `Killright.UI.csproj` cannot find `killright_engine.dll`: it hard-codes `killright_engine\target\debug\`, so the app build fails with MSB3030 (WS-1.1)
