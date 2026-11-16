@@ -46,12 +46,12 @@ Section "Install"
     Sleep 500
 
     SetRegView 64
-    StrCpy $1 "$PROGRAMFILES64\dotnet\shared\Microsoft.WindowsDesktop.App\9.*"
+    StrCpy $1 "$PROGRAMFILES64\dotnet\shared\Microsoft.WindowsDesktop.App\10.*"
     FindFirst $0 $2 $1
     FindClose $0
     StrCmp $2 "" 0 RuntimeFound
-    MessageBox MB_YESNO|MB_ICONEXCLAMATION "${APP_NAME} needs the .NET 9 Desktop Runtime (x64), which was not found on this computer.$\r$\n$\r$\nOpen the Microsoft download page now? Install the Desktop Runtime, then start ${APP_NAME}." /SD IDNO IDNO RuntimeFound
-    ExecShell "open" "https://dotnet.microsoft.com/download/dotnet/9.0"
+    MessageBox MB_YESNO|MB_ICONEXCLAMATION "${APP_NAME} needs the .NET 10 Desktop Runtime (x64), which was not found on this computer.$\r$\n$\r$\nOpen the Microsoft download page now? Install the Desktop Runtime, then start ${APP_NAME}." /SD IDNO IDNO RuntimeFound
+    ExecShell "open" "https://dotnet.microsoft.com/download/dotnet/10.0"
     RuntimeFound:
 
     Delete "$INSTDIR\*.dll"
