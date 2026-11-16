@@ -70,12 +70,12 @@ Scopes: `wave` per T-TLO §2.6; `full` per §2.7 and §3. A check must pass on a
 ### Version Files
 | File | Pattern |
 | --- | --- |
-| `Packaging/Build-AlphaPackage.ps1` | `$version = '{v}'` |
+| `Packaging/Build-Package.ps1` | `$version = '{v}'` |
 
 ### Release Build (`local` only)
 | Step | Command |
 | --- | --- |
-| package | `powershell -File Packaging/Build-AlphaPackage.ps1` |
+| package | `powershell -File Packaging/Build-Package.ps1` |
 
 Artefacts: `Packaging/out/`
 
