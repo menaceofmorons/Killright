@@ -1,4 +1,4 @@
-; Defines passed by Build-AlphaPackage.ps1: APP_DIR, OUT_FILE, APP_VERSION
+; Defines passed by Build-Package.ps1: APP_DIR, OUT_FILE, APP_VERSION
 Unicode true
 SetCompressor /SOLID lzma
 !include "MUI2.nsh"
@@ -7,16 +7,16 @@ SetCompressor /SOLID lzma
 !define APP_EXE "Killright.UI.exe"
 !define UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\KillRight"
 
-Name "${APP_NAME} Alpha v${APP_VERSION}"
+Name "${APP_NAME} v${APP_VERSION}"
 OutFile "${OUT_FILE}"
 InstallDir "$LOCALAPPDATA\Programs\KillRight"
 InstallDirRegKey HKCU "Software\KillRight" "InstallDir"
 RequestExecutionLevel user
-BrandingText "KillRight Alpha v${APP_VERSION}"
+BrandingText "KillRight v${APP_VERSION}"
 
 VIProductVersion "${APP_VERSION}.0"
 VIAddVersionKey "ProductName" "${APP_NAME}"
-VIAddVersionKey "FileDescription" "${APP_NAME} Alpha v${APP_VERSION} Setup"
+VIAddVersionKey "FileDescription" "${APP_NAME} v${APP_VERSION} Setup"
 VIAddVersionKey "FileVersion" "${APP_VERSION}"
 VIAddVersionKey "ProductVersion" "${APP_VERSION}"
 
@@ -80,7 +80,7 @@ Section "Install"
     CreateShortcut "$SMPROGRAMS\${APP_NAME}.lnk" "$INSTDIR\${APP_EXE}" "" "$INSTDIR\${APP_EXE}" 0
 
     WriteRegStr HKCU "Software\KillRight" "InstallDir" "$INSTDIR"
-    WriteRegStr HKCU "${UNINST_KEY}" "DisplayName" "${APP_NAME} (Alpha v${APP_VERSION})"
+    WriteRegStr HKCU "${UNINST_KEY}" "DisplayName" "${APP_NAME} (v${APP_VERSION})"
     WriteRegStr HKCU "${UNINST_KEY}" "DisplayVersion" "${APP_VERSION}"
     WriteRegStr HKCU "${UNINST_KEY}" "Publisher" "${APP_NAME}"
     WriteRegStr HKCU "${UNINST_KEY}" "InstallLocation" "$INSTDIR"
