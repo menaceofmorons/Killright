@@ -43,3 +43,16 @@
 ## Tests
 - Follow `dev-testing`. Here: one `public sealed {Type}Tests` class per type; methods named `Subject_Condition_Result`; hand-written fakes, no mocking library; a temp-file SQLite database per test; WPF objects only inside `Sta.Run`.
 - Assert on behaviour, never on source text.
+
+## Project specifics
+- Statics and constants are PascalCase.
+- Instants are `DateTimeOffset` in UTC; elapsed time uses `Stopwatch.GetTimestamp` and `GetElapsedTime`, never wall-clock subtraction.
+- Time comes from an injected `Func<DateTimeOffset>`; app-wide code uses the static `ApplicationClock`. Never call `DateTimeOffset.UtcNow` in logic that tests need to control.
+- Catch cancellation from the caller's own token with a `when` filter on that token, so other cancellations still surface.
+- Locks use a private `_gate` object; enum `switch` expressions throw in the discard arm.
+- No `ICommand` and no MVVM toolkit: views use `Click=` handlers in XAML and thin view models.
+- Theme brushes and font tiers are `DynamicResource` dictionaries, swapped in `Application.Resources.MergedDictionaries`.
+- A bound grid collection is replaced in bulk on the UI thread, not changed item by item.
+- Composition is manual: `App.OnStartup` builds services into static `App` properties; no DI container.
+- `OnExit` runs shutdown as named steps, each guarded on its own, so one failure does not skip the rest.
+- Tests use xunit only.

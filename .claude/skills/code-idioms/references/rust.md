@@ -27,3 +27,10 @@
 ## Settings and the CLI
 - Thresholds and other changeable values come from the settings the runtime loads, never from literals.
 - The CLI should use the library crate rather than compiling the modules again through `#[path]`, and its thresholds should come from settings (BL-013); add no new literals there.
+
+## Project specifics
+- Engine state is one `static` `OnceLock<Mutex<Option<RuntimeState>>>`.
+- Fallible functions return `Result<_, String>`, building the message with `map_err` and `format!` so the cause stays in the text.
+- Modules are split by feature, each with a `mod_<name>.rs`; contract types are re-exported with `pub use`; internals are `pub(crate)`.
+- Only `lib.rs` reads the clock; analysers take `now` as a parameter.
+- Tests are inline `#[cfg(test)] mod tests` with `use super::*;`, named by behaviour in snake_case.

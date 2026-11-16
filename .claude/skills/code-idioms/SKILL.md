@@ -22,11 +22,13 @@ metadata:
 | --- | --- | --- |
 | C# | `KillRight/**/*.cs`, `KillRight/**/*.xaml` | `references/csharp.md` |
 | Rust | `killright_engine/**/*.rs` | `references/rust.md` |
+| SQLite | `KillRight/Killright.Storage/**/*.cs` | `references/sqlite.md` |
 
 ### Boundaries
 | Between | Files | Reference |
 | --- | --- | --- |
 | C# and Rust | `KillRight/Killright.UI/Analysis/KillrightEngineRuntime.cs`, `KillRight/Killright.UI/Analysis/RustRecentStyleClient.cs`, `KillRight/Killright.Storage/Engine/EngineInputModels.cs`, `killright_engine/src/lib.rs`, `killright_engine/src/contracts/**` | `references/csharp-rust-boundary.md` |
+| C# and SQLite | `KillRight/Killright.Storage/**/*.cs`, `KillRight/Killright.Shared/Data/**` | `references/csharp-sqlite-boundary.md` |
 
 ### All languages
 - Add a NuGet package or crate only when the brief names it.

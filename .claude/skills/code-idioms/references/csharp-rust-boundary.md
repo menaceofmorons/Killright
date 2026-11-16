@@ -26,3 +26,10 @@
 ## Versioning and tests
 - The engine exports a contract version; the runtime checks it at load and refuses a mismatch (BL-009).
 - Interop tests fail, never skip, when the DLL is missing (BL-008).
+
+## Project specifics
+- Request and response DTOs are mirrored by hand and match by name and type; neither side uses `deny_unknown_fields`, and optional fields are omitted when empty.
+- Times cross as round-trip (`"O"`) ISO strings.
+- Each export returns one JSON envelope with a `failure` field; the batch export returns an empty `results` list beside its failure.
+- `killright_initialize` returns 1 or 0 and `killright_shutdown` returns nothing; neither returns JSON. `killright_free_string` ignores null.
+- The runtime sets the engine's settings path before initialising; a settings failure must stop initialisation on both sides, not fall back silently.
