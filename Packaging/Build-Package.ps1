@@ -14,7 +14,8 @@ New-Item -ItemType Directory -Path $appDir | Out-Null
 Push-Location $engineDir
 $ErrorActionPreference = 'Continue'
 try { cargo build --release; if ($LASTEXITCODE -ne 0) { throw 'cargo build --release failed' } } finally { Pop-Location; $ErrorActionPreference = 'Stop' }
-$engineDll = Join-Path $engineDir 'target\release\killright_engine.dll'
+$engineTargetDir = if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { Join-Path $engineDir 'target' }
+$engineDll = Join-Path $engineTargetDir 'release\killright_engine.dll'
 
 dotnet publish $uiProject -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -p:SatelliteResourceLanguages=en -p:DebugType=none -p:DebugSymbols=false -p:AlphaRelease=true -p:Version=$version -o $appDir
 if ($LASTEXITCODE -ne 0) { throw 'dotnet publish failed' }
