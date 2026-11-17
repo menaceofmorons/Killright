@@ -1,3 +1,6 @@
+using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.Data.Sqlite;
 using Killright.Storage.Database;
 
@@ -169,18 +172,62 @@ public sealed class DatabaseBackupService : IDatabaseBackupService
 
     private static string ComputeFingerprint(SqliteConnection connection)
     {
-        var killmailCount = ExecuteScalarLong(connection, "SELECT COUNT(*) FROM main.zkill_killmails;");
-        var latestCachedAtUtc = ExecuteScalarLong(connection, "SELECT COALESCE(MAX(cached_at_utc), 0) FROM main.zkill_killmails;");
-        var attackerCount = ExecuteScalarLong(connection, "SELECT COUNT(*) FROM main.zkill_killmail_attackers;");
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
 
-        return $"{killmailCount}|{latestCachedAtUtc}|{attackerCount}";
+        foreach (var table in ListTables(connection))
+        {
+            AppendText(hash, table);
+
+            using var command = connection.CreateCommand();
+            command.CommandText = $"SELECT * FROM main.\"{table}\" ORDER BY rowid;";
+
+            using var reader = command.ExecuteReader();
+
+            while (reader.Read())
+            {
+                for (var column = 0; column < reader.FieldCount; column++)
+                    AppendValue(hash, reader.IsDBNull(column) ? null : reader.GetValue(column));
+
+                AppendText(hash, "\n");
+            }
+        }
+
+        return Convert.ToHexString(hash.GetHashAndReset());
     }
 
-    private static long ExecuteScalarLong(SqliteConnection connection, string sql)
+    private static List<string> ListTables(SqliteConnection connection)
     {
         using var command = connection.CreateCommand();
-        command.CommandText = sql;
+        command.CommandText = "SELECT name FROM main.sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name;";
 
-        return Convert.ToInt64(command.ExecuteScalar());
+        var tables = new List<string>();
+        using var reader = command.ExecuteReader();
+
+        while (reader.Read())
+            tables.Add(reader.GetString(0));
+
+        return tables;
+    }
+
+    private static void AppendValue(IncrementalHash hash, object? value)
+    {
+        switch (value)
+        {
+            case null:
+                AppendText(hash, "\0N");
+                break;
+            case byte[] bytes:
+                AppendText(hash, "\0B");
+                hash.AppendData(bytes);
+                break;
+            default:
+                AppendText(hash, "\0" + Convert.ToString(value, CultureInfo.InvariantCulture));
+                break;
+        }
+    }
+
+    private static void AppendText(IncrementalHash hash, string text)
+    {
+        hash.AppendData(Encoding.UTF8.GetBytes(text));
     }
 }

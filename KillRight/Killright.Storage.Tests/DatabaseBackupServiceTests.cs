@@ -117,6 +117,35 @@ public sealed class DatabaseBackupServiceTests
         Assert.Equal(2, BackupFiles(fixture.Folder).Length);
     }
 
+    [Theory]
+    [InlineData("INSERT INTO main.pilot_identity_cache (input_name, verify_status, cached_at_utc) VALUES ('Pilot One', 'verified', 1790553600);")]
+    [InlineData("INSERT INTO main.esi_entity_name_cache (entity_id, entity_type, name) VALUES (98000001, 'corporation', 'Corp One');")]
+    [InlineData("INSERT INTO main.zkill_activity_cache (character_id, has_public_activity_data, checked_at_utc) VALUES (95465499, 1, 1790553600);")]
+    [InlineData("INSERT INTO main.zkill_statistics_cache (character_id, ships_destroyed, solo_kills, solo_ratio, avg_gang_size, ships_lost, solo_losses, general_style, checked_at_utc) VALUES (95465499, 1, 1, 1.0, 1.0, 0, 0, 'solo', 1790553600);")]
+    [InlineData("INSERT INTO main.pilot_last_killmail_cache (character_id, has_killmail, checked_at_utc) VALUES (95465499, 0, 1790553600);")]
+    [InlineData("INSERT INTO main.sde_types (type_id, name) VALUES (587, 'Rifter');")]
+    [InlineData("INSERT INTO main.sde_solar_systems (system_id, name) VALUES (30000142, 'Jita');")]
+    [InlineData("INSERT INTO main.sde_npc_corporations (corporation_id) VALUES (1000001);")]
+    [InlineData("INSERT INTO main.sde_factions (faction_id, name) VALUES (500001, 'Caldari State');")]
+    [InlineData("UPDATE main.sde_metadata SET build_number = 4242;")]
+    [InlineData("UPDATE main.schema_metadata SET alpha_lock = 1;")]
+    [InlineData("UPDATE main.zkill_killmails SET is_qualifying = 0;")]
+    [InlineData("UPDATE main.zkill_killmail_attackers SET weapon_type_id = 3001;")]
+    public async Task BackupAsync_ChangeInAnyTable_CreatesANewCopy(string change)
+    {
+        var clock = new FakeClock();
+        var fixture = CreateFixture(rotationCount: 5, clock);
+        InsertKillmail(fixture.Database, 800080);
+        InsertAttacker(fixture.Database, 800080, 95465499);
+        await fixture.Service.BackupAsync();
+
+        Execute(fixture.Database, change);
+        clock.Advance(TimeSpan.FromSeconds(5));
+        await fixture.Service.BackupAsync();
+
+        Assert.Equal(2, BackupFiles(fixture.Folder).Length);
+    }
+
     [Fact]
     public async Task BackupAsync_OldParquetFolders_AreIgnoredAndNeverDeleted()
     {
