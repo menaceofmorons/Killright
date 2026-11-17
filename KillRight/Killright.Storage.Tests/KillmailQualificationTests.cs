@@ -45,15 +45,39 @@ public sealed class KillmailQualificationTests
     }
 
     [Theory]
-    [InlineData(1, false, 11, false)]
-    [InlineData(2, false, 11, true)]
-    [InlineData(10, false, 11, true)]
-    [InlineData(11, false, 11, false)]
-    [InlineData(2, true, 11, false)]
-    [InlineData(4, false, 5, true)]
-    [InlineData(5, false, 5, false)]
-    public void IsQualifying_AppliesAttackerCountPodRulesAndConfiguredThreshold(int uniqueAttackerCount, bool isPodKill, int fleetThreshold, bool expected)
+    [InlineData(1, false, 11, true, false)]
+    [InlineData(2, false, 11, true, true)]
+    [InlineData(10, false, 11, true, true)]
+    [InlineData(11, false, 11, true, false)]
+    [InlineData(25, false, 11, true, false)]
+    [InlineData(2, true, 11, true, false)]
+    [InlineData(4, false, 5, true, true)]
+    [InlineData(5, false, 5, true, false)]
+    [InlineData(2, false, 11, false, false)]
+    [InlineData(10, false, 11, false, false)]
+    public void IsQualifying_AppliesScannedAttackerCountPodRulesAndConfiguredThreshold(
+        int uniqueAttackerCount,
+        bool isPodKill,
+        int fleetThreshold,
+        bool hasScannedAttacker,
+        bool expected)
     {
-        Assert.Equal(expected, KillmailQualification.IsQualifying(uniqueAttackerCount, isPodKill, fleetThreshold));
+        Assert.Equal(expected, KillmailQualification.IsQualifying(uniqueAttackerCount, isPodKill, fleetThreshold, hasScannedAttacker));
+    }
+
+    [Fact]
+    public void HasScannedAttacker_ScannedPilotOnAttackerSide_True()
+    {
+        var attackers = new List<KillmailAttacker> { new(1, null, null, 587), new(2, null, null, 587) };
+
+        Assert.True(KillmailQualification.HasScannedAttacker(attackers, new HashSet<long> { 2 }));
+    }
+
+    [Fact]
+    public void HasScannedAttacker_ScannedPilotOnlyVictim_False()
+    {
+        var attackers = new List<KillmailAttacker> { new(1, null, null, 587), new(null, 1000125, null, 32872) };
+
+        Assert.False(KillmailQualification.HasScannedAttacker(attackers, new HashSet<long> { 99 }));
     }
 }

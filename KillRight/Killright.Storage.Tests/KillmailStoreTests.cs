@@ -203,6 +203,34 @@ public sealed class KillmailStoreTests
     }
 
     [Fact]
+    public async Task UpsertAsync_ScannedPilotIsVictimWithTwoAttackers_WritesNonQualifying()
+    {
+        var (database, store) = CreateStore();
+
+        var killmail = new RawKillmail(
+            323456,
+            "ghi789",
+            new DateTimeOffset(2026, 9, 20, 10, 0, 0, TimeSpan.Zero),
+            30000142,
+            40000001,
+            ScannedCharacterId,
+            587,
+            false,
+            false,
+            [
+                new KillmailAttacker(91321792, 98000002, 99000001, 17738),
+                new KillmailAttacker(91321793, 98000002, 99000001, 17738)
+            ]);
+
+        await store.UpsertAsync(ScannedCharacterId, [killmail]);
+
+        var (uniqueAttackerCount, isQualifying) = ReadKillmail(database, 323456);
+        Assert.Equal(2, uniqueAttackerCount);
+        Assert.False(isQualifying);
+        Assert.Equal(0, CountAttackers(database, 323456));
+    }
+
+    [Fact]
     public async Task UpsertAsync_EmptyList_NoOp()
     {
         var (_, store) = CreateStore();
