@@ -163,13 +163,25 @@ public sealed class KillRightDatabase
     {
         SqliteConnection.ClearAllPools();
 
-        var quarantineSuffix = $".corrupt-{DateTimeOffset.UtcNow:yyyyMMddHHmmss}";
+        var paths = new[] { _options.DatabasePath, _options.DatabasePath + "-wal", _options.DatabasePath + "-shm" };
+        var quarantineSuffix = NextFreeQuarantineSuffix(paths);
 
-        foreach (var path in new[] { _options.DatabasePath, _options.DatabasePath + "-wal", _options.DatabasePath + "-shm" })
+        foreach (var path in paths)
         {
             if (File.Exists(path))
-                File.Move(path, path + quarantineSuffix, overwrite: true);
+                File.Move(path, path + quarantineSuffix);
         }
+    }
+
+    private static string NextFreeQuarantineSuffix(string[] paths)
+    {
+        var baseSuffix = $".corrupt-{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}";
+        var suffix = baseSuffix;
+
+        for (var counter = 1; paths.Any(path => File.Exists(path + suffix)); counter++)
+            suffix = $"{baseSuffix}-{counter}";
+
+        return suffix;
     }
 
     private string? FindCorruption()

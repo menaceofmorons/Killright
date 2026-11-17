@@ -413,6 +413,27 @@ public sealed class KillRightDatabaseTests
     }
 
     [Fact]
+    public void SetAsideFiles_RepeatedWithinSameInstant_KeepsEveryEarlierFile()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"setaside.{Guid.NewGuid():N}.db");
+        var database = new KillRightDatabase(new KillRightDatabaseOptions { DatabasePath = path });
+
+        File.WriteAllText(path, "first");
+        database.SetAsideFiles();
+        File.WriteAllText(path, "second");
+        database.SetAsideFiles();
+        File.WriteAllText(path, "third");
+        database.SetAsideFiles();
+
+        var contents = Directory.GetFiles(Path.GetTempPath(), $"{Path.GetFileName(path)}.corrupt-*")
+            .Select(File.ReadAllText)
+            .Order()
+            .ToArray();
+
+        Assert.Equal(["first", "second", "third"], contents);
+    }
+
+    [Fact]
     public void QuarantineIfCorrupt_HealthyFile_IsLeftAlone()
     {
         var database = CreateDatabase();
