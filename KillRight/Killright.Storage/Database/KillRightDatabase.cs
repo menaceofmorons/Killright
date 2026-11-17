@@ -244,7 +244,7 @@ public sealed class KillRightDatabase
 
     public void SetLastAppliedQualificationFleetThreshold(int threshold)
     {
-        ExecuteWrite($"UPDATE main.schema_metadata SET last_qualification_fleet_threshold = {threshold};");
+        ExecuteMetadataWrite("last_qualification_fleet_threshold", threshold);
     }
 
     public bool GetAlphaLock()
@@ -264,7 +264,7 @@ public sealed class KillRightDatabase
 
     public void SetSchemaVersion(int version)
     {
-        ExecuteWrite($"UPDATE main.schema_metadata SET schema_version = {version};");
+        ExecuteMetadataWrite("schema_version", version);
     }
 
     public void ApplyMigration(Action<SqliteConnection, SqliteTransaction> apply, int toVersion)
@@ -272,7 +272,7 @@ public sealed class KillRightDatabase
         using var scope = BeginWrite();
 
         apply(scope.Connection, scope.Transaction);
-        ExecuteNonQuery(scope.Connection, scope.Transaction, $"UPDATE main.schema_metadata SET schema_version = {toVersion};");
+        UpdateMetadata(scope.Connection, scope.Transaction, "schema_version", toVersion);
 
         scope.Commit();
     }
@@ -351,6 +351,23 @@ public sealed class KillRightDatabase
             WriteGate.Release();
             throw;
         }
+    }
+
+    private void ExecuteMetadataWrite(string column, int value)
+    {
+        using var scope = BeginWrite();
+
+        UpdateMetadata(scope.Connection, scope.Transaction, column, value);
+
+        scope.Commit();
+    }
+
+    private static void UpdateMetadata(SqliteConnection connection, SqliteTransaction transaction, string column, int value)
+    {
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = $"UPDATE main.schema_metadata SET {column} = {CommandParameters.Bind(command, value)};";
+        command.ExecuteNonQuery();
     }
 
     private void ExecuteWrite(string sql)
