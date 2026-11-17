@@ -4,10 +4,24 @@ using System.Text.Json.Serialization;
 
 namespace Killright.UI.Configuration;
 
+public sealed record SettingsLoadResult
+{
+    public ApplicationSettings? Settings { get; private init; }
+
+    public string? Failure { get; private init; }
+
+    public bool Succeeded => Settings is not null;
+
+    public static SettingsLoadResult Success(ApplicationSettings settings) => new() { Settings = settings };
+
+    public static SettingsLoadResult Failed(string failure) => new() { Failure = failure };
+}
+
 public static class ApplicationSettingsLoader
 {
-    private const int MinimumQualificationFleetThreshold = 3;
-    private const int DefaultQualificationFleetThreshold = 11;
+    public const int MinimumQualificationFleetThreshold = 3;
+
+    public const int MinimumCount = 1;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -20,52 +34,82 @@ public static class ApplicationSettingsLoader
         return Path.Combine(AppContext.BaseDirectory, "config", "settings.json");
     }
 
-    public static ApplicationSettings LoadOrDefault(string? settingsPath = null)
+    public static SettingsLoadResult Load(string? settingsPath = null)
     {
         var path = settingsPath ?? GetDefaultSettingsPath();
+
+        string json;
 
         try
         {
             if (!File.Exists(path))
-                return new ApplicationSettings();
+                return SettingsLoadResult.Failed($"The settings file was not found at '{path}'.");
 
-            var json = File.ReadAllText(path);
-            var settings = JsonSerializer.Deserialize<ApplicationSettings>(json, JsonOptions) ?? new ApplicationSettings();
-            return Normalize(settings);
+            json = File.ReadAllText(path);
         }
-        catch
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or System.Security.SecurityException)
         {
-            return new ApplicationSettings();
+            return SettingsLoadResult.Failed($"The settings file at '{path}' could not be read. {exception.Message}");
         }
+
+        ApplicationSettings? settings;
+
+        try
+        {
+            settings = JsonSerializer.Deserialize<ApplicationSettings>(json, JsonOptions);
+        }
+        catch (JsonException exception)
+        {
+            return SettingsLoadResult.Failed($"The settings file at '{path}' is not valid. {exception.Message}");
+        }
+
+        if (settings is null)
+            return SettingsLoadResult.Failed($"The settings file at '{path}' is empty.");
+
+        var problems = Validate(settings);
+
+        return problems.Count == 0
+            ? SettingsLoadResult.Success(settings)
+            : SettingsLoadResult.Failed($"The settings file at '{path}' has invalid values: {string.Join("; ", problems)}.");
     }
 
-    private static ApplicationSettings Normalize(ApplicationSettings settings)
+    public static IReadOnlyList<string> Validate(ApplicationSettings settings)
     {
-        var qualificationFleetThreshold = settings.QualificationFleetThreshold >= MinimumQualificationFleetThreshold
-            ? settings.QualificationFleetThreshold
-            : DefaultQualificationFleetThreshold;
+        var problems = new List<string>();
 
-        var network = settings.Network.Normalized();
-        var database = settings.Database.Normalized();
+        RequireAtLeast(problems, "qualificationFleetThreshold", settings.QualificationFleetThreshold, MinimumQualificationFleetThreshold);
 
-        return qualificationFleetThreshold == settings.QualificationFleetThreshold && network == settings.Network && database == settings.Database
-            ? settings
-            : new ApplicationSettings
-            {
-                RecentWindowDays = settings.RecentWindowDays,
-                BackupFolder = settings.BackupFolder,
-                BackupRotationCount = settings.BackupRotationCount,
-                ThreatBands = settings.ThreatBands,
-                RelationshipConfidenceBands = settings.RelationshipConfidenceBands,
-                HighlightOpacity = settings.HighlightOpacity,
-                QualificationFleetThreshold = qualificationFleetThreshold,
-                Sde = settings.Sde,
-                Threat = settings.Threat,
-                GroupDetection = settings.GroupDetection,
-                Style = settings.Style,
-                Timing = settings.Timing,
-                Network = network,
-                Database = database
-            };
+        if (settings.Network is null || settings.Network.Zkill is null || settings.Database is null)
+        {
+            problems.Add("a network, network.zkill or database section is null");
+            return problems;
+        }
+
+        var network = settings.Network;
+        var zkill = network.Zkill;
+        var database = settings.Database;
+
+        RequireAtLeast(problems, "network.esiMaxConcurrency", network.EsiMaxConcurrency, MinimumCount);
+        RequireAtLeast(problems, "network.zkill.requestBudget", zkill.RequestBudget, MinimumCount);
+
+        if (zkill.RequestBudget > ZkillSettings.MaximumRequestBudget)
+            problems.Add($"network.zkill.requestBudget is above {ZkillSettings.MaximumRequestBudget}");
+
+        RequireAtLeast(problems, "network.zkill.budgetWindowSeconds", zkill.BudgetWindowSeconds, MinimumCount);
+        RequireAtLeast(problems, "network.zkill.maxConcurrency", zkill.MaxConcurrency, MinimumCount);
+        RequireAtLeast(problems, "network.zkill.requestTimeoutSeconds", zkill.RequestTimeoutSeconds, MinimumCount);
+        RequireAtLeast(problems, "network.zkill.retryCount", zkill.RetryCount, MinimumCount);
+        RequireAtLeast(problems, "network.zkill.rateLimitPauseSeconds", zkill.RateLimitPauseSeconds, MinimumCount);
+        RequireAtLeast(problems, "database.busyTimeoutSeconds", database.BusyTimeoutSeconds, MinimumCount);
+        RequireAtLeast(problems, "database.pageCacheMegabytes", database.PageCacheMegabytes, MinimumCount);
+        RequireAtLeast(problems, "database.idleCheckpointSeconds", database.IdleCheckpointSeconds, MinimumCount);
+
+        return problems;
+    }
+
+    private static void RequireAtLeast(List<string> problems, string name, int value, int minimum)
+    {
+        if (value < minimum)
+            problems.Add($"{name} is {value}, below the minimum {minimum}");
     }
 }

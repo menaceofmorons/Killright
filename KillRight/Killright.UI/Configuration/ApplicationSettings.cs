@@ -122,15 +122,6 @@ public sealed record NetworkSettings
     public int EsiMaxConcurrency { get; init; } = DefaultEsiMaxConcurrency;
 
     public ZkillSettings Zkill { get; init; } = new();
-
-    public NetworkSettings Normalized()
-    {
-        return new NetworkSettings
-        {
-            EsiMaxConcurrency = EsiMaxConcurrency >= 1 ? EsiMaxConcurrency : DefaultEsiMaxConcurrency,
-            Zkill = (Zkill ?? new ZkillSettings()).Normalized()
-        };
-    }
 }
 
 public sealed record ZkillSettings
@@ -160,19 +151,6 @@ public sealed record ZkillSettings
     public int RetryCount { get; init; } = DefaultRetryCount;
 
     public int RateLimitPauseSeconds { get; init; } = DefaultRateLimitPauseSeconds;
-
-    public ZkillSettings Normalized()
-    {
-        return new ZkillSettings
-        {
-            RequestBudget = RequestBudget >= 1 ? Math.Min(RequestBudget, MaximumRequestBudget) : DefaultRequestBudget,
-            BudgetWindowSeconds = BudgetWindowSeconds >= 1 ? BudgetWindowSeconds : DefaultBudgetWindowSeconds,
-            MaxConcurrency = MaxConcurrency >= 1 ? MaxConcurrency : DefaultMaxConcurrency,
-            RequestTimeoutSeconds = RequestTimeoutSeconds >= 1 ? RequestTimeoutSeconds : DefaultRequestTimeoutSeconds,
-            RetryCount = RetryCount >= 1 ? RetryCount : DefaultRetryCount,
-            RateLimitPauseSeconds = RateLimitPauseSeconds >= 1 ? RateLimitPauseSeconds : DefaultRateLimitPauseSeconds
-        };
-    }
 }
 
 public sealed record DatabaseSettings
@@ -182,16 +160,6 @@ public sealed record DatabaseSettings
     public int PageCacheMegabytes { get; init; } = KillRightDatabaseOptions.DefaultPageCacheMegabytes;
 
     public int IdleCheckpointSeconds { get; init; } = KillRightDatabaseOptions.DefaultIdleCheckpointSeconds;
-
-    public DatabaseSettings Normalized()
-    {
-        return new DatabaseSettings
-        {
-            BusyTimeoutSeconds = KillRightDatabaseOptions.NormalizeBusyTimeoutSeconds(BusyTimeoutSeconds),
-            PageCacheMegabytes = KillRightDatabaseOptions.NormalizePageCacheMegabytes(PageCacheMegabytes),
-            IdleCheckpointSeconds = KillRightDatabaseOptions.NormalizeIdleCheckpointSeconds(IdleCheckpointSeconds)
-        };
-    }
 }
 
 public sealed class TimingSettings

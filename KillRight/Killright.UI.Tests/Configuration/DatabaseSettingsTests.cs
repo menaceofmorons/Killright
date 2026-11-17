@@ -16,9 +16,9 @@ public sealed class DatabaseSettingsTests
     }
 
     [Fact]
-    public void LoadOrDefault_RealSettingsFile_ReadsDatabaseSection()
+    public void Load_RealSettingsFile_ReadsDatabaseSection()
     {
-        var settings = ApplicationSettingsLoader.LoadOrDefault(ApplicationSettingsLoader.GetDefaultSettingsPath());
+        var settings = ApplicationSettingsLoader.Load(ApplicationSettingsLoader.GetDefaultSettingsPath()).Settings!;
 
         Assert.Equal(5, settings.Database.BusyTimeoutSeconds);
         Assert.Equal(64, settings.Database.PageCacheMegabytes);
@@ -26,7 +26,7 @@ public sealed class DatabaseSettingsTests
     }
 
     [Fact]
-    public void LoadOrDefault_SectionAbsent_UsesDefaults()
+    public void Load_SectionAbsent_UsesDefaults()
     {
         var settings = LoadJson("{ \"recentWindowDays\": 14 }");
 
@@ -34,7 +34,7 @@ public sealed class DatabaseSettingsTests
     }
 
     [Fact]
-    public void LoadOrDefault_ValidValues_AreRead()
+    public void Load_ValidValues_AreRead()
     {
         var settings = LoadJson("{ \"database\": { \"busyTimeoutSeconds\": 9, \"pageCacheMegabytes\": 128, \"idleCheckpointSeconds\": 10 } }");
 
@@ -43,26 +43,20 @@ public sealed class DatabaseSettingsTests
         Assert.Equal(10, settings.Database.IdleCheckpointSeconds);
     }
 
-    [Fact]
-    public void LoadOrDefault_NonPositiveValues_FallBackToDefaults()
+    [Theory]
+    [InlineData("busyTimeoutSeconds")]
+    [InlineData("pageCacheMegabytes")]
+    [InlineData("idleCheckpointSeconds")]
+    public void Load_NonPositiveValue_FailsNamingTheSetting(string name)
     {
-        var settings = LoadJson("{ \"database\": { \"busyTimeoutSeconds\": 0, \"pageCacheMegabytes\": -1, \"idleCheckpointSeconds\": -5 } }");
+        var result = LoadResult($"{{ \"database\": {{ \"{name}\": 0 }} }}");
 
-        Assert.Equal(new DatabaseSettings(), settings.Database);
+        Assert.False(result.Succeeded);
+        Assert.Contains($"database.{name}", result.Failure);
     }
 
     [Fact]
-    public void LoadOrDefault_OneNonPositiveValue_KeepsTheOtherValues()
-    {
-        var settings = LoadJson("{ \"database\": { \"busyTimeoutSeconds\": 0, \"pageCacheMegabytes\": 32, \"idleCheckpointSeconds\": 45 } }");
-
-        Assert.Equal(5, settings.Database.BusyTimeoutSeconds);
-        Assert.Equal(32, settings.Database.PageCacheMegabytes);
-        Assert.Equal(45, settings.Database.IdleCheckpointSeconds);
-    }
-
-    [Fact]
-    public void LoadOrDefault_PartialSection_KeepsDefaultsForMissingValues()
+    public void Load_PartialSection_KeepsDefaultsForMissingValues()
     {
         var settings = LoadJson("{ \"database\": { \"pageCacheMegabytes\": 8 } }");
 
@@ -72,7 +66,7 @@ public sealed class DatabaseSettingsTests
     }
 
     [Fact]
-    public void LoadOrDefault_FileStillHoldingMemoryLimitAndThreads_LoadsWithTheNewValuesIntact()
+    public void Load_FileStillHoldingMemoryLimitAndThreads_LoadsWithTheNewValuesIntact()
     {
         var settings = LoadJson("{ \"database\": { \"memoryLimit\": \"512MB\", \"threads\": 2, \"busyTimeoutSeconds\": 7, \"idleCheckpointSeconds\": 12 } }");
 
@@ -83,12 +77,21 @@ public sealed class DatabaseSettingsTests
 
     private static ApplicationSettings LoadJson(string json)
     {
+        var result = LoadResult(json);
+
+        Assert.True(result.Succeeded, result.Failure);
+
+        return result.Settings!;
+    }
+
+    private static SettingsLoadResult LoadResult(string json)
+    {
         var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"killright-settings-{Guid.NewGuid():N}.json");
         System.IO.File.WriteAllText(path, json);
 
         try
         {
-            return ApplicationSettingsLoader.LoadOrDefault(path);
+            return ApplicationSettingsLoader.Load(path);
         }
         finally
         {
