@@ -169,7 +169,7 @@ public sealed record ZkillSettings
             BudgetWindowSeconds = BudgetWindowSeconds >= 1 ? BudgetWindowSeconds : DefaultBudgetWindowSeconds,
             MaxConcurrency = MaxConcurrency >= 1 ? MaxConcurrency : DefaultMaxConcurrency,
             RequestTimeoutSeconds = RequestTimeoutSeconds >= 1 ? RequestTimeoutSeconds : DefaultRequestTimeoutSeconds,
-            RetryCount = RetryCount >= 1 ? RetryCount : DefaultRetryCount,
+            RetryCount = RetryCount,
             RateLimitPauseSeconds = RateLimitPauseSeconds >= 1 ? RateLimitPauseSeconds : DefaultRateLimitPauseSeconds
         };
     }

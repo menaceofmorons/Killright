@@ -73,7 +73,17 @@ public partial class App : Application
         AppDomain.CurrentDomain.UnhandledException += OnAppDomainUnhandledException;
 
         var settingsPath = ApplicationSettingsLoader.GetDefaultSettingsPath();
-        Settings = ApplicationSettingsLoader.LoadOrDefault(settingsPath);
+        var settingsResult = ApplicationSettingsLoader.Load(settingsPath);
+
+        if (!settingsResult.Succeeded)
+        {
+            EngineFailureLog.Record($"Startup refused: {settingsResult.Failure}");
+
+            Shutdown();
+            return;
+        }
+
+        Settings = settingsResult.Settings!;
 
         GeneralStyleClassifier.Configure(
             Settings.Style.BlobMinimumAverageAttackers,

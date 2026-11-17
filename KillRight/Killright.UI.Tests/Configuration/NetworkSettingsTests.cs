@@ -6,9 +6,9 @@ namespace Killright.UI.Tests.Configuration;
 public sealed class NetworkSettingsTests
 {
     [Fact]
-    public void LoadOrDefault_RealSettingsFile_ReadsNetworkSection()
+    public void Load_RealSettingsFile_ReadsNetworkSection()
     {
-        var settings = ApplicationSettingsLoader.LoadOrDefault(ApplicationSettingsLoader.GetDefaultSettingsPath());
+        var settings = ApplicationSettingsLoader.Load(ApplicationSettingsLoader.GetDefaultSettingsPath()).Settings!;
 
         Assert.Equal(8, settings.Network.EsiMaxConcurrency);
         Assert.Equal(550, settings.Network.Zkill.RequestBudget);
@@ -20,7 +20,7 @@ public sealed class NetworkSettingsTests
     }
 
     [Fact]
-    public void LoadOrDefault_SectionAbsent_UsesDefaults()
+    public void Load_SectionAbsent_UsesDefaults()
     {
         var settings = LoadJson("{ \"recentWindowDays\": 14 }");
 
@@ -34,7 +34,7 @@ public sealed class NetworkSettingsTests
     }
 
     [Fact]
-    public void LoadOrDefault_NetworkSectionWithoutZkill_UsesZkillDefaults()
+    public void Load_NetworkSectionWithoutZkill_UsesZkillDefaults()
     {
         var settings = LoadJson("{ \"network\": { \"esiMaxConcurrency\": 4 } }");
 
@@ -44,7 +44,7 @@ public sealed class NetworkSettingsTests
     }
 
     [Fact]
-    public void LoadOrDefault_ZkillSectionNull_UsesZkillDefaults()
+    public void Load_ZkillSectionNull_UsesZkillDefaults()
     {
         var settings = LoadJson("{ \"network\": { \"zkill\": null } }");
 
@@ -52,7 +52,7 @@ public sealed class NetworkSettingsTests
     }
 
     [Fact]
-    public void LoadOrDefault_ValidValues_AreRead()
+    public void Load_ValidValues_AreRead()
     {
         var settings = LoadJson(
             "{ \"network\": { \"esiMaxConcurrency\": 4, \"zkill\": { \"requestBudget\": 300, \"budgetWindowSeconds\": 30, \"maxConcurrency\": 20, \"requestTimeoutSeconds\": 5, \"retryCount\": 2, \"rateLimitPauseSeconds\": 90 } } }");
@@ -69,25 +69,36 @@ public sealed class NetworkSettingsTests
     [Theory]
     [InlineData(0)]
     [InlineData(-5)]
-    public void LoadOrDefault_NonPositiveValues_FallBackToDefaults(int value)
+    public void Load_NonPositiveValues_FallBackToDefaults(int value)
     {
         var settings = LoadJson(
-            $"{{ \"network\": {{ \"esiMaxConcurrency\": {value}, \"zkill\": {{ \"requestBudget\": {value}, \"budgetWindowSeconds\": {value}, \"maxConcurrency\": {value}, \"requestTimeoutSeconds\": {value}, \"retryCount\": {value}, \"rateLimitPauseSeconds\": {value} }} }} }}");
+            $"{{ \"network\": {{ \"esiMaxConcurrency\": {value}, \"zkill\": {{ \"requestBudget\": {value}, \"budgetWindowSeconds\": {value}, \"maxConcurrency\": {value}, \"requestTimeoutSeconds\": {value}, \"retryCount\": 1, \"rateLimitPauseSeconds\": {value} }} }} }}");
 
         Assert.Equal(NetworkSettings.DefaultEsiMaxConcurrency, settings.Network.EsiMaxConcurrency);
         Assert.Equal(ZkillSettings.DefaultRequestBudget, settings.Network.Zkill.RequestBudget);
         Assert.Equal(ZkillSettings.DefaultBudgetWindowSeconds, settings.Network.Zkill.BudgetWindowSeconds);
         Assert.Equal(ZkillSettings.DefaultMaxConcurrency, settings.Network.Zkill.MaxConcurrency);
         Assert.Equal(ZkillSettings.DefaultRequestTimeoutSeconds, settings.Network.Zkill.RequestTimeoutSeconds);
-        Assert.Equal(ZkillSettings.DefaultRetryCount, settings.Network.Zkill.RetryCount);
         Assert.Equal(ZkillSettings.DefaultRateLimitPauseSeconds, settings.Network.Zkill.RateLimitPauseSeconds);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-5)]
+    public void Load_RetryCountBelowOne_FailsAndIsNotMappedToOne(int value)
+    {
+        var result = LoadResult($"{{ \"network\": {{ \"zkill\": {{ \"retryCount\": {value} }} }} }}");
+
+        Assert.False(result.Succeeded);
+        Assert.Null(result.Settings);
+        Assert.Contains("network.zkill.retryCount", result.Failure);
     }
 
     [Theory]
     [InlineData(601, 600)]
     [InlineData(5000, 600)]
     [InlineData(600, 600)]
-    public void LoadOrDefault_RequestBudgetAboveCap_IsCappedAt600(int configured, int expected)
+    public void Load_RequestBudgetAboveCap_IsCappedAt600(int configured, int expected)
     {
         var settings = LoadJson($"{{ \"network\": {{ \"zkill\": {{ \"requestBudget\": {configured} }} }} }}");
 
@@ -95,7 +106,7 @@ public sealed class NetworkSettingsTests
     }
 
     [Fact]
-    public void LoadOrDefault_RemovedSettingNames_AreIgnored()
+    public void Load_RemovedSettingNames_AreIgnored()
     {
         var settings = LoadJson("{ \"network\": { \"zkillRequestsPerSecond\": 99, \"maxConcurrency\": 3 } }");
 
@@ -160,12 +171,21 @@ public sealed class NetworkSettingsTests
 
     private static ApplicationSettings LoadJson(string json)
     {
+        var result = LoadResult(json);
+
+        Assert.True(result.Succeeded, result.Failure);
+
+        return result.Settings!;
+    }
+
+    private static SettingsLoadResult LoadResult(string json)
+    {
         var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"killright-settings-{Guid.NewGuid():N}.json");
         System.IO.File.WriteAllText(path, json);
 
         try
         {
-            return ApplicationSettingsLoader.LoadOrDefault(path);
+            return ApplicationSettingsLoader.Load(path);
         }
         finally
         {
