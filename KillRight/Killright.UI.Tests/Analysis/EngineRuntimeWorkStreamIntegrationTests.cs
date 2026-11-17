@@ -160,9 +160,7 @@ public sealed class EngineRuntimeWorkStreamIntegrationTests
 
         await Task.Run(runtime.Dispose);
 
-        Assert.True(Task.WhenAll(inFlight).Wait(TimeSpan.FromSeconds(10)), "In-flight calls had not completed after Dispose returned.");
-
-        var responses = await Task.WhenAll(inFlight);
+        var responses = await Task.WhenAll(inFlight).WaitAsync(TimeSpan.FromSeconds(10));
 
         Assert.Equal(16, responses.Length);
         Assert.All(responses, response =>
