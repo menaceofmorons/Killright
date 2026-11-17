@@ -248,6 +248,41 @@ public sealed class SdeReferenceDataStoreTests
     }
 
     [Fact]
+    public async Task ReplaceTablesAsync_Success_LeavesNoStagingTables()
+    {
+        var (database, store) = CreateStore();
+
+        await store.ReplaceTablesAsync(SdeData(types: [new SdeType(587, "Rifter")], factions: [new SdeFaction(500004, "Gallente Federation")]));
+
+        Assert.Equal(0, CountRows(database, "sqlite_schema WHERE name LIKE '%_staging'"));
+    }
+
+    [Fact]
+    public async Task ReplaceTablesAsync_FailureInsideSwap_RollsBackDropsStagingAndKeepsOldRows()
+    {
+        var (database, store) = CreateStore();
+
+        await store.ReplaceTablesAsync(SdeData(
+            types: [new SdeType(587, "Rifter")],
+            systems: [new SdeSolarSystem(30000142, "Jita")],
+            npcCorporationIds: [1000001],
+            factions: [new SdeFaction(500004, "Gallente Federation")]));
+
+        ExecuteNonQuery(database, "DROP TABLE main.sde_metadata;");
+
+        await Assert.ThrowsAnyAsync<Exception>(() => store.ReplaceTablesAsync(SdeData(
+            types: [new SdeType(11567, "Crow")],
+            factions: [new SdeFaction(500001, "Caldari State")])));
+
+        Assert.Equal("Rifter", store.GetTypeName(587));
+        Assert.Null(store.GetTypeName(11567));
+        Assert.Equal("Jita", store.GetSolarSystemName(30000142));
+        Assert.True(store.IsNpcCorporation(1000001));
+        Assert.Equal("Gallente Federation", store.GetFactionName(500004));
+        Assert.Equal(0, CountRows(database, "sqlite_schema WHERE name LIKE '%_staging'"));
+    }
+
+    [Fact]
     public async Task ReplaceTablesAsync_ReplacedTables_StayStrict()
     {
         var (database, store) = CreateStore();
