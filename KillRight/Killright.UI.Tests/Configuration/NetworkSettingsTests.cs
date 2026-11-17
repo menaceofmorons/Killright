@@ -44,12 +44,11 @@ public sealed class NetworkSettingsTests
     }
 
     [Fact]
-    public void Load_ZkillSectionNull_Fails()
+    public void Load_ZkillSectionNull_UsesZkillDefaults()
     {
-        var result = LoadResult("{ \"network\": { \"zkill\": null } }");
+        var settings = LoadJson("{ \"network\": { \"zkill\": null } }");
 
-        Assert.False(result.Succeeded);
-        Assert.Contains("null", result.Failure);
+        Assert.Equal(ZkillSettings.DefaultRequestBudget, settings.Network.Zkill.RequestBudget);
     }
 
     [Fact]
@@ -68,33 +67,27 @@ public sealed class NetworkSettingsTests
     }
 
     [Theory]
-    [InlineData("esiMaxConcurrency", "network.esiMaxConcurrency")]
-    [InlineData("zkill.requestBudget", "network.zkill.requestBudget")]
-    [InlineData("zkill.budgetWindowSeconds", "network.zkill.budgetWindowSeconds")]
-    [InlineData("zkill.maxConcurrency", "network.zkill.maxConcurrency")]
-    [InlineData("zkill.requestTimeoutSeconds", "network.zkill.requestTimeoutSeconds")]
-    [InlineData("zkill.retryCount", "network.zkill.retryCount")]
-    [InlineData("zkill.rateLimitPauseSeconds", "network.zkill.rateLimitPauseSeconds")]
-    public void Load_NonPositiveValue_FailsNamingTheSetting(string path, string expectedName)
+    [InlineData(0)]
+    [InlineData(-5)]
+    public void Load_NonPositiveValues_FallBackToDefaults(int value)
     {
-        foreach (var value in new[] { 0, -5 })
-        {
-            var parts = path.Split('.');
-            var inner = parts.Length == 1
-                ? $"\"{parts[0]}\": {value}"
-                : $"\"zkill\": {{ \"{parts[1]}\": {value} }}";
+        var settings = LoadJson(
+            $"{{ \"network\": {{ \"esiMaxConcurrency\": {value}, \"zkill\": {{ \"requestBudget\": {value}, \"budgetWindowSeconds\": {value}, \"maxConcurrency\": {value}, \"requestTimeoutSeconds\": {value}, \"retryCount\": 1, \"rateLimitPauseSeconds\": {value} }} }} }}");
 
-            var result = LoadResult($"{{ \"network\": {{ {inner} }} }}");
-
-            Assert.False(result.Succeeded);
-            Assert.Contains(expectedName, result.Failure);
-        }
+        Assert.Equal(NetworkSettings.DefaultEsiMaxConcurrency, settings.Network.EsiMaxConcurrency);
+        Assert.Equal(ZkillSettings.DefaultRequestBudget, settings.Network.Zkill.RequestBudget);
+        Assert.Equal(ZkillSettings.DefaultBudgetWindowSeconds, settings.Network.Zkill.BudgetWindowSeconds);
+        Assert.Equal(ZkillSettings.DefaultMaxConcurrency, settings.Network.Zkill.MaxConcurrency);
+        Assert.Equal(ZkillSettings.DefaultRequestTimeoutSeconds, settings.Network.Zkill.RequestTimeoutSeconds);
+        Assert.Equal(ZkillSettings.DefaultRateLimitPauseSeconds, settings.Network.Zkill.RateLimitPauseSeconds);
     }
 
-    [Fact]
-    public void Load_RetryCountZero_IsRejectedNotMappedToOne()
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-5)]
+    public void Load_RetryCountBelowOne_FailsAndIsNotMappedToOne(int value)
     {
-        var result = LoadResult("{ \"network\": { \"zkill\": { \"retryCount\": 0 } } }");
+        var result = LoadResult($"{{ \"network\": {{ \"zkill\": {{ \"retryCount\": {value} }} }} }}");
 
         Assert.False(result.Succeeded);
         Assert.Null(result.Settings);
@@ -102,20 +95,14 @@ public sealed class NetworkSettingsTests
     }
 
     [Theory]
-    [InlineData(601)]
-    [InlineData(5000)]
-    public void Load_RequestBudgetAboveCap_Fails(int configured)
+    [InlineData(601, 600)]
+    [InlineData(5000, 600)]
+    [InlineData(600, 600)]
+    public void Load_RequestBudgetAboveCap_IsCappedAt600(int configured, int expected)
     {
-        var result = LoadResult($"{{ \"network\": {{ \"zkill\": {{ \"requestBudget\": {configured} }} }} }}");
+        var settings = LoadJson($"{{ \"network\": {{ \"zkill\": {{ \"requestBudget\": {configured} }} }} }}");
 
-        Assert.False(result.Succeeded);
-        Assert.Contains("network.zkill.requestBudget", result.Failure);
-    }
-
-    [Fact]
-    public void Load_RequestBudgetAtCap_IsRead()
-    {
-        Assert.Equal(600, LoadJson("{ \"network\": { \"zkill\": { \"requestBudget\": 600 } } }").Network.Zkill.RequestBudget);
+        Assert.Equal(expected, settings.Network.Zkill.RequestBudget);
     }
 
     [Fact]

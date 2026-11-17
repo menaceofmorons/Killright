@@ -43,16 +43,22 @@ public sealed class DatabaseSettingsTests
         Assert.Equal(10, settings.Database.IdleCheckpointSeconds);
     }
 
-    [Theory]
-    [InlineData("busyTimeoutSeconds")]
-    [InlineData("pageCacheMegabytes")]
-    [InlineData("idleCheckpointSeconds")]
-    public void Load_NonPositiveValue_FailsNamingTheSetting(string name)
+    [Fact]
+    public void Load_NonPositiveValues_FallBackToDefaults()
     {
-        var result = LoadResult($"{{ \"database\": {{ \"{name}\": 0 }} }}");
+        var settings = LoadJson("{ \"database\": { \"busyTimeoutSeconds\": 0, \"pageCacheMegabytes\": -1, \"idleCheckpointSeconds\": -5 } }");
 
-        Assert.False(result.Succeeded);
-        Assert.Contains($"database.{name}", result.Failure);
+        Assert.Equal(new DatabaseSettings(), settings.Database);
+    }
+
+    [Fact]
+    public void Load_OneNonPositiveValue_KeepsTheOtherValues()
+    {
+        var settings = LoadJson("{ \"database\": { \"busyTimeoutSeconds\": 0, \"pageCacheMegabytes\": 32, \"idleCheckpointSeconds\": 45 } }");
+
+        Assert.Equal(5, settings.Database.BusyTimeoutSeconds);
+        Assert.Equal(32, settings.Database.PageCacheMegabytes);
+        Assert.Equal(45, settings.Database.IdleCheckpointSeconds);
     }
 
     [Fact]
@@ -77,21 +83,12 @@ public sealed class DatabaseSettingsTests
 
     private static ApplicationSettings LoadJson(string json)
     {
-        var result = LoadResult(json);
-
-        Assert.True(result.Succeeded, result.Failure);
-
-        return result.Settings!;
-    }
-
-    private static SettingsLoadResult LoadResult(string json)
-    {
         var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"killright-settings-{Guid.NewGuid():N}.json");
         System.IO.File.WriteAllText(path, json);
 
         try
         {
-            return ApplicationSettingsLoader.Load(path);
+            return ApplicationSettingsLoader.Load(path).Settings!;
         }
         finally
         {

@@ -19,9 +19,9 @@ public sealed record SettingsLoadResult
 
 public static class ApplicationSettingsLoader
 {
-    public const int MinimumQualificationFleetThreshold = 3;
-
-    public const int MinimumCount = 1;
+    private const int MinimumQualificationFleetThreshold = 3;
+    private const int DefaultQualificationFleetThreshold = 11;
+    private const int MinimumCount = 1;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -66,50 +66,52 @@ public static class ApplicationSettingsLoader
         if (settings is null)
             return SettingsLoadResult.Failed($"The settings file at '{path}' is empty.");
 
-        var problems = Validate(settings);
+        var problem = Validate(settings);
 
-        return problems.Count == 0
-            ? SettingsLoadResult.Success(settings)
-            : SettingsLoadResult.Failed($"The settings file at '{path}' has invalid values: {string.Join("; ", problems)}.");
+        return problem is null
+            ? SettingsLoadResult.Success(Normalize(settings))
+            : SettingsLoadResult.Failed($"The settings file at '{path}' has an invalid value: {problem}.");
     }
 
-    public static IReadOnlyList<string> Validate(ApplicationSettings settings)
+    public static string? Validate(ApplicationSettings settings)
     {
-        var problems = new List<string>();
+        if (settings.Network is null || settings.Database is null)
+            return "a network or database section is null";
 
-        RequireAtLeast(problems, "qualificationFleetThreshold", settings.QualificationFleetThreshold, MinimumQualificationFleetThreshold);
+        var retryCount = (settings.Network.Zkill ?? new ZkillSettings()).RetryCount;
 
-        if (settings.Network is null || settings.Network.Zkill is null || settings.Database is null)
-        {
-            problems.Add("a network, network.zkill or database section is null");
-            return problems;
-        }
-
-        var network = settings.Network;
-        var zkill = network.Zkill;
-        var database = settings.Database;
-
-        RequireAtLeast(problems, "network.esiMaxConcurrency", network.EsiMaxConcurrency, MinimumCount);
-        RequireAtLeast(problems, "network.zkill.requestBudget", zkill.RequestBudget, MinimumCount);
-
-        if (zkill.RequestBudget > ZkillSettings.MaximumRequestBudget)
-            problems.Add($"network.zkill.requestBudget is above {ZkillSettings.MaximumRequestBudget}");
-
-        RequireAtLeast(problems, "network.zkill.budgetWindowSeconds", zkill.BudgetWindowSeconds, MinimumCount);
-        RequireAtLeast(problems, "network.zkill.maxConcurrency", zkill.MaxConcurrency, MinimumCount);
-        RequireAtLeast(problems, "network.zkill.requestTimeoutSeconds", zkill.RequestTimeoutSeconds, MinimumCount);
-        RequireAtLeast(problems, "network.zkill.retryCount", zkill.RetryCount, MinimumCount);
-        RequireAtLeast(problems, "network.zkill.rateLimitPauseSeconds", zkill.RateLimitPauseSeconds, MinimumCount);
-        RequireAtLeast(problems, "database.busyTimeoutSeconds", database.BusyTimeoutSeconds, MinimumCount);
-        RequireAtLeast(problems, "database.pageCacheMegabytes", database.PageCacheMegabytes, MinimumCount);
-        RequireAtLeast(problems, "database.idleCheckpointSeconds", database.IdleCheckpointSeconds, MinimumCount);
-
-        return problems;
+        return retryCount < MinimumCount
+            ? $"network.zkill.retryCount is {retryCount}, below the minimum {MinimumCount}"
+            : null;
     }
 
-    private static void RequireAtLeast(List<string> problems, string name, int value, int minimum)
+    private static ApplicationSettings Normalize(ApplicationSettings settings)
     {
-        if (value < minimum)
-            problems.Add($"{name} is {value}, below the minimum {minimum}");
+        var qualificationFleetThreshold = settings.QualificationFleetThreshold >= MinimumQualificationFleetThreshold
+            ? settings.QualificationFleetThreshold
+            : DefaultQualificationFleetThreshold;
+
+        var network = settings.Network.Normalized();
+        var database = settings.Database.Normalized();
+
+        return qualificationFleetThreshold == settings.QualificationFleetThreshold && network == settings.Network && database == settings.Database
+            ? settings
+            : new ApplicationSettings
+            {
+                RecentWindowDays = settings.RecentWindowDays,
+                BackupFolder = settings.BackupFolder,
+                BackupRotationCount = settings.BackupRotationCount,
+                ThreatBands = settings.ThreatBands,
+                RelationshipConfidenceBands = settings.RelationshipConfidenceBands,
+                HighlightOpacity = settings.HighlightOpacity,
+                QualificationFleetThreshold = qualificationFleetThreshold,
+                Sde = settings.Sde,
+                Threat = settings.Threat,
+                GroupDetection = settings.GroupDetection,
+                Style = settings.Style,
+                Timing = settings.Timing,
+                Network = network,
+                Database = database
+            };
     }
 }

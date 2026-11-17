@@ -108,12 +108,12 @@ public sealed class ApplicationSettingsLoaderTests
     }
 
     [Fact]
-    public void Load_QualificationThresholdBelowMinimum_Fails()
+    public void Load_QualificationThresholdBelowMinimum_IsAdjustedToDefault()
     {
         var result = LoadResult("{ \"qualificationFleetThreshold\": 2 }");
 
-        Assert.False(result.Succeeded);
-        Assert.Contains("qualificationFleetThreshold", result.Failure);
+        Assert.True(result.Succeeded);
+        Assert.Equal(11, result.Settings!.QualificationFleetThreshold);
     }
 
     [Fact]
@@ -123,16 +123,6 @@ public sealed class ApplicationSettingsLoaderTests
 
         Assert.False(result.Succeeded);
         Assert.Contains("network.zkill.retryCount", result.Failure);
-    }
-
-    [Fact]
-    public void Load_SeveralInvalidValues_ReportsEach()
-    {
-        var result = LoadResult("{ \"qualificationFleetThreshold\": 0, \"database\": { \"busyTimeoutSeconds\": 0 } }");
-
-        Assert.False(result.Succeeded);
-        Assert.Contains("qualificationFleetThreshold", result.Failure);
-        Assert.Contains("database.busyTimeoutSeconds", result.Failure);
     }
 
     [Fact]

@@ -79,12 +79,6 @@ public partial class App : Application
         {
             EngineFailureLog.Record($"Startup refused: {settingsResult.Failure}");
 
-            MessageBox.Show(
-                "The KillRight settings file is missing or invalid. See the KillRight log for details, correct the file and start KillRight again.",
-                "KillRight - Settings",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
-
             Shutdown();
             return;
         }
