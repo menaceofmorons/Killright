@@ -7,9 +7,9 @@ namespace Killright.UI.Tests.Configuration;
 public sealed class ApplicationSettingsLoaderTests
 {
     [Fact]
-    public void LoadOrDefault_RealSettingsFile_ReadsEverySectionWithoutDiscardingValues()
+    public void Load_RealSettingsFile_ReadsEverySectionWithoutDiscardingValues()
     {
-        var settings = ApplicationSettingsLoader.LoadOrDefault(ApplicationSettingsLoader.GetDefaultSettingsPath());
+        var settings = ApplicationSettingsLoader.Load(ApplicationSettingsLoader.GetDefaultSettingsPath()).Settings!;
 
         Assert.Equal(14, settings.RecentWindowDays);
         Assert.Equal(5, settings.BackupRotationCount);
@@ -23,22 +23,22 @@ public sealed class ApplicationSettingsLoaderTests
     }
 
     [Fact]
-    public void LoadOrDefault_RealSettingsFile_TimingIsDisabled()
+    public void Load_RealSettingsFile_TimingIsDisabled()
     {
-        var settings = ApplicationSettingsLoader.LoadOrDefault(ApplicationSettingsLoader.GetDefaultSettingsPath());
+        var settings = ApplicationSettingsLoader.Load(ApplicationSettingsLoader.GetDefaultSettingsPath()).Settings!;
 
         Assert.False(settings.Timing.Enabled);
     }
 
     [Fact]
-    public void LoadOrDefault_SectionAbsent_TimingDefaultsToDisabled()
+    public void Load_SectionAbsent_TimingDefaultsToDisabled()
     {
         var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"killright-settings-{Guid.NewGuid():N}.json");
         System.IO.File.WriteAllText(path, "{ \"recentWindowDays\": 14 }");
 
         try
         {
-            Assert.False(ApplicationSettingsLoader.LoadOrDefault(path).Timing.Enabled);
+            Assert.False(ApplicationSettingsLoader.Load(path).Settings!.Timing.Enabled);
         }
         finally
         {
@@ -47,14 +47,14 @@ public sealed class ApplicationSettingsLoaderTests
     }
 
     [Fact]
-    public void LoadOrDefault_TimingEnabledTrue_IsRead()
+    public void Load_TimingEnabledTrue_IsRead()
     {
         var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"killright-settings-{Guid.NewGuid():N}.json");
-        System.IO.File.WriteAllText(path, "{ \"timing\": { \"enabled\": true }, \"qualificationFleetThreshold\": 1 }");
+        System.IO.File.WriteAllText(path, "{ \"timing\": { \"enabled\": true }, \"qualificationFleetThreshold\": 11 }");
 
         try
         {
-            Assert.True(ApplicationSettingsLoader.LoadOrDefault(path).Timing.Enabled);
+            Assert.True(ApplicationSettingsLoader.Load(path).Settings!.Timing.Enabled);
         }
         finally
         {
@@ -63,17 +63,97 @@ public sealed class ApplicationSettingsLoaderTests
     }
 
     [Fact]
-    public void LoadOrDefault_MissingFile_ReturnsDefaults()
+    public void Load_MissingFile_FailsWithNoSettings()
     {
-        var settings = ApplicationSettingsLoader.LoadOrDefault(@"C:\does-not-exist\settings.json");
+        var result = ApplicationSettingsLoader.Load(@"C:\does-not-exist\settings.json");
 
-        Assert.Equal(RecentWindowDefaults.DefaultWindowDays, settings.RecentWindowDays);
-        Assert.Equal(5, settings.Style.BlobMinimumAverageAttackers);
-        Assert.Equal(11, settings.Style.FleetMinimumAverageAttackers);
+        Assert.False(result.Succeeded);
+        Assert.Null(result.Settings);
+        Assert.Contains("not found", result.Failure);
     }
 
     [Fact]
-    public void LoadOrDefault_RetiredSectionPresent_IgnoredAndOtherValuesIntact()
+    public void Load_UnreadableFile_FailsWithNoSettings()
+    {
+        var path = TempPath();
+        System.IO.File.WriteAllText(path, "{ \"recentWindowDays\": 14 }");
+
+        try
+        {
+            using var held = new System.IO.FileStream(path, System.IO.FileMode.Open, System.IO.FileAccess.Read, System.IO.FileShare.None);
+
+            var result = ApplicationSettingsLoader.Load(path);
+
+            Assert.False(result.Succeeded);
+            Assert.Null(result.Settings);
+            Assert.Contains("could not be read", result.Failure);
+        }
+        finally
+        {
+            System.IO.File.Delete(path);
+        }
+    }
+
+    [Theory]
+    [InlineData("{ not json")]
+    [InlineData("")]
+    [InlineData("{ \"recentWindowDays\": \"many\" }")]
+    public void Load_InvalidJson_FailsWithNoSettings(string json)
+    {
+        var result = LoadResult(json);
+
+        Assert.False(result.Succeeded);
+        Assert.Null(result.Settings);
+        Assert.Contains("not valid", result.Failure);
+    }
+
+    [Fact]
+    public void Load_QualificationThresholdBelowMinimum_IsAdjustedToDefault()
+    {
+        var result = LoadResult("{ \"qualificationFleetThreshold\": 2 }");
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(11, result.Settings!.QualificationFleetThreshold);
+    }
+
+    [Fact]
+    public void Load_RetryCountZero_Fails()
+    {
+        var result = LoadResult("{ \"network\": { \"zkill\": { \"retryCount\": 0 } } }");
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("network.zkill.retryCount", result.Failure);
+    }
+
+    [Fact]
+    public void Load_ValidFile_Succeeds()
+    {
+        var result = LoadResult("{ \"recentWindowDays\": 21 }");
+
+        Assert.True(result.Succeeded);
+        Assert.Null(result.Failure);
+        Assert.Equal(21, result.Settings!.RecentWindowDays);
+    }
+
+    private static string TempPath() => System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"killright-settings-{Guid.NewGuid():N}.json");
+
+    private static SettingsLoadResult LoadResult(string json)
+    {
+        var path = TempPath();
+        System.IO.File.WriteAllText(path, json);
+
+        try
+        {
+            return ApplicationSettingsLoader.Load(path);
+        }
+        finally
+        {
+            System.IO.File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Load_RetiredSectionPresent_IgnoredAndOtherValuesIntact()
     {
         var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"killright-settings-{Guid.NewGuid():N}.json");
         System.IO.File.WriteAllText(path, """
@@ -88,13 +168,61 @@ public sealed class ApplicationSettingsLoaderTests
 
         try
         {
-            var settings = ApplicationSettingsLoader.LoadOrDefault(path);
+            var settings = ApplicationSettingsLoader.Load(path).Settings!;
 
             Assert.Equal(21, settings.RecentWindowDays);
             Assert.Equal(7, settings.BackupRotationCount);
             Assert.Equal(0.35, settings.HighlightOpacity);
             Assert.Equal(6, settings.Style.BlobMinimumAverageAttackers);
             Assert.Equal(12, settings.Style.FleetMinimumAverageAttackers);
+        }
+        finally
+        {
+            System.IO.File.Delete(path);
+        }
+    }
+
+    [Theory]
+    [InlineData("threatBands")]
+    [InlineData("relationshipConfidenceBands")]
+    [InlineData("sde")]
+    [InlineData("threat")]
+    [InlineData("groupDetection")]
+    [InlineData("style")]
+    [InlineData("timing")]
+    [InlineData("network")]
+    [InlineData("database")]
+    public void Load_ExplicitNullSection_FailsWithNoSettings(string section)
+    {
+        var path = TempPath();
+        System.IO.File.WriteAllText(path, $"{{ \"{section}\": null }}");
+
+        try
+        {
+            var result = ApplicationSettingsLoader.Load(path);
+
+            Assert.False(result.Succeeded);
+            Assert.Null(result.Settings);
+            Assert.Contains(section, result.Failure);
+        }
+        finally
+        {
+            System.IO.File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Load_UnsupportedValueShape_FailsWithNoSettings()
+    {
+        var path = TempPath();
+        System.IO.File.WriteAllText(path, "{ \"recentWindowDays\": [1, 2] }");
+
+        try
+        {
+            var result = ApplicationSettingsLoader.Load(path);
+
+            Assert.False(result.Succeeded);
+            Assert.Null(result.Settings);
         }
         finally
         {

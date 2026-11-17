@@ -1,6 +1,5 @@
-use std::env;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use serde::Deserialize;
 
@@ -14,8 +13,6 @@ use crate::shared::style_configuration::{validate_style_configuration, StyleConf
 use crate::shared::timing_recorder::TimingConfiguration;
 use crate::threat_analysis::threat_configuration_loader::validate_threat_configuration;
 use crate::threat_analysis::threat_configuration_models::ThreatConfiguration;
-
-pub const SETTINGS_PATH_ENVIRONMENT_VARIABLE: &str = "KILLRIGHT_SETTINGS_PATH";
 
 #[derive(Debug, Clone, Deserialize)]
 struct SettingsFile {
@@ -35,23 +32,6 @@ pub struct EngineSettings {
     pub group_detection: GroupDetectionConfiguration,
     pub style: StyleConfiguration,
     pub timing: TimingConfiguration,
-}
-
-pub fn get_settings_path() -> Result<PathBuf, String> {
-    match env::var_os(SETTINGS_PATH_ENVIRONMENT_VARIABLE) {
-        Some(value) if !value.is_empty() => Ok(PathBuf::from(value)),
-
-        _ => Err(format!(
-            "{} environment variable is not set",
-            SETTINGS_PATH_ENVIRONMENT_VARIABLE
-        )),
-    }
-}
-
-pub fn load_engine_settings() -> Result<EngineSettings, String> {
-    let path = get_settings_path()?;
-
-    load_engine_settings_from_path(&path)
 }
 
 pub fn load_engine_settings_from_path(path: &Path) -> Result<EngineSettings, String> {

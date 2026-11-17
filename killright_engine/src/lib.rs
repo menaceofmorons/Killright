@@ -3,10 +3,14 @@
     reason = "extern \"C\" entry points are the FFI surface; signatures are fixed by the managed caller"
 )]
 use chrono::{DateTime, Duration, Utc};
+use serde::Serialize;
+use serde_json::json;
+use std::any::Any;
 use std::collections::{HashMap, HashSet};
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 use std::panic;
+use std::path::Path;
 use std::sync::{Mutex, OnceLock};
 use std::time::Instant;
 #[path = "kr_engine.rs"]
@@ -26,7 +30,7 @@ use kr_engine::group_analysis::group_relationship_scoring::score_and_select_rela
 use kr_engine::recent_style::recent_style_analyzer::analyze_recent_style;
 use kr_engine::recent_style::{RecentKillmailInput, RecentStyleRequest};
 use kr_engine::shared::recent_window_configuration::RecentWindowConfiguration;
-use kr_engine::shared::settings_loader::load_engine_settings;
+use kr_engine::shared::settings_loader::load_engine_settings_from_path;
 use kr_engine::shared::style_configuration::StyleConfiguration;
 use kr_engine::shared::timing_recorder;
 use kr_engine::threat_analysis::{
@@ -40,31 +44,119 @@ struct RuntimeState {
     style_configuration: StyleConfiguration,
 }
 static RUNTIME: OnceLock<Mutex<Option<RuntimeState>>> = OnceLock::new();
+pub const ENGINE_CONTRACT_VERSION: u32 = 1;
+const FAILURE_SETTINGS: &str = "settings_failure";
+const FAILURE_INITIALIZE: &str = "initialize_failure";
+const FAILURE_INTERNAL: &str = "internal_error";
+
+#[derive(Debug, Serialize)]
+struct InitializeResponse {
+    success: bool,
+    contract_version: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    failure: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    failure_detail: Option<String>,
+}
+
+impl InitializeResponse {
+    fn succeeded() -> Self {
+        Self {
+            success: true,
+            contract_version: ENGINE_CONTRACT_VERSION,
+            failure: None,
+            failure_detail: None,
+        }
+    }
+
+    fn failed(reason: &str, detail: String) -> Self {
+        Self {
+            success: false,
+            contract_version: ENGINE_CONTRACT_VERSION,
+            failure: Some(reason.to_string()),
+            failure_detail: Some(detail),
+        }
+    }
+}
+
+fn initialize_runtime(
+    settings_path: &str,
+    cell: &Mutex<Option<RuntimeState>>,
+) -> InitializeResponse {
+    let engine_settings = match load_engine_settings_from_path(Path::new(settings_path)) {
+        Ok(value) => value,
+        Err(error) => return InitializeResponse::failed(FAILURE_SETTINGS, error),
+    };
+    let Ok(mut guard) = cell.lock() else {
+        return InitializeResponse::failed(
+            FAILURE_INITIALIZE,
+            "runtime state lock is poisoned".to_string(),
+        );
+    };
+    timing_recorder::set_enabled(engine_settings.timing.enabled);
+    *guard = Some(RuntimeState {
+        threat_configuration: engine_settings.threat,
+        recent_window_configuration: engine_settings.recent_window,
+        group_detection_configuration: engine_settings.group_detection,
+        style_configuration: engine_settings.style,
+    });
+    InitializeResponse::succeeded()
+}
+
+fn panic_cause(payload: &(dyn Any + Send)) -> String {
+    if let Some(text) = payload.downcast_ref::<&str>() {
+        (*text).to_string()
+    } else if let Some(text) = payload.downcast_ref::<String>() {
+        text.clone()
+    } else {
+        "panic with a non-text payload".to_string()
+    }
+}
+
+fn json_to_c_string(value: serde_json::Value) -> *mut c_char {
+    let fallback = "{\"failure\":\"internal_error\"}";
+    CString::new(value.to_string())
+        .unwrap_or_else(|_| CString::new(fallback).expect("fallback has no interior nul"))
+        .into_raw()
+}
+
+fn internal_error_pilot(payload: &(dyn Any + Send)) -> *mut c_char {
+    json_to_c_string(internal_error_pilot_value(payload))
+}
+
+fn internal_error_pilot_value(payload: &(dyn Any + Send)) -> serde_json::Value {
+    json!({"character_id": 0, "failure": FAILURE_INTERNAL, "failure_detail": panic_cause(payload)})
+}
+
+fn internal_error_pilots_value(payload: &(dyn Any + Send)) -> serde_json::Value {
+    json!({"results": [], "failure": FAILURE_INTERNAL, "failure_detail": panic_cause(payload)})
+}
+
 #[no_mangle]
-pub extern "C" fn killright_initialize() -> i32 {
+pub extern "C" fn killright_initialize(settings_path: *const c_char) -> *mut c_char {
     let result = panic::catch_unwind(|| {
-        let engine_settings = match load_engine_settings() {
-            Ok(value) => value,
-            Err(error) => {
-                eprintln!("{}", error);
-                return 0;
-            }
+        if settings_path.is_null() {
+            return InitializeResponse::failed(
+                FAILURE_SETTINGS,
+                "settings path was not provided".to_string(),
+            );
+        }
+        let path_text = unsafe { CStr::from_ptr(settings_path) };
+        let Ok(path_text) = path_text.to_str() else {
+            return InitializeResponse::failed(
+                FAILURE_SETTINGS,
+                "settings path is not valid UTF-8".to_string(),
+            );
         };
         let cell = RUNTIME.get_or_init(|| Mutex::new(None));
-        let mut guard = match cell.lock() {
-            Ok(value) => value,
-            Err(_) => return 0,
-        };
-        timing_recorder::set_enabled(engine_settings.timing.enabled);
-        *guard = Some(RuntimeState {
-            threat_configuration: engine_settings.threat,
-            recent_window_configuration: engine_settings.recent_window,
-            group_detection_configuration: engine_settings.group_detection,
-            style_configuration: engine_settings.style,
-        });
-        1
+        initialize_runtime(path_text, cell)
     });
-    result.unwrap_or(0)
+    let response = result.unwrap_or_else(|payload| {
+        InitializeResponse::failed(FAILURE_INTERNAL, panic_cause(payload.as_ref()))
+    });
+    json_to_c_string(
+        serde_json::to_value(&response).expect("initialize response serialises to JSON"),
+    )
 }
 #[no_mangle]
 pub extern "C" fn killright_analyze_pilot(request_json: *const c_char) -> *mut c_char {
@@ -108,7 +200,7 @@ pub extern "C" fn killright_analyze_pilot(request_json: *const c_char) -> *mut c
         }
         timed_response_json(response, timing_started, total_phase)
     });
-    result.unwrap_or_else(|_| failure_response(0, "internal_error"))
+    result.unwrap_or_else(|payload| internal_error_pilot(payload.as_ref()))
 }
 
 fn respond_to_pilot_request(
@@ -370,7 +462,7 @@ pub extern "C" fn killright_analyze_pilots(request_json: *const c_char) -> *mut 
             "batch_total",
         )
     });
-    result.unwrap_or_else(|_| pilots_failure_response("internal_error"))
+    result.unwrap_or_else(|payload| json_to_c_string(internal_error_pilots_value(payload.as_ref())))
 }
 
 fn pilots_failure_response(reason: &str) -> *mut c_char {
@@ -623,7 +715,7 @@ pub extern "C" fn killright_diagnose_group_detection(request_json: *const c_char
             &group_detection_configuration,
         ))
     });
-    result.unwrap_or_else(|_| group_detection_diagnostics_failure(0, "internal_error"))
+    result.unwrap_or_else(|payload| internal_error_pilot(payload.as_ref()))
 }
 
 #[no_mangle]
@@ -658,7 +750,7 @@ pub extern "C" fn killright_diagnose_threat(request_json: *const c_char) -> *mut
             &threat_configuration,
         ))
     });
-    result.unwrap_or_else(|_| threat_diagnostics_failure(0, "internal_error"))
+    result.unwrap_or_else(|payload| internal_error_pilot(payload.as_ref()))
 }
 
 fn group_detection_diagnostics_failure(character_id: i64, reason: &str) -> *mut c_char {
@@ -1447,5 +1539,145 @@ mod tests {
 
         assert_eq!(envelope.failure.as_deref(), Some("unreadable_request"));
         assert!(envelope.diagnostics.is_none());
+    }
+
+    fn shipped_settings_path() -> String {
+        format!(
+            "{}/../KillRight/Killright.UI/config/settings.json",
+            env!("CARGO_MANIFEST_DIR")
+        )
+    }
+
+    fn temp_settings_file(label: &str, contents: &str) -> std::path::PathBuf {
+        let path = std::env::temp_dir().join(format!(
+            "killright-init-{}-{}-{}.json",
+            label,
+            std::process::id(),
+            Utc::now().timestamp_nanos_opt().unwrap_or_default()
+        ));
+        std::fs::write(&path, contents).unwrap();
+        path
+    }
+
+    #[test]
+    fn initialize_with_valid_path_succeeds_and_reports_contract_version() {
+        let cell = Mutex::new(None);
+
+        let response = initialize_runtime(&shipped_settings_path(), &cell);
+
+        assert!(response.success);
+        assert_eq!(response.contract_version, ENGINE_CONTRACT_VERSION);
+        assert!(response.failure.is_none());
+        assert!(cell.lock().unwrap().is_some());
+    }
+
+    #[test]
+    fn initialize_with_missing_file_fails_with_settings_reason() {
+        let cell = Mutex::new(None);
+
+        let response = initialize_runtime("does/not/exist/settings.json", &cell);
+
+        assert!(!response.success);
+        assert_eq!(response.failure.as_deref(), Some("settings_failure"));
+        assert!(response.failure_detail.unwrap().contains("failed to read"));
+        assert!(cell.lock().unwrap().is_none());
+    }
+
+    #[test]
+    fn initialize_with_unreadable_file_fails_with_settings_reason() {
+        let cell = Mutex::new(None);
+        let directory = std::env::temp_dir();
+
+        let response = initialize_runtime(directory.to_str().unwrap(), &cell);
+
+        assert_eq!(response.failure.as_deref(), Some("settings_failure"));
+    }
+
+    #[test]
+    fn initialize_with_invalid_value_fails_with_settings_reason() {
+        let cell = Mutex::new(None);
+        let text = std::fs::read_to_string(shipped_settings_path()).unwrap();
+        let invalid = text.replacen(
+            "\"recentWindowDays\"",
+            "\"recentWindowDays\": 0, \"ignored\"",
+            1,
+        );
+        let path = temp_settings_file("invalid", &invalid);
+
+        let response = initialize_runtime(path.to_str().unwrap(), &cell);
+
+        std::fs::remove_file(&path).unwrap();
+        assert_eq!(response.failure.as_deref(), Some("settings_failure"));
+        assert!(cell.lock().unwrap().is_none());
+    }
+
+    #[test]
+    fn initialize_with_poisoned_runtime_lock_fails_with_non_settings_reason() {
+        let cell = Mutex::new(None::<RuntimeState>);
+        let _ = std::thread::scope(|scope| {
+            scope
+                .spawn(|| {
+                    let _guard = cell.lock().unwrap();
+                    panic!("poison the lock");
+                })
+                .join()
+        });
+
+        let response = initialize_runtime(&shipped_settings_path(), &cell);
+
+        assert!(!response.success);
+        assert_eq!(response.failure.as_deref(), Some("initialize_failure"));
+    }
+
+    #[test]
+    fn initialize_response_serialises_contract_version_and_omits_failure_on_success() {
+        let json = serde_json::to_string(&InitializeResponse::succeeded()).unwrap();
+
+        assert_eq!(
+            json,
+            format!(
+                "{{\"success\":true,\"contract_version\":{}}}",
+                ENGINE_CONTRACT_VERSION
+            )
+        );
+    }
+
+    #[test]
+    fn killright_initialize_with_null_path_reports_settings_failure() {
+        let pointer = killright_initialize(std::ptr::null());
+        let text = unsafe { CStr::from_ptr(pointer) }
+            .to_str()
+            .unwrap()
+            .to_string();
+        killright_free_string(pointer);
+
+        let value: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(value["success"], false);
+        assert_eq!(value["failure"], "settings_failure");
+    }
+
+    #[test]
+    fn panic_response_carries_cause_in_json() {
+        let payload = panic::catch_unwind(|| panic!("forced engine panic")).unwrap_err();
+
+        let single = internal_error_pilot_value(payload.as_ref());
+        let batch = internal_error_pilots_value(payload.as_ref());
+
+        assert_eq!(single["failure"], "internal_error");
+        assert_eq!(single["failure_detail"], "forced engine panic");
+        assert_eq!(batch["failure"], "internal_error");
+        assert_eq!(batch["failure_detail"], "forced engine panic");
+    }
+
+    #[test]
+    fn panic_cause_reads_formatted_and_non_text_payloads() {
+        let formatted = panic::catch_unwind(|| panic!("value {}", 7)).unwrap_err();
+        let opaque = panic::catch_unwind(|| panic::panic_any(7_u8)).unwrap_err();
+
+        assert_eq!(panic_cause(formatted.as_ref()), "value 7");
+        assert_eq!(
+            panic_cause(opaque.as_ref()),
+            "panic with a non-text payload"
+        );
     }
 }

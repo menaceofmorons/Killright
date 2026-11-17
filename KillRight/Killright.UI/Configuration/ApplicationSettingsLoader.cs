@@ -4,10 +4,24 @@ using System.Text.Json.Serialization;
 
 namespace Killright.UI.Configuration;
 
+public sealed record SettingsLoadResult
+{
+    public ApplicationSettings? Settings { get; private init; }
+
+    public string? Failure { get; private init; }
+
+    public bool Succeeded => Settings is not null;
+
+    public static SettingsLoadResult Success(ApplicationSettings settings) => new() { Settings = settings };
+
+    public static SettingsLoadResult Failed(string failure) => new() { Failure = failure };
+}
+
 public static class ApplicationSettingsLoader
 {
     private const int MinimumQualificationFleetThreshold = 3;
     private const int DefaultQualificationFleetThreshold = 11;
+    private const int MinimumCount = 1;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -20,23 +34,75 @@ public static class ApplicationSettingsLoader
         return Path.Combine(AppContext.BaseDirectory, "config", "settings.json");
     }
 
-    public static ApplicationSettings LoadOrDefault(string? settingsPath = null)
+    public static SettingsLoadResult Load(string? settingsPath = null)
     {
         var path = settingsPath ?? GetDefaultSettingsPath();
+
+        string json;
 
         try
         {
             if (!File.Exists(path))
-                return new ApplicationSettings();
+                return SettingsLoadResult.Failed($"The settings file was not found at '{path}'.");
 
-            var json = File.ReadAllText(path);
-            var settings = JsonSerializer.Deserialize<ApplicationSettings>(json, JsonOptions) ?? new ApplicationSettings();
-            return Normalize(settings);
+            json = File.ReadAllText(path);
         }
-        catch
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or System.Security.SecurityException)
         {
-            return new ApplicationSettings();
+            return SettingsLoadResult.Failed($"The settings file at '{path}' could not be read. {exception.Message}");
         }
+
+        ApplicationSettings? settings;
+
+        try
+        {
+            settings = JsonSerializer.Deserialize<ApplicationSettings>(json, JsonOptions);
+        }
+        catch (Exception exception) when (exception is JsonException or NotSupportedException)
+        {
+            return SettingsLoadResult.Failed($"The settings file at '{path}' is not valid. {exception.Message}");
+        }
+
+        if (settings is null)
+            return SettingsLoadResult.Failed($"The settings file at '{path}' is empty.");
+
+        var problem = Validate(settings);
+
+        return problem is null
+            ? SettingsLoadResult.Success(Normalize(settings))
+            : SettingsLoadResult.Failed($"The settings file at '{path}' has an invalid value: {problem}.");
+    }
+
+    public static string? Validate(ApplicationSettings settings)
+    {
+        var nullSection = FirstNullSection(settings);
+
+        if (nullSection is not null)
+            return $"the {nullSection} section is null";
+
+        var retryCount = (settings.Network.Zkill ?? new ZkillSettings()).RetryCount;
+
+        return retryCount < MinimumCount
+            ? $"network.zkill.retryCount is {retryCount}, below the minimum {MinimumCount}"
+            : null;
+    }
+
+    private static string? FirstNullSection(ApplicationSettings settings)
+    {
+        var sections = new (string Name, object? Value)[]
+        {
+            ("threatBands", settings.ThreatBands),
+            ("relationshipConfidenceBands", settings.RelationshipConfidenceBands),
+            ("sde", settings.Sde),
+            ("threat", settings.Threat),
+            ("groupDetection", settings.GroupDetection),
+            ("style", settings.Style),
+            ("timing", settings.Timing),
+            ("network", settings.Network),
+            ("database", settings.Database)
+        };
+
+        return sections.FirstOrDefault(section => section.Value is null).Name;
     }
 
     private static ApplicationSettings Normalize(ApplicationSettings settings)

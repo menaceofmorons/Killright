@@ -78,7 +78,36 @@ public partial class App : Application
         _unobservedFailureSubscription = BackgroundFailureRecorder.Attach(EngineFailureLog.Record);
 
         var settingsPath = ApplicationSettingsLoader.GetDefaultSettingsPath();
-        Settings = ApplicationSettingsLoader.LoadOrDefault(settingsPath);
+        var settingsResult = ApplicationSettingsLoader.Load(settingsPath);
+
+        if (!settingsResult.Succeeded)
+        {
+            EngineFailureLog.Record($"Startup refused: {settingsResult.Failure}");
+
+            Shutdown();
+            return;
+        }
+
+        Settings = settingsResult.Settings!;
+
+        var dllPath = Path.Combine(
+            AppContext.BaseDirectory,
+            "killright_engine.dll");
+
+        var engineRuntime =
+            new KillrightEngineRuntime(
+                dllPath,
+                settingsPath);
+
+        if (engineRuntime.InitializeFailedOnSettings)
+        {
+            EngineFailureLog.Record($"Startup refused: the engine rejected the settings file. {engineRuntime.InitializeFailureReason}");
+
+            Shutdown();
+            return;
+        }
+
+        EngineRuntime = engineRuntime;
 
         GeneralStyleClassifier.Configure(
             Settings.Style.BlobMinimumAverageAttackers,
@@ -217,18 +246,6 @@ public partial class App : Application
                 "SDE update check",
                 EngineFailureLog.Record);
         }
-
-        var dllPath = Path.Combine(
-            AppContext.BaseDirectory,
-            "killright_engine.dll");
-
-        EngineRuntime =
-            new KillrightEngineRuntime(
-                dllPath,
-                settingsPath);
-
-        if (!EngineRuntime.IsAvailable)
-            EngineFailureLog.Record("killright_engine failed to initialize (killright_initialize did not return success).");
 
         EngineInputReader =
             new EngineInputReader(
