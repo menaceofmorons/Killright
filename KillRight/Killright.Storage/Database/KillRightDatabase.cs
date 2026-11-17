@@ -138,30 +138,49 @@ public sealed class KillRightDatabase
         if (!File.Exists(_options.DatabasePath))
             return false;
 
+        var corruption = FindCorruption();
+
+        if (corruption is null)
+            return false;
+
+        onCorruptionDetected?.Invoke(corruption);
+        SetAsideFiles();
+
+        return true;
+    }
+
+    public void SetAsideFiles()
+    {
+        SqliteConnection.ClearAllPools();
+
+        var quarantineSuffix = $".corrupt-{DateTimeOffset.UtcNow:yyyyMMddHHmmss}";
+
+        foreach (var path in new[] { _options.DatabasePath, _options.DatabasePath + "-wal", _options.DatabasePath + "-shm" })
+        {
+            if (File.Exists(path))
+                File.Move(path, path + quarantineSuffix, overwrite: true);
+        }
+    }
+
+    private string? FindCorruption()
+    {
         try
         {
             using var connection = new SqliteConnection(BuildConnectionString(_options, SqliteOpenMode.ReadOnly, pooling: false));
             connection.Open();
 
             using var command = connection.CreateCommand();
-            command.CommandText = "SELECT COUNT(*) FROM sqlite_schema;";
-            command.ExecuteScalar();
+            command.CommandText = "PRAGMA quick_check;";
 
-            return false;
+            var result = Convert.ToString(command.ExecuteScalar());
+
+            return string.Equals(result, "ok", StringComparison.OrdinalIgnoreCase)
+                ? null
+                : $"quick_check failed: {result}";
         }
         catch (SqliteException exception) when (exception.SqliteErrorCode is SqliteCorrupt or SqliteNotADatabase)
         {
-            onCorruptionDetected?.Invoke(exception.Message);
-
-            var quarantineSuffix = $".corrupt-{DateTimeOffset.UtcNow:yyyyMMddHHmmss}";
-
-            foreach (var path in new[] { _options.DatabasePath, _options.DatabasePath + "-wal", _options.DatabasePath + "-shm" })
-            {
-                if (File.Exists(path))
-                    File.Move(path, path + quarantineSuffix, overwrite: true);
-            }
-
-            return true;
+            return exception.Message;
         }
     }
 

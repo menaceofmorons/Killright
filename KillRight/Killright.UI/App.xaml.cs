@@ -113,9 +113,6 @@ public partial class App : Application
 
         Database = database;
 
-        database.QuarantineIfCorrupt(reason =>
-            EngineFailureLog.Record($"Operational database was corrupt at startup and has been rebuilt. {reason}"));
-
         var backupFolder = Settings.BackupFolder
             ?? Path.Combine(Path.GetDirectoryName(databasePath)!, KillmailBackupDefaults.DefaultBackupFolderName);
 
@@ -125,18 +122,15 @@ public partial class App : Application
                 backupFolder,
                 Settings.BackupRotationCount);
 
-        try
-        {
-            if (!File.Exists(databasePath) && BackupService.TryRestore())
-                EngineFailureLog.Record("Restored the database from the latest backup.");
+        var startupResult = GuardedStartup.Run(
+            database,
+            BackupService,
+            IsAlphaRelease,
+            Settings.QualificationFleetThreshold,
+            message => EngineFailureLog.Record(message));
 
-            database.EnsureCreated();
-            database.Open();
-        }
-        catch (Exception exception)
+        if (startupResult.Outcome == StartupOutcome.DatabaseRefused)
         {
-            EngineFailureLog.Record($"Startup refused: the operational database could not be opened. {exception.Message}");
-
             MessageBox.Show(
                 "The KillRight database could not be opened. Close any other program or KillRight window using it and start KillRight again.",
                 "KillRight - Database",
@@ -147,9 +141,7 @@ public partial class App : Application
             return;
         }
 
-        var schemaCheckResult = SchemaVersionGate.CheckOnStartup(database, IsAlphaRelease);
-
-        if (schemaCheckResult.Outcome != SchemaVersionCheckOutcome.Ok)
+        if (startupResult.Schema is { } schemaCheckResult)
         {
             var message = schemaCheckResult.Outcome == SchemaVersionCheckOutcome.RefusedDowngrade
                 ? $"This database's schema version ({schemaCheckResult.StoredVersion}) is newer than this build supports ({schemaCheckResult.CurrentVersion}). Install a newer version of KillRight to continue."
@@ -166,8 +158,6 @@ public partial class App : Application
             Shutdown();
             return;
         }
-
-        KillmailQualificationRequalifier.RequalifyOnStartup(database, Settings.QualificationFleetThreshold);
 
         PilotIdentityCache =
             new PilotIdentityCache(database);

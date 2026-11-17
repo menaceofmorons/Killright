@@ -359,6 +359,33 @@ public sealed class KillRightDatabaseTests
     }
 
     [Fact]
+    public void QuarantineIfCorrupt_BodyPagesDamagedButFileOpens_IsQuarantined()
+    {
+        var database = CreateDatabase();
+        database.EnsureCreated();
+        database.Open();
+
+        using (var connection = database.OpenConnection())
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = "CREATE TABLE main.bulk (id INTEGER PRIMARY KEY, payload TEXT NOT NULL); "
+                + "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 2000) "
+                + "INSERT INTO main.bulk SELECT i, hex(randomblob(64)) FROM n;";
+            command.ExecuteNonQuery();
+        }
+
+        database.Close();
+        DamageLastPage(database.DatabasePath);
+
+        string? reason = null;
+        var quarantined = database.QuarantineIfCorrupt(detected => reason = detected);
+
+        Assert.True(quarantined);
+        Assert.NotNull(reason);
+        Assert.False(File.Exists(database.DatabasePath));
+    }
+
+    [Fact]
     public void QuarantineIfCorrupt_NoFile_ReturnsFalse()
     {
         Assert.False(CreateDatabase().QuarantineIfCorrupt());
@@ -477,5 +504,12 @@ public sealed class KillRightDatabaseTests
         command.Transaction = transaction;
         command.CommandText = sql;
         command.ExecuteNonQuery();
+    }
+
+    private static void DamageLastPage(string path)
+    {
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Write);
+        stream.Seek(-4096, SeekOrigin.End);
+        stream.Write(Enumerable.Repeat((byte)0xFF, 4096).ToArray());
     }
 }
