@@ -18,7 +18,7 @@ public sealed class SchemaVersionGateTests
     }
 
     [Fact]
-    public void CheckOnStartup_AlphaReleaseAndLockAbsent_SetsLock()
+    public void CheckOnStartup_ReleaseBuildAndLockAbsent_SetsLock()
     {
         var database = CreateDatabase();
 
@@ -28,7 +28,7 @@ public sealed class SchemaVersionGateTests
     }
 
     [Fact]
-    public void CheckOnStartup_NotAlphaRelease_LeavesLockUnset()
+    public void CheckOnStartup_NotReleaseBuild_LeavesLockUnset()
     {
         var database = CreateDatabase();
 
