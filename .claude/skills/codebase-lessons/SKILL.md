@@ -19,6 +19,7 @@ metadata:
 
 ### Build & Tooling
 - In a worktree, a hook refuses Bash commands that combine `git` with heredocs or `&&` chains; run plain single commands and write files with the Write tool (WS-1.2)
+- Without a prior `dotnet restore KillRight/KillRight.sln`, `dotnet test --no-restore` can exit 0 with no output; check the test count, not the exit code (WS-1.2)
 
 ### Conventions
 - {lesson} (WS-x.y)
