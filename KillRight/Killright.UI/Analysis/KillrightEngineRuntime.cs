@@ -19,7 +19,11 @@ public sealed class KillrightEngineRuntime : IKillrightEngineRuntime
     private readonly Action<string> _logFailure;
     private nint _libraryHandle;
     private NativeExports? _exports;
+    private readonly object _gate = new();
+    private readonly object _disposeGate = new();
+    private int _callsInFlight;
     private bool _disposed;
+    private bool _released;
 
     public bool IsAvailable { get; private set; }
 
@@ -96,25 +100,38 @@ public sealed class KillrightEngineRuntime : IKillrightEngineRuntime
 
     public void Dispose()
     {
-        if (_disposed)
+        lock (_disposeGate)
         {
-            return;
-        }
+            if (_released)
+            {
+                return;
+            }
 
-        _disposed = true;
+            lock (_gate)
+            {
+                _disposed = true;
 
-        if (_exports is null)
-        {
-            return;
-        }
+                while (_callsInFlight > 0)
+                {
+                    Monitor.Wait(_gate);
+                }
+            }
 
-        try
-        {
-            _exports.Shutdown();
-        }
-        finally
-        {
-            ReleaseLibrary();
+            _released = true;
+
+            if (_exports is null)
+            {
+                return;
+            }
+
+            try
+            {
+                _exports.Shutdown();
+            }
+            finally
+            {
+                ReleaseLibrary();
+            }
         }
     }
 
@@ -261,17 +278,48 @@ public sealed class KillrightEngineRuntime : IKillrightEngineRuntime
         ScanTimings? timings = null,
         long? timingCharacterId = null)
     {
-        var exports = _exports;
-
-        if (_disposed || !IsAvailable || exports is null)
-        {
-            return Task.FromResult(fallbackJson);
-        }
-
         cancellationToken.ThrowIfCancellationRequested();
 
-        var export = selectExport(exports);
+        NativeExports exports;
 
+        lock (_gate)
+        {
+            if (_disposed || !IsAvailable || _exports is null)
+            {
+                return Task.FromResult(fallbackJson);
+            }
+
+            exports = _exports;
+            _callsInFlight++;
+        }
+
+        return Task.Run(
+            () =>
+            {
+                try
+                {
+                    return CallNative(selectExport(exports), exports, fallbackJson, requestJson, timings, timingCharacterId);
+                }
+                finally
+                {
+                    lock (_gate)
+                    {
+                        _callsInFlight--;
+                        Monitor.PulseAll(_gate);
+                    }
+                }
+            },
+            CancellationToken.None);
+    }
+
+    private string CallNative(
+        JsonExportDelegate export,
+        NativeExports exports,
+        string fallbackJson,
+        string requestJson,
+        ScanTimings? timings,
+        long? timingCharacterId)
+    {
         var requestBytes =
             Encoding.UTF8.GetBytes(requestJson + "\0");
 
@@ -295,14 +343,14 @@ public sealed class KillrightEngineRuntime : IKillrightEngineRuntime
 
             if (responsePointer == nint.Zero)
             {
-                return Task.FromResult(fallbackJson);
+                return fallbackJson;
             }
 
             try
             {
                 var response = Marshal.PtrToStringUTF8(responsePointer) ?? fallbackJson;
                 RecordPanicCause(response);
-                return Task.FromResult(response);
+                return response;
             }
             finally
             {
