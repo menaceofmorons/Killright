@@ -58,7 +58,7 @@ public static class ApplicationSettingsLoader
         {
             settings = JsonSerializer.Deserialize<ApplicationSettings>(json, JsonOptions);
         }
-        catch (JsonException exception)
+        catch (Exception exception) when (exception is JsonException or NotSupportedException)
         {
             return SettingsLoadResult.Failed($"The settings file at '{path}' is not valid. {exception.Message}");
         }
@@ -75,14 +75,34 @@ public static class ApplicationSettingsLoader
 
     public static string? Validate(ApplicationSettings settings)
     {
-        if (settings.Network is null || settings.Database is null)
-            return "a network or database section is null";
+        var nullSection = FirstNullSection(settings);
+
+        if (nullSection is not null)
+            return $"the {nullSection} section is null";
 
         var retryCount = (settings.Network.Zkill ?? new ZkillSettings()).RetryCount;
 
         return retryCount < MinimumCount
             ? $"network.zkill.retryCount is {retryCount}, below the minimum {MinimumCount}"
             : null;
+    }
+
+    private static string? FirstNullSection(ApplicationSettings settings)
+    {
+        var sections = new (string Name, object? Value)[]
+        {
+            ("threatBands", settings.ThreatBands),
+            ("relationshipConfidenceBands", settings.RelationshipConfidenceBands),
+            ("sde", settings.Sde),
+            ("threat", settings.Threat),
+            ("groupDetection", settings.GroupDetection),
+            ("style", settings.Style),
+            ("timing", settings.Timing),
+            ("network", settings.Network),
+            ("database", settings.Database)
+        };
+
+        return sections.FirstOrDefault(section => section.Value is null).Name;
     }
 
     private static ApplicationSettings Normalize(ApplicationSettings settings)
