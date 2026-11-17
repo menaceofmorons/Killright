@@ -321,6 +321,76 @@ public sealed class KillRightDatabaseTests
     }
 
     [Fact]
+    public void Checkpoint_WithTimeout_WhileWriteGateIsHeld_ReturnsFalseWithinTheTimeout()
+    {
+        var database = CreateDatabase();
+        database.EnsureCreated();
+        database.Open();
+
+        try
+        {
+            using var scope = database.BeginWrite();
+            var started = System.Diagnostics.Stopwatch.StartNew();
+
+            var completed = database.Checkpoint(TimeSpan.FromMilliseconds(200));
+
+            Assert.False(completed);
+            Assert.True(started.Elapsed < TimeSpan.FromSeconds(3));
+        }
+        finally
+        {
+            database.Close();
+        }
+    }
+
+    [Fact]
+    public void Checkpoint_WhileWriteGateIsHeld_ReturnsWithinTheTestTimeLimit()
+    {
+        var database = CreateDatabase();
+        database.EnsureCreated();
+        database.Open();
+
+        try
+        {
+            using var scope = database.BeginWrite();
+
+            var checkpoint = Task.Run(() => database.Checkpoint());
+            var finished = checkpoint.Wait(TimeSpan.FromSeconds(12));
+
+            Assert.True(finished, "Checkpoint() did not return while the write gate was held.");
+        }
+        finally
+        {
+            database.Close();
+        }
+    }
+
+    [Fact]
+    public void Checkpoint_WithTimeout_WhenGateIsFree_CheckpointsAndReturnsTrue()
+    {
+        var database = CreateDatabase();
+        database.EnsureCreated();
+        database.Open();
+
+        try
+        {
+            using (var scope = database.BeginWrite())
+            {
+                Execute(scope.Connection, scope.Transaction, "CREATE TABLE main.checkpoint_probe (id INTEGER NOT NULL);");
+                Execute(scope.Connection, scope.Transaction, "INSERT INTO main.checkpoint_probe (id) VALUES (1);");
+                scope.Commit();
+            }
+
+            Assert.True(database.Checkpoint(TimeSpan.FromSeconds(5)));
+            Assert.False(database.HasPendingWal());
+        }
+        finally
+        {
+            database.Close();
+        }
+    }
+
+    [Fact]
     public void QuarantineIfCorrupt_CorruptHeader_MovesAllThreeFiles()
     {
         var path = Path.Combine(Path.GetTempPath(), $"quarantine.{Guid.NewGuid():N}.db");

@@ -19,6 +19,7 @@ using Killright.Storage.zKill;
 using Killright.Core.Style;
 using Killright.UI.Analysis;
 using Killright.UI.Configuration;
+using Killright.UI.Diagnostics;
 using Killright.UI.InfoSheet;
 using Killright.UI.Scan;
 using Killright.UI.Sde;
@@ -55,6 +56,7 @@ public partial class App : Application
     public static bool SkipBackupOnClose { get; set; }
 
     private static readonly TimeSpan ShutdownWaitTimeout = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan ShutdownCheckpointTimeout = TimeSpan.FromSeconds(5);
 
 #if ALPHA_RELEASE
     private const bool IsAlphaRelease = true;
@@ -71,6 +73,7 @@ public partial class App : Application
 
         DispatcherUnhandledException += OnDispatcherUnhandledException;
         AppDomain.CurrentDomain.UnhandledException += OnAppDomainUnhandledException;
+        TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
 
         var settingsPath = ApplicationSettingsLoader.GetDefaultSettingsPath();
         Settings = ApplicationSettingsLoader.LoadOrDefault(settingsPath);
@@ -205,7 +208,10 @@ public partial class App : Application
         }
         else
         {
-            _ = Task.Run(() => sdeIngestionService.RunCheckWithRetryAsync());
+            _ = BackgroundFailureRecorder.RunAsync(
+                () => Task.Run(() => sdeIngestionService.RunCheckWithRetryAsync()),
+                "SDE update check",
+                EngineFailureLog.Record);
         }
 
         var dllPath = Path.Combine(
@@ -309,7 +315,10 @@ public partial class App : Application
         ShutdownMode = ShutdownMode.OnMainWindowClose;
         mainWindow.Show();
 
-        _ = PurgeScheduler.RunStartupPassAsync();
+        _ = BackgroundFailureRecorder.RunAsync(
+            () => PurgeScheduler.RunStartupPassAsync(),
+            "Startup purge",
+            EngineFailureLog.Record);
     }
 
     private static void RecordPurgePassTiming(string tag, double milliseconds)
@@ -359,6 +368,8 @@ public partial class App : Application
     protected override void OnExit(
         ExitEventArgs e)
     {
+        var workStopped = true;
+
         try
         {
             RunShutdownStep("wait for running work", () =>
@@ -371,7 +382,9 @@ public partial class App : Application
                 var purgeIdle = PurgeScheduler?.WaitForIdle(
                     deadline.Elapsed >= ShutdownWaitTimeout ? TimeSpan.Zero : ShutdownWaitTimeout - deadline.Elapsed) ?? true;
 
-                if (!scanIdle || !purgeIdle)
+                workStopped = scanIdle && purgeIdle;
+
+                if (!workStopped)
                     EngineFailureLog.Record("Shutdown continued while a scan or purge pass was still running.");
             });
 
@@ -392,8 +405,20 @@ public partial class App : Application
                 if (Database is null || !Database.IsOpen)
                     return;
 
+                if (!workStopped)
+                {
+                    EngineFailureLog.Record("Shutdown checkpoint skipped because a scan or purge pass did not stop.");
+                    return;
+                }
+
                 var startTimestamp = Stopwatch.GetTimestamp();
-                Database.Checkpoint();
+
+                if (!Database.Checkpoint(ShutdownCheckpointTimeout))
+                {
+                    EngineFailureLog.Record("Shutdown checkpoint skipped because the write gate was not released in time.");
+                    return;
+                }
+
                 RecordCheckpointTiming("shutdown", Stopwatch.GetElapsedTime(startTimestamp).TotalMilliseconds);
             });
 
@@ -411,6 +436,11 @@ public partial class App : Application
         EngineFailureLog.Record($"Unhandled UI-thread exception: {e.Exception}");
         MessageBox.Show(e.Exception.ToString(), "KillRight - Unexpected Error", MessageBoxButton.OK, MessageBoxImage.Error);
         e.Handled = true;
+    }
+
+    private static void OnUnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
+    {
+        BackgroundFailureRecorder.RecordUnobserved(e, EngineFailureLog.Record);
     }
 
     private static void OnAppDomainUnhandledException(object sender, UnhandledExceptionEventArgs e)
