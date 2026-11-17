@@ -224,9 +224,9 @@ public sealed class EngineInputReader : IEngineInputReader
         return value.UtcDateTime.ToString("O", CultureInfo.InvariantCulture);
     }
 
-    private static string IdList(IReadOnlyList<long> characterIds)
+    private static string IdList(SqliteCommand command, IReadOnlyList<long> characterIds)
     {
-        return string.Join(",", characterIds.Select(characterId => characterId.ToString(CultureInfo.InvariantCulture)));
+        return CommandParameters.BindList(command, characterIds);
     }
 
     private static Dictionary<long, List<EngineKillmailRow>> ReadKillmails(
@@ -234,9 +234,8 @@ public sealed class EngineInputReader : IEngineInputReader
         IReadOnlyList<long> characterIds)
     {
         var grouped = new Dictionary<long, List<EngineKillmailRow>>();
-        var ids = IdList(characterIds);
-
         using var command = connection.CreateCommand();
+        var ids = IdList(command, characterIds);
         command.CommandText = $"""
                                SELECT victim_character_id AS character_id, killmail_id, killmail_hash, kill_time_utc,
                                       1 AS is_loss, unique_attacker_count, is_solo, victim_ship_type_id, system_id,
@@ -294,7 +293,7 @@ public sealed class EngineInputReader : IEngineInputReader
                                SELECT character_id, ships_destroyed, solo_kills, solo_ratio, avg_gang_size, ships_lost,
                                       solo_losses, general_style, checked_at_utc, no_history_marker, pod_losses
                                FROM main.zkill_statistics_cache
-                               WHERE character_id IN ({IdList(characterIds)});
+                               WHERE character_id IN ({IdList(command, characterIds)});
                                """;
 
         using var reader = command.ExecuteReader();
@@ -334,7 +333,7 @@ public sealed class EngineInputReader : IEngineInputReader
                                SELECT input_name, character_id, character_name, verify_status, security_status, corporation_id,
                                       corporation_name, corporation_ticker, alliance_id, alliance_name, alliance_ticker, cached_at_utc
                                FROM main.pilot_identity_cache
-                               WHERE character_id IN ({IdList(characterIds)});
+                               WHERE character_id IN ({IdList(command, characterIds)});
                                """;
 
         using var reader = command.ExecuteReader();
@@ -384,7 +383,7 @@ public sealed class EngineInputReader : IEngineInputReader
         command.CommandText = $"""
                                SELECT character_id, recent_coverage_start_utc
                                FROM main.zkill_activity_cache
-                               WHERE character_id IN ({IdList(characterIds)});
+                               WHERE character_id IN ({IdList(command, characterIds)});
                                """;
 
         using var reader = command.ExecuteReader();
@@ -408,9 +407,8 @@ public sealed class EngineInputReader : IEngineInputReader
         if (characterIds.Count == 0)
             return results;
 
-        var ids = IdList(characterIds);
-
         using var command = connection.CreateCommand();
+        var ids = IdList(command, characterIds);
         command.CommandText = qualifyingOnly
             ? $"""
                SELECT a.killmail_id, a.character_id, a.corporation_id, a.alliance_id, k.kill_time_utc, k.unique_attacker_count

@@ -32,7 +32,7 @@ public sealed class PilotLastKillmailCache : IPilotLastKillmailCache
                                      weapon_type_id,
                                      checked_at_utc
                               FROM main.pilot_last_killmail_cache
-                              WHERE character_id = {characterId}
+                              WHERE character_id = {CommandParameters.Bind(command, characterId)}
                               LIMIT 1;
                               """;
 
@@ -71,7 +71,7 @@ public sealed class PilotLastKillmailCache : IPilotLastKillmailCache
         using (var deleteCommand = scope.Connection.CreateCommand())
         {
             deleteCommand.Transaction = scope.Transaction;
-            deleteCommand.CommandText = $"DELETE FROM main.pilot_last_killmail_cache WHERE character_id = {record.CharacterId};";
+            deleteCommand.CommandText = $"DELETE FROM main.pilot_last_killmail_cache WHERE character_id = {CommandParameters.Bind(deleteCommand, record.CharacterId)};";
             deleteCommand.ExecuteNonQuery();
         }
 

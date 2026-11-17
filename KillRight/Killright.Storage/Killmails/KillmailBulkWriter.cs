@@ -84,7 +84,7 @@ internal static class KillmailBulkWriter
             command.CommandText = $"""
                                   SELECT killmail_id, is_qualifying
                                   FROM main.zkill_killmails
-                                  WHERE killmail_id IN ({string.Join(", ", chunk)});
+                                  WHERE killmail_id IN ({CommandParameters.BindList(command, chunk)});
                                   """;
 
             using var reader = command.ExecuteReader();
@@ -148,7 +148,7 @@ internal static class KillmailBulkWriter
             command.CommandText = $"""
                                   UPDATE main.zkill_killmails
                                   SET is_qualifying = 1
-                                  WHERE killmail_id IN ({string.Join(", ", chunk)});
+                                  WHERE killmail_id IN ({CommandParameters.BindList(command, chunk)});
                                   """;
             command.ExecuteNonQuery();
         }

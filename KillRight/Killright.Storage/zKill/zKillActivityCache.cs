@@ -34,7 +34,7 @@ public sealed class zKillActivityCache : IzKillActivityCache
                                      recent_coverage_start_utc,
                                      last_kill_utc
                               FROM zkill_activity_cache
-                              WHERE character_id = {characterId}
+                              WHERE character_id = {CommandParameters.Bind(command, characterId)}
                               LIMIT 1;
                               """;
 
@@ -92,7 +92,7 @@ public sealed class zKillActivityCache : IzKillActivityCache
                                          recent_coverage_start_utc,
                                          last_kill_utc
                                   FROM zkill_activity_cache
-                                  WHERE character_id IN ({string.Join(", ", chunk)});
+                                  WHERE character_id IN ({CommandParameters.BindList(command, chunk)});
                                   """;
 
             using var reader = command.ExecuteReader();
@@ -130,7 +130,7 @@ public sealed class zKillActivityCache : IzKillActivityCache
         using (var deleteCommand = scope.Connection.CreateCommand())
         {
             deleteCommand.Transaction = scope.Transaction;
-            deleteCommand.CommandText = $"DELETE FROM zkill_activity_cache WHERE character_id = {record.CharacterId};";
+            deleteCommand.CommandText = $"DELETE FROM zkill_activity_cache WHERE character_id = {CommandParameters.Bind(deleteCommand, record.CharacterId)};";
             deleteCommand.ExecuteNonQuery();
         }
 

@@ -30,7 +30,7 @@ public sealed class SdeReferenceDataStore : ISdeReferenceDataStore
         using var connection = _database.OpenConnection();
 
         using var command = connection.CreateCommand();
-        command.CommandText = $"SELECT name FROM main.sde_types WHERE type_id = {typeId} LIMIT 1;";
+        command.CommandText = $"SELECT name FROM main.sde_types WHERE type_id = {CommandParameters.Bind(command, typeId)} LIMIT 1;";
 
         var name = command.ExecuteScalar() as string;
 
@@ -48,7 +48,7 @@ public sealed class SdeReferenceDataStore : ISdeReferenceDataStore
         using var connection = _database.OpenConnection();
 
         using var command = connection.CreateCommand();
-        command.CommandText = $"SELECT name FROM main.sde_solar_systems WHERE system_id = {systemId} LIMIT 1;";
+        command.CommandText = $"SELECT name FROM main.sde_solar_systems WHERE system_id = {CommandParameters.Bind(command, systemId)} LIMIT 1;";
 
         var name = command.ExecuteScalar() as string;
 
@@ -101,7 +101,7 @@ public sealed class SdeReferenceDataStore : ISdeReferenceDataStore
         using var connection = _database.OpenConnection();
 
         using var command = connection.CreateCommand();
-        command.CommandText = $"SELECT 1 FROM main.sde_npc_corporations WHERE corporation_id = {corporationId} LIMIT 1;";
+        command.CommandText = $"SELECT 1 FROM main.sde_npc_corporations WHERE corporation_id = {CommandParameters.Bind(command, corporationId)} LIMIT 1;";
 
         return command.ExecuteScalar() is not null;
     }
