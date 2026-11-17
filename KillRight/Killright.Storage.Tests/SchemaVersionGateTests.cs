@@ -183,6 +183,26 @@ public sealed class SchemaVersionGateTests
     }
 
     [Fact]
+    public void CheckOnStartup_SecondMigrationFails_KeepsFirstStepVersionAndKillmails()
+    {
+        var database = CreateDatabase();
+        InsertKillmailRow(database, 900008);
+        database.SetAlphaLock();
+        var current = KillRightDatabase.CurrentSchemaVersion;
+        database.SetSchemaVersion(current - 2);
+        var migrations = new[]
+        {
+            new SchemaMigration(current - 2, current - 1, (_, _) => { }),
+            new SchemaMigration(current - 1, current, (_, _) => throw new InvalidOperationException("migration failed"))
+        };
+
+        Assert.Throws<InvalidOperationException>(() => SchemaVersionGate.CheckOnStartup(database, isReleaseBuild: true, migrations));
+
+        Assert.Equal(current - 1, database.GetSchemaVersion());
+        Assert.Equal(1, CountKillmails(database));
+    }
+
+    [Fact]
     public void Migrations_AreEmpty()
     {
         Assert.Empty(SchemaVersionGate.Migrations);
