@@ -78,21 +78,11 @@ public sealed class KillRightDatabase
         SqliteConnection.ClearAllPools();
     }
 
+    public static readonly TimeSpan DefaultCheckpointGateTimeout = TimeSpan.FromSeconds(5);
+
     public void Checkpoint()
     {
-        WriteGate.Wait();
-
-        try
-        {
-            using var connection = OpenConnection();
-            using var command = connection.CreateCommand();
-            command.CommandText = "PRAGMA wal_checkpoint(TRUNCATE);";
-            command.ExecuteNonQuery();
-        }
-        finally
-        {
-            WriteGate.Release();
-        }
+        Checkpoint(DefaultCheckpointGateTimeout);
     }
 
     public bool Checkpoint(TimeSpan gateTimeout)

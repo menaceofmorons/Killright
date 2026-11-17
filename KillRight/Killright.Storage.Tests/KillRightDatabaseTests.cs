@@ -344,6 +344,28 @@ public sealed class KillRightDatabaseTests
     }
 
     [Fact]
+    public void Checkpoint_WhileWriteGateIsHeld_ReturnsWithinTheTestTimeLimit()
+    {
+        var database = CreateDatabase();
+        database.EnsureCreated();
+        database.Open();
+
+        try
+        {
+            using var scope = database.BeginWrite();
+
+            var checkpoint = Task.Run(() => database.Checkpoint());
+            var finished = checkpoint.Wait(TimeSpan.FromSeconds(12));
+
+            Assert.True(finished, "Checkpoint() did not return while the write gate was held.");
+        }
+        finally
+        {
+            database.Close();
+        }
+    }
+
+    [Fact]
     public void Checkpoint_WithTimeout_WhenGateIsFree_CheckpointsAndReturnsTrue()
     {
         var database = CreateDatabase();
