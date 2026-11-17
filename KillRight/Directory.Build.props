@@ -1,11 +1,11 @@
 <Project>
 
     <PropertyGroup>
-        <AlphaRelease Condition="'$(AlphaRelease)' == ''">false</AlphaRelease>
+        <ReleaseBuild Condition="'$(ReleaseBuild)' == ''">false</ReleaseBuild>
     </PropertyGroup>
 
-    <PropertyGroup Condition="'$(AlphaRelease)' == 'true'">
-        <DefineConstants>$(DefineConstants);ALPHA_RELEASE</DefineConstants>
+    <PropertyGroup Condition="'$(ReleaseBuild)' == 'true'">
+        <DefineConstants>$(DefineConstants);RELEASE_BUILD</DefineConstants>
     </PropertyGroup>
 
 </Project>

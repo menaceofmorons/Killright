@@ -58,10 +58,10 @@ public partial class App : Application
     private static readonly TimeSpan ShutdownWaitTimeout = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan ShutdownCheckpointTimeout = TimeSpan.FromSeconds(5);
 
-#if ALPHA_RELEASE
-    private const bool IsAlphaRelease = true;
+#if RELEASE_BUILD
+    private const bool IsReleaseBuild = true;
 #else
-    private const bool IsAlphaRelease = false;
+    private const bool IsReleaseBuild = false;
 #endif
 
     protected override void OnStartup(
@@ -128,7 +128,7 @@ public partial class App : Application
         var startupResult = GuardedStartup.Run(
             database,
             BackupService,
-            IsAlphaRelease,
+            IsReleaseBuild,
             Settings.QualificationFleetThreshold,
             message => EngineFailureLog.Record(message));
 

@@ -29,7 +29,7 @@ public static class GuardedStartup
     public static StartupResult Run(
         KillRightDatabase database,
         IDatabaseBackupService backupService,
-        bool isAlphaRelease,
+        bool isReleaseBuild,
         int qualificationFleetThreshold,
         Action<string> record)
     {
@@ -44,7 +44,7 @@ public static class GuardedStartup
                     database.EnsureCreated();
                     database.Open();
                 },
-                () => SchemaVersionGate.CheckOnStartup(database, isAlphaRelease),
+                () => SchemaVersionGate.CheckOnStartup(database, isReleaseBuild),
                 () => KillmailQualificationRequalifier.RequalifyOnStartup(database, qualificationFleetThreshold)),
             record);
     }

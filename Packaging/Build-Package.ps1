@@ -17,7 +17,7 @@ try { cargo build --release; if ($LASTEXITCODE -ne 0) { throw 'cargo build --rel
 $engineTargetDir = if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { Join-Path $engineDir 'target' }
 $engineDll = Join-Path $engineTargetDir 'release\killright_engine.dll'
 
-dotnet publish $uiProject -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -p:SatelliteResourceLanguages=en -p:DebugType=none -p:DebugSymbols=false -p:AlphaRelease=true -p:Version=$version -o $appDir
+dotnet publish $uiProject -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -p:SatelliteResourceLanguages=en -p:DebugType=none -p:DebugSymbols=false -p:ReleaseBuild=true -p:Version=$version -o $appDir
 if ($LASTEXITCODE -ne 0) { throw 'dotnet publish failed' }
 
 Copy-Item $engineDll (Join-Path $appDir 'killright_engine.dll') -Force
