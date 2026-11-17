@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Killright.Core.Models;
 using Killright.Core.Style;
 using Killright.Shared;
@@ -159,9 +160,18 @@ public sealed class EngineRuntimeWorkStreamIntegrationTests
 
         await Task.Run(runtime.Dispose);
 
+        Assert.True(Task.WhenAll(inFlight).Wait(TimeSpan.FromSeconds(10)), "In-flight calls had not completed after Dispose returned.");
+
         var responses = await Task.WhenAll(inFlight);
 
-        Assert.All(responses, response => Assert.StartsWith("{", response));
+        Assert.Equal(16, responses.Length);
+        Assert.All(responses, response =>
+        {
+            using var document = JsonDocument.Parse(response);
+
+            Assert.Equal(0, document.RootElement.GetProperty("results").GetArrayLength());
+            Assert.False(document.RootElement.TryGetProperty("failure", out _), response);
+        });
 
         var afterDispose = await runtime.AnalyzePilotsAsync("{}");
         Assert.Contains("missing_runtime", afterDispose);
