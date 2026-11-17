@@ -204,12 +204,14 @@ public sealed class SdeReferenceDataStore : ISdeReferenceDataStore
         using (var updateMetadata = connection.CreateCommand())
         {
             updateMetadata.Transaction = transaction;
+            var parameters = new CommandParameters(updateMetadata);
+            var updatedUtc = parameters.Add(SqlValueFormatter.Date(data.UpdatedUtc));
             updateMetadata.CommandText = $"""
                                 UPDATE main.sde_metadata
-                                SET build_number = {data.BuildNumber},
-                                    last_checked_utc = {SqlValueFormatter.Date(data.UpdatedUtc)},
-                                    last_updated_utc = {SqlValueFormatter.Date(data.UpdatedUtc)},
-                                    last_attempt_utc = {SqlValueFormatter.Date(data.UpdatedUtc)},
+                                SET build_number = {parameters.Add(data.BuildNumber)},
+                                    last_checked_utc = {updatedUtc},
+                                    last_updated_utc = {updatedUtc},
+                                    last_attempt_utc = {updatedUtc},
                                     last_check_result = 'Replaced';
                                 """;
             updateMetadata.ExecuteNonQuery();
@@ -231,17 +233,20 @@ public sealed class SdeReferenceDataStore : ISdeReferenceDataStore
 
         using var command = scope.Connection.CreateCommand();
         command.Transaction = scope.Transaction;
+        var parameters = new CommandParameters(command);
+        var attempted = parameters.Add(SqlValueFormatter.Date(attemptedUtc));
+        var result = parameters.Add(SqlValueFormatter.String(checkResult));
         command.CommandText = succeeded
             ? $"""
               UPDATE main.sde_metadata
-              SET last_checked_utc = {SqlValueFormatter.Date(attemptedUtc)},
-                  last_attempt_utc = {SqlValueFormatter.Date(attemptedUtc)},
-                  last_check_result = {SqlValueFormatter.String(checkResult)};
+              SET last_checked_utc = {attempted},
+                  last_attempt_utc = {attempted},
+                  last_check_result = {result};
               """
             : $"""
               UPDATE main.sde_metadata
-              SET last_attempt_utc = {SqlValueFormatter.Date(attemptedUtc)},
-                  last_check_result = {SqlValueFormatter.String(checkResult)};
+              SET last_attempt_utc = {attempted},
+                  last_check_result = {result};
               """;
         command.ExecuteNonQuery();
 
@@ -293,16 +298,18 @@ public sealed class SdeReferenceDataStore : ISdeReferenceDataStore
     {
         for (var offset = 0; offset < types.Count; offset += InsertBatchSize)
         {
+            using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+
+            var parameters = new CommandParameters(command);
             var values = string.Join(
                 ",",
                 types.Skip(offset).Take(InsertBatchSize)
-                    .Select(row => $"({row.TypeId}, {SqlValueFormatter.String(row.Name)})"));
+                    .Select(row => parameters.Row(SqlValueFormatter.Long(row.TypeId), SqlValueFormatter.String(row.Name))));
 
             if (values.Length == 0)
                 continue;
 
-            using var command = connection.CreateCommand();
-            command.Transaction = transaction;
             command.CommandText = $"INSERT INTO main.{tableName} (type_id, name) VALUES {values};";
             command.ExecuteNonQuery();
         }
@@ -316,16 +323,18 @@ public sealed class SdeReferenceDataStore : ISdeReferenceDataStore
     {
         for (var offset = 0; offset < solarSystems.Count; offset += InsertBatchSize)
         {
+            using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+
+            var parameters = new CommandParameters(command);
             var values = string.Join(
                 ",",
                 solarSystems.Skip(offset).Take(InsertBatchSize)
-                    .Select(row => $"({row.SystemId}, {SqlValueFormatter.String(row.Name)})"));
+                    .Select(row => parameters.Row(SqlValueFormatter.Long(row.SystemId), SqlValueFormatter.String(row.Name))));
 
             if (values.Length == 0)
                 continue;
 
-            using var command = connection.CreateCommand();
-            command.Transaction = transaction;
             command.CommandText = $"INSERT INTO main.{tableName} (system_id, name) VALUES {values};";
             command.ExecuteNonQuery();
         }
@@ -339,16 +348,18 @@ public sealed class SdeReferenceDataStore : ISdeReferenceDataStore
     {
         for (var offset = 0; offset < factions.Count; offset += InsertBatchSize)
         {
+            using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+
+            var parameters = new CommandParameters(command);
             var values = string.Join(
                 ",",
                 factions.Skip(offset).Take(InsertBatchSize)
-                    .Select(row => $"({row.FactionId}, {SqlValueFormatter.String(row.Name)})"));
+                    .Select(row => parameters.Row(SqlValueFormatter.Long(row.FactionId), SqlValueFormatter.String(row.Name))));
 
             if (values.Length == 0)
                 continue;
 
-            using var command = connection.CreateCommand();
-            command.Transaction = transaction;
             command.CommandText = $"INSERT INTO main.{tableName} (faction_id, name) VALUES {values};";
             command.ExecuteNonQuery();
         }

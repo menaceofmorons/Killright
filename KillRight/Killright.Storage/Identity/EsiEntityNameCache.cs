@@ -69,12 +69,22 @@ public sealed class EsiEntityNameCache : IEsiEntityNameCache
             deleteCommand.ExecuteNonQuery();
         }
 
-        using (var insertCommand = scope.Connection.CreateCommand())
+        foreach (var chunk in distinctNames.Chunk(500))
         {
+            using var insertCommand = scope.Connection.CreateCommand();
             insertCommand.Transaction = scope.Transaction;
+
+            var parameters = new CommandParameters(insertCommand);
+            var values = string.Join(
+                ", ",
+                chunk.Select(name => parameters.Row(
+                    SqlValueFormatter.Long(name.EntityId),
+                    SqlValueFormatter.String(name.EntityType),
+                    SqlValueFormatter.String(name.Name))));
+
             insertCommand.CommandText = $"""
                                         INSERT INTO esi_entity_name_cache (entity_id, entity_type, name)
-                                        VALUES {string.Join(", ", distinctNames.Select(name => $"({name.EntityId}, {SqlValueFormatter.String(name.EntityType)}, {SqlValueFormatter.String(name.Name)})"))};
+                                        VALUES {values};
                                         """;
             insertCommand.ExecuteNonQuery();
         }

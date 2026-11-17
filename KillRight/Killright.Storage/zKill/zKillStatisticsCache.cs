@@ -177,6 +177,7 @@ public sealed class zKillStatisticsCache : IzKillStatisticsCache
 
         using var insertCommand = scope.Connection.CreateCommand();
         insertCommand.Transaction = scope.Transaction;
+        var parameters = new CommandParameters(insertCommand);
         insertCommand.CommandText = $"""
             INSERT INTO main.zkill_statistics_cache (
                 character_id,
@@ -192,21 +193,20 @@ public sealed class zKillStatisticsCache : IzKillStatisticsCache
                 checked_at_utc,
                 pod_kills,
                 pod_losses
-            ) VALUES (
-                {record.CharacterId},
-                {record.ShipsDestroyed},
-                {record.SoloKills},
-                {SqlValueFormatter.Double(record.SoloRatio)},
-                {SqlValueFormatter.Double(record.AvgGangSize)},
-                {record.ShipsLost},
-                {record.SoloLosses},
-                {SqlValueFormatter.String(record.GeneralStyle)},
-                {SqlValueFormatter.Bool(true)},
-                {SqlValueFormatter.Bool(record.NoHistory)},
-                {SqlValueFormatter.Date(record.CheckedAtUtc)},
-                {record.PodKills},
-                {record.PodLosses}
-            );
+            ) VALUES {parameters.Row(
+                SqlValueFormatter.Long(record.CharacterId),
+                SqlValueFormatter.Long(record.ShipsDestroyed),
+                SqlValueFormatter.Long(record.SoloKills),
+                SqlValueFormatter.Double(record.SoloRatio),
+                SqlValueFormatter.Double(record.AvgGangSize),
+                SqlValueFormatter.Long(record.ShipsLost),
+                SqlValueFormatter.Long(record.SoloLosses),
+                SqlValueFormatter.String(record.GeneralStyle),
+                SqlValueFormatter.Bool(true),
+                SqlValueFormatter.Bool(record.NoHistory),
+                SqlValueFormatter.Date(record.CheckedAtUtc),
+                SqlValueFormatter.Long(record.PodKills),
+                SqlValueFormatter.Long(record.PodLosses))};
             """;
         insertCommand.ExecuteNonQuery();
 

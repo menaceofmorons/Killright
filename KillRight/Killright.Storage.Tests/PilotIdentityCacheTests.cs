@@ -179,6 +179,58 @@ public sealed class PilotIdentityCacheTests
         Assert.Null(birthday);
     }
 
+    [Theory]
+    [InlineData("O'Brien''; DROP TABLE pilot_identity_cache; --")]
+    [InlineData("x' OR '1'='1")]
+    [InlineData("name; SELECT 1")]
+    [InlineData("Robert\"); DELETE FROM esi_entity_name_cache; --")]
+    public async Task UpsertAsync_HostileNames_RoundTripUnchanged(string hostileName)
+    {
+        var (_, cache) = CreateCache();
+
+        await cache.UpsertRecordAsync(BuildRecord(hostileName));
+
+        var record = await cache.GetRecordAsync(hostileName);
+        var records = await cache.GetRecordsAsync([hostileName, "no such pilot"]);
+
+        Assert.NotNull(record);
+        Assert.Equal(hostileName, record!.CharacterName);
+        Assert.Equal(hostileName, record.CorporationName);
+        Assert.Single(records);
+    }
+
+    [Fact]
+    public async Task UpsertRecordAsync_NonFiniteSecurityStatus_FailsTheWriteAndKeepsTheExistingRow()
+    {
+        var (_, cache) = CreateCache();
+
+        await cache.UpsertRecordAsync(BuildRecord("Lukas Naarii"));
+
+        var bad = BuildRecord("Lukas Naarii", double.NaN);
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () => await cache.UpsertRecordAsync(bad));
+
+        var record = await cache.GetRecordAsync("Lukas Naarii");
+
+        Assert.NotNull(record);
+        Assert.Equal(1.5, record!.SecurityStatus);
+    }
+
+    private static PilotIdentityCacheRecord BuildRecord(string name, double securityStatus = 1.5)
+    {
+        return new PilotIdentityCacheRecord
+        {
+            InputName = PilotIdentityCacheRecord.NormalizeInputName(name),
+            CharacterId = 95465499,
+            CharacterName = name,
+            VerifyStatus = VerifyStatus.Partial,
+            SecurityStatus = securityStatus,
+            CorporationId = 98765,
+            CorporationName = name,
+            CachedAtUtc = DateTime.UtcNow
+        };
+    }
+
     private static (KillRightDatabase Database, PilotIdentityCache Cache) CreateCache()
     {
         var path = Path.Combine(Path.GetTempPath(), $"pilotIdentity.{Guid.NewGuid():N}.db");

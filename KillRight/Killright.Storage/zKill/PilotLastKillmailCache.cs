@@ -80,6 +80,7 @@ public sealed class PilotLastKillmailCache : IPilotLastKillmailCache
         using (var insertCommand = scope.Connection.CreateCommand())
         {
             insertCommand.Transaction = scope.Transaction;
+            var parameters = new CommandParameters(insertCommand);
             insertCommand.CommandText = $"""
                                         INSERT INTO main.pilot_last_killmail_cache (
                                             character_id,
@@ -93,19 +94,18 @@ public sealed class PilotLastKillmailCache : IPilotLastKillmailCache
                                             attacker_count,
                                             weapon_type_id,
                                             checked_at_utc
-                                        ) VALUES (
-                                            {record.CharacterId},
-                                            {SqlValueFormatter.Bool(killmail is not null)},
-                                            {SqlValueFormatter.Long(killmail is null ? null : record.KillmailId)},
-                                            {SqlValueFormatter.Date(killmail?.KillTimeUtc)},
-                                            {SqlValueFormatter.String(killmail?.ActivityType.ToString())},
-                                            {SqlValueFormatter.Long(killmail?.SystemId)},
-                                            {SqlValueFormatter.Long(killmail?.ShipTypeId)},
-                                            {SqlValueFormatter.Long(killmail?.VictimShipTypeId)},
-                                            {SqlValueFormatter.Int(killmail?.AttackerCount)},
-                                            {SqlValueFormatter.Long(killmail?.WeaponTypeId)},
-                                            {SqlValueFormatter.Date(record.CheckedAtUtc)}
-                                        );
+                                        ) VALUES {parameters.Row(
+                                            SqlValueFormatter.Long(record.CharacterId),
+                                            SqlValueFormatter.Bool(killmail is not null),
+                                            SqlValueFormatter.Long(killmail is null ? null : record.KillmailId),
+                                            SqlValueFormatter.Date(killmail?.KillTimeUtc),
+                                            SqlValueFormatter.String(killmail?.ActivityType.ToString()),
+                                            SqlValueFormatter.Long(killmail?.SystemId),
+                                            SqlValueFormatter.Long(killmail?.ShipTypeId),
+                                            SqlValueFormatter.Long(killmail?.VictimShipTypeId),
+                                            SqlValueFormatter.Int(killmail?.AttackerCount),
+                                            SqlValueFormatter.Long(killmail?.WeaponTypeId),
+                                            SqlValueFormatter.Date(record.CheckedAtUtc))};
                                         """;
             insertCommand.ExecuteNonQuery();
         }

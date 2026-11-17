@@ -156,12 +156,13 @@ public sealed class RecentKillmailCache : IRecentKillmailCache
         using var connection = _database.OpenConnection();
 
         using var command = connection.CreateCommand();
+        var parameters = new CommandParameters(command);
         command.CommandText = $"""
                               WITH {BuildProtectedFloorCtes(null)}
                               SELECT killmail_id
                               FROM main.zkill_killmails
                               WHERE is_qualifying = 0
-                                AND kill_time_utc < {SqlValueFormatter.Date(cutoffUtc)}
+                                AND kill_time_utc < {parameters.Add(SqlValueFormatter.Date(cutoffUtc))}
                                 AND killmail_id NOT IN (SELECT killmail_id FROM protected_killmail_ids)
                               ORDER BY killmail_id;
                               """;
