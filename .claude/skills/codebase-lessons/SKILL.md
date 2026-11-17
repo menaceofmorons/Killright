@@ -18,7 +18,7 @@ metadata:
 - This file merges with `merge=union`, so dedupe at release.
 
 ### Build & Tooling
-- {lesson} (WS-x.y)
+- `killright_engine` builds its lib as `cdylib` + `rlib`; the CLI bin links the lib through `rlib`, and CLI integration tests in `tests/` run it via `CARGO_BIN_EXE_killright_engine_cli` (WS-1.3)
 
 ### Conventions
 - {lesson} (WS-x.y)
