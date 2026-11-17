@@ -27,8 +27,13 @@ public static class KillmailQualification
         return victimShipTypeId is long shipTypeId && PodShipTypeIds.Contains(shipTypeId);
     }
 
-    public static bool IsQualifying(int uniqueAttackerCount, bool isPodKill, int fleetThreshold)
+    public static bool HasScannedAttacker(IReadOnlyList<KillmailAttacker> attackers, IReadOnlySet<long> scannedCharacterIds)
     {
-        return uniqueAttackerCount >= 2 && uniqueAttackerCount < fleetThreshold && !isPodKill;
+        return attackers.Any(attacker => attacker.CharacterId is long characterId && scannedCharacterIds.Contains(characterId));
+    }
+
+    public static bool IsQualifying(int uniqueAttackerCount, bool isPodKill, int fleetThreshold, bool hasScannedAttacker)
+    {
+        return hasScannedAttacker && uniqueAttackerCount >= 2 && uniqueAttackerCount < fleetThreshold && !isPodKill;
     }
 }

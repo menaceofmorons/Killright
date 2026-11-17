@@ -25,6 +25,7 @@ internal static class KillmailBulkWriter
             transaction,
             pending.SelectMany(item => item.Killmails.Select(killmail => killmail.KillmailId)).Distinct().ToList());
 
+        var scannedCharacterIds = pending.Select(item => item.CharacterId).ToHashSet();
         var newKillmails = new List<(RawKillmail Killmail, int UniqueAttackerCount, bool IsQualifying)>();
         var toQualify = new HashSet<long>();
         var attackers = new Dictionary<(long KillmailId, long CharacterId), KillmailAttacker>();
@@ -35,7 +36,11 @@ internal static class KillmailBulkWriter
             {
                 var uniqueAttackerCount = KillmailQualification.CountUniqueAttackers(killmail.Attackers);
                 var isPodKill = KillmailQualification.IsPodKill(killmail.VictimShipTypeId);
-                var isQualifying = KillmailQualification.IsQualifying(uniqueAttackerCount, isPodKill, qualificationFleetThreshold);
+                var isQualifying = KillmailQualification.IsQualifying(
+                    uniqueAttackerCount,
+                    isPodKill,
+                    qualificationFleetThreshold,
+                    KillmailQualification.HasScannedAttacker(killmail.Attackers, scannedCharacterIds));
 
                 bool attackerRowsCoverAllAttackers;
 
