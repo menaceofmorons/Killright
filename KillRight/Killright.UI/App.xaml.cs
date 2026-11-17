@@ -85,6 +85,25 @@ public partial class App : Application
 
         Settings = settingsResult.Settings!;
 
+        var dllPath = Path.Combine(
+            AppContext.BaseDirectory,
+            "killright_engine.dll");
+
+        var engineRuntime =
+            new KillrightEngineRuntime(
+                dllPath,
+                settingsPath);
+
+        if (engineRuntime.InitializeFailedOnSettings)
+        {
+            EngineFailureLog.Record($"Startup refused: the engine rejected the settings file. {engineRuntime.InitializeFailureReason}");
+
+            Shutdown();
+            return;
+        }
+
+        EngineRuntime = engineRuntime;
+
         GeneralStyleClassifier.Configure(
             Settings.Style.BlobMinimumAverageAttackers,
             Settings.Style.FleetMinimumAverageAttackers,
@@ -227,25 +246,6 @@ public partial class App : Application
         {
             _ = Task.Run(() => sdeIngestionService.RunCheckWithRetryAsync());
         }
-
-        var dllPath = Path.Combine(
-            AppContext.BaseDirectory,
-            "killright_engine.dll");
-
-        var engineRuntime =
-            new KillrightEngineRuntime(
-                dllPath,
-                settingsPath);
-
-        if (engineRuntime.InitializeFailedOnSettings)
-        {
-            EngineFailureLog.Record($"Startup refused: the engine rejected the settings file. {engineRuntime.InitializeFailureReason}");
-
-            Shutdown();
-            return;
-        }
-
-        EngineRuntime = engineRuntime;
 
         EngineInputReader =
             new EngineInputReader(

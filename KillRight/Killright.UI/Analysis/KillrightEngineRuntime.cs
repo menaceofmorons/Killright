@@ -11,6 +11,7 @@ public sealed class KillrightEngineRuntime : IKillrightEngineRuntime
 
     private const string SettingsFailureCode = "settings_failure";
     private const string MissingRuntimeCode = "missing_runtime";
+    private const nint MinimumValidPointer = 0x10000;
     private const string InternalErrorCode = "internal_error";
     private const string SingleFallbackJson = "{\"character_id\":0,\"failure\":\"missing_runtime\"}";
     private const string BatchFallbackJson = "{\"results\":[],\"failure\":\"missing_runtime\"}";
@@ -210,7 +211,7 @@ public sealed class KillrightEngineRuntime : IKillrightEngineRuntime
 
             var responsePointer = exports.Initialize(pathPointer);
 
-            if (responsePointer == nint.Zero)
+            if (responsePointer < MinimumValidPointer)
             {
                 return null;
             }

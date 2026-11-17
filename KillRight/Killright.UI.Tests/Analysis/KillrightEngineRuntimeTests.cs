@@ -49,6 +49,18 @@ public sealed class KillrightEngineRuntimeTests
     }
 
     [Fact]
+    public void Constructor_InitialiseReturnsSmallPointer_TreatedAsNoResponseAndNotFreed()
+    {
+        var native = new FakeNativeLibrary { InitializePointer = 1 };
+
+        using var runtime = new KillrightEngineRuntime("x.dll", "s.json", native, _ => { });
+
+        Assert.False(runtime.IsAvailable);
+        Assert.Equal("missing_runtime", runtime.InitializeFailureReason);
+        Assert.Empty(native.FreedStrings);
+    }
+
+    [Fact]
     public void Constructor_ContractVersionMismatch_RefusesWithReasonAndReleasesHandle()
     {
         var native = new FakeNativeLibrary { InitializeJson = "{\"success\":true,\"contract_version\":2}" };
@@ -182,6 +194,10 @@ public sealed class KillrightEngineRuntimeTests
 
         public int ShutdownCalls { get; private set; }
 
+        public nint? InitializePointer { get; init; }
+
+        public List<nint> FreedStrings { get; } = [];
+
         public List<nint> Freed { get; } = [];
 
         public nint Load(string path)
@@ -203,10 +219,10 @@ public sealed class KillrightEngineRuntimeTests
                 "killright_initialize" => new KillrightEngineRuntime.InitializeDelegate(argument =>
                 {
                     ReceivedSettingsPath = Marshal.PtrToStringUTF8(argument);
-                    return Allocate(InitializeJson);
+                    return InitializePointer ?? Allocate(InitializeJson);
                 }),
                 "killright_shutdown" => new KillrightEngineRuntime.ShutdownDelegate(() => ShutdownCalls++),
-                "killright_free_string" => new KillrightEngineRuntime.FreeStringDelegate(_ => { }),
+                "killright_free_string" => new KillrightEngineRuntime.FreeStringDelegate(pointer => FreedStrings.Add(pointer)),
                 _ => new KillrightEngineRuntime.JsonExportDelegate(_ =>
                 {
                     CallCount++;
