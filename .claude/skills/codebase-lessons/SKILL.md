@@ -18,7 +18,7 @@ metadata:
 - This file merges with `merge=union`, so dedupe at release.
 
 ### Build & Tooling
-- {lesson} (WS-x.y)
+- In a worktree, a hook refuses Bash commands that combine `git` with heredocs or `&&` chains; run plain single commands and write files with the Write tool (WS-1.2)
 
 ### Conventions
 - {lesson} (WS-x.y)
