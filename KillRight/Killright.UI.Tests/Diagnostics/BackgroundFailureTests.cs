@@ -53,13 +53,12 @@ public sealed class UnobservedFailureTests
         var recorded = new List<string>();
         var marker = Guid.NewGuid().ToString("N");
 
-        void Handler(object? sender, UnobservedTaskExceptionEventArgs e)
-        {
-            if (e.Exception.ToString().Contains(marker))
-                BackgroundFailureRecorder.RecordUnobserved(e, recorded.Add);
-        }
-
-        TaskScheduler.UnobservedTaskException += Handler;
+        using var subscription = BackgroundFailureRecorder.Attach(
+            line =>
+            {
+                if (line.Contains(marker))
+                    recorded.Add(line);
+            });
 
         try
         {
@@ -74,7 +73,7 @@ public sealed class UnobservedFailureTests
         }
         finally
         {
-            TaskScheduler.UnobservedTaskException -= Handler;
+            subscription.Dispose();
         }
 
         var line = Assert.Single(recorded);
