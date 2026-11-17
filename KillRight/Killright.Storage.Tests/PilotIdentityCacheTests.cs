@@ -183,6 +183,7 @@ public sealed class PilotIdentityCacheTests
     [InlineData("O'Brien''; DROP TABLE pilot_identity_cache; --")]
     [InlineData("x' OR '1'='1")]
     [InlineData("name; SELECT 1")]
+    [InlineData("embedded\0nul'); DROP TABLE pilot_identity_cache; --")]
     [InlineData("Robert\"); DELETE FROM esi_entity_name_cache; --")]
     public async Task UpsertAsync_HostileNames_RoundTripUnchanged(string hostileName)
     {
