@@ -13,6 +13,8 @@ public sealed class EngineInputReader : IEngineInputReader
     private readonly ISdeReferenceDataStore _sdeReferenceDataStore;
     private readonly Action<string>? _logFailure;
 
+    internal Action<string>? AfterRead { get; init; }
+
     public EngineInputReader(
         KillRightDatabase database,
         ISdeReferenceDataStore sdeReferenceDataStore,
@@ -51,10 +53,12 @@ public sealed class EngineInputReader : IEngineInputReader
         using (timings.Measure(ScanTimings.EngineLevel, "engine_input_read"))
         {
             SqliteConnection connection;
+            SqliteTransaction transaction;
 
             try
             {
                 connection = _database.OpenConnection();
+                transaction = BeginSnapshot(connection);
             }
             catch (Exception exception)
             {
@@ -62,6 +66,7 @@ public sealed class EngineInputReader : IEngineInputReader
             }
 
             using (connection)
+            using (transaction)
             {
                 Dictionary<long, List<EngineKillmailRow>> killmails;
                 Dictionary<long, EngineStatisticsRow> statistics;
@@ -71,7 +76,10 @@ public sealed class EngineInputReader : IEngineInputReader
                 try
                 {
                     using (timings.Measure(ScanTimings.EngineLevel, "killmails_read"))
-                        killmails = ReadKillmails(connection, characterIds);
+                    {
+                        killmails = ReadKillmails(transaction, characterIds);
+                        AfterRead?.Invoke("killmails_read");
+                    }
                 }
                 catch (Exception exception)
                 {
@@ -81,7 +89,10 @@ public sealed class EngineInputReader : IEngineInputReader
                 try
                 {
                     using (timings.Measure(ScanTimings.EngineLevel, "statistics_read"))
-                        statistics = ReadStatistics(connection, characterIds);
+                    {
+                        statistics = ReadStatistics(transaction, characterIds);
+                        AfterRead?.Invoke("statistics_read");
+                    }
                 }
                 catch (Exception exception)
                 {
@@ -91,7 +102,10 @@ public sealed class EngineInputReader : IEngineInputReader
                 try
                 {
                     using (timings.Measure(ScanTimings.EngineLevel, "identity_read"))
-                        identities = FirstByCharacter(ReadIdentities(connection, characterIds));
+                    {
+                        identities = FirstByCharacter(ReadIdentities(transaction, characterIds));
+                        AfterRead?.Invoke("identity_read");
+                    }
                 }
                 catch (Exception exception)
                 {
@@ -101,7 +115,10 @@ public sealed class EngineInputReader : IEngineInputReader
                 try
                 {
                     using (timings.Measure(ScanTimings.EngineLevel, "activity_cache_read"))
-                        coverageStarts = ReadCoverageStarts(connection, characterIds);
+                    {
+                        coverageStarts = ReadCoverageStarts(transaction, characterIds);
+                        AfterRead?.Invoke("activity_cache_read");
+                    }
                 }
                 catch (Exception exception)
                 {
@@ -128,10 +145,12 @@ public sealed class EngineInputReader : IEngineInputReader
         using (timings.Measure(ScanTimings.EngineLevel, "group_input_read"))
         {
             SqliteConnection connection;
+            SqliteTransaction transaction;
 
             try
             {
                 connection = _database.OpenConnection();
+                transaction = BeginSnapshot(connection);
             }
             catch (Exception exception)
             {
@@ -143,11 +162,15 @@ public sealed class EngineInputReader : IEngineInputReader
             IReadOnlyList<EngineIdentityRow> identities;
 
             using (connection)
+            using (transaction)
             {
                 try
                 {
                     using (timings.Measure(ScanTimings.EngineLevel, "direct_evidence_read"))
-                        directEvidence = ReadAttackerEvidence(connection, scannedCharacterIds, qualifyingOnly: false);
+                    {
+                        directEvidence = ReadAttackerEvidence(transaction, scannedCharacterIds, qualifyingOnly: false);
+                        AfterRead?.Invoke("direct_evidence_read");
+                    }
                 }
                 catch (Exception exception)
                 {
@@ -157,7 +180,10 @@ public sealed class EngineInputReader : IEngineInputReader
                 try
                 {
                     using (timings.Measure(ScanTimings.EngineLevel, "chain_evidence_read"))
-                        chainEvidence = ReadAttackerEvidence(connection, scannedCharacterIds, qualifyingOnly: true);
+                    {
+                        chainEvidence = ReadAttackerEvidence(transaction, scannedCharacterIds, qualifyingOnly: true);
+                        AfterRead?.Invoke("chain_evidence_read");
+                    }
                 }
                 catch (Exception exception)
                 {
@@ -167,7 +193,10 @@ public sealed class EngineInputReader : IEngineInputReader
                 try
                 {
                     using (timings.Measure(ScanTimings.EngineLevel, "identities_read"))
-                        identities = ReadIdentities(connection, scannedCharacterIds);
+                    {
+                        identities = ReadIdentities(transaction, scannedCharacterIds);
+                        AfterRead?.Invoke("identities_read");
+                    }
                 }
                 catch (Exception exception)
                 {
@@ -224,17 +253,38 @@ public sealed class EngineInputReader : IEngineInputReader
         return value.UtcDateTime.ToString("O", CultureInfo.InvariantCulture);
     }
 
+    private static SqliteTransaction BeginSnapshot(SqliteConnection connection)
+    {
+        try
+        {
+            return connection.BeginTransaction(deferred: true);
+        }
+        catch
+        {
+            connection.Dispose();
+            throw;
+        }
+    }
+
+    private static SqliteCommand CreateCommand(SqliteTransaction transaction)
+    {
+        var command = transaction.Connection!.CreateCommand();
+        command.Transaction = transaction;
+
+        return command;
+    }
+
     private static string IdList(SqliteCommand command, IReadOnlyList<long> characterIds)
     {
         return CommandParameters.BindList(command, characterIds);
     }
 
     private static Dictionary<long, List<EngineKillmailRow>> ReadKillmails(
-        SqliteConnection connection,
+        SqliteTransaction transaction,
         IReadOnlyList<long> characterIds)
     {
         var grouped = new Dictionary<long, List<EngineKillmailRow>>();
-        using var command = connection.CreateCommand();
+        using var command = CreateCommand(transaction);
         var ids = IdList(command, characterIds);
         command.CommandText = $"""
                                SELECT victim_character_id AS character_id, killmail_id, killmail_hash, kill_time_utc,
@@ -283,12 +333,12 @@ public sealed class EngineInputReader : IEngineInputReader
     }
 
     private static Dictionary<long, EngineStatisticsRow> ReadStatistics(
-        SqliteConnection connection,
+        SqliteTransaction transaction,
         IReadOnlyList<long> characterIds)
     {
         var results = new Dictionary<long, EngineStatisticsRow>();
 
-        using var command = connection.CreateCommand();
+        using var command = CreateCommand(transaction);
         command.CommandText = $"""
                                SELECT character_id, ships_destroyed, solo_kills, solo_ratio, avg_gang_size, ships_lost,
                                       solo_losses, general_style, checked_at_utc, no_history_marker, pod_losses
@@ -320,7 +370,7 @@ public sealed class EngineInputReader : IEngineInputReader
     }
 
     private static List<EngineIdentityRow> ReadIdentities(
-        SqliteConnection connection,
+        SqliteTransaction transaction,
         IReadOnlyList<long> characterIds)
     {
         var results = new List<EngineIdentityRow>();
@@ -328,7 +378,7 @@ public sealed class EngineInputReader : IEngineInputReader
         if (characterIds.Count == 0)
             return results;
 
-        using var command = connection.CreateCommand();
+        using var command = CreateCommand(transaction);
         command.CommandText = $"""
                                SELECT input_name, character_id, character_name, verify_status, security_status, corporation_id,
                                       corporation_name, corporation_ticker, alliance_id, alliance_name, alliance_ticker, cached_at_utc
@@ -374,12 +424,12 @@ public sealed class EngineInputReader : IEngineInputReader
     }
 
     private static Dictionary<long, string> ReadCoverageStarts(
-        SqliteConnection connection,
+        SqliteTransaction transaction,
         IReadOnlyList<long> characterIds)
     {
         var results = new Dictionary<long, string>();
 
-        using var command = connection.CreateCommand();
+        using var command = CreateCommand(transaction);
         command.CommandText = $"""
                                SELECT character_id, recent_coverage_start_utc
                                FROM main.zkill_activity_cache
@@ -398,7 +448,7 @@ public sealed class EngineInputReader : IEngineInputReader
     }
 
     private static List<EngineAttackerEvidenceRow> ReadAttackerEvidence(
-        SqliteConnection connection,
+        SqliteTransaction transaction,
         IReadOnlyList<long> characterIds,
         bool qualifyingOnly)
     {
@@ -407,7 +457,7 @@ public sealed class EngineInputReader : IEngineInputReader
         if (characterIds.Count == 0)
             return results;
 
-        using var command = connection.CreateCommand();
+        using var command = CreateCommand(transaction);
         var ids = IdList(command, characterIds);
         command.CommandText = qualifyingOnly
             ? $"""
