@@ -232,13 +232,20 @@ public partial class App : Application
             AppContext.BaseDirectory,
             "killright_engine.dll");
 
-        EngineRuntime =
+        var engineRuntime =
             new KillrightEngineRuntime(
                 dllPath,
                 settingsPath);
 
-        if (!EngineRuntime.IsAvailable)
-            EngineFailureLog.Record("killright_engine failed to initialize (killright_initialize did not return success).");
+        if (engineRuntime.InitializeFailedOnSettings)
+        {
+            EngineFailureLog.Record($"Startup refused: the engine rejected the settings file. {engineRuntime.InitializeFailureReason}");
+
+            Shutdown();
+            return;
+        }
+
+        EngineRuntime = engineRuntime;
 
         EngineInputReader =
             new EngineInputReader(
