@@ -11,7 +11,7 @@ public sealed class SchemaVersionGateTests
     {
         var database = CreateDatabase();
 
-        var result = SchemaVersionGate.CheckOnStartup(database, isAlphaRelease: false);
+        var result = SchemaVersionGate.CheckOnStartup(database, isReleaseBuild: false);
 
         Assert.Equal(SchemaVersionCheckOutcome.Ok, result.Outcome);
         Assert.Equal(KillRightDatabase.CurrentSchemaVersion, database.GetSchemaVersion());
@@ -22,7 +22,7 @@ public sealed class SchemaVersionGateTests
     {
         var database = CreateDatabase();
 
-        SchemaVersionGate.CheckOnStartup(database, isAlphaRelease: true);
+        SchemaVersionGate.CheckOnStartup(database, isReleaseBuild: true);
 
         Assert.True(database.GetAlphaLock());
     }
@@ -32,7 +32,7 @@ public sealed class SchemaVersionGateTests
     {
         var database = CreateDatabase();
 
-        SchemaVersionGate.CheckOnStartup(database, isAlphaRelease: false);
+        SchemaVersionGate.CheckOnStartup(database, isReleaseBuild: false);
 
         Assert.False(database.GetAlphaLock());
     }
@@ -44,7 +44,7 @@ public sealed class SchemaVersionGateTests
         InsertKillmailRow(database, 900001);
         database.SetSchemaVersion(KillRightDatabase.CurrentSchemaVersion - 1);
 
-        var result = SchemaVersionGate.CheckOnStartup(database, isAlphaRelease: false);
+        var result = SchemaVersionGate.CheckOnStartup(database, isReleaseBuild: false);
 
         Assert.Equal(SchemaVersionCheckOutcome.Ok, result.Outcome);
         Assert.Equal(KillRightDatabase.CurrentSchemaVersion, database.GetSchemaVersion());
@@ -56,9 +56,9 @@ public sealed class SchemaVersionGateTests
     {
         var database = CreateDatabase();
         InsertKillmailRow(database, 900002);
-        SchemaVersionGate.CheckOnStartup(database, isAlphaRelease: true);
+        SchemaVersionGate.CheckOnStartup(database, isReleaseBuild: true);
 
-        var result = SchemaVersionGate.CheckOnStartup(database, isAlphaRelease: true);
+        var result = SchemaVersionGate.CheckOnStartup(database, isReleaseBuild: true);
 
         Assert.Equal(SchemaVersionCheckOutcome.Ok, result.Outcome);
         Assert.Equal(1, CountKillmails(database));
@@ -71,7 +71,7 @@ public sealed class SchemaVersionGateTests
         database.SetAlphaLock();
         database.SetSchemaVersion(KillRightDatabase.CurrentSchemaVersion + 1);
 
-        var result = SchemaVersionGate.CheckOnStartup(database, isAlphaRelease: false);
+        var result = SchemaVersionGate.CheckOnStartup(database, isReleaseBuild: false);
 
         Assert.Equal(SchemaVersionCheckOutcome.RefusedDowngrade, result.Outcome);
     }
@@ -83,7 +83,7 @@ public sealed class SchemaVersionGateTests
         database.SetAlphaLock();
         database.SetSchemaVersion(KillRightDatabase.CurrentSchemaVersion - 2);
 
-        var result = SchemaVersionGate.CheckOnStartup(database, isAlphaRelease: false);
+        var result = SchemaVersionGate.CheckOnStartup(database, isReleaseBuild: false);
 
         Assert.Equal(SchemaVersionCheckOutcome.RefusedNoMigrationPath, result.Outcome);
     }
@@ -96,7 +96,7 @@ public sealed class SchemaVersionGateTests
         database.SetAlphaLock();
         database.SetSchemaVersion(KillRightDatabase.CurrentSchemaVersion - 1);
 
-        var result = SchemaVersionGate.CheckOnStartup(database, isAlphaRelease: false);
+        var result = SchemaVersionGate.CheckOnStartup(database, isReleaseBuild: false);
 
         Assert.Equal(SchemaVersionCheckOutcome.RefusedNoMigrationPath, result.Outcome);
         Assert.Equal(1, CountKillmails(database));
@@ -109,13 +109,77 @@ public sealed class SchemaVersionGateTests
         InsertKillmailRow(database, 900004);
         database.SetSchemaVersion(KillRightDatabase.CurrentSchemaVersion - 1);
 
-        SchemaVersionGate.CheckOnStartup(database, isAlphaRelease: false);
+        SchemaVersionGate.CheckOnStartup(database, isReleaseBuild: false);
 
         using var connection = database.OpenConnection();
 
         Assert.Equal(2L, ScalarLong(connection, "SELECT COUNT(*) FROM pragma_table_list WHERE schema = 'main' AND name IN ('zkill_killmails', 'zkill_killmail_attackers') AND strict = 1;"));
         Assert.Equal(1L, ScalarLong(connection, "SELECT COUNT(*) FROM pragma_foreign_key_list('zkill_killmail_attackers') WHERE on_delete = 'CASCADE';"));
         Assert.Equal(3L, ScalarLong(connection, "SELECT COUNT(*) FROM sqlite_schema WHERE type = 'index' AND name LIKE 'ix_zkill_%';"));
+    }
+
+    [Fact]
+    public void CheckOnStartup_ReleaseBuildUnlockedVersionMismatch_RebuildsThenLocks()
+    {
+        var database = CreateDatabase();
+        InsertKillmailRow(database, 900005);
+        database.SetSchemaVersion(KillRightDatabase.CurrentSchemaVersion - 1);
+
+        var result = SchemaVersionGate.CheckOnStartup(database, isReleaseBuild: true);
+
+        Assert.Equal(SchemaVersionCheckOutcome.Ok, result.Outcome);
+        Assert.Equal(KillRightDatabase.CurrentSchemaVersion, database.GetSchemaVersion());
+        Assert.Equal(0, CountKillmails(database));
+        Assert.True(database.GetAlphaLock());
+    }
+
+    [Fact]
+    public void CheckOnStartup_LockedAndOlderWithMigrationPath_RunsMigrationsInOrderAndKeepsKillmails()
+    {
+        var database = CreateDatabase();
+        InsertKillmailRow(database, 900006);
+        database.SetAlphaLock();
+        var current = KillRightDatabase.CurrentSchemaVersion;
+        database.SetSchemaVersion(current - 2);
+        var applied = new List<int>();
+        var migrations = new[]
+        {
+            new SchemaMigration(current - 1, current, (_, _) => applied.Add(current)),
+            new SchemaMigration(current - 2, current - 1, (_, _) => applied.Add(current - 1))
+        };
+
+        var result = SchemaVersionGate.CheckOnStartup(database, isReleaseBuild: true, migrations);
+
+        Assert.Equal(SchemaVersionCheckOutcome.Ok, result.Outcome);
+        Assert.Equal([current - 1, current], applied);
+        Assert.Equal(current, database.GetSchemaVersion());
+        Assert.Equal(1, CountKillmails(database));
+    }
+
+    [Fact]
+    public void CheckOnStartup_MigrationFails_RollsBackStepAndLeavesVersionUnchanged()
+    {
+        var database = CreateDatabase();
+        InsertKillmailRow(database, 900007);
+        database.SetAlphaLock();
+        var current = KillRightDatabase.CurrentSchemaVersion;
+        database.SetSchemaVersion(current - 1);
+        var migrations = new[]
+        {
+            new SchemaMigration(current - 1, current, (connection, transaction) =>
+            {
+                using var command = connection.CreateCommand();
+                command.Transaction = transaction;
+                command.CommandText = "DELETE FROM main.zkill_killmails;";
+                command.ExecuteNonQuery();
+                throw new InvalidOperationException("migration failed");
+            })
+        };
+
+        Assert.Throws<InvalidOperationException>(() => SchemaVersionGate.CheckOnStartup(database, isReleaseBuild: true, migrations));
+
+        Assert.Equal(current - 1, database.GetSchemaVersion());
+        Assert.Equal(1, CountKillmails(database));
     }
 
     [Fact]

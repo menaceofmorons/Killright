@@ -114,7 +114,7 @@ public sealed class StartupRecoveryTests
         var service = new DatabaseBackupService(database, fixture.Folder, 5);
         var records = new List<string>();
 
-        var result = GuardedStartup.Run(database, service, isAlphaRelease: false, qualificationFleetThreshold: 11, records.Add);
+        var result = GuardedStartup.Run(database, service, isReleaseBuild: false, qualificationFleetThreshold: 11, records.Add);
 
         try
         {
@@ -140,7 +140,7 @@ public sealed class StartupRecoveryTests
         var database = new KillRightDatabase(new KillRightDatabaseOptions { DatabasePath = fixture.Database.DatabasePath });
         var service = new DatabaseBackupService(database, fixture.Folder, 5);
 
-        var result = GuardedStartup.Run(database, service, isAlphaRelease: false, qualificationFleetThreshold: 11, _ => { });
+        var result = GuardedStartup.Run(database, service, isReleaseBuild: false, qualificationFleetThreshold: 11, _ => { });
 
         try
         {

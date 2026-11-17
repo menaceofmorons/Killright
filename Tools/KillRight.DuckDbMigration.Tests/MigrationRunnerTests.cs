@@ -169,7 +169,7 @@ public sealed class MigrationRunnerTests
             database.EnsureCreated();
             database.Open();
 
-            var result = SchemaVersionGate.CheckOnStartup(database, isAlphaRelease: false);
+            var result = SchemaVersionGate.CheckOnStartup(database, isReleaseBuild: false);
 
             Assert.Equal(SchemaVersionCheckOutcome.Ok, result.Outcome);
             Assert.True(database.GetAlphaLock());

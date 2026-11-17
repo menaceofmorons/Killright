@@ -267,6 +267,16 @@ public sealed class KillRightDatabase
         ExecuteWrite($"UPDATE main.schema_metadata SET schema_version = {version};");
     }
 
+    public void ApplyMigration(Action<SqliteConnection, SqliteTransaction> apply, int toVersion)
+    {
+        using var scope = BeginWrite();
+
+        apply(scope.Connection, scope.Transaction);
+        ExecuteNonQuery(scope.Connection, scope.Transaction, $"UPDATE main.schema_metadata SET schema_version = {toVersion};");
+
+        scope.Commit();
+    }
+
     public void RebuildKillmailAndAttackerTables()
     {
         using var scope = BeginWrite();
