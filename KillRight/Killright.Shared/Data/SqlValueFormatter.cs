@@ -1,53 +1,52 @@
-using System.Globalization;
-
 namespace Killright.Shared.Data;
 
 public static class SqlValueFormatter
 {
-    public static string Bool(bool value)
+    public static object Bool(bool value)
     {
-        return value ? "1" : "0";
+        return value ? 1L : 0L;
     }
 
-    public static string Int(int? value)
+    public static object Int(int? value)
     {
-        return value?.ToString(CultureInfo.InvariantCulture) ?? "NULL";
+        return value is null ? DBNull.Value : (long)value.Value;
     }
 
-    public static string Long(long? value)
+    public static object Long(long? value)
     {
-        return value?.ToString(CultureInfo.InvariantCulture) ?? "NULL";
+        return value is null ? DBNull.Value : value.Value;
     }
 
-    public static string Double(double? value)
+    public static object Double(double? value)
     {
-        return value?.ToString(CultureInfo.InvariantCulture) ?? "NULL";
+        if (value is null)
+            return DBNull.Value;
+
+        if (!double.IsFinite(value.Value))
+            throw new ArgumentOutOfRangeException(nameof(value), value, "A non-finite double cannot be stored.");
+
+        return value.Value;
     }
 
-    public static string String(string? value)
+    public static object String(string? value)
     {
-        return value is null ? "NULL" : $"'{Escape(value)}'";
+        return value is null ? DBNull.Value : value;
     }
 
-    public static string Date(DateTimeOffset? value)
+    public static object Date(DateTimeOffset? value)
     {
-        return value is null ? "NULL" : value.Value.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
+        return value is null ? DBNull.Value : value.Value.ToUnixTimeSeconds();
     }
 
-    public static string Date(DateTime value)
+    public static object Date(DateTime? value)
     {
-        return new DateTimeOffset(value.ToUniversalTime()).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
+        return value is null ? DBNull.Value : new DateTimeOffset(value.Value.ToUniversalTime()).ToUnixTimeSeconds();
     }
 
-    public static string Date(DateOnly? value)
+    public static object Date(DateOnly? value)
     {
         return value is null
-            ? "NULL"
-            : new DateTimeOffset(value.Value.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
-    }
-
-    public static string Escape(string value)
-    {
-        return value.Replace("'", "''");
+            ? DBNull.Value
+            : new DateTimeOffset(value.Value.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero).ToUnixTimeSeconds();
     }
 }

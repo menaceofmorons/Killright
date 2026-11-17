@@ -407,7 +407,7 @@ public partial class DiagnosticsView : UserControl
         if (!DiagnosticQueries.TryGetValue(selected, out var sql))
             return;
 
-        sql = sql.Replace("{{RecentWindowCutoffUtc}}", SqlValueFormatter.Date(ApplicationClock.UtcNow.AddDays(-14)));
+        sql = sql.Replace("{{RecentWindowCutoffUtc}}", ApplicationClock.UtcNow.AddDays(-14).ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture));
 
         QueryText.Text = sql;
         _lastQueryRows = _service.LoadRows(sql);

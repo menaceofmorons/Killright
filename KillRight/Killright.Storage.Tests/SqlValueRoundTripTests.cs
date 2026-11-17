@@ -10,8 +10,8 @@ public sealed class SqlValueRoundTripTests
     [Fact]
     public void Bool_WritesOneAndZero()
     {
-        Assert.Equal("1", SqlValueFormatter.Bool(true));
-        Assert.Equal("0", SqlValueFormatter.Bool(false));
+        Assert.Equal(1L, SqlValueFormatter.Bool(true));
+        Assert.Equal(0L, SqlValueFormatter.Bool(false));
     }
 
     [Fact]
@@ -19,9 +19,9 @@ public sealed class SqlValueRoundTripTests
     {
         var value = new DateTimeOffset(2026, 9, 28, 0, 0, 0, TimeSpan.Zero);
 
-        Assert.Equal("1790553600", SqlValueFormatter.Date(value));
-        Assert.Equal("1790553600", SqlValueFormatter.Date((DateTimeOffset?)value));
-        Assert.Equal("NULL", SqlValueFormatter.Date((DateTimeOffset?)null));
+        Assert.Equal(1790553600L, SqlValueFormatter.Date(value));
+        Assert.Equal(1790553600L, SqlValueFormatter.Date((DateTimeOffset?)value));
+        Assert.Equal(DBNull.Value, SqlValueFormatter.Date((DateTimeOffset?)null));
     }
 
     [Fact]
@@ -38,15 +38,31 @@ public sealed class SqlValueRoundTripTests
     {
         var utc = new DateTime(2026, 9, 28, 0, 0, 0, DateTimeKind.Utc);
 
-        Assert.Equal("1790553600", SqlValueFormatter.Date(utc));
-        Assert.Equal("1790553600", SqlValueFormatter.Date(utc.ToLocalTime()));
+        Assert.Equal(1790553600L, SqlValueFormatter.Date(utc));
+        Assert.Equal(1790553600L, SqlValueFormatter.Date(utc.ToLocalTime()));
     }
 
     [Fact]
     public void Date_DateOnly_WritesMidnightUtc()
     {
-        Assert.Equal("1790553600", SqlValueFormatter.Date((DateOnly?)new DateOnly(2026, 9, 28)));
-        Assert.Equal("NULL", SqlValueFormatter.Date((DateOnly?)null));
+        Assert.Equal(1790553600L, SqlValueFormatter.Date((DateOnly?)new DateOnly(2026, 9, 28)));
+        Assert.Equal(DBNull.Value, SqlValueFormatter.Date((DateOnly?)null));
+    }
+
+    [Theory]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    [InlineData(double.NegativeInfinity)]
+    public void Double_NonFinite_IsRejected(double value)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => SqlValueFormatter.Double(value));
+    }
+
+    [Fact]
+    public void Double_FiniteAndNull_AreKeptAndMappedToNull()
+    {
+        Assert.Equal(0.25, SqlValueFormatter.Double(0.25));
+        Assert.Equal(DBNull.Value, SqlValueFormatter.Double(null));
     }
 
     [Fact]
@@ -59,10 +75,22 @@ public sealed class SqlValueRoundTripTests
         using var connection = database.OpenConnection();
 
         Execute(connection, "CREATE TABLE main.value_probe (at INTEGER, at_null INTEGER, born INTEGER, born_null INTEGER, flag INTEGER, flag_null INTEGER) STRICT;");
-        Execute(connection, $"""
-            INSERT INTO main.value_probe (at, at_null, born, born_null, flag, flag_null)
-            VALUES ({SqlValueFormatter.Date(instant)}, {SqlValueFormatter.Date((DateTimeOffset?)null)}, {SqlValueFormatter.Date((DateOnly?)birthday)}, {SqlValueFormatter.Date((DateOnly?)null)}, {SqlValueFormatter.Bool(true)}, NULL);
-            """);
+
+        using (var insert = connection.CreateCommand())
+        {
+            var parameters = new CommandParameters(insert);
+            insert.CommandText = $"""
+                INSERT INTO main.value_probe (at, at_null, born, born_null, flag, flag_null)
+                VALUES {parameters.Row(
+                    SqlValueFormatter.Date(instant),
+                    SqlValueFormatter.Date((DateTimeOffset?)null),
+                    SqlValueFormatter.Date((DateOnly?)birthday),
+                    SqlValueFormatter.Date((DateOnly?)null),
+                    SqlValueFormatter.Bool(true),
+                    DBNull.Value)};
+                """;
+            insert.ExecuteNonQuery();
+        }
 
         using var command = connection.CreateCommand();
         command.CommandText = "SELECT at, at_null, born, born_null, flag, flag_null FROM main.value_probe;";
@@ -89,7 +117,13 @@ public sealed class SqlValueRoundTripTests
         using var connection = database.OpenConnection();
 
         Execute(connection, "CREATE TABLE main.flag_probe (flag INTEGER NOT NULL CHECK (flag IN (0, 1))) STRICT;");
-        Execute(connection, $"INSERT INTO main.flag_probe (flag) VALUES ({SqlValueFormatter.Bool(false)});");
+
+        using (var insert = connection.CreateCommand())
+        {
+            var parameters = new CommandParameters(insert);
+            insert.CommandText = $"INSERT INTO main.flag_probe (flag) VALUES ({parameters.Add(SqlValueFormatter.Bool(false))});";
+            insert.ExecuteNonQuery();
+        }
 
         using var command = connection.CreateCommand();
         command.CommandText = "SELECT flag FROM main.flag_probe;";

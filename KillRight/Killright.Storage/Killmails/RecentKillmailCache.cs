@@ -49,7 +49,7 @@ public sealed class RecentKillmailCache : IRecentKillmailCache
                                      NULL AS attacker_count,
                                      NULL AS weapon_type_id
                               FROM main.zkill_killmails
-                              WHERE victim_character_id = {characterId}
+                              WHERE victim_character_id = {CommandParameters.Bind(command, characterId)}
                                 AND (victim_ship_type_id IS NULL OR victim_ship_type_id NOT IN ({PodShipTypeIdList}))
                               UNION ALL
                               SELECT k.kill_time_utc,
@@ -61,7 +61,7 @@ public sealed class RecentKillmailCache : IRecentKillmailCache
                                      a.weapon_type_id
                               FROM main.zkill_killmail_attackers a
                               JOIN main.zkill_killmails k ON k.killmail_id = a.killmail_id
-                              WHERE a.character_id = {characterId}
+                              WHERE a.character_id = {CommandParameters.Bind(command, characterId)}
                                 AND (k.victim_ship_type_id IS NULL OR k.victim_ship_type_id NOT IN ({PodShipTypeIdList}))
                               ORDER BY kill_time_utc DESC
                               LIMIT 1;
@@ -110,13 +110,14 @@ public sealed class RecentKillmailCache : IRecentKillmailCache
 
             BeforeBatch?.Invoke(batches);
 
-            var idList = string.Join(",", candidates.Skip(offset).Take(BatchSize));
+            var batch = candidates.Skip(offset).Take(BatchSize).ToList();
 
             using var scope = _database.BeginWrite();
 
             using (var deleteBatch = scope.Connection.CreateCommand())
             {
                 deleteBatch.Transaction = scope.Transaction;
+                var idList = CommandParameters.BindList(deleteBatch, batch);
                 deleteBatch.CommandText = $"""
                                 WITH {BuildProtectedFloorCtes(idList)}
                                 DELETE FROM main.zkill_killmails
@@ -156,12 +157,13 @@ public sealed class RecentKillmailCache : IRecentKillmailCache
         using var connection = _database.OpenConnection();
 
         using var command = connection.CreateCommand();
+        var parameters = new CommandParameters(command);
         command.CommandText = $"""
                               WITH {BuildProtectedFloorCtes(null)}
                               SELECT killmail_id
                               FROM main.zkill_killmails
                               WHERE is_qualifying = 0
-                                AND kill_time_utc < {SqlValueFormatter.Date(cutoffUtc)}
+                                AND kill_time_utc < {parameters.Add(SqlValueFormatter.Date(cutoffUtc))}
                                 AND killmail_id NOT IN (SELECT killmail_id FROM protected_killmail_ids)
                               ORDER BY killmail_id;
                               """;

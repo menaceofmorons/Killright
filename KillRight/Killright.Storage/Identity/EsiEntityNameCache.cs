@@ -33,17 +33,20 @@ public sealed class EsiEntityNameCache : IEsiEntityNameCache
         using var ownedConnection = session is null ? _database.OpenConnection() : null;
         var connection = session?.Connection ?? ownedConnection!;
 
-        using var command = connection.CreateCommand();
-        command.CommandText = $"""
-                              SELECT entity_id, name
-                              FROM esi_entity_name_cache
-                              WHERE entity_id IN ({string.Join(", ", entityIds.Distinct())});
-                              """;
+        foreach (var chunk in entityIds.Distinct().Chunk(500))
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = $"""
+                                  SELECT entity_id, name
+                                  FROM esi_entity_name_cache
+                                  WHERE entity_id IN ({CommandParameters.BindList(command, chunk)});
+                                  """;
 
-        using var reader = command.ExecuteReader();
+            using var reader = command.ExecuteReader();
 
-        while (reader.Read())
-            names[reader.GetInt64(0)] = reader.GetString(1);
+            while (reader.Read())
+                names[reader.GetInt64(0)] = reader.GetString(1);
+        }
 
         return Task.FromResult<IReadOnlyDictionary<long, string>>(names);
     }
@@ -62,19 +65,29 @@ public sealed class EsiEntityNameCache : IEsiEntityNameCache
 
         using var scope = _database.BeginWrite();
 
-        using (var deleteCommand = scope.Connection.CreateCommand())
+        foreach (var chunk in distinctNames.Chunk(500))
         {
-            deleteCommand.Transaction = scope.Transaction;
-            deleteCommand.CommandText = $"DELETE FROM esi_entity_name_cache WHERE entity_id IN ({string.Join(", ", distinctNames.Select(name => name.EntityId))});";
-            deleteCommand.ExecuteNonQuery();
-        }
+            using (var deleteCommand = scope.Connection.CreateCommand())
+            {
+                deleteCommand.Transaction = scope.Transaction;
+                deleteCommand.CommandText = $"DELETE FROM esi_entity_name_cache WHERE entity_id IN ({CommandParameters.BindList(deleteCommand, chunk.Select(name => name.EntityId))});";
+                deleteCommand.ExecuteNonQuery();
+            }
 
-        using (var insertCommand = scope.Connection.CreateCommand())
-        {
+            using var insertCommand = scope.Connection.CreateCommand();
             insertCommand.Transaction = scope.Transaction;
+
+            var parameters = new CommandParameters(insertCommand);
+            var values = string.Join(
+                ", ",
+                chunk.Select(name => parameters.Row(
+                    SqlValueFormatter.Long(name.EntityId),
+                    SqlValueFormatter.String(name.EntityType),
+                    SqlValueFormatter.String(name.Name))));
+
             insertCommand.CommandText = $"""
                                         INSERT INTO esi_entity_name_cache (entity_id, entity_type, name)
-                                        VALUES {string.Join(", ", distinctNames.Select(name => $"({name.EntityId}, {SqlValueFormatter.String(name.EntityType)}, {SqlValueFormatter.String(name.Name)})"))};
+                                        VALUES {values};
                                         """;
             insertCommand.ExecuteNonQuery();
         }

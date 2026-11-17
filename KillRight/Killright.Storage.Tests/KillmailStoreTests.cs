@@ -240,6 +240,35 @@ public sealed class KillmailStoreTests
         Assert.False(isQualifying);
     }
 
+    [Theory]
+    [InlineData("abc'); DROP TABLE zkill_killmails; --")]
+    [InlineData("it's")]
+    [InlineData("a;b")]
+    public async Task UpsertAsync_HashWithQuotesAndSemicolons_RoundTripsUnchanged(string hash)
+    {
+        var (database, store) = CreateStore();
+
+        var killmail = new RawKillmail(
+            523456,
+            hash,
+            new DateTimeOffset(2026, 9, 20, 10, 0, 0, TimeSpan.Zero),
+            30000142,
+            null,
+            null,
+            587,
+            false,
+            false,
+            [new KillmailAttacker(ScannedCharacterId, 98000001, null, 11567)]);
+
+        await store.UpsertAsync(ScannedCharacterId, [killmail]);
+
+        using var connection = database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT killmail_hash FROM main.zkill_killmails WHERE killmail_id = 523456;";
+
+        Assert.Equal(hash, command.ExecuteScalar());
+    }
+
     private static (KillRightDatabase Database, KillmailStore Store) CreateStore()
     {
         var path = Path.Combine(Path.GetTempPath(), $"killmailStore.{Guid.NewGuid():N}.db");

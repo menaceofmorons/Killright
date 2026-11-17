@@ -1,7 +1,7 @@
-using System.Text;
 using Microsoft.Data.Sqlite;
 using Killright.Shared.Data;
 using Killright.Shared.Killmails;
+using Killright.Storage.Database;
 using Killright.Storage.Scan;
 
 namespace Killright.Storage.Killmails;
@@ -84,7 +84,7 @@ internal static class KillmailBulkWriter
             command.CommandText = $"""
                                   SELECT killmail_id, is_qualifying
                                   FROM main.zkill_killmails
-                                  WHERE killmail_id IN ({string.Join(", ", chunk)});
+                                  WHERE killmail_id IN ({CommandParameters.BindList(command, chunk)});
                                   """;
 
             using var reader = command.ExecuteReader();
@@ -104,19 +104,26 @@ internal static class KillmailBulkWriter
     {
         foreach (var chunk in newKillmails.Chunk(ChunkSize))
         {
-            var values = new StringBuilder();
-
-            foreach (var (killmail, uniqueAttackerCount, isQualifying) in chunk)
-            {
-                if (values.Length > 0)
-                    values.Append(", ");
-
-                values.Append(
-                    $"({killmail.KillmailId}, {SqlValueFormatter.String(killmail.KillmailHash)}, {SqlValueFormatter.Date(killmail.KillTimeUtc)}, {killmail.SystemId}, {SqlValueFormatter.Long(killmail.LocationId)}, {SqlValueFormatter.Long(killmail.VictimCharacterId)}, {SqlValueFormatter.Long(killmail.VictimShipTypeId)}, {uniqueAttackerCount}, {SqlValueFormatter.Bool(killmail.IsSolo)}, {SqlValueFormatter.Bool(killmail.IsNpc)}, {SqlValueFormatter.Bool(isQualifying)}, {SqlValueFormatter.Date(cachedAtUtc)})");
-            }
-
             using var command = connection.CreateCommand();
             command.Transaction = transaction;
+
+            var parameters = new CommandParameters(command);
+            var values = string.Join(
+                ", ",
+                chunk.Select(item => parameters.Row(
+                    SqlValueFormatter.Long(item.Killmail.KillmailId),
+                    SqlValueFormatter.String(item.Killmail.KillmailHash),
+                    SqlValueFormatter.Date(item.Killmail.KillTimeUtc),
+                    SqlValueFormatter.Long(item.Killmail.SystemId),
+                    SqlValueFormatter.Long(item.Killmail.LocationId),
+                    SqlValueFormatter.Long(item.Killmail.VictimCharacterId),
+                    SqlValueFormatter.Long(item.Killmail.VictimShipTypeId),
+                    SqlValueFormatter.Int(item.UniqueAttackerCount),
+                    SqlValueFormatter.Bool(item.Killmail.IsSolo),
+                    SqlValueFormatter.Bool(item.Killmail.IsNpc),
+                    SqlValueFormatter.Bool(item.IsQualifying),
+                    SqlValueFormatter.Date(cachedAtUtc))));
+
             command.CommandText = $"""
                                   INSERT INTO main.zkill_killmails (
                                       killmail_id, killmail_hash, kill_time_utc, system_id, location_id,
@@ -141,7 +148,7 @@ internal static class KillmailBulkWriter
             command.CommandText = $"""
                                   UPDATE main.zkill_killmails
                                   SET is_qualifying = 1
-                                  WHERE killmail_id IN ({string.Join(", ", chunk)});
+                                  WHERE killmail_id IN ({CommandParameters.BindList(command, chunk)});
                                   """;
             command.ExecuteNonQuery();
         }
@@ -154,13 +161,20 @@ internal static class KillmailBulkWriter
     {
         foreach (var chunk in attackers.Chunk(ChunkSize))
         {
-            var values = string.Join(
-                ", ",
-                chunk.Select(pair =>
-                    $"({pair.Key.KillmailId}, {pair.Key.CharacterId}, {SqlValueFormatter.Long(pair.Value.CorporationId)}, {SqlValueFormatter.Long(pair.Value.AllianceId)}, {SqlValueFormatter.Long(pair.Value.ShipTypeId)}, {SqlValueFormatter.Long(pair.Value.WeaponTypeId)})"));
-
             using var command = connection.CreateCommand();
             command.Transaction = transaction;
+
+            var parameters = new CommandParameters(command);
+            var values = string.Join(
+                ", ",
+                chunk.Select(pair => parameters.Row(
+                    SqlValueFormatter.Long(pair.Key.KillmailId),
+                    SqlValueFormatter.Long(pair.Key.CharacterId),
+                    SqlValueFormatter.Long(pair.Value.CorporationId),
+                    SqlValueFormatter.Long(pair.Value.AllianceId),
+                    SqlValueFormatter.Long(pair.Value.ShipTypeId),
+                    SqlValueFormatter.Long(pair.Value.WeaponTypeId))));
+
             command.CommandText = $"""
                                   INSERT INTO main.zkill_killmail_attackers (
                                       killmail_id, character_id, corporation_id, alliance_id, ship_type_id, weapon_type_id

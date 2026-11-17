@@ -22,6 +22,7 @@ public sealed class PilotIdentityCache : IPilotIdentityCache
         using var connection = _database.OpenConnection();
 
         using var command = connection.CreateCommand();
+        var parameters = new CommandParameters(command);
         command.CommandText = $"""
                               SELECT input_name,
                                      character_id,
@@ -38,7 +39,7 @@ public sealed class PilotIdentityCache : IPilotIdentityCache
                                      birthday,
                                      faction_id
                               FROM pilot_identity_cache
-                              WHERE input_name = {SqlValueFormatter.String(normalizedInputName)}
+                              WHERE input_name = {parameters.Add(SqlValueFormatter.String(normalizedInputName))}
                               LIMIT 1;
                               """;
 
@@ -80,10 +81,11 @@ public sealed class PilotIdentityCache : IPilotIdentityCache
         using var connection = _database.OpenConnection();
 
         using var command = connection.CreateCommand();
+        var parameters = new CommandParameters(command);
         command.CommandText = $"""
                               SELECT birthday
                               FROM pilot_identity_cache
-                              WHERE input_name = {SqlValueFormatter.String(normalizedInputName)}
+                              WHERE input_name = {parameters.Add(SqlValueFormatter.String(normalizedInputName))}
                               LIMIT 1;
                               """;
 
@@ -115,6 +117,7 @@ public sealed class PilotIdentityCache : IPilotIdentityCache
         foreach (var chunk in normalizedNames.Chunk(500))
         {
             using var command = connection.CreateCommand();
+            var parameters = new CommandParameters(command);
             command.CommandText = $"""
                                   SELECT input_name,
                                          character_id,
@@ -132,7 +135,7 @@ public sealed class PilotIdentityCache : IPilotIdentityCache
                                          security_status_at_utc,
                                          faction_id
                                   FROM pilot_identity_cache
-                                  WHERE input_name IN ({string.Join(", ", chunk.Select(SqlValueFormatter.String))});
+                                  WHERE input_name IN ({string.Join(", ", chunk.Select(name => parameters.Add(SqlValueFormatter.String(name))))});
                                   """;
 
             using var reader = command.ExecuteReader();
@@ -172,6 +175,7 @@ public sealed class PilotIdentityCache : IPilotIdentityCache
         using var connection = _database.OpenConnection();
 
         using var command = connection.CreateCommand();
+        var parameters = new CommandParameters(command);
         command.CommandText = $"""
                               SELECT input_name,
                                      character_id,
@@ -189,7 +193,7 @@ public sealed class PilotIdentityCache : IPilotIdentityCache
                                      security_status_at_utc,
                                      faction_id
                               FROM pilot_identity_cache
-                              WHERE input_name = {SqlValueFormatter.String(normalizedInputName)}
+                              WHERE input_name = {parameters.Add(SqlValueFormatter.String(normalizedInputName))}
                               LIMIT 1;
                               """;
 
@@ -235,13 +239,15 @@ public sealed class PilotIdentityCache : IPilotIdentityCache
         using (var deleteCommand = scope.Connection.CreateCommand())
         {
             deleteCommand.Transaction = scope.Transaction;
-            deleteCommand.CommandText = $"DELETE FROM pilot_identity_cache WHERE input_name = {SqlValueFormatter.String(record.InputName)};";
+            var deleteParameters = new CommandParameters(deleteCommand);
+            deleteCommand.CommandText = $"DELETE FROM pilot_identity_cache WHERE input_name = {deleteParameters.Add(SqlValueFormatter.String(record.InputName))};";
             deleteCommand.ExecuteNonQuery();
         }
 
         using (var insertCommand = scope.Connection.CreateCommand())
         {
             insertCommand.Transaction = scope.Transaction;
+            var parameters = new CommandParameters(insertCommand);
             insertCommand.CommandText = $"""
                                         INSERT INTO pilot_identity_cache (
                                             input_name,
@@ -259,23 +265,22 @@ public sealed class PilotIdentityCache : IPilotIdentityCache
                                             birthday,
                                             security_status_at_utc,
                                             faction_id
-                                        ) VALUES (
-                                            {SqlValueFormatter.String(record.InputName)},
-                                            {SqlValueFormatter.Long(record.CharacterId)},
-                                            {SqlValueFormatter.String(record.CharacterName)},
-                                            {SqlValueFormatter.String(record.VerifyStatus.ToString())},
-                                            {SqlValueFormatter.Double(record.SecurityStatus)},
-                                            {SqlValueFormatter.Long(record.CorporationId)},
-                                            {SqlValueFormatter.String(record.CorporationName)},
-                                            {SqlValueFormatter.String(record.CorporationTicker)},
-                                            {SqlValueFormatter.Long(record.AllianceId)},
-                                            {SqlValueFormatter.String(record.AllianceName)},
-                                            {SqlValueFormatter.String(record.AllianceTicker)},
-                                            {SqlValueFormatter.Date(record.CachedAtUtc)},
-                                            {SqlValueFormatter.Date(record.Birthday)},
-                                            {(record.SecurityStatusAtUtc is { } securityStatusAtUtc ? SqlValueFormatter.Date(securityStatusAtUtc) : "NULL")},
-                                            {SqlValueFormatter.Long(record.FactionId)}
-                                        );
+                                        ) VALUES {parameters.Row(
+                                            SqlValueFormatter.String(record.InputName),
+                                            SqlValueFormatter.Long(record.CharacterId),
+                                            SqlValueFormatter.String(record.CharacterName),
+                                            SqlValueFormatter.String(record.VerifyStatus.ToString()),
+                                            SqlValueFormatter.Double(record.SecurityStatus),
+                                            SqlValueFormatter.Long(record.CorporationId),
+                                            SqlValueFormatter.String(record.CorporationName),
+                                            SqlValueFormatter.String(record.CorporationTicker),
+                                            SqlValueFormatter.Long(record.AllianceId),
+                                            SqlValueFormatter.String(record.AllianceName),
+                                            SqlValueFormatter.String(record.AllianceTicker),
+                                            SqlValueFormatter.Date(record.CachedAtUtc),
+                                            SqlValueFormatter.Date(record.Birthday),
+                                            SqlValueFormatter.Date(record.SecurityStatusAtUtc),
+                                            SqlValueFormatter.Long(record.FactionId))};
                                         """;
             insertCommand.ExecuteNonQuery();
         }

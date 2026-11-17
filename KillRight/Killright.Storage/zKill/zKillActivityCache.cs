@@ -34,7 +34,7 @@ public sealed class zKillActivityCache : IzKillActivityCache
                                      recent_coverage_start_utc,
                                      last_kill_utc
                               FROM zkill_activity_cache
-                              WHERE character_id = {characterId}
+                              WHERE character_id = {CommandParameters.Bind(command, characterId)}
                               LIMIT 1;
                               """;
 
@@ -92,7 +92,7 @@ public sealed class zKillActivityCache : IzKillActivityCache
                                          recent_coverage_start_utc,
                                          last_kill_utc
                                   FROM zkill_activity_cache
-                                  WHERE character_id IN ({string.Join(", ", chunk)});
+                                  WHERE character_id IN ({CommandParameters.BindList(command, chunk)});
                                   """;
 
             using var reader = command.ExecuteReader();
@@ -130,13 +130,14 @@ public sealed class zKillActivityCache : IzKillActivityCache
         using (var deleteCommand = scope.Connection.CreateCommand())
         {
             deleteCommand.Transaction = scope.Transaction;
-            deleteCommand.CommandText = $"DELETE FROM zkill_activity_cache WHERE character_id = {record.CharacterId};";
+            deleteCommand.CommandText = $"DELETE FROM zkill_activity_cache WHERE character_id = {CommandParameters.Bind(deleteCommand, record.CharacterId)};";
             deleteCommand.ExecuteNonQuery();
         }
 
         using (var insertCommand = scope.Connection.CreateCommand())
         {
             insertCommand.Transaction = scope.Transaction;
+            var parameters = new CommandParameters(insertCommand);
             insertCommand.CommandText = $"""
                                         INSERT INTO zkill_activity_cache (
                                             character_id,
@@ -150,19 +151,18 @@ public sealed class zKillActivityCache : IzKillActivityCache
                                             last_recent_call_utc,
                                             recent_coverage_start_utc,
                                             last_kill_utc
-                                        ) VALUES (
-                                            {record.CharacterId},
-                                            {SqlValueFormatter.Bool(record.HasPublicActivityData)},
-                                            {SqlValueFormatter.Int(record.KillsWeek)},
-                                            {SqlValueFormatter.Int(record.SoloWeek)},
-                                            {SqlValueFormatter.Date(record.LastActiveUtc)},
-                                            {SqlValueFormatter.String(record.LastActivityType?.ToString())},
-                                            {SqlValueFormatter.Date(record.CheckedAtUtc)},
-                                            {SqlValueFormatter.String(record.Error)},
-                                            {SqlValueFormatter.Date(record.LastSuccessfulRecentCallUtc)},
-                                            {SqlValueFormatter.Date(record.RecentCoverageStartUtc)},
-                                            {SqlValueFormatter.Date(record.LastKillUtc)}
-                                        );
+                                        ) VALUES {parameters.Row(
+                                            SqlValueFormatter.Long(record.CharacterId),
+                                            SqlValueFormatter.Bool(record.HasPublicActivityData),
+                                            SqlValueFormatter.Int(record.KillsWeek),
+                                            SqlValueFormatter.Int(record.SoloWeek),
+                                            SqlValueFormatter.Date(record.LastActiveUtc),
+                                            SqlValueFormatter.String(record.LastActivityType?.ToString()),
+                                            SqlValueFormatter.Date(record.CheckedAtUtc),
+                                            SqlValueFormatter.String(record.Error),
+                                            SqlValueFormatter.Date(record.LastSuccessfulRecentCallUtc),
+                                            SqlValueFormatter.Date(record.RecentCoverageStartUtc),
+                                            SqlValueFormatter.Date(record.LastKillUtc))};
                                         """;
             insertCommand.ExecuteNonQuery();
         }

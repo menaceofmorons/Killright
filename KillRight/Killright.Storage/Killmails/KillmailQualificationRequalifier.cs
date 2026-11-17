@@ -24,7 +24,7 @@ public static class KillmailQualificationRequalifier
                                       UPDATE main.zkill_killmails
                                       SET is_qualifying = 0
                                       WHERE is_qualifying = 1
-                                        AND unique_attacker_count >= {configuredThreshold};
+                                        AND unique_attacker_count >= {CommandParameters.Bind(command, configuredThreshold)};
                                       """;
                 command.ExecuteNonQuery();
 

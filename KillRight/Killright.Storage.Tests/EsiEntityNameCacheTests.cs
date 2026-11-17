@@ -24,6 +24,23 @@ public sealed class EsiEntityNameCacheTests
     }
 
     [Fact]
+    public async Task UpsertAsync_MoreThanOneChunkOfHostileNames_RoundTripsEveryName()
+    {
+        var cache = CreateCache();
+        var entities = Enumerable.Range(1, 1200)
+            .Select(id => new EsiEntityName(id, EsiEntityTypes.Corporation, $"O'Corp {id}'); DROP TABLE esi_entity_name_cache; --"))
+            .ToList();
+
+        await cache.UpsertAsync(entities);
+        await cache.UpsertAsync(entities);
+
+        var names = await cache.GetNamesAsync(entities.Select(entity => entity.EntityId).ToList());
+
+        Assert.Equal(1200, names.Count);
+        Assert.Equal(entities[1199].Name, names[1200]);
+    }
+
+    [Fact]
     public async Task GetNamesAsync_UnknownId_IsOmitted()
     {
         var cache = CreateCache();

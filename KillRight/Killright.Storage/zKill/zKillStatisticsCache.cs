@@ -38,7 +38,7 @@ public sealed class zKillStatisticsCache : IzKillStatisticsCache
                                      pod_kills,
                                      pod_losses
                               FROM main.zkill_statistics_cache
-                              WHERE character_id = {characterId}
+                              WHERE character_id = {CommandParameters.Bind(command, characterId)}
                               LIMIT 1;
                               """;
 
@@ -111,7 +111,7 @@ public sealed class zKillStatisticsCache : IzKillStatisticsCache
                                          pod_kills,
                                          pod_losses
                                   FROM main.zkill_statistics_cache
-                                  WHERE character_id IN ({string.Join(", ", chunk)});
+                                  WHERE character_id IN ({CommandParameters.BindList(command, chunk)});
                                   """;
 
             using var reader = command.ExecuteReader();
@@ -171,12 +171,13 @@ public sealed class zKillStatisticsCache : IzKillStatisticsCache
         using (var deleteCommand = scope.Connection.CreateCommand())
         {
             deleteCommand.Transaction = scope.Transaction;
-            deleteCommand.CommandText = $"DELETE FROM main.zkill_statistics_cache WHERE character_id = {record.CharacterId};";
+            deleteCommand.CommandText = $"DELETE FROM main.zkill_statistics_cache WHERE character_id = {CommandParameters.Bind(deleteCommand, record.CharacterId)};";
             deleteCommand.ExecuteNonQuery();
         }
 
         using var insertCommand = scope.Connection.CreateCommand();
         insertCommand.Transaction = scope.Transaction;
+        var parameters = new CommandParameters(insertCommand);
         insertCommand.CommandText = $"""
             INSERT INTO main.zkill_statistics_cache (
                 character_id,
@@ -192,21 +193,20 @@ public sealed class zKillStatisticsCache : IzKillStatisticsCache
                 checked_at_utc,
                 pod_kills,
                 pod_losses
-            ) VALUES (
-                {record.CharacterId},
-                {record.ShipsDestroyed},
-                {record.SoloKills},
-                {SqlValueFormatter.Double(record.SoloRatio)},
-                {SqlValueFormatter.Double(record.AvgGangSize)},
-                {record.ShipsLost},
-                {record.SoloLosses},
-                {SqlValueFormatter.String(record.GeneralStyle)},
-                {SqlValueFormatter.Bool(true)},
-                {SqlValueFormatter.Bool(record.NoHistory)},
-                {SqlValueFormatter.Date(record.CheckedAtUtc)},
-                {record.PodKills},
-                {record.PodLosses}
-            );
+            ) VALUES {parameters.Row(
+                SqlValueFormatter.Long(record.CharacterId),
+                SqlValueFormatter.Long(record.ShipsDestroyed),
+                SqlValueFormatter.Long(record.SoloKills),
+                SqlValueFormatter.Double(record.SoloRatio),
+                SqlValueFormatter.Double(record.AvgGangSize),
+                SqlValueFormatter.Long(record.ShipsLost),
+                SqlValueFormatter.Long(record.SoloLosses),
+                SqlValueFormatter.String(record.GeneralStyle),
+                SqlValueFormatter.Bool(true),
+                SqlValueFormatter.Bool(record.NoHistory),
+                SqlValueFormatter.Date(record.CheckedAtUtc),
+                SqlValueFormatter.Long(record.PodKills),
+                SqlValueFormatter.Long(record.PodLosses))};
             """;
         insertCommand.ExecuteNonQuery();
 
@@ -226,7 +226,7 @@ public sealed class zKillStatisticsCache : IzKillStatisticsCache
         command.CommandText = $"""
             UPDATE main.zkill_statistics_cache
             SET no_history_marker = 0
-            WHERE character_id = {characterId};
+            WHERE character_id = {CommandParameters.Bind(command, characterId)};
             """;
         command.ExecuteNonQuery();
 
