@@ -95,6 +95,26 @@ public sealed class KillRightDatabase
         }
     }
 
+    public bool Checkpoint(TimeSpan gateTimeout)
+    {
+        if (!WriteGate.Wait(gateTimeout))
+            return false;
+
+        try
+        {
+            using var connection = OpenConnection();
+            using var command = connection.CreateCommand();
+            command.CommandText = "PRAGMA wal_checkpoint(TRUNCATE);";
+            command.ExecuteNonQuery();
+
+            return true;
+        }
+        finally
+        {
+            WriteGate.Release();
+        }
+    }
+
     public bool HasPendingWal()
     {
         var wal = new FileInfo(_options.DatabasePath + "-wal");

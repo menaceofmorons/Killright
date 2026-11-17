@@ -521,7 +521,15 @@ public partial class MainWindow : Window
         public string? Value { get; set; }
     }
 
-    private static async Task LoadInfoSheetAsync(InfoSheetViewModel viewModel, PilotReportRow row, LastActivityLookupTag lookupTag)
+    private static Task LoadInfoSheetAsync(InfoSheetViewModel viewModel, PilotReportRow row, LastActivityLookupTag lookupTag)
+    {
+        return BackgroundFailureRecorder.RunAsync(
+            () => LoadInfoSheetCoreAsync(viewModel, row, lookupTag),
+            "Info Sheet load",
+            EngineFailureLog.Record);
+    }
+
+    private static async Task LoadInfoSheetCoreAsync(InfoSheetViewModel viewModel, PilotReportRow row, LastActivityLookupTag lookupTag)
     {
         var timings = App.Settings.Timing.Enabled ? new ScanTimings() : null;
         var zKillRequestsAtStart = App.zKillClient.RequestCount;
