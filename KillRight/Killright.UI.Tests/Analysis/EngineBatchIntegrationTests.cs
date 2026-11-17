@@ -22,8 +22,7 @@ public sealed class EngineBatchIntegrationTests
     {
         var dllPath = FindEngineDll();
 
-        if (dllPath is null)
-            return;
+        Assert.True(dllPath is not null, $"killright_engine.dll not found under {EngineTargetDirectory()}; build the engine first (cargo build --manifest-path killright_engine/Cargo.toml).");
 
         var databasePath = Path.Combine(Path.GetTempPath(), $"engineBatch.{Guid.NewGuid():N}.db");
         var database = new KillRightDatabase(new KillRightDatabaseOptions { DatabasePath = databasePath });
@@ -92,12 +91,37 @@ public sealed class EngineBatchIntegrationTests
 
     private static string? FindEngineDll()
     {
-        foreach (var relative in new[] { "killright_engine/target/release/killright_engine.dll", "killright_engine/target/debug/killright_engine.dll" })
-        {
-            var found = FindFile(relative);
+        var path = Path.Combine(EngineTargetDirectory(), EngineProfileDirectory, "killright_engine.dll");
+        return File.Exists(path) ? path : null;
+    }
 
-            if (found is not null)
-                return found;
+    private static string EngineTargetDirectory()
+    {
+        var cargoTargetDir = Environment.GetEnvironmentVariable("CARGO_TARGET_DIR");
+
+        if (!string.IsNullOrWhiteSpace(cargoTargetDir))
+            return Path.GetFullPath(cargoTargetDir);
+
+        var root = FindDirectory("killright_engine") ?? AppContext.BaseDirectory;
+        return Path.Combine(root, "killright_engine", "target");
+    }
+
+#if DEBUG
+    private const string EngineProfileDirectory = "debug";
+#else
+    private const string EngineProfileDirectory = "release";
+#endif
+
+    private static string? FindDirectory(string name)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+
+        while (directory is not null)
+        {
+            if (Directory.Exists(Path.Combine(directory.FullName, name)))
+                return directory.FullName;
+
+            directory = directory.Parent;
         }
 
         return null;
