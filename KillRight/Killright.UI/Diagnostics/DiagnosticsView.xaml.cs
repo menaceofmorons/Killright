@@ -1,8 +1,8 @@
 using System.Data;
+using System.Globalization;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
-using Killright.Shared.Data;
 using Killright.Shared.Time;
 
 namespace Killright.UI.Diagnostics;
@@ -407,7 +407,9 @@ public partial class DiagnosticsView : UserControl
         if (!DiagnosticQueries.TryGetValue(selected, out var sql))
             return;
 
-        sql = sql.Replace("{{RecentWindowCutoffUtc}}", ApplicationClock.UtcNow.AddDays(-14).ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture));
+        var cutoffUnixSeconds = ApplicationClock.UtcNow.AddDays(-14).ToUnixTimeSeconds();
+        var cutoff = cutoffUnixSeconds.ToString(CultureInfo.InvariantCulture);
+        sql = sql.Replace("{{RecentWindowCutoffUtc}}", cutoff);
 
         QueryText.Text = sql;
         _lastQueryRows = _service.LoadRows(sql);
