@@ -32,15 +32,13 @@ public sealed class SettingsStartupStopIntegrationTests
 
     private static string RunBuiltApplication(Action<string> arrange)
     {
-        var appFolder = Path.Combine(Path.GetTempPath(), $"killrightApp.{Guid.NewGuid():N}");
+        var runMarker = $"killrightApp.{Guid.NewGuid():N}";
+        var appFolder = Path.Combine(Path.GetTempPath(), runMarker);
         CopyDirectory(IntegrationPaths.BuiltAppFolder(), appFolder);
 
         try
         {
             arrange(appFolder);
-
-            var logPath = EngineFailureLogPaths.GetDefaultLogPath();
-            var lengthBefore = File.Exists(logPath) ? new FileInfo(logPath).Length : 0;
 
             using var process = Process.Start(new ProcessStartInfo(Path.Combine(appFolder, "Killright.UI.exe"))
             {
@@ -56,15 +54,32 @@ public sealed class SettingsStartupStopIntegrationTests
 
             Assert.Equal(0, process.ExitCode);
 
-            using var stream = new FileStream(logPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-            stream.Seek(lengthBefore, SeekOrigin.Begin);
-
-            return new StreamReader(stream).ReadToEnd();
+            return ReadLinesCarrying(runMarker);
         }
         finally
         {
             Directory.Delete(appFolder, recursive: true);
         }
+    }
+
+    private static string ReadLinesCarrying(string runMarker)
+    {
+        var logPath = EngineFailureLogPaths.GetDefaultLogPath();
+
+        Assert.True(File.Exists(logPath), $"No failure log at {logPath}.");
+
+        using var stream = new FileStream(logPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        using var reader = new StreamReader(stream);
+
+        var lines = new List<string>();
+
+        while (reader.ReadLine() is { } line)
+        {
+            if (line.Contains(runMarker, StringComparison.Ordinal))
+                lines.Add(line);
+        }
+
+        return string.Join(Environment.NewLine, lines);
     }
 
     private static void CopyDirectory(string source, string destination)
