@@ -181,4 +181,52 @@ public sealed class ApplicationSettingsLoaderTests
             System.IO.File.Delete(path);
         }
     }
+
+    [Theory]
+    [InlineData("threatBands")]
+    [InlineData("relationshipConfidenceBands")]
+    [InlineData("sde")]
+    [InlineData("threat")]
+    [InlineData("groupDetection")]
+    [InlineData("style")]
+    [InlineData("timing")]
+    [InlineData("network")]
+    [InlineData("database")]
+    public void Load_ExplicitNullSection_FailsWithNoSettings(string section)
+    {
+        var path = TempPath();
+        System.IO.File.WriteAllText(path, $"{{ \"{section}\": null }}");
+
+        try
+        {
+            var result = ApplicationSettingsLoader.Load(path);
+
+            Assert.False(result.Succeeded);
+            Assert.Null(result.Settings);
+            Assert.Contains(section, result.Failure);
+        }
+        finally
+        {
+            System.IO.File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Load_UnsupportedValueShape_FailsWithNoSettings()
+    {
+        var path = TempPath();
+        System.IO.File.WriteAllText(path, "{ \"recentWindowDays\": [1, 2] }");
+
+        try
+        {
+            var result = ApplicationSettingsLoader.Load(path);
+
+            Assert.False(result.Succeeded);
+            Assert.Null(result.Settings);
+        }
+        finally
+        {
+            System.IO.File.Delete(path);
+        }
+    }
 }
