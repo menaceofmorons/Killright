@@ -216,6 +216,84 @@ public sealed class SdeIngestionServiceTests
         Assert.NotNull(metadata.LastAttemptUtc);
     }
 
+    [Fact]
+    public async Task RunCheckAsync_ParseFailure_RecordsAttemptWithoutCountingAsCheck_AndLeavesTablesUntouched()
+    {
+        var (_, store) = CreateStore();
+        await SeedAsync(store);
+
+        var client = new FakeSdeClient(manifestBuildNumber: 200, zipContentsFactory: BuildZipWithoutFactions);
+
+        var outcome = await new SdeIngestionService(client, store, checkIntervalHours: 24).RunCheckAsync();
+
+        Assert.Equal(SdeCheckOutcome.UnexpectedFailure, outcome);
+        await AssertFailureRecordedAsync(store, "ParseFailure");
+    }
+
+    [Fact]
+    public async Task RunCheckAsync_SwapFailure_RecordsAttemptWithoutCountingAsCheck_AndLeavesTablesUntouched()
+    {
+        var (_, store) = CreateStore();
+        await SeedAsync(store);
+
+        var client = new FakeSdeClient(manifestBuildNumber: 200, zipContentsFactory: BuildValidZip);
+        var failingStore = new ReplaceFailingStore(store);
+
+        var outcome = await new SdeIngestionService(client, failingStore, checkIntervalHours: 24).RunCheckAsync();
+
+        Assert.Equal(SdeCheckOutcome.UnexpectedFailure, outcome);
+        await AssertFailureRecordedAsync(store, "SwapFailure");
+    }
+
+    private static Task SeedAsync(SdeReferenceDataStore store)
+    {
+        return store.ReplaceTablesAsync(new SdeReplacementData(
+            Types: [new SdeType(587, "Rifter")],
+            SolarSystems: [],
+            NpcCorporationIds: [],
+            BuildNumber: 100,
+            UpdatedUtc: DateTimeOffset.UtcNow.AddDays(-2),
+            Factions: [new SdeFaction(500001, "Caldari State")]));
+    }
+
+    private static async Task AssertFailureRecordedAsync(SdeReferenceDataStore store, string expectedResult)
+    {
+        var metadata = await store.GetMetadataAsync();
+
+        Assert.Equal(expectedResult, metadata.LastCheckResult);
+        Assert.Equal(100, metadata.BuildNumber);
+        Assert.True(metadata.LastAttemptUtc > metadata.LastCheckedUtc);
+        Assert.Equal("Rifter", store.GetTypeName(587));
+        Assert.Equal("Caldari State", store.GetFactionName(500001));
+    }
+
+    private sealed class ReplaceFailingStore : ISdeReferenceDataStore
+    {
+        private readonly ISdeReferenceDataStore _inner;
+
+        public ReplaceFailingStore(ISdeReferenceDataStore inner) => _inner = inner;
+
+        public string? GetTypeName(long typeId) => _inner.GetTypeName(typeId);
+
+        public string? GetSolarSystemName(long systemId) => _inner.GetSolarSystemName(systemId);
+
+        public bool IsNpcCorporation(long corporationId) => _inner.IsNpcCorporation(corporationId);
+
+        public IReadOnlySet<long> GetNpcCorporationIds() => _inner.GetNpcCorporationIds();
+
+        public string? GetFactionName(long factionId) => _inner.GetFactionName(factionId);
+
+        public Task<bool> HasReferenceDataAsync(CancellationToken cancellationToken = default) => _inner.HasReferenceDataAsync(cancellationToken);
+
+        public Task<SdeMetadata> GetMetadataAsync(CancellationToken cancellationToken = default) => _inner.GetMetadataAsync(cancellationToken);
+
+        public Task ReplaceTablesAsync(SdeReplacementData data, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("swap failed");
+
+        public Task RecordCheckAsync(DateTimeOffset attemptedUtc, string checkResult, bool succeeded, CancellationToken cancellationToken = default) =>
+            _inner.RecordCheckAsync(attemptedUtc, checkResult, succeeded, cancellationToken);
+    }
+
     private static byte[] BuildValidZip()
     {
         using var memoryStream = new MemoryStream();

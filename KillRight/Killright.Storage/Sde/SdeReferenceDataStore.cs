@@ -179,22 +179,67 @@ public sealed class SdeReferenceDataStore : ISdeReferenceDataStore
 
     public Task ReplaceTablesAsync(SdeReplacementData data, CancellationToken cancellationToken = default)
     {
+        try
+        {
+            LoadStagingTables(data);
+            SwapIn(data);
+        }
+        catch
+        {
+            DropStagingTables();
+            throw;
+        }
+
+        _typeNames.Clear();
+        _solarSystemNames.Clear();
+        _npcCorporationIds = null;
+        _factionNames = null;
+
+        return Task.CompletedTask;
+    }
+
+    private void LoadStagingTables(SdeReplacementData data)
+    {
+        using var connection = _database.OpenConnection();
+
+        CreateStagingTable(connection, null, "sde_types_staging", "type_id INTEGER NOT NULL PRIMARY KEY, name TEXT NOT NULL");
+        InsertTypes(connection, null, "sde_types_staging", data.Types);
+
+        CreateStagingTable(connection, null, "sde_solar_systems_staging", "system_id INTEGER NOT NULL PRIMARY KEY, name TEXT NOT NULL");
+        InsertSolarSystems(connection, null, "sde_solar_systems_staging", data.SolarSystems);
+
+        CreateStagingTable(connection, null, "sde_npc_corporations_staging", "corporation_id INTEGER NOT NULL PRIMARY KEY");
+        InsertNpcCorporationIds(connection, null, "sde_npc_corporations_staging", data.NpcCorporationIds);
+
+        CreateStagingTable(connection, null, "sde_factions_staging", "faction_id INTEGER NOT NULL PRIMARY KEY, name TEXT");
+        InsertFactions(connection, null, "sde_factions_staging", data.Factions ?? []);
+    }
+
+    private void DropStagingTables()
+    {
+        try
+        {
+            using var connection = _database.OpenConnection();
+
+            foreach (var table in new[] { "sde_types", "sde_solar_systems", "sde_npc_corporations", "sde_factions" })
+            {
+                using var command = connection.CreateCommand();
+                command.CommandText = $"DROP TABLE IF EXISTS main.{table}_staging;";
+                command.ExecuteNonQuery();
+            }
+        }
+        catch (Exception exception)
+        {
+            EngineFailureLog.Record($"SDE staging table cleanup failed: {exception.Message}");
+        }
+    }
+
+    private void SwapIn(SdeReplacementData data)
+    {
         using var scope = _database.BeginWrite();
 
         var connection = scope.Connection;
         var transaction = scope.Transaction;
-
-        CreateStagingTable(connection, transaction, "sde_types_staging", "type_id INTEGER NOT NULL PRIMARY KEY, name TEXT NOT NULL");
-        InsertTypes(connection, transaction, "sde_types_staging", data.Types);
-
-        CreateStagingTable(connection, transaction, "sde_solar_systems_staging", "system_id INTEGER NOT NULL PRIMARY KEY, name TEXT NOT NULL");
-        InsertSolarSystems(connection, transaction, "sde_solar_systems_staging", data.SolarSystems);
-
-        CreateStagingTable(connection, transaction, "sde_npc_corporations_staging", "corporation_id INTEGER NOT NULL PRIMARY KEY");
-        InsertNpcCorporationIds(connection, transaction, "sde_npc_corporations_staging", data.NpcCorporationIds);
-
-        CreateStagingTable(connection, transaction, "sde_factions_staging", "faction_id INTEGER NOT NULL PRIMARY KEY, name TEXT");
-        InsertFactions(connection, transaction, "sde_factions_staging", data.Factions ?? []);
 
         SwapStagingTable(connection, transaction, "sde_types");
         SwapStagingTable(connection, transaction, "sde_solar_systems");
@@ -218,13 +263,6 @@ public sealed class SdeReferenceDataStore : ISdeReferenceDataStore
         }
 
         scope.Commit();
-
-        _typeNames.Clear();
-        _solarSystemNames.Clear();
-        _npcCorporationIds = null;
-        _factionNames = null;
-
-        return Task.CompletedTask;
     }
 
     public Task RecordCheckAsync(DateTimeOffset attemptedUtc, string checkResult, bool succeeded, CancellationToken cancellationToken = default)
@@ -257,7 +295,7 @@ public sealed class SdeReferenceDataStore : ISdeReferenceDataStore
 
     private static void CreateStagingTable(
         SqliteConnection connection,
-        SqliteTransaction transaction,
+        SqliteTransaction? transaction,
         string tableName,
         string columns)
     {
@@ -272,7 +310,7 @@ public sealed class SdeReferenceDataStore : ISdeReferenceDataStore
 
     private static void SwapStagingTable(
         SqliteConnection connection,
-        SqliteTransaction transaction,
+        SqliteTransaction? transaction,
         string tableName)
     {
         using (var drop = connection.CreateCommand())
@@ -292,7 +330,7 @@ public sealed class SdeReferenceDataStore : ISdeReferenceDataStore
 
     private static void InsertTypes(
         SqliteConnection connection,
-        SqliteTransaction transaction,
+        SqliteTransaction? transaction,
         string tableName,
         IReadOnlyList<SdeType> types)
     {
@@ -317,7 +355,7 @@ public sealed class SdeReferenceDataStore : ISdeReferenceDataStore
 
     private static void InsertSolarSystems(
         SqliteConnection connection,
-        SqliteTransaction transaction,
+        SqliteTransaction? transaction,
         string tableName,
         IReadOnlyList<SdeSolarSystem> solarSystems)
     {
@@ -342,7 +380,7 @@ public sealed class SdeReferenceDataStore : ISdeReferenceDataStore
 
     private static void InsertFactions(
         SqliteConnection connection,
-        SqliteTransaction transaction,
+        SqliteTransaction? transaction,
         string tableName,
         IReadOnlyList<SdeFaction> factions)
     {
@@ -367,7 +405,7 @@ public sealed class SdeReferenceDataStore : ISdeReferenceDataStore
 
     private static void InsertNpcCorporationIds(
         SqliteConnection connection,
-        SqliteTransaction transaction,
+        SqliteTransaction? transaction,
         string tableName,
         IReadOnlyList<long> corporationIds)
     {
