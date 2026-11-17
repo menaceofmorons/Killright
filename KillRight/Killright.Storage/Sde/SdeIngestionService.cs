@@ -123,7 +123,16 @@ public sealed class SdeIngestionService
 
             progress?.Report(new SdeCheckProgress(SdeCheckStage.Importing, null));
 
-            var contents = SdeDatasetParser.ParseZip(zipPath);
+            SdeDatasetContents contents;
+
+            try
+            {
+                contents = SdeDatasetParser.ParseZip(zipPath);
+            }
+            catch (Exception ex)
+            {
+                return await RecordIngestFailureAsync("ParseFailure", "SDE dataset parse failed", ex, now, cancellationToken);
+            }
 
             var replacementData = new SdeReplacementData(
                 contents.Types,
@@ -133,7 +142,14 @@ public sealed class SdeIngestionService
                 now,
                 contents.Factions);
 
-            await _store.ReplaceTablesAsync(replacementData, cancellationToken);
+            try
+            {
+                await _store.ReplaceTablesAsync(replacementData, cancellationToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                return await RecordIngestFailureAsync("SwapFailure", "SDE table swap failed", ex, now, cancellationToken);
+            }
 
             return SdeCheckOutcome.Replaced;
         }
@@ -142,5 +158,17 @@ public sealed class SdeIngestionService
             if (File.Exists(zipPath))
                 File.Delete(zipPath);
         }
+    }
+
+    private async Task<SdeCheckOutcome> RecordIngestFailureAsync(
+        string checkResult,
+        string description,
+        Exception exception,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        EngineFailureLog.Record($"{description}; existing reference tables left untouched. {exception.Message}");
+        await _store.RecordCheckAsync(now, checkResult, succeeded: false, cancellationToken);
+        return SdeCheckOutcome.UnexpectedFailure;
     }
 }

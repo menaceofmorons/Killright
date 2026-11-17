@@ -419,6 +419,69 @@ public sealed class SdeReferenceDataStoreTests
         Assert.All(results, result => Assert.Equal(("Rifter", "Crow", "Jita", 2), result));
     }
 
+    [Fact]
+    public async Task ReplaceTablesAsync_WhileStagingLoads_ScanWriteCommitsWithoutWaiting()
+    {
+        var (database, store) = CreateStore();
+        var blockingTypes = new BlockingTypeList();
+        var data = SdeData(types: blockingTypes) with { Factions = [new SdeFaction(500001, "Caldari State")] };
+
+        var replace = Task.Run(() => store.ReplaceTablesAsync(data));
+
+        try
+        {
+            Assert.True(blockingTypes.Entered.Wait(TimeSpan.FromSeconds(10)));
+
+            using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            using var scope = await database.BeginWriteAsync(cancellationToken: cancellation.Token);
+
+            using var command = scope.Connection.CreateCommand();
+            command.Transaction = scope.Transaction;
+            command.CommandText = "UPDATE main.sde_metadata SET last_check_result = 'ScanWrite';";
+            command.ExecuteNonQuery();
+            scope.Commit();
+        }
+        finally
+        {
+            blockingTypes.Release.Set();
+        }
+
+        await replace;
+        Assert.Equal("Replaced", (await store.GetMetadataAsync()).LastCheckResult);
+    }
+
+    private sealed class BlockingTypeList : IReadOnlyList<SdeType>
+    {
+        public ManualResetEventSlim Entered { get; } = new();
+
+        public ManualResetEventSlim Release { get; } = new();
+
+        public int Count => 1;
+
+        public SdeType this[int index]
+        {
+            get
+            {
+                Block();
+                return new SdeType(587, "Rifter");
+            }
+        }
+
+        public IEnumerator<SdeType> GetEnumerator()
+        {
+            Block();
+            yield return new SdeType(587, "Rifter");
+        }
+
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+
+        private void Block()
+        {
+            Entered.Set();
+            Release.Wait();
+        }
+    }
+
     private static SdeReplacementData SdeData(
         IReadOnlyList<SdeType>? types = null,
         IReadOnlyList<SdeSolarSystem>? systems = null,
