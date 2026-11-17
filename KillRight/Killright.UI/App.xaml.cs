@@ -55,6 +55,8 @@ public partial class App : Application
     public static IDatabaseBackupService BackupService { get; private set; } = null!;
     public static bool SkipBackupOnClose { get; set; }
 
+    private static IDisposable? _unobservedFailureSubscription;
+    private static bool _startupRefused;
     private static readonly TimeSpan ShutdownWaitTimeout = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan ShutdownCheckpointTimeout = TimeSpan.FromSeconds(5);
 
@@ -73,7 +75,7 @@ public partial class App : Application
 
         DispatcherUnhandledException += OnDispatcherUnhandledException;
         AppDomain.CurrentDomain.UnhandledException += OnAppDomainUnhandledException;
-        TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
+        _unobservedFailureSubscription = BackgroundFailureRecorder.Attach(EngineFailureLog.Record);
 
         var settingsPath = ApplicationSettingsLoader.GetDefaultSettingsPath();
         Settings = ApplicationSettingsLoader.LoadOrDefault(settingsPath);
@@ -140,6 +142,7 @@ public partial class App : Application
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
 
+            _startupRefused = true;
             Shutdown();
             return;
         }
@@ -158,6 +161,7 @@ public partial class App : Application
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
 
+            _startupRefused = true;
             Shutdown();
             return;
         }
@@ -388,7 +392,7 @@ public partial class App : Application
                     EngineFailureLog.Record("Shutdown continued while a scan or purge pass was still running.");
             });
 
-            if (!SkipBackupOnClose)
+            if (ShutdownPolicy.ShouldBackup(_startupRefused, SkipBackupOnClose))
             {
                 try
                 {
@@ -402,7 +406,7 @@ public partial class App : Application
 
             RunShutdownStep("checkpoint", () =>
             {
-                if (Database is null || !Database.IsOpen)
+                if (!ShutdownPolicy.ShouldCheckpoint(_startupRefused) || Database is null || !Database.IsOpen)
                     return;
 
                 if (!workStopped)
@@ -436,11 +440,6 @@ public partial class App : Application
         EngineFailureLog.Record($"Unhandled UI-thread exception: {e.Exception}");
         MessageBox.Show(e.Exception.ToString(), "KillRight - Unexpected Error", MessageBoxButton.OK, MessageBoxImage.Error);
         e.Handled = true;
-    }
-
-    private static void OnUnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
-    {
-        BackgroundFailureRecorder.RecordUnobserved(e, EngineFailureLog.Record);
     }
 
     private static void OnAppDomainUnhandledException(object sender, UnhandledExceptionEventArgs e)
