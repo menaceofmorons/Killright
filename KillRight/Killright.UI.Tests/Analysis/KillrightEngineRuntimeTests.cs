@@ -160,9 +160,15 @@ public sealed class KillrightEngineRuntimeTests
         Assert.Equal([FakeHandle], native.Freed);
     }
 
-    private sealed class FakeNativeLibrary : INativeLibrary
+    internal sealed class FakeNativeLibrary : INativeLibrary
     {
         private readonly List<nint> _allocated = [];
+
+        public Action? OnCall { get; init; }
+
+        public int CallThreadId { get; private set; }
+
+        public int CallCount { get; private set; }
 
         public bool LoadThrows { get; init; }
 
@@ -201,7 +207,13 @@ public sealed class KillrightEngineRuntimeTests
                 }),
                 "killright_shutdown" => new KillrightEngineRuntime.ShutdownDelegate(() => ShutdownCalls++),
                 "killright_free_string" => new KillrightEngineRuntime.FreeStringDelegate(_ => { }),
-                _ => new KillrightEngineRuntime.JsonExportDelegate(_ => Allocate(CallResponseJson))
+                _ => new KillrightEngineRuntime.JsonExportDelegate(_ =>
+                {
+                    CallCount++;
+                    CallThreadId = Environment.CurrentManagedThreadId;
+                    OnCall?.Invoke();
+                    return Allocate(CallResponseJson);
+                })
             };
 
             return (TDelegate)export;
