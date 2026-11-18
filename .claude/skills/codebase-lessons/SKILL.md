@@ -32,3 +32,4 @@ metadata:
 - The engine dll location is resolved from `CARGO_TARGET_DIR`, falling back to `killright_engine/target` (`EngineTargetDir` in `Killright.UI.csproj`, same rule in `Build-Package.ps1`); never hard-code a cargo output path in a project, script or test (WS-1.1)
 - `KillrightEngineRuntime` binds exports through `INativeLibrary.GetExport<T>`; test fakes must return delegates, not function pointers (`GetDelegateForFunctionPointer` hands back the original delegate type) (WS-1.3)
 - `Killright.UI.csproj` copies the engine dll from the cargo output for the build configuration (`debug`/`release`); a missing dll fails the build with MSB3030, so build the engine in the matching profile (`--release` for Release) first (WS-1.3)
+- `f64::NAN.max(0.0)` returns 0.0, so check `is_finite()` before any `max(0.0)` clamp that precedes a checked numeric conversion (WS-1.4)
