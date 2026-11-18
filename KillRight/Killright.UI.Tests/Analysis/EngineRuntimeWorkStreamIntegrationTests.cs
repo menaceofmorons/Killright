@@ -15,6 +15,7 @@ using Xunit;
 
 namespace Killright.UI.Tests.Analysis;
 
+[Collection("RealEngine")]
 public sealed class EngineRuntimeWorkStreamIntegrationTests
 {
     private const long Lukas = 95465499;
