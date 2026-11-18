@@ -39,41 +39,31 @@ pub fn derive_activity(
 
     window.sort_by_key(|entry| std::cmp::Reverse(entry.0));
 
-    let newest_non_pod_kill_time_utc = killmails
-        .iter()
-        .filter(|row| !row.is_loss && !is_pod_kill(row.ship_type_id))
-        .filter_map(|row| {
-            DateTime::parse_from_rfc3339(&row.kill_time_utc)
-                .ok()
-                .map(|timestamp| (timestamp.with_timezone(&Utc), row))
-        })
-        .max_by_key(|(timestamp, _)| *timestamp)
-        .map(|(_, row)| row.kill_time_utc.clone());
+    let newest_non_pod_kill_time_utc =
+        newest_non_pod(killmails, |row| !row.is_loss).map(|row| row.kill_time_utc.clone());
+
+    let newest_non_pod_killmail = newest_non_pod(killmails, |_| true).map(|row| NewestKillmail {
+        kill_time_utc: row.kill_time_utc.clone(),
+        is_loss: row.is_loss,
+    });
 
     let mut derived = DerivedActivity {
         has_public_activity_data: !window.is_empty(),
         kills_week: 0,
         solo_week: 0,
         info_week_losses: 0,
-        newest_non_pod_killmail: None,
+        newest_non_pod_killmail,
         newest_non_pod_kill_time_utc,
     };
 
     for (_, row) in window {
-        let is_pod_kill_row = !row.is_loss && is_pod_kill(row.ship_type_id);
+        if is_pod_kill(row.ship_type_id) {
+            continue;
+        }
 
         if row.is_loss {
             derived.info_week_losses += 1;
-        }
-
-        if derived.newest_non_pod_killmail.is_none() && !is_pod_kill_row {
-            derived.newest_non_pod_killmail = Some(NewestKillmail {
-                kill_time_utc: row.kill_time_utc.clone(),
-                is_loss: row.is_loss,
-            });
-        }
-
-        if !row.is_loss && !is_pod_kill_row {
+        } else {
             derived.kills_week += 1;
 
             if row.is_solo {
@@ -83,6 +73,22 @@ pub fn derive_activity(
     }
 
     derived
+}
+
+fn newest_non_pod(
+    killmails: &[RecentKillmailSnapshot],
+    include: impl Fn(&RecentKillmailSnapshot) -> bool,
+) -> Option<&RecentKillmailSnapshot> {
+    killmails
+        .iter()
+        .filter(|row| !is_pod_kill(row.ship_type_id) && include(row))
+        .filter_map(|row| {
+            DateTime::parse_from_rfc3339(&row.kill_time_utc)
+                .ok()
+                .map(|timestamp| (timestamp.with_timezone(&Utc), row))
+        })
+        .max_by_key(|(timestamp, _)| *timestamp)
+        .map(|(_, row)| row)
 }
 
 #[cfg(test)]
@@ -129,13 +135,14 @@ mod tests {
     }
 
     #[test]
-    fn rows_outside_the_weekly_window_are_ignored() {
+    fn rows_outside_the_weekly_window_do_not_count_toward_the_week() {
         let rows = vec![row(1, "2026-09-10T00:00:00+00:00", false, true, Some(587))];
 
         let derived = derive_activity(&rows, now());
 
         assert!(!derived.has_public_activity_data);
-        assert!(derived.newest_non_pod_killmail.is_none());
+        assert_eq!(derived.kills_week, 0);
+        assert_eq!(derived.solo_week, 0);
     }
 
     #[test]
@@ -179,9 +186,9 @@ mod tests {
     }
 
     #[test]
-    fn newest_killmail_may_be_a_loss_and_a_pod_loss_counts() {
+    fn newest_killmail_may_be_a_loss_but_never_a_pod_loss() {
         let rows = vec![
-            row(1, "2026-09-28T12:00:00+00:00", true, false, Some(670)),
+            row(1, "2026-09-28T12:00:00+00:00", true, false, Some(587)),
             row(2, "2026-09-28T00:00:00+00:00", false, false, Some(587)),
         ];
 
@@ -221,7 +228,13 @@ mod tests {
 
         assert!(!derived.has_public_activity_data);
         assert_eq!(derived.kills_week, 0);
-        assert!(derived.newest_non_pod_killmail.is_none());
+        assert_eq!(
+            derived.newest_non_pod_killmail,
+            Some(NewestKillmail {
+                kill_time_utc: "2026-09-09T00:00:00+00:00".to_string(),
+                is_loss: false,
+            })
+        );
         assert_eq!(
             derived.newest_non_pod_kill_time_utc.as_deref(),
             Some("2026-09-09T00:00:00+00:00")
@@ -296,7 +309,7 @@ mod tests {
     }
 
     #[test]
-    fn info_week_losses_include_pod_losses_and_exclude_kills() {
+    fn info_week_losses_exclude_pod_losses_and_kills() {
         let rows = vec![
             row(1, "2026-09-28T12:00:00+00:00", false, true, Some(670)),
             row(2, "2026-09-28T06:00:00+00:00", false, false, Some(587)),
@@ -306,7 +319,7 @@ mod tests {
 
         let derived = derive_activity(&rows, now());
 
-        assert_eq!(derived.info_week_losses, 2);
+        assert_eq!(derived.info_week_losses, 1);
         assert_eq!(derived.kills_week, 1);
         assert_eq!(derived.solo_week, 0);
     }
@@ -314,14 +327,51 @@ mod tests {
     #[test]
     fn info_week_losses_respect_the_seven_day_boundary() {
         let rows = vec![
-            row(1, "2026-09-22T12:00:00+00:00", true, false, Some(670)),
-            row(2, "2026-09-22T11:59:59+00:00", true, false, Some(670)),
+            row(1, "2026-09-22T12:00:00+00:00", true, false, Some(587)),
+            row(2, "2026-09-22T11:59:59+00:00", true, false, Some(587)),
             row(3, "2026-09-22T12:00:00+00:00", false, true, Some(587)),
         ];
 
         let derived = derive_activity(&rows, now());
 
         assert_eq!(derived.info_week_losses, 1);
+    }
+
+    #[test]
+    fn newest_killmail_older_than_the_week_is_found_across_all_killmails() {
+        let rows = vec![
+            row(1, "2026-06-01T00:00:00+00:00", true, false, Some(587)),
+            row(2, "2026-05-01T00:00:00+00:00", false, false, Some(587)),
+        ];
+
+        let derived = derive_activity(&rows, now());
+
+        assert_eq!(
+            derived.newest_non_pod_killmail,
+            Some(NewestKillmail {
+                kill_time_utc: "2026-06-01T00:00:00+00:00".to_string(),
+                is_loss: true,
+            })
+        );
+    }
+
+    #[test]
+    fn newer_pod_killmail_is_not_returned_over_an_older_non_pod() {
+        let rows = vec![
+            row(1, "2026-09-28T00:00:00+00:00", true, false, Some(670)),
+            row(2, "2026-06-01T00:00:00+00:00", false, false, Some(587)),
+        ];
+
+        let derived = derive_activity(&rows, now());
+
+        assert_eq!(
+            derived.newest_non_pod_killmail,
+            Some(NewestKillmail {
+                kill_time_utc: "2026-06-01T00:00:00+00:00".to_string(),
+                is_loss: false,
+            })
+        );
+        assert_eq!(derived.info_week_losses, 0);
     }
 
     #[test]
