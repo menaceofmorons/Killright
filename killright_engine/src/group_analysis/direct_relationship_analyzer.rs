@@ -8,8 +8,6 @@ use crate::group_analysis::shared_relationship_evidence::{
 };
 use crate::shared::timing_recorder;
 
-pub const PROVISIONAL_MINIMUM_SHARED_EVENTS: i64 = 2;
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct DirectRelationship {
     pub pilot_a: i64,

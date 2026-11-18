@@ -1,6 +1,3 @@
-use std::fs;
-use std::path::Path;
-
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize)]
@@ -17,6 +14,8 @@ pub struct GroupDetectionConfiguration {
     pub split_bonus: i32,
     #[serde(rename = "chainDiscount")]
     pub chain_discount: f64,
+    #[serde(rename = "chainStrengthMaximum")]
+    pub chain_strength_maximum: f64,
     #[serde(rename = "intermediaryBonus")]
     pub intermediary_bonus: IntermediaryBonusConfiguration,
 }
@@ -41,28 +40,6 @@ pub struct IntermediaryBonusConfiguration {
     #[serde(rename = "perAdditional")]
     pub per_additional: i32,
     pub maximum: i32,
-}
-
-pub fn load_group_detection_configuration(
-    path: &Path,
-) -> Result<GroupDetectionConfiguration, String> {
-    let text = fs::read_to_string(path)
-        .map_err(|error| format!("failed to read {}: {}", path.display(), error))?;
-
-    let text = text.trim_start_matches('\u{feff}');
-
-    let configuration = serde_json::from_str::<GroupDetectionConfiguration>(text)
-        .map_err(|error| format!("failed to parse {}: {}", path.display(), error))?;
-
-    validate_group_detection_configuration(&configuration).map_err(|error| {
-        format!(
-            "group detection configuration validation failed for {}: {}",
-            path.display(),
-            error
-        )
-    })?;
-
-    Ok(configuration)
 }
 
 pub(crate) fn validate_group_detection_configuration(
@@ -143,78 +120,4 @@ fn validate_steps_and_saturation(
     }
 
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn unique_suffix() -> u128 {
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    }
-
-    fn valid_configuration_json() -> &'static str {
-        r#"{
-            "minimumSharedEvents": 2,
-            "strengthStep": 10,
-            "gangSizeWeights": [
-                {"maximumGangSize": 3, "weight": 1.0},
-                {"maximumGangSize": 5, "weight": 0.75},
-                {"maximumGangSize": 7, "weight": 0.5},
-                {"maximumGangSize": 10, "weight": 0.25}
-            ],
-            "sampleFactor": {"minimum": 0.5, "maximum": 1.0, "saturatesAtCountedSharedKills": 10},
-            "splitBonus": 20,
-            "chainDiscount": 0.75,
-            "intermediaryBonus": {"perAdditional": 10, "maximum": 30}
-        }"#
-    }
-
-    #[test]
-    fn load_group_detection_configuration_parses_valid_file() {
-        let path = std::env::temp_dir().join(format!("group-detection-{}.json", unique_suffix()));
-        fs::write(&path, valid_configuration_json()).unwrap();
-
-        let configuration = load_group_detection_configuration(&path).unwrap();
-
-        fs::remove_file(&path).unwrap();
-        assert_eq!(configuration.minimum_shared_events, 2);
-        assert_eq!(configuration.gang_size_weights.len(), 4);
-    }
-
-    #[test]
-    fn load_group_detection_configuration_rejects_weight_outside_zero_one() {
-        let path = std::env::temp_dir().join(format!(
-            "group-detection-invalid-weight-{}.json",
-            unique_suffix()
-        ));
-        let json = valid_configuration_json().replace("\"weight\": 1.0", "\"weight\": 1.5");
-        fs::write(&path, json).unwrap();
-
-        let result = load_group_detection_configuration(&path);
-
-        fs::remove_file(&path).unwrap();
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn load_group_detection_configuration_rejects_non_positive_saturation() {
-        let path = std::env::temp_dir().join(format!(
-            "group-detection-invalid-saturation-{}.json",
-            unique_suffix()
-        ));
-        let json = valid_configuration_json().replace(
-            "\"saturatesAtCountedSharedKills\": 10",
-            "\"saturatesAtCountedSharedKills\": 0",
-        );
-        fs::write(&path, json).unwrap();
-
-        let result = load_group_detection_configuration(&path);
-
-        fs::remove_file(&path).unwrap();
-        assert!(result.is_err());
-    }
 }

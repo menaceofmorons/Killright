@@ -65,7 +65,7 @@ pub fn diagnose_direct_relationships(
     current_identities: &[PilotIdentitySnapshot],
     configuration: &GroupDetectionConfiguration,
     npc_corporation_ids: &HashSet<i64>,
-) -> Vec<DirectRelationshipDiagnostic> {
+) -> Result<Vec<DirectRelationshipDiagnostic>, String> {
     let current_identity_by_character = build_current_identity_index(current_identities);
     let attackers_by_killmail = group_attackers_by_killmail(evidence);
     let shared_events_by_pair =
@@ -73,7 +73,7 @@ pub fn diagnose_direct_relationships(
 
     let mut diagnostics: Vec<DirectRelationshipDiagnostic> = shared_events_by_pair
         .into_iter()
-        .map(|((pilot_a, pilot_b), mut events)| {
+        .map(|((pilot_a, pilot_b), mut events)| -> Result<_, String> {
             events.sort_by(|left, right| left.kill_time_utc.cmp(&right.kill_time_utc));
 
             let contributing_killmails = events
@@ -128,14 +128,14 @@ pub fn diagnose_direct_relationships(
                     counted_shared_kills,
                     configuration.minimum_shared_events,
                     configuration.strength_step,
-                ));
+                ))?;
                 let confidence = round_to_integer(direct_confidence(
                     &gang_sizes,
                     split_bonus_applied,
                     counted_shared_kills,
                     configuration.minimum_shared_events,
                     configuration,
-                ));
+                ))?;
 
                 (
                     Some(gang_quality),
@@ -147,7 +147,7 @@ pub fn diagnose_direct_relationships(
                 (None, None, None, None)
             };
 
-            DirectRelationshipDiagnostic {
+            Ok(DirectRelationshipDiagnostic {
                 pilot_a,
                 pilot_b,
                 gated_by_current_membership,
@@ -161,16 +161,16 @@ pub fn diagnose_direct_relationships(
                 sample_factor,
                 strength,
                 confidence,
-            }
+            })
         })
-        .collect();
+        .collect::<Result<_, String>>()?;
 
     diagnostics.sort_by(|left, right| {
         left.pilot_a
             .cmp(&right.pilot_a)
             .then(left.pilot_b.cmp(&right.pilot_b))
     });
-    diagnostics
+    Ok(diagnostics)
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -214,7 +214,7 @@ pub fn diagnose_chained_relationships(
     npc_corporation_ids: &HashSet<i64>,
     recent_window_days: i64,
     now: DateTime<Utc>,
-) -> Vec<ChainedRelationshipDiagnostic> {
+) -> Result<Vec<ChainedRelationshipDiagnostic>, String> {
     let base_chains = analyze_chained_relationships(
         evidence,
         current_identities,
@@ -240,35 +240,35 @@ pub fn diagnose_chained_relationships(
             distinct_intermediary_count,
             configuration.intermediary_bonus.per_additional,
             configuration.intermediary_bonus.maximum,
-        ));
+        ))?;
 
         let scored: Vec<ScoredCandidate> = candidates
             .iter()
-            .map(|chain| {
+            .map(|chain| -> Result<_, String> {
                 let link_ab_strength = round_to_integer(direct_strength(
                     chain.link_ab_counted_shared_kills,
                     configuration.minimum_shared_events,
                     configuration.strength_step,
-                ));
+                ))?;
                 let link_ab_confidence = round_to_integer(direct_confidence(
                     &chain.link_ab_counted_shared_kill_gang_sizes,
                     chain.link_ab_split_bonus_applied,
                     chain.link_ab_counted_shared_kills,
                     configuration.minimum_shared_events,
                     configuration,
-                ));
+                ))?;
                 let link_cb_strength = round_to_integer(direct_strength(
                     chain.link_cb_counted_shared_kills,
                     configuration.minimum_shared_events,
                     configuration.strength_step,
-                ));
+                ))?;
                 let link_cb_confidence = round_to_integer(direct_confidence(
                     &chain.link_cb_counted_shared_kill_gang_sizes,
                     chain.link_cb_split_bonus_applied,
                     chain.link_cb_counted_shared_kills,
                     configuration.minimum_shared_events,
                     configuration,
-                ));
+                ))?;
 
                 let weaker_strength = link_ab_strength.min(link_cb_strength);
                 let weaker_confidence = link_ab_confidence.min(link_cb_confidence);
@@ -276,11 +276,12 @@ pub fn diagnose_chained_relationships(
                 let chain_strength_for_this_intermediary = round_to_integer(chain_strength(
                     weaker_strength as f64,
                     configuration.chain_discount,
+                    configuration.chain_strength_maximum,
                     chain.chain_age_days,
                     recent_window_days,
-                ));
+                ))?;
 
-                ScoredCandidate {
+                Ok(ScoredCandidate {
                     chain,
                     link_ab_strength,
                     link_ab_confidence,
@@ -288,9 +289,9 @@ pub fn diagnose_chained_relationships(
                     link_cb_confidence,
                     weaker_confidence,
                     chain_strength_for_this_intermediary,
-                }
+                })
             })
-            .collect();
+            .collect::<Result<_, String>>()?;
 
         let strongest = scored
             .iter()
@@ -304,7 +305,7 @@ pub fn diagnose_chained_relationships(
                 distinct_intermediary_count,
                 configuration.intermediary_bonus.per_additional,
                 configuration.intermediary_bonus.maximum,
-            ));
+            ))?;
 
             diagnostics.push(ChainedRelationshipDiagnostic {
                 pilot_a: *pilot_a,
@@ -345,7 +346,7 @@ pub fn diagnose_chained_relationships(
             .then(left.pilot_c.cmp(&right.pilot_c))
             .then(left.intermediary_pilot_b.cmp(&right.intermediary_pilot_b))
     });
-    diagnostics
+    Ok(diagnostics)
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -404,15 +405,15 @@ pub fn run_group_detection_diagnostics(
     npc_corporation_ids: &HashSet<i64>,
     recent_window_days: i64,
     now: DateTime<Utc>,
-) -> GroupDetectionDiagnostics {
+) -> Result<GroupDetectionDiagnostics, String> {
     let direct_started_at = Instant::now();
     let direct_relationships = diagnose_direct_relationships(
         direct_evidence,
         current_identities,
         configuration,
         npc_corporation_ids,
-    );
-    let direct_analysis_duration_ms = direct_started_at.elapsed().as_millis() as i64;
+    )?;
+    let direct_analysis_duration_ms = elapsed_milliseconds(direct_started_at)?;
 
     let chain_started_at = Instant::now();
     let chains = diagnose_chained_relationships(
@@ -422,18 +423,23 @@ pub fn run_group_detection_diagnostics(
         npc_corporation_ids,
         recent_window_days,
         now,
-    );
-    let chain_analysis_duration_ms = chain_started_at.elapsed().as_millis() as i64;
+    )?;
+    let chain_analysis_duration_ms = elapsed_milliseconds(chain_started_at)?;
 
     let hubs = summarize_intermediary_hubs(&chains);
 
-    GroupDetectionDiagnostics {
+    Ok(GroupDetectionDiagnostics {
         direct_relationships,
         chains,
         hubs,
         direct_analysis_duration_ms,
         chain_analysis_duration_ms,
-    }
+    })
+}
+
+fn elapsed_milliseconds(started_at: Instant) -> Result<i64, String> {
+    i64::try_from(started_at.elapsed().as_millis())
+        .map_err(|_| "elapsed milliseconds do not fit a 64-bit integer".to_string())
 }
 
 #[cfg(test)]
@@ -481,6 +487,7 @@ mod tests {
             },
             split_bonus: 20,
             chain_discount: 0.75,
+            chain_strength_maximum: 75.0,
             intermediary_bonus: IntermediaryBonusConfiguration {
                 per_additional: 10,
                 maximum: 30,
@@ -543,7 +550,8 @@ mod tests {
             &identities,
             &configuration(),
             &npc_corporation_ids(),
-        );
+        )
+        .unwrap();
 
         assert_eq!(diagnostics.len(), 1);
         assert!(diagnostics[0].gated_by_current_membership);
@@ -565,7 +573,8 @@ mod tests {
             &identities,
             &configuration(),
             &npc_corporation_ids(),
-        );
+        )
+        .unwrap();
 
         assert_eq!(diagnostics.len(), 1);
         assert!(!diagnostics[0].gated_by_current_membership);
@@ -588,7 +597,8 @@ mod tests {
             &identities,
             &configuration(),
             &npc_corporation_ids(),
-        );
+        )
+        .unwrap();
 
         assert_eq!(diagnostics.len(), 1);
         let relationship = &diagnostics[0];
@@ -619,7 +629,8 @@ mod tests {
             &npc_corporation_ids(),
             14,
             now(),
-        );
+        )
+        .unwrap();
 
         assert_eq!(diagnostics.len(), 1);
         assert!(diagnostics[0].is_strongest_intermediary_for_pair);

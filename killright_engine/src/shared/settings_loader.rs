@@ -139,6 +139,7 @@ mod tests {
                 "sampleFactor": {"minimum": 0.5, "maximum": 1.0, "saturatesAtCountedSharedKills": 10},
                 "splitBonus": 20,
                 "chainDiscount": 0.75,
+                "chainStrengthMaximum": 75,
                 "intermediaryBonus": {"perAdditional": 10, "maximum": 30}
             },
             "style": {"blobMinimumAverageAttackers": 5, "fleetMinimumAverageAttackers": 11, "podderMinimumSharePercent": 35, "podderMinimumKillCount": 5}
@@ -249,6 +250,67 @@ mod tests {
 
         fs::remove_file(&path).unwrap();
         result
+    }
+
+    #[test]
+    fn load_engine_settings_from_path_reads_chain_strength_maximum() {
+        let settings = load_with_replacement(
+            "chain-maximum",
+            "\"chainStrengthMaximum\": 75",
+            "\"chainStrengthMaximum\": 30",
+        )
+        .unwrap();
+
+        assert_eq!(settings.group_detection.chain_strength_maximum, 30.0);
+    }
+
+    #[test]
+    fn load_engine_settings_from_path_rejects_missing_chain_strength_maximum() {
+        assert!(
+            load_with_replacement("no-chain-maximum", "\"chainStrengthMaximum\": 75,", "").is_err()
+        );
+    }
+
+    #[test]
+    fn load_engine_settings_from_path_rejects_gang_weight_outside_zero_one() {
+        assert!(load_with_replacement("weight", "\"weight\": 1.0", "\"weight\": 1.5").is_err());
+    }
+
+    #[test]
+    fn load_engine_settings_from_path_rejects_non_positive_saturation() {
+        assert!(load_with_replacement(
+            "saturation",
+            "\"saturatesAtCountedSharedKills\": 10",
+            "\"saturatesAtCountedSharedKills\": 0"
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn load_engine_settings_from_path_rejects_sample_factor_out_of_order() {
+        assert!(load_with_replacement(
+            "sample-order",
+            "\"minimum\": 0.5, \"maximum\": 1.0",
+            "\"minimum\": 0.9, \"maximum\": 0.6"
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn load_engine_settings_from_path_rejects_chain_discount_outside_zero_one() {
+        assert!(load_with_replacement(
+            "discount",
+            "\"chainDiscount\": 0.75",
+            "\"chainDiscount\": 1.5"
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn load_engine_settings_from_path_rejects_non_positive_strength_step() {
+        assert!(
+            load_with_replacement("step", "\"strengthStep\": 10", "\"strengthStep\": 0").is_err()
+        );
     }
 
     #[test]
