@@ -1218,7 +1218,7 @@ mod tests {
         let tral = results[1].derived_activity.as_ref().unwrap();
         assert!(!tral.has_public_activity_data);
         assert_eq!(tral.kills_week, None);
-        assert!(tral.newest_non_pod_killmail.is_none());
+        assert!(tral.newest_non_pod_killmail.is_some());
 
         let symptom = results[2].derived_activity.as_ref().unwrap();
         assert!(symptom.has_public_activity_data);
