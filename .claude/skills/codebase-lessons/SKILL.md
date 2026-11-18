@@ -33,3 +33,5 @@ metadata:
 - `KillrightEngineRuntime` binds exports through `INativeLibrary.GetExport<T>`; test fakes must return delegates, not function pointers (`GetDelegateForFunctionPointer` hands back the original delegate type) (WS-1.3)
 - `Killright.UI.csproj` copies the engine dll from the cargo output for the build configuration (`debug`/`release`); a missing dll fails the build with MSB3030, so build the engine in the matching profile (`--release` for Release) first (WS-1.3)
 - `f64::NAN.max(0.0)` returns 0.0, so check `is_finite()` before any `max(0.0)` clamp that precedes a checked numeric conversion (WS-1.4)
+- xunit test classes that initialise the real engine share one `[Collection("RealEngine")]`; the engine runtime is process-wide, so parallel classes fail intermittently (WS-1.4)
+- Group Detection skips pairs whose current identities share a corporation; seeded test pilots need distinct corporation ids (WS-1.4)
