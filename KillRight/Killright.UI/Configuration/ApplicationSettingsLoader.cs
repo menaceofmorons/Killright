@@ -81,7 +81,7 @@ public static class ApplicationSettingsLoader
         if (nullSection is not null)
             return $"the {nullSection} section is null";
 
-        var retryCount = (settings.Network.Zkill ?? new ZkillSettings()).RetryCount;
+        var retryCount = (settings.Network?.Zkill ?? new ZkillSettings()).RetryCount;
 
         return retryCount < MinimumCount
             ? $"network.zkill.retryCount is {retryCount}, below the minimum {MinimumCount}"
@@ -96,9 +96,7 @@ public static class ApplicationSettingsLoader
             ("threat", settings.Threat),
             ("groupDetection", settings.GroupDetection),
             ("style", settings.Style),
-            ("timing", settings.Timing),
-            ("network", settings.Network),
-            ("database", settings.Database)
+            ("timing", settings.Timing)
         };
 
         return sections.FirstOrDefault(section => section.Value is null).Name;
@@ -123,8 +121,8 @@ public static class ApplicationSettingsLoader
             GroupDetection = settings.GroupDetection,
             Style = settings.Style,
             Timing = settings.Timing,
-            Network = settings.Network.Normalized(log),
-            Database = settings.Database.Normalized(log)
+            Network = (settings.Network ?? new NetworkSettings()).Normalized(log),
+            Database = (settings.Database ?? new DatabaseSettings()).Normalized(log)
         };
     }
 
