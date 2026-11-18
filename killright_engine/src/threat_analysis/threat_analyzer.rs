@@ -10,9 +10,6 @@ use crate::shared::recent_style_contract::{
 use crate::threat_analysis::threat_analysis_response::ThreatAnalysisResponse;
 use crate::threat_analysis::threat_configuration_models::*;
 
-const GENERAL_STYLE_LABEL_VICTIM: &str = "Vict";
-const GENERAL_STYLE_LABEL_INACTIVE: &str = "Inactive";
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum GateRule {
     NoData,
@@ -113,10 +110,7 @@ fn is_non_combat_recent_style(recent_style: &str) -> bool {
 }
 
 fn is_non_combat_general_style(general_style: &str) -> bool {
-    let label = general_style.trim();
-
-    label.eq_ignore_ascii_case(GENERAL_STYLE_LABEL_VICTIM)
-        || label.eq_ignore_ascii_case(GENERAL_STYLE_LABEL_INACTIVE)
+    matches!(general_style, STYLE_VICTIM | STYLE_INACTIVE)
 }
 
 fn ratio_cap(
@@ -448,17 +442,15 @@ pub(crate) fn calculate_security_modifier(
         .unwrap_or(0)
 }
 
-fn style_matches(actual: &str, expected: &str) -> bool {
-    actual
-        .trim()
-        .to_ascii_lowercase()
-        .contains(&expected.trim().to_ascii_lowercase())
+fn style_matches(actual_code: &str, configured_style: &str) -> bool {
+    actual_code == configured_style.trim().to_ascii_lowercase()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::contracts::RecentKillmailSnapshot;
+    use crate::shared::recent_style_contract::{STYLE_GANG_BEGINNER, STYLE_SOLO_BEGINNER};
     use chrono::TimeZone;
 
     fn configuration() -> ThreatConfiguration {
@@ -485,7 +477,7 @@ mod tests {
             avg_gang_size: 0.0,
             ships_lost,
             solo_losses: 0,
-            general_style: "Unknown".to_string(),
+            general_style: "unknown".to_string(),
             checked_at_utc: "2026-09-22T00:00:00Z".to_string(),
             no_history_marker,
         }
@@ -573,7 +565,7 @@ mod tests {
             None,
             now(),
             14,
-            "Inactive",
+            "inactive",
         );
 
         assert_eq!(result.score, 0);
@@ -592,7 +584,7 @@ mod tests {
             None,
             now(),
             14,
-            "Solo",
+            "solo",
         );
 
         assert_eq!(result.score, 0);
@@ -611,14 +603,14 @@ mod tests {
             calculate_loss_quality_score(&configuration.loss_quality, Some(&stats)),
             0
         );
-        assert_eq!(score(Some(&stats), &[], "Inactive"), 0);
+        assert_eq!(score(Some(&stats), &[], "inactive"), 0);
     }
 
     #[test]
     fn real_kill_history_returns_scored_result() {
         let stats = statistics(500, 50, false);
 
-        assert!(score(Some(&stats), &[], "Solo") > 0);
+        assert!(score(Some(&stats), &[], "solo") > 0);
     }
 
     #[test]
@@ -638,7 +630,7 @@ mod tests {
             Some(coverage_start),
             now(),
             14,
-            "Gang",
+            "gang",
         );
 
         assert_eq!(result.score, 2);
@@ -657,7 +649,7 @@ mod tests {
             Some(coverage_start),
             now(),
             14,
-            "Gang",
+            "gang",
         );
 
         assert_eq!(result.score, 10);
@@ -680,7 +672,7 @@ mod tests {
             Some(coverage_start),
             now(),
             14,
-            "Solo",
+            "solo",
         );
 
         assert_eq!(result.score, 1);
@@ -719,7 +711,7 @@ mod tests {
             Some(coverage_start),
             now(),
             14,
-            "Inactive",
+            "inactive",
         );
 
         assert_eq!(result.score, 0);
@@ -741,9 +733,9 @@ mod tests {
 
     #[test]
     fn general_victim_with_recent_inactive_victim_or_unknown_is_none() {
-        let stats = statistics_with_style(1, 42, "Vict");
+        let stats = statistics_with_style(1, 42, "victim");
 
-        for recent in ["Inactive", "Victim", "Unknown"] {
+        for recent in ["inactive", "victim", "unknown"] {
             assert_eq!(
                 score(Some(&stats), &busy_recent_killmails(), recent),
                 0,
@@ -754,16 +746,16 @@ mod tests {
 
     #[test]
     fn general_inactive_with_recent_inactive_is_none() {
-        let stats = statistics_with_style(0, 0, "Inactive");
+        let stats = statistics_with_style(0, 0, "inactive");
 
-        assert_eq!(score(Some(&stats), &busy_recent_killmails(), "Inactive"), 0);
+        assert_eq!(score(Some(&stats), &busy_recent_killmails(), "inactive"), 0);
     }
 
     #[test]
     fn general_victim_with_solo_recent_style_is_scored_capped_at_medium_and_never_none() {
-        let stats = statistics_with_style(500, 10, "Vict");
+        let stats = statistics_with_style(500, 10, "victim");
 
-        let value = score(Some(&stats), &busy_recent_killmails(), "Solo");
+        let value = score(Some(&stats), &busy_recent_killmails(), "solo");
 
         assert!(value >= 1);
         assert!(value <= 40);
@@ -771,17 +763,17 @@ mod tests {
 
     #[test]
     fn general_victim_style_cap_is_applied_to_a_high_raw_score() {
-        let capped = statistics_with_style(5000, 1, "Vict");
-        let uncapped = statistics_with_style(5000, 1, "Solo");
+        let capped = statistics_with_style(5000, 1, "victim");
+        let uncapped = statistics_with_style(5000, 1, "solo");
 
-        assert_eq!(score(Some(&capped), &busy_recent_killmails(), "Solo"), 40);
-        assert!(score(Some(&uncapped), &busy_recent_killmails(), "Solo") > 40);
+        assert_eq!(score(Some(&capped), &busy_recent_killmails(), "solo"), 40);
+        assert!(score(Some(&uncapped), &busy_recent_killmails(), "solo") > 40);
     }
 
     #[test]
     fn general_inactive_zero_statistics_with_gang_recent_style_scores_from_recent_activity_and_security_only(
     ) {
-        let stats = statistics_with_style(0, 0, "Inactive");
+        let stats = statistics_with_style(0, 0, "inactive");
         let killmails = busy_recent_killmails();
         let pilot = identity(Some(-6.0));
 
@@ -793,7 +785,7 @@ mod tests {
             Some(now() - chrono::Duration::days(1)),
             now(),
             14,
-            "Gang",
+            "gang",
         );
 
         assert_eq!(result.score, 15);
@@ -801,27 +793,27 @@ mod tests {
 
     #[test]
     fn floor_gives_one_for_a_combat_recent_style_that_computes_zero() {
-        let stats = statistics_with_style(0, 42, "Vict");
+        let stats = statistics_with_style(0, 42, "victim");
 
-        assert_eq!(score(Some(&stats), &[], "Solo"), 1);
-        assert_eq!(score(Some(&stats), &[], "Fleet"), 1);
+        assert_eq!(score(Some(&stats), &[], "solo"), 1);
+        assert_eq!(score(Some(&stats), &[], "fleet"), 1);
     }
 
     #[test]
     fn floor_is_not_applied_for_non_combat_recent_style_with_a_computed_zero() {
-        let stats = statistics_with_style(0, 5, "Unknown");
+        let stats = statistics_with_style(0, 5, "unknown");
 
-        assert_eq!(score(Some(&stats), &[], "Victim"), 0);
+        assert_eq!(score(Some(&stats), &[], "victim"), 0);
     }
 
     #[test]
     fn ratio_caps_follow_the_configured_thresholds() {
         let configuration = configuration();
-        let at_half = statistics_with_style(5000, 10000, "Solo");
-        let above_half = statistics_with_style(5100, 10000, "Solo");
-        let below_one = statistics_with_style(99, 100, "Solo");
-        let at_one = statistics_with_style(5000, 5000, "Solo");
-        let no_losses = statistics_with_style(5000, 0, "Solo");
+        let at_half = statistics_with_style(5000, 10000, "solo");
+        let above_half = statistics_with_style(5100, 10000, "solo");
+        let below_one = statistics_with_style(99, 100, "solo");
+        let at_one = statistics_with_style(5000, 5000, "solo");
+        let no_losses = statistics_with_style(5000, 0, "solo");
 
         assert_eq!(ratio_cap(&configuration.gating, &at_half), Some(40));
         assert_eq!(ratio_cap(&configuration.gating, &above_half), Some(60));
@@ -833,24 +825,24 @@ mod tests {
     #[test]
     fn high_volume_pilot_is_capped_by_ratio_and_uncapped_ratio_is_unchanged() {
         let killmails = busy_recent_killmails();
-        let half = statistics_with_style(5000, 10000, "Solo");
-        let above_half = statistics_with_style(10000, 19000, "Solo");
-        let even = statistics_with_style(10000, 10000, "Solo");
+        let half = statistics_with_style(5000, 10000, "solo");
+        let above_half = statistics_with_style(10000, 19000, "solo");
+        let even = statistics_with_style(10000, 10000, "solo");
 
-        assert_eq!(score(Some(&half), &killmails, "Solo"), 40);
-        assert_eq!(score(Some(&above_half), &killmails, "Solo"), 60);
-        assert!(score(Some(&even), &killmails, "Solo") > 60);
+        assert_eq!(score(Some(&half), &killmails, "solo"), 40);
+        assert_eq!(score(Some(&above_half), &killmails, "solo"), 60);
+        assert!(score(Some(&even), &killmails, "solo") > 60);
     }
 
     #[test]
     fn lowest_applicable_cap_wins() {
         let configuration = configuration();
-        let style_and_ratio = statistics_with_style(60, 100, "Vict");
-        let ratio_only = statistics_with_style(10, 100, "Solo");
+        let style_and_ratio = statistics_with_style(60, 100, "victim");
+        let ratio_only = statistics_with_style(10, 100, "solo");
 
         let first =
-            evaluate_threat_gate(&configuration.gating, Some(&style_and_ratio), &[], "Solo");
-        let second = evaluate_threat_gate(&configuration.gating, Some(&ratio_only), &[], "Solo");
+            evaluate_threat_gate(&configuration.gating, Some(&style_and_ratio), &[], "solo");
+        let second = evaluate_threat_gate(&configuration.gating, Some(&ratio_only), &[], "solo");
 
         assert_eq!(first.rule, GateRule::Capped);
         assert_eq!(first.cap, Some(40));
@@ -860,7 +852,7 @@ mod tests {
     #[test]
     fn low_volume_pilot_below_the_cap_is_unchanged() {
         let configuration = configuration();
-        let stats = statistics_with_style(10, 100, "Solo");
+        let stats = statistics_with_style(10, 100, "solo");
         let uncapped_total =
             calculate_historical_capability_score(
                 &configuration.historical_capability,
@@ -869,14 +861,14 @@ mod tests {
                 + calculate_loss_quality_score(&configuration.loss_quality, Some(&stats));
 
         assert!(uncapped_total < 40);
-        assert_eq!(score(Some(&stats), &[], "Solo"), uncapped_total);
+        assert_eq!(score(Some(&stats), &[], "solo"), uncapped_total);
     }
 
     #[test]
     fn statistics_missing_applies_no_general_style_or_ratio_gate() {
         let configuration = configuration();
         let killmails = vec![killmail(false)];
-        let gate = evaluate_threat_gate(&configuration.gating, None, &killmails, "Solo");
+        let gate = evaluate_threat_gate(&configuration.gating, None, &killmails, "solo");
 
         assert_eq!(gate.rule, GateRule::Uncapped);
         assert_eq!(gate.cap, None);
@@ -921,6 +913,96 @@ mod tests {
         assert_eq!(
             calculate_security_modifier(&configuration.security_status, Some(&pilot)),
             0
+        );
+    }
+
+    const ALL_STYLE_CODES: [&str; 9] = [
+        STYLE_UNKNOWN,
+        STYLE_INACTIVE,
+        STYLE_VICTIM,
+        STYLE_SOLO,
+        STYLE_SOLO_BEGINNER,
+        STYLE_GANG,
+        STYLE_GANG_BEGINNER,
+        STYLE_BLOB,
+        STYLE_FLEET,
+    ];
+
+    #[test]
+    fn gate_for_every_general_and_recent_style_code_combination() {
+        let configuration = configuration();
+
+        for general in ALL_STYLE_CODES {
+            for recent in ALL_STYLE_CODES {
+                let stats = statistics_with_style(10, 5, general);
+                let gate = evaluate_threat_gate(&configuration.gating, Some(&stats), &[], recent);
+                let general_non_combat = general == STYLE_VICTIM || general == STYLE_INACTIVE;
+                let recent_non_combat =
+                    recent == STYLE_VICTIM || recent == STYLE_INACTIVE || recent == STYLE_UNKNOWN;
+                let label = format!("{general}/{recent}");
+
+                if general_non_combat && recent_non_combat {
+                    assert_eq!(gate.rule, GateRule::NonCombatNone, "{label}");
+                    assert_eq!(gate.cap, None, "{label}");
+                } else if general_non_combat {
+                    assert_eq!(gate.rule, GateRule::Capped, "{label}");
+                    assert_eq!(gate.cap, Some(configuration.gating.medium_cap), "{label}");
+                } else {
+                    assert_eq!(gate.rule, GateRule::Uncapped, "{label}");
+                    assert_eq!(gate.cap, None, "{label}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn display_text_is_not_a_style_code() {
+        let configuration = configuration();
+
+        for display in ["Vict", "Victim", "Inactive", "Solo", "Gang"] {
+            let stats = statistics_with_style(10, 5, display);
+            let gate = evaluate_threat_gate(&configuration.gating, Some(&stats), &[], STYLE_SOLO);
+
+            assert_eq!(gate.rule, GateRule::Uncapped, "{display}");
+        }
+    }
+
+    #[test]
+    fn solo_and_gang_beginners_receive_no_style_modifier() {
+        let configuration = configuration();
+        let modifier_score = |style: &str| {
+            let stats = statistics_with_style(100_000, 0, style);
+
+            calculate_historical_capability_score(
+                &configuration.historical_capability,
+                Some(&stats),
+            )
+        };
+        let baseline = modifier_score(STYLE_UNKNOWN);
+
+        assert!(modifier_score(STYLE_SOLO) > baseline);
+        assert!(modifier_score(STYLE_GANG) > baseline);
+        assert_eq!(modifier_score(STYLE_SOLO_BEGINNER), baseline);
+        assert_eq!(modifier_score(STYLE_GANG_BEGINNER), baseline);
+    }
+
+    #[test]
+    fn beginner_styles_use_the_default_loss_quality_bands() {
+        let configuration = configuration();
+        let loss_quality = |style: &str| {
+            let mut stats = statistics_with_style(100, 10, style);
+            stats.solo_losses = 10;
+
+            calculate_loss_quality_score(&configuration.loss_quality, Some(&stats))
+        };
+
+        assert_eq!(
+            loss_quality(STYLE_SOLO_BEGINNER),
+            loss_quality(STYLE_UNKNOWN)
+        );
+        assert_eq!(
+            loss_quality(STYLE_GANG_BEGINNER),
+            loss_quality(STYLE_UNKNOWN)
         );
     }
 }

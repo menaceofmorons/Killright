@@ -293,34 +293,12 @@ public sealed class RustRecentStyleClient
 
     private static StyleClassification MapRecentStyle(string? value)
     {
-        var normalized = value?.Trim();
-        return normalized switch
-        {
-            RecentStyleContract.Unknown => StyleClassification.Unknown,
-            RecentStyleContract.Inactive => StyleClassification.Inactive,
-            RecentStyleContract.Victim => StyleClassification.Victim,
-            RecentStyleContract.Solo => StyleClassification.Solo,
-            RecentStyleContract.Gang => StyleClassification.Gang,
-            RecentStyleContract.Blob => StyleClassification.Blob,
-            RecentStyleContract.Fleet => StyleClassification.Fleet,
-            _ => StyleClassification.Unknown
-        };
+        return StyleCodes.TryFromCode(value, out var style) ? style : StyleClassification.Unknown;
     }
 
     private string MapThreatScore(int? score)
     {
         return ThreatBandMapper.MapScore(score, _threatBands);
-    }
-
-    private static class RecentStyleContract
-    {
-        public const string Unknown = "Unknown";
-        public const string Inactive = "Inactive";
-        public const string Victim = "Victim";
-        public const string Solo = "Solo";
-        public const string Gang = "Gang";
-        public const string Blob = "Blob";
-        public const string Fleet = "Fleet";
     }
 
     private sealed record PilotAnalysisRequest(

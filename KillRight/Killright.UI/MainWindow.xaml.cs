@@ -31,7 +31,6 @@ using Killright.UI.MenuModal;
 using Killright.UI.Resources;
 using Killright.UI.Scan;
 using Killright.UI.Shortcuts;
-using Killright.UI.Style;
 using Killright.UI.Theme;
 using Killright.UI.UiState;
 using Killright.UI.ViewModels;
@@ -1256,7 +1255,7 @@ public partial class MainWindow : Window
 
         try
         {
-            var style = StyleDisplayFormatter.Format(GeneralStyleClassifier.Classify(statistics).Classification);
+            var style = StyleCodes.ToCode(GeneralStyleClassifier.Classify(statistics).Classification);
 
             writes.AddStatistics(new PendingStatistics(
                 characterId,

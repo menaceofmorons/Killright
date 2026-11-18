@@ -136,7 +136,7 @@ mod tests {
             avg_gang_size: 0.0,
             ships_lost,
             solo_losses: 0,
-            general_style: "Unknown".to_string(),
+            general_style: "unknown".to_string(),
             checked_at_utc: "2026-09-22T00:00:00Z".to_string(),
             no_history_marker,
         }
@@ -171,7 +171,7 @@ mod tests {
             None,
             now(),
             14,
-            "Solo",
+            "solo",
         );
 
         assert_eq!(diagnostics.score, 0);
@@ -193,7 +193,7 @@ mod tests {
             None,
             now(),
             14,
-            "Solo",
+            "solo",
         );
 
         let expected_score = (diagnostics.historical_capability as f64
@@ -224,7 +224,7 @@ mod tests {
             Some(coverage_start),
             now(),
             14,
-            "Solo",
+            "solo",
         );
 
         assert!(diagnostics.coverage_start_present);
@@ -246,7 +246,7 @@ mod tests {
             None,
             now(),
             14,
-            "Solo",
+            "solo",
         );
 
         assert!(!diagnostics.coverage_start_present);
@@ -265,7 +265,7 @@ mod tests {
 
     #[test]
     fn non_combat_gate_reports_rule_and_zeroed_components() {
-        let stats = statistics_with_style(1, 42, "Vict");
+        let stats = statistics_with_style(1, 42, "victim");
 
         let diagnostics = analyze_intrinsic_threat_diagnostics(
             &configuration(),
@@ -275,7 +275,7 @@ mod tests {
             None,
             now(),
             14,
-            "Inactive",
+            "inactive",
         );
 
         assert_eq!(diagnostics.score, 0);
@@ -296,7 +296,7 @@ mod tests {
             None,
             now(),
             14,
-            "Solo",
+            "solo",
         );
 
         assert_eq!(diagnostics.gate_rule, "no_data");
@@ -304,7 +304,7 @@ mod tests {
 
     #[test]
     fn capped_gate_reports_cap_and_matches_the_analyzer_score() {
-        let stats = statistics_with_style(5000, 10000, "Solo");
+        let stats = statistics_with_style(5000, 10000, "solo");
         let killmails: Vec<RecentKillmailSnapshot> = (0..20)
             .map(|_| killmail_at(false, "2026-09-21T12:00:00Z"))
             .collect();
@@ -318,7 +318,7 @@ mod tests {
             coverage_start,
             now(),
             14,
-            "Solo",
+            "solo",
         );
         let analyzed = crate::threat_analysis::threat_analyzer::analyze_intrinsic_threat(
             &configuration(),
@@ -328,7 +328,7 @@ mod tests {
             coverage_start,
             now(),
             14,
-            "Solo",
+            "solo",
         );
 
         assert_eq!(diagnostics.gate_rule, "capped");
@@ -339,7 +339,7 @@ mod tests {
 
     #[test]
     fn floor_applied_is_reported() {
-        let stats = statistics_with_style(0, 42, "Vict");
+        let stats = statistics_with_style(0, 42, "victim");
 
         let diagnostics = analyze_intrinsic_threat_diagnostics(
             &configuration(),
@@ -349,7 +349,7 @@ mod tests {
             None,
             now(),
             14,
-            "Gang",
+            "gang",
         );
 
         assert_eq!(diagnostics.score, 1);

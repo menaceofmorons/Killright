@@ -86,7 +86,7 @@ public sealed class EngineInputReaderSnapshotTests
             INSERT INTO main.zkill_killmail_attackers (killmail_id, character_id, corporation_id, alliance_id, ship_type_id) VALUES
                 (1, {Lukas}, 98000001, NULL, 11567);
             INSERT INTO main.zkill_statistics_cache (character_id, ships_destroyed, solo_kills, solo_ratio, avg_gang_size, ships_lost, solo_losses, general_style, checked_at_utc) VALUES
-                ({Lukas}, 100, 20, 0.25, 4.5, 10, 1, 'Gang', 1789862400);
+                ({Lukas}, 100, 20, 0.25, 4.5, 10, 1, 'gang', 1789862400);
             INSERT INTO main.pilot_identity_cache (input_name, character_id, character_name, verify_status, security_status, corporation_id, corporation_name, corporation_ticker, alliance_id, alliance_name, alliance_ticker, cached_at_utc) VALUES
                 ('Lukas Naarii', {Lukas}, 'Lukas Naarii', 'Verified', 1.2, 98000001, 'Corp One', 'ONE', NULL, NULL, NULL, 1789862400);
             INSERT INTO main.zkill_activity_cache (character_id, has_public_activity_data, checked_at_utc, recent_coverage_start_utc) VALUES

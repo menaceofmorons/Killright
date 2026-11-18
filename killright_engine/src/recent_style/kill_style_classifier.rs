@@ -60,6 +60,29 @@ mod tests {
     }
 
     #[test]
+    fn results_carry_lower_case_codes() {
+        let configuration = style_configuration();
+
+        assert_eq!(classify_kill_style(&[], &configuration), "unknown");
+        assert_eq!(
+            classify_kill_style(&[kill(1, true)], &configuration),
+            "solo"
+        );
+        assert_eq!(
+            classify_kill_style(&[kill(3, false)], &configuration),
+            "gang"
+        );
+        assert_eq!(
+            classify_kill_style(&[kill(6, false)], &configuration),
+            "blob"
+        );
+        assert_eq!(
+            classify_kill_style(&[kill(12, false)], &configuration),
+            "fleet"
+        );
+    }
+
+    #[test]
     fn solo_heavy_kills_return_solo() {
         let result = classify_kill_style(
             &[kill(1, true), kill(1, true), kill(3, false)],

@@ -1,7 +1,9 @@
-pub const STYLE_UNKNOWN: &str = "Unknown";
-pub const STYLE_INACTIVE: &str = "Inactive";
-pub const STYLE_VICTIM: &str = "Victim";
-pub const STYLE_SOLO: &str = "Solo";
-pub const STYLE_GANG: &str = "Gang";
-pub const STYLE_BLOB: &str = "Blob";
-pub const STYLE_FLEET: &str = "Fleet";
+pub const STYLE_UNKNOWN: &str = "unknown";
+pub const STYLE_INACTIVE: &str = "inactive";
+pub const STYLE_VICTIM: &str = "victim";
+pub const STYLE_SOLO: &str = "solo";
+pub const STYLE_SOLO_BEGINNER: &str = "solo_beginner";
+pub const STYLE_GANG: &str = "gang";
+pub const STYLE_GANG_BEGINNER: &str = "gang_beginner";
+pub const STYLE_BLOB: &str = "blob";
+pub const STYLE_FLEET: &str = "fleet";
