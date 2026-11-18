@@ -244,8 +244,6 @@ public sealed class ApplicationSettingsLoaderTests
     [InlineData("groupDetection")]
     [InlineData("style")]
     [InlineData("timing")]
-    [InlineData("network")]
-    [InlineData("database")]
     public void Load_ExplicitNullSection_FailsWithNoSettings(string section)
     {
         var path = TempPath();
@@ -258,6 +256,30 @@ public sealed class ApplicationSettingsLoaderTests
             Assert.False(result.Succeeded);
             Assert.Null(result.Settings);
             Assert.Contains(section, result.Failure);
+        }
+        finally
+        {
+            System.IO.File.Delete(path);
+        }
+    }
+
+    [Theory]
+    [InlineData("network", "network.esiMaxConcurrency")]
+    [InlineData("database", "database.busyTimeoutSeconds")]
+    public void Load_ExplicitNullNetworkOrDatabase_UsesDefaultsAndLogs(string section, string loggedKey)
+    {
+        var path = TempPath();
+        System.IO.File.WriteAllText(path, $"{{ \"{section}\": null }}");
+        var log = new List<string>();
+
+        try
+        {
+            var result = ApplicationSettingsLoader.Load(path, log.Add);
+
+            Assert.True(result.Succeeded);
+            Assert.NotNull(result.Settings!.Network);
+            Assert.NotNull(result.Settings.Database);
+            Assert.Contains(log, line => line.Contains(loggedKey));
         }
         finally
         {
