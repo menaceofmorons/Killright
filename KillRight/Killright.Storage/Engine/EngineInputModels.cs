@@ -26,8 +26,7 @@ public sealed record EngineStatisticsRow(
     [property: JsonPropertyName("solo_losses")] int SoloLosses,
     [property: JsonPropertyName("general_style")] string GeneralStyle,
     [property: JsonPropertyName("checked_at_utc")] string CheckedAtUtc,
-    [property: JsonPropertyName("no_history_marker")] bool NoHistoryMarker,
-    [property: JsonPropertyName("pod_losses")] int PodLosses);
+    [property: JsonPropertyName("no_history_marker")] bool NoHistoryMarker);
 
 public sealed record EngineIdentityRow(
     [property: JsonPropertyName("input_name")] string InputName,

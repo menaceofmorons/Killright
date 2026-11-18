@@ -341,7 +341,7 @@ public sealed class EngineInputReader : IEngineInputReader
         using var command = CreateCommand(transaction);
         command.CommandText = $"""
                                SELECT character_id, ships_destroyed, solo_kills, solo_ratio, avg_gang_size, ships_lost,
-                                      solo_losses, general_style, checked_at_utc, no_history_marker, pod_losses
+                                      solo_losses, general_style, checked_at_utc, no_history_marker, pod_kills, pod_losses
                                FROM main.zkill_statistics_cache
                                WHERE character_id IN ({IdList(command, characterIds)});
                                """;
@@ -352,16 +352,15 @@ public sealed class EngineInputReader : IEngineInputReader
         {
             var row = new EngineStatisticsRow(
                 CharacterId: reader.GetInt64(0),
-                ShipsDestroyed: reader.GetInt32(1),
+                ShipsDestroyed: Math.Max(0, reader.GetInt32(1) - (reader.GetNullableInt32(10) ?? 0)),
                 SoloKills: reader.GetInt32(2),
                 SoloRatio: reader.GetDouble(3),
                 AvgGangSize: reader.GetDouble(4),
-                ShipsLost: reader.GetInt32(5),
+                ShipsLost: Math.Max(0, reader.GetInt32(5) - (reader.GetNullableInt32(11) ?? 0)),
                 SoloLosses: reader.GetInt32(6),
                 GeneralStyle: reader.GetString(7),
                 CheckedAtUtc: FormatEngineTime(reader.GetUtcDateTimeOffset(8)),
-                NoHistoryMarker: reader.GetNullableBoolean(9) ?? false,
-                PodLosses: reader.GetNullableInt32(10) ?? 0);
+                NoHistoryMarker: reader.GetNullableBoolean(9) ?? false);
 
             results[row.CharacterId] = row;
         }

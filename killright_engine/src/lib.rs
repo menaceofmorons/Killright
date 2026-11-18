@@ -44,7 +44,7 @@ struct RuntimeState {
     style_configuration: StyleConfiguration,
 }
 static RUNTIME: OnceLock<Mutex<Option<RuntimeState>>> = OnceLock::new();
-pub const ENGINE_CONTRACT_VERSION: u32 = 1;
+pub const ENGINE_CONTRACT_VERSION: u32 = 2;
 const FAILURE_SETTINGS: &str = "settings_failure";
 const FAILURE_INITIALIZE: &str = "initialize_failure";
 const FAILURE_INTERNAL: &str = "internal_error";
@@ -994,7 +994,6 @@ mod tests {
                     general_style: "Gang".to_string(),
                     checked_at_utc: recent.clone(),
                     no_history_marker: false,
-                    pod_losses: 0,
                 }),
                 identity: Some(fixture_identity(LUKAS, "Lukas Naarii", 98000001, None)),
                 coverage_start_utc: Some(old.clone()),
