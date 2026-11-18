@@ -44,11 +44,31 @@ public sealed class DatabaseSettingsTests
     }
 
     [Fact]
-    public void Load_NonPositiveValues_FallBackToDefaults()
+    public void Load_NonPositiveValues_AreSetToTheMinimumAndLogged()
     {
-        var settings = LoadJson("{ \"database\": { \"busyTimeoutSeconds\": 0, \"pageCacheMegabytes\": -1, \"idleCheckpointSeconds\": -5 } }");
+        var log = new List<string>();
+
+        var settings = LoadJson("{ \"database\": { \"busyTimeoutSeconds\": 0, \"pageCacheMegabytes\": -1, \"idleCheckpointSeconds\": -5 } }", log);
+
+        Assert.Equal(1, settings.Database.BusyTimeoutSeconds);
+        Assert.Equal(1, settings.Database.PageCacheMegabytes);
+        Assert.Equal(1, settings.Database.IdleCheckpointSeconds);
+        Assert.Contains("Setting 'database.busyTimeoutSeconds' read as 0; using 1 (below the minimum of 1).", log);
+        Assert.Contains("Setting 'database.pageCacheMegabytes' read as -1; using 1 (below the minimum of 1).", log);
+        Assert.Contains("Setting 'database.idleCheckpointSeconds' read as -5; using 1 (below the minimum of 1).", log);
+    }
+
+    [Fact]
+    public void Load_MissingDatabaseValues_TakeDefaultsAndAreLogged()
+    {
+        var log = new List<string>();
+
+        var settings = LoadJson("{ }", log);
 
         Assert.Equal(new DatabaseSettings(), settings.Database);
+        Assert.Contains("Setting 'database.busyTimeoutSeconds' read as missing; using the default 5.", log);
+        Assert.Contains("Setting 'database.pageCacheMegabytes' read as missing; using the default 64.", log);
+        Assert.Contains("Setting 'database.idleCheckpointSeconds' read as missing; using the default 30.", log);
     }
 
     [Fact]
@@ -56,7 +76,7 @@ public sealed class DatabaseSettingsTests
     {
         var settings = LoadJson("{ \"database\": { \"busyTimeoutSeconds\": 0, \"pageCacheMegabytes\": 32, \"idleCheckpointSeconds\": 45 } }");
 
-        Assert.Equal(5, settings.Database.BusyTimeoutSeconds);
+        Assert.Equal(1, settings.Database.BusyTimeoutSeconds);
         Assert.Equal(32, settings.Database.PageCacheMegabytes);
         Assert.Equal(45, settings.Database.IdleCheckpointSeconds);
     }
@@ -81,14 +101,14 @@ public sealed class DatabaseSettingsTests
         Assert.Equal(12, settings.Database.IdleCheckpointSeconds);
     }
 
-    private static ApplicationSettings LoadJson(string json)
+    private static ApplicationSettings LoadJson(string json, List<string>? log = null)
     {
         var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"killright-settings-{Guid.NewGuid():N}.json");
         System.IO.File.WriteAllText(path, json);
 
         try
         {
-            return ApplicationSettingsLoader.Load(path).Settings!;
+            return ApplicationSettingsLoader.Load(path, log is null ? null : log.Add).Settings!;
         }
         finally
         {

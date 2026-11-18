@@ -1,6 +1,7 @@
 ﻿using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Killright.Storage.Database;
 
 namespace Killright.UI.Configuration;
 
@@ -34,7 +35,7 @@ public static class ApplicationSettingsLoader
         return Path.Combine(AppContext.BaseDirectory, "config", "settings.json");
     }
 
-    public static SettingsLoadResult Load(string? settingsPath = null)
+    public static SettingsLoadResult Load(string? settingsPath = null, Action<string>? log = null)
     {
         var path = settingsPath ?? GetDefaultSettingsPath();
 
@@ -69,7 +70,7 @@ public static class ApplicationSettingsLoader
         var problem = Validate(settings);
 
         return problem is null
-            ? SettingsLoadResult.Success(Normalize(settings))
+            ? SettingsLoadResult.Success(Normalize(settings, json, log ?? (_ => { })))
             : SettingsLoadResult.Failed($"The settings file at '{path}' has an invalid value: {problem}.");
     }
 
@@ -91,8 +92,6 @@ public static class ApplicationSettingsLoader
     {
         var sections = new (string Name, object? Value)[]
         {
-            ("threatBands", settings.ThreatBands),
-            ("relationshipConfidenceBands", settings.RelationshipConfidenceBands),
             ("sde", settings.Sde),
             ("threat", settings.Threat),
             ("groupDetection", settings.GroupDetection),
@@ -105,33 +104,70 @@ public static class ApplicationSettingsLoader
         return sections.FirstOrDefault(section => section.Value is null).Name;
     }
 
-    private static ApplicationSettings Normalize(ApplicationSettings settings)
+    private static ApplicationSettings Normalize(ApplicationSettings settings, string json, Action<string> log)
     {
-        var qualificationFleetThreshold = settings.QualificationFleetThreshold >= MinimumQualificationFleetThreshold
-            ? settings.QualificationFleetThreshold
-            : DefaultQualificationFleetThreshold;
+        using (var document = JsonDocument.Parse(json))
+            LogMissingSettings(document.RootElement, log);
 
-        var network = settings.Network.Normalized();
-        var database = settings.Database.Normalized();
-
-        return qualificationFleetThreshold == settings.QualificationFleetThreshold && network == settings.Network && database == settings.Database
-            ? settings
-            : new ApplicationSettings
-            {
-                RecentWindowDays = settings.RecentWindowDays,
-                BackupFolder = settings.BackupFolder,
-                BackupRotationCount = settings.BackupRotationCount,
-                ThreatBands = settings.ThreatBands,
-                RelationshipConfidenceBands = settings.RelationshipConfidenceBands,
-                HighlightOpacity = settings.HighlightOpacity,
-                QualificationFleetThreshold = qualificationFleetThreshold,
-                Sde = settings.Sde,
-                Threat = settings.Threat,
-                GroupDetection = settings.GroupDetection,
-                Style = settings.Style,
-                Timing = settings.Timing,
-                Network = network,
-                Database = database
-            };
+        return new ApplicationSettings
+        {
+            RecentWindowDays = settings.RecentWindowDays,
+            BackupFolder = settings.BackupFolder,
+            BackupRotationCount = settings.BackupRotationCount,
+            ThreatBands = ThreatBandSetting.ValidateOrDefault(settings.ThreatBands, log),
+            RelationshipConfidenceBands = RelationshipConfidenceBandSetting.ValidateOrDefault(settings.RelationshipConfidenceBands, log),
+            HighlightOpacity = settings.HighlightOpacity,
+            QualificationFleetThreshold = SettingsAdjustment.Limit("qualificationFleetThreshold", settings.QualificationFleetThreshold, MinimumQualificationFleetThreshold, null, log),
+            Sde = settings.Sde,
+            Threat = settings.Threat,
+            GroupDetection = settings.GroupDetection,
+            Style = settings.Style,
+            Timing = settings.Timing,
+            Network = settings.Network.Normalized(log),
+            Database = settings.Database.Normalized(log)
+        };
     }
+
+    private static void LogMissingSettings(JsonElement root, Action<string> log)
+    {
+        foreach (var (path, defaultText) in DefaultedSettings)
+        {
+            if (!IsPresent(root, path.Split('.')))
+                SettingsAdjustment.LogMissing(path, defaultText, log);
+        }
+
+        foreach (var bandsName in new[] { "threatBands", "relationshipConfidenceBands" })
+        {
+            if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty(bandsName, out _))
+                log($"Setting '{bandsName}' read as missing; using the built-in bands.");
+        }
+    }
+
+    private static bool IsPresent(JsonElement root, string[] path)
+    {
+        var current = root;
+
+        foreach (var segment in path)
+        {
+            if (current.ValueKind != JsonValueKind.Object || !current.TryGetProperty(segment, out current))
+                return false;
+        }
+
+        return current.ValueKind != JsonValueKind.Null;
+    }
+
+    private static readonly (string Path, string DefaultText)[] DefaultedSettings =
+    {
+        ("qualificationFleetThreshold", DefaultQualificationFleetThreshold.ToString()),
+        ("network.esiMaxConcurrency", NetworkSettings.DefaultEsiMaxConcurrency.ToString()),
+        ("network.zkill.requestBudget", ZkillSettings.DefaultRequestBudget.ToString()),
+        ("network.zkill.budgetWindowSeconds", ZkillSettings.DefaultBudgetWindowSeconds.ToString()),
+        ("network.zkill.maxConcurrency", ZkillSettings.DefaultMaxConcurrency.ToString()),
+        ("network.zkill.requestTimeoutSeconds", ZkillSettings.DefaultRequestTimeoutSeconds.ToString()),
+        ("network.zkill.retryCount", ZkillSettings.DefaultRetryCount.ToString()),
+        ("network.zkill.rateLimitPauseSeconds", ZkillSettings.DefaultRateLimitPauseSeconds.ToString()),
+        ("database.busyTimeoutSeconds", KillRightDatabaseOptions.DefaultBusyTimeoutSeconds.ToString()),
+        ("database.pageCacheMegabytes", KillRightDatabaseOptions.DefaultPageCacheMegabytes.ToString()),
+        ("database.idleCheckpointSeconds", KillRightDatabaseOptions.DefaultIdleCheckpointSeconds.ToString())
+    };
 }

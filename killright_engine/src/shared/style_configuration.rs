@@ -10,6 +10,8 @@ pub struct StyleConfiguration {
     pub podder_minimum_share_percent: f64,
     #[serde(rename = "podderMinimumKillCount")]
     pub podder_minimum_kill_count: i64,
+    #[serde(rename = "recentSoloSharePercent")]
+    pub recent_solo_share_percent: f64,
 }
 
 pub(crate) fn validate_style_configuration(
@@ -31,6 +33,15 @@ pub(crate) fn validate_style_configuration(
         ));
     }
 
+    if !(configuration.recent_solo_share_percent > 0.0
+        && configuration.recent_solo_share_percent <= 100.0)
+    {
+        return Err(format!(
+            "recentSoloSharePercent must be above 0 and at most 100; actual value was {}",
+            configuration.recent_solo_share_percent
+        ));
+    }
+
     Ok(())
 }
 
@@ -45,6 +56,7 @@ mod tests {
             fleet_minimum_average_attackers: 11.0,
             podder_minimum_share_percent: 35.0,
             podder_minimum_kill_count: 5,
+            recent_solo_share_percent: 60.0,
         };
 
         assert!(validate_style_configuration(&configuration).is_ok());
@@ -57,9 +69,28 @@ mod tests {
             fleet_minimum_average_attackers: 11.0,
             podder_minimum_share_percent: 35.0,
             podder_minimum_kill_count: 5,
+            recent_solo_share_percent: 60.0,
         };
 
         assert!(validate_style_configuration(&configuration).is_err());
+    }
+
+    #[test]
+    fn validate_style_configuration_rejects_recent_solo_share_outside_range() {
+        for share in [0.0, -1.0, 100.5, f64::NAN] {
+            let configuration = StyleConfiguration {
+                blob_minimum_average_attackers: 5.0,
+                fleet_minimum_average_attackers: 11.0,
+                podder_minimum_share_percent: 35.0,
+                podder_minimum_kill_count: 5,
+                recent_solo_share_percent: share,
+            };
+
+            assert!(
+                validate_style_configuration(&configuration).is_err(),
+                "{share}"
+            );
+        }
     }
 
     #[test]
@@ -69,6 +100,7 @@ mod tests {
             fleet_minimum_average_attackers: 11.0,
             podder_minimum_share_percent: 35.0,
             podder_minimum_kill_count: 5,
+            recent_solo_share_percent: 60.0,
         };
 
         assert!(validate_style_configuration(&configuration).is_err());

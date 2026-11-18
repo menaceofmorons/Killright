@@ -69,17 +69,59 @@ public sealed class NetworkSettingsTests
     [Theory]
     [InlineData(0)]
     [InlineData(-5)]
-    public void Load_NonPositiveValues_FallBackToDefaults(int value)
+    public void Load_NonPositiveValues_AreSetToTheirMinimumAndLogged(int value)
     {
+        var log = new List<string>();
+
         var settings = LoadJson(
-            $"{{ \"network\": {{ \"esiMaxConcurrency\": {value}, \"zkill\": {{ \"requestBudget\": {value}, \"budgetWindowSeconds\": {value}, \"maxConcurrency\": {value}, \"requestTimeoutSeconds\": {value}, \"retryCount\": 1, \"rateLimitPauseSeconds\": {value} }} }} }}");
+            $"{{ \"network\": {{ \"esiMaxConcurrency\": {value}, \"zkill\": {{ \"requestBudget\": {value}, \"budgetWindowSeconds\": {value}, \"maxConcurrency\": {value}, \"requestTimeoutSeconds\": {value}, \"retryCount\": 1, \"rateLimitPauseSeconds\": {value} }} }} }}",
+            log);
+
+        Assert.Equal(1, settings.Network.EsiMaxConcurrency);
+        Assert.Equal(1, settings.Network.Zkill.RequestBudget);
+        Assert.Equal(1, settings.Network.Zkill.BudgetWindowSeconds);
+        Assert.Equal(1, settings.Network.Zkill.MaxConcurrency);
+        Assert.Equal(1, settings.Network.Zkill.RequestTimeoutSeconds);
+        Assert.Equal(1, settings.Network.Zkill.RateLimitPauseSeconds);
+
+        foreach (var name in new[] { "network.esiMaxConcurrency", "network.zkill.requestBudget", "network.zkill.budgetWindowSeconds", "network.zkill.maxConcurrency", "network.zkill.requestTimeoutSeconds", "network.zkill.rateLimitPauseSeconds" })
+            Assert.Contains($"Setting '{name}' read as {value}; using 1 (below the minimum of 1).", log);
+    }
+
+    [Fact]
+    public void Load_MissingNetworkValues_TakeDefaultsAndAreLogged()
+    {
+        var log = new List<string>();
+
+        var settings = LoadJson("{ \"network\": { \"zkill\": null } }", log);
 
         Assert.Equal(NetworkSettings.DefaultEsiMaxConcurrency, settings.Network.EsiMaxConcurrency);
         Assert.Equal(ZkillSettings.DefaultRequestBudget, settings.Network.Zkill.RequestBudget);
-        Assert.Equal(ZkillSettings.DefaultBudgetWindowSeconds, settings.Network.Zkill.BudgetWindowSeconds);
-        Assert.Equal(ZkillSettings.DefaultMaxConcurrency, settings.Network.Zkill.MaxConcurrency);
-        Assert.Equal(ZkillSettings.DefaultRequestTimeoutSeconds, settings.Network.Zkill.RequestTimeoutSeconds);
-        Assert.Equal(ZkillSettings.DefaultRateLimitPauseSeconds, settings.Network.Zkill.RateLimitPauseSeconds);
+
+        foreach (var name in new[] { "network.esiMaxConcurrency", "network.zkill.requestBudget", "network.zkill.budgetWindowSeconds", "network.zkill.maxConcurrency", "network.zkill.requestTimeoutSeconds", "network.zkill.retryCount", "network.zkill.rateLimitPauseSeconds" })
+            Assert.Contains(log, line => line.StartsWith($"Setting '{name}' read as missing; using the default "));
+    }
+
+    [Fact]
+    public void Load_RequestBudgetAboveCap_IsLogged()
+    {
+        var log = new List<string>();
+
+        LoadJson("{ \"network\": { \"zkill\": { \"requestBudget\": 601 } } }", log);
+
+        Assert.Contains("Setting 'network.zkill.requestBudget' read as 601; using 600 (above the maximum of 600).", log);
+    }
+
+    [Fact]
+    public void Load_ValuesWithinLimits_LogNoAdjustment()
+    {
+        var log = new List<string>();
+
+        LoadJson(
+            "{ \"network\": { \"esiMaxConcurrency\": 4, \"zkill\": { \"requestBudget\": 300, \"budgetWindowSeconds\": 30, \"maxConcurrency\": 20, \"requestTimeoutSeconds\": 5, \"retryCount\": 2, \"rateLimitPauseSeconds\": 90 } } }",
+            log);
+
+        Assert.DoesNotContain(log, line => line.StartsWith("Setting 'network."));
     }
 
     [Theory]
@@ -169,23 +211,23 @@ public sealed class NetworkSettingsTests
         return System.IO.File.ReadAllText(System.IO.Path.Combine(directory!.FullName, "Killright.UI", fileName));
     }
 
-    private static ApplicationSettings LoadJson(string json)
+    private static ApplicationSettings LoadJson(string json, List<string>? log = null)
     {
-        var result = LoadResult(json);
+        var result = LoadResult(json, log);
 
         Assert.True(result.Succeeded, result.Failure);
 
         return result.Settings!;
     }
 
-    private static SettingsLoadResult LoadResult(string json)
+    private static SettingsLoadResult LoadResult(string json, List<string>? log = null)
     {
         var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"killright-settings-{Guid.NewGuid():N}.json");
         System.IO.File.WriteAllText(path, json);
 
         try
         {
-            return ApplicationSettingsLoader.Load(path);
+            return ApplicationSettingsLoader.Load(path, log is null ? null : log.Add);
         }
         finally
         {

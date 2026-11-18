@@ -130,7 +130,7 @@ mod tests {
                 },
                 "recentActivity": {"points": [{"dailyRate": 0.0, "score": 0.0}, {"dailyRate": 1.0, "score": 10.0}]},
                 "securityStatus": {"bands": [{"belowSecurityStatus": 0.0, "score": 1}]},
-                "gating": {"mediumCap": 40, "highCap": 60, "mediumRatioMaximum": 0.5, "highRatioBelow": 1.0, "floor": 1}
+                "gating": {"mediumCap": 40, "killLossCap1": 40, "highCap": 60, "mediumRatioMaximum": 0.5, "highRatioBelow": 1.0, "floor": 1}
             },
             "groupDetection": {
                 "minimumSharedEvents": 2,
@@ -142,7 +142,7 @@ mod tests {
                 "chainStrengthMaximum": 75,
                 "intermediaryBonus": {"perAdditional": 10, "maximum": 30}
             },
-            "style": {"blobMinimumAverageAttackers": 5, "fleetMinimumAverageAttackers": 11, "podderMinimumSharePercent": 35, "podderMinimumKillCount": 5}
+            "style": {"blobMinimumAverageAttackers": 5, "fleetMinimumAverageAttackers": 11, "podderMinimumSharePercent": 35, "podderMinimumKillCount": 5, "recentSoloSharePercent": 60}
         }"#
     }
 
@@ -325,6 +325,7 @@ mod tests {
 
         fs::remove_file(&path).unwrap();
         assert_eq!(settings.threat.gating.medium_cap, 40);
+        assert_eq!(settings.threat.gating.kill_loss_cap_1, 40);
         assert_eq!(settings.threat.gating.high_cap, 60);
         assert_eq!(settings.threat.gating.medium_ratio_maximum, 0.5);
         assert_eq!(settings.threat.gating.high_ratio_below, 1.0);
@@ -344,10 +345,129 @@ mod tests {
     fn load_engine_settings_from_path_rejects_caps_out_of_order() {
         assert!(load_with_replacement(
             "caps-order",
-            "\"mediumCap\": 40, \"highCap\": 60",
-            "\"mediumCap\": 60, \"highCap\": 40"
+            "\"killLossCap1\": 40, \"highCap\": 60",
+            "\"killLossCap1\": 60, \"highCap\": 40"
         )
         .is_err());
+    }
+
+    #[test]
+    fn load_engine_settings_from_path_keeps_medium_cap_and_kill_loss_cap_1_separate() {
+        let settings = load_with_replacement(
+            "separate-caps",
+            "\"mediumCap\": 40, \"killLossCap1\": 40",
+            "\"mediumCap\": 30, \"killLossCap1\": 45",
+        )
+        .unwrap();
+
+        assert_eq!(settings.threat.gating.medium_cap, 30);
+        assert_eq!(settings.threat.gating.kill_loss_cap_1, 45);
+    }
+
+    #[test]
+    fn load_engine_settings_from_path_rejects_missing_kill_loss_cap_1() {
+        assert!(load_with_replacement("no-cap-1", "\"killLossCap1\": 40, ", "").is_err());
+    }
+
+    #[test]
+    fn load_engine_settings_from_path_rejects_floor_above_kill_loss_cap_1() {
+        assert!(load_with_replacement(
+            "floor-above-cap-1",
+            "\"killLossCap1\": 40, \"highCap\": 60, \"mediumRatioMaximum\": 0.5, \"highRatioBelow\": 1.0, \"floor\": 1",
+            "\"killLossCap1\": 40, \"highCap\": 60, \"mediumRatioMaximum\": 0.5, \"highRatioBelow\": 1.0, \"floor\": 41"
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn load_engine_settings_from_path_rejects_band_scores_above_a_component_maximum() {
+        assert!(load_with_replacement(
+            "kill-volume-score",
+            "\"killVolumeBands\": [{\"maximumKills\": 0, \"score\": 0}]",
+            "\"killVolumeBands\": [{\"maximumKills\": 0, \"score\": 41}]"
+        )
+        .is_err());
+        assert!(load_with_replacement(
+            "survivability-score",
+            "\"ratios\": [{\"maximumRatio\": 1.0, \"score\": 8}]",
+            "\"ratios\": [{\"maximumRatio\": 1.0, \"score\": 26}]"
+        )
+        .is_err());
+        assert!(load_with_replacement(
+            "loss-quality-score",
+            "\"noLossesWithKillsScore\": 15",
+            "\"noLossesWithKillsScore\": 21"
+        )
+        .is_err());
+        assert!(load_with_replacement(
+            "security-score",
+            "\"belowSecurityStatus\": 0.0, \"score\": 1",
+            "\"belowSecurityStatus\": 0.0, \"score\": 6"
+        )
+        .is_err());
+        assert!(load_with_replacement(
+            "activity-score",
+            "{\"dailyRate\": 1.0, \"score\": 10.0}",
+            "{\"dailyRate\": 1.0, \"score\": 11.0}"
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn load_engine_settings_from_path_rejects_component_maxima_that_do_not_total_the_score_maximum()
+    {
+        let error = load_with_replacement(
+            "weights-total",
+            "\"historicalCapability\": {\"maximumScore\": 40}",
+            "\"historicalCapability\": {\"maximumScore\": 39}",
+        )
+        .err()
+        .unwrap();
+
+        assert!(error.contains("must total 100"), "{error}");
+    }
+
+    #[test]
+    fn load_engine_settings_from_path_reads_recent_solo_share() {
+        let settings = load_with_replacement(
+            "solo-share",
+            "\"recentSoloSharePercent\": 60",
+            "\"recentSoloSharePercent\": 75",
+        )
+        .unwrap();
+
+        assert_eq!(settings.style.recent_solo_share_percent, 75.0);
+    }
+
+    #[test]
+    fn load_engine_settings_from_path_rejects_missing_or_invalid_recent_solo_share() {
+        assert!(
+            load_with_replacement("no-solo-share", ", \"recentSoloSharePercent\": 60", "").is_err()
+        );
+        assert!(load_with_replacement(
+            "zero-solo-share",
+            "\"recentSoloSharePercent\": 60",
+            "\"recentSoloSharePercent\": 0"
+        )
+        .is_err());
+        assert!(load_with_replacement(
+            "huge-solo-share",
+            "\"recentSoloSharePercent\": 60",
+            "\"recentSoloSharePercent\": 101"
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn load_engine_settings_from_path_rejects_recent_window_below_one() {
+        for days in ["0", "-3"] {
+            assert!(load_with_replacement(
+                "window",
+                "\"recentWindowDays\": 14,",
+                &format!("\"recentWindowDays\": {days},")
+            )
+            .is_err());
+        }
     }
 
     #[test]
@@ -368,7 +488,7 @@ mod tests {
 
     #[test]
     fn load_engine_settings_from_path_rejects_missing_gating() {
-        let from = ",\n                \"gating\": {\"mediumCap\": 40, \"highCap\": 60, \"mediumRatioMaximum\": 0.5, \"highRatioBelow\": 1.0, \"floor\": 1}";
+        let from = ",\n                \"gating\": {\"mediumCap\": 40, \"killLossCap1\": 40, \"highCap\": 60, \"mediumRatioMaximum\": 0.5, \"highRatioBelow\": 1.0, \"floor\": 1}";
         let json = valid_settings_json().replace("\r\n", "\n");
         assert!(json.contains(from));
         let path = std::env::temp_dir().join(format!(
@@ -403,19 +523,11 @@ mod tests {
 
     #[test]
     fn load_engine_settings_from_path_rejects_invalid_style_boundaries() {
-        let path = std::env::temp_dir().join(format!(
-            "killright-settings-invalid-style-{}.json",
-            unique_suffix()
-        ));
-        let json = valid_settings_json().replace(
-            "\"style\": {\"blobMinimumAverageAttackers\": 5, \"fleetMinimumAverageAttackers\": 11, \"podderMinimumSharePercent\": 35, \"podderMinimumKillCount\": 5}",
-            "\"style\": {\"blobMinimumAverageAttackers\": 11, \"fleetMinimumAverageAttackers\": 11, \"podderMinimumSharePercent\": 35, \"podderMinimumKillCount\": 5}",
-        );
-        fs::write(&path, json).unwrap();
-
-        let result = load_engine_settings_from_path(&path);
-
-        fs::remove_file(&path).unwrap();
-        assert!(result.is_err());
+        assert!(load_with_replacement(
+            "invalid-style",
+            "\"blobMinimumAverageAttackers\": 5,",
+            "\"blobMinimumAverageAttackers\": 11,"
+        )
+        .is_err());
     }
 }

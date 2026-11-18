@@ -1,32 +1,9 @@
-use std::fs;
-use std::path::Path;
-
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct RecentWindowConfiguration {
     #[serde(rename = "recentWindowDays")]
     pub recent_window_days: i64,
-}
-
-pub fn load_recent_window_configuration(path: &Path) -> Result<RecentWindowConfiguration, String> {
-    let text = fs::read_to_string(path)
-        .map_err(|error| format!("failed to read {}: {}", path.display(), error))?;
-
-    let text = text.trim_start_matches('\u{feff}');
-
-    let configuration = serde_json::from_str::<RecentWindowConfiguration>(text)
-        .map_err(|error| format!("failed to parse {}: {}", path.display(), error))?;
-
-    validate_recent_window_configuration(&configuration).map_err(|error| {
-        format!(
-            "recent window configuration validation failed for {}: {}",
-            path.display(),
-            error
-        )
-    })?;
-
-    Ok(configuration)
 }
 
 pub(crate) fn validate_recent_window_configuration(
@@ -40,36 +17,4 @@ pub(crate) fn validate_recent_window_configuration(
     }
 
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::io::Write;
-
-    #[test]
-    fn load_recent_window_configuration_parses_valid_file() {
-        let mut path = std::env::temp_dir();
-        path.push(format!("recent-window-{}.json", std::process::id()));
-        let mut file = fs::File::create(&path).unwrap();
-        write!(file, r#"{{"recentWindowDays": 14}}"#).unwrap();
-
-        let configuration = load_recent_window_configuration(&path).unwrap();
-
-        fs::remove_file(&path).unwrap();
-        assert_eq!(configuration.recent_window_days, 14);
-    }
-
-    #[test]
-    fn load_recent_window_configuration_rejects_non_positive_window() {
-        let mut path = std::env::temp_dir();
-        path.push(format!("recent-window-invalid-{}.json", std::process::id()));
-        let mut file = fs::File::create(&path).unwrap();
-        write!(file, r#"{{"recentWindowDays": 0}}"#).unwrap();
-
-        let result = load_recent_window_configuration(&path);
-
-        fs::remove_file(&path).unwrap();
-        assert!(result.is_err());
-    }
 }
