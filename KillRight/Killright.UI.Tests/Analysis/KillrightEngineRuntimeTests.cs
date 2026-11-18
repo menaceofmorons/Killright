@@ -63,7 +63,7 @@ public sealed class KillrightEngineRuntimeTests
     [Fact]
     public void Constructor_ContractVersionMismatch_RefusesWithReasonAndReleasesHandle()
     {
-        var native = new FakeNativeLibrary { InitializeJson = "{\"success\":true,\"contract_version\":2}" };
+        var native = new FakeNativeLibrary { InitializeJson = "{\"success\":true,\"contract_version\":1}" };
         var log = new List<string>();
 
         using var runtime = new KillrightEngineRuntime("x.dll", "s.json", native, log.Add);
@@ -81,7 +81,7 @@ public sealed class KillrightEngineRuntimeTests
     {
         var native = new FakeNativeLibrary
         {
-            InitializeJson = "{\"success\":false,\"contract_version\":1,\"failure\":\"settings_failure\",\"failure_detail\":\"bad file\"}"
+            InitializeJson = "{\"success\":false,\"contract_version\":2,\"failure\":\"settings_failure\",\"failure_detail\":\"bad file\"}"
         };
         var log = new List<string>();
 
@@ -99,7 +99,7 @@ public sealed class KillrightEngineRuntimeTests
     {
         var native = new FakeNativeLibrary
         {
-            InitializeJson = "{\"success\":false,\"contract_version\":1,\"failure\":\"initialize_failure\",\"failure_detail\":\"boom\"}"
+            InitializeJson = "{\"success\":false,\"contract_version\":2,\"failure\":\"initialize_failure\",\"failure_detail\":\"boom\"}"
         };
 
         using var runtime = new KillrightEngineRuntime("x.dll", "s.json", native, _ => { });
@@ -186,7 +186,7 @@ public sealed class KillrightEngineRuntimeTests
 
         public string? MissingExport { get; init; }
 
-        public string InitializeJson { get; init; } = "{\"success\":true,\"contract_version\":1}";
+        public string InitializeJson { get; init; } = "{\"success\":true,\"contract_version\":2}";
 
         public string? CallResponseJson { get; init; } = "{\"character_id\":0}";
 

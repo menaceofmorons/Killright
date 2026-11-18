@@ -28,7 +28,7 @@ internal sealed class FakeEngineInputReader : IEngineInputReader
                 "2026-09-20T00:00:00+00:00")
         ],
         new EngineStatisticsRow(
-            characterId, 120, 30, 0.25, 4.0, 12, 2, "Gang", "2026-09-20T00:00:00+00:00", false, 0),
+            characterId, 120, 30, 0.25, 4.0, 12, 2, "Gang", "2026-09-20T00:00:00+00:00", false),
         new EngineIdentityRow(
             "LUKAS NAARII", characterId, "Lukas Naarii", "Partial", 1.5, 98000001, null, null, null, null, null,
             "2026-09-20T00:00:00+00:00"),

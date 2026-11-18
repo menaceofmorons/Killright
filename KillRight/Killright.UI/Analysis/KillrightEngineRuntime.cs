@@ -7,7 +7,7 @@ namespace Killright.UI.Analysis;
 
 public sealed class KillrightEngineRuntime : IKillrightEngineRuntime
 {
-    public const int ExpectedContractVersion = 1;
+    public const int ExpectedContractVersion = 2;
 
     private const string SettingsFailureCode = "settings_failure";
     private const string MissingRuntimeCode = "missing_runtime";

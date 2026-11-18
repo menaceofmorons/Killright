@@ -28,13 +28,6 @@ pub struct ZKillStatisticsSnapshot {
     pub general_style: String,
     pub checked_at_utc: String,
     pub no_history_marker: bool,
-    pub pod_losses: i32,
-}
-
-impl ZKillStatisticsSnapshot {
-    pub fn ship_losses(&self) -> i32 {
-        (self.ships_lost - self.pod_losses).max(0)
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]

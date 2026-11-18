@@ -73,11 +73,11 @@ public sealed class EngineInputReaderTests
         var results = await fixture.Reader.ReadPilotInputsAsync([Lukas, Tral, 5]);
 
         var lukas = results[0].Inputs!;
-        Assert.Equal(100, lukas.Statistics!.ShipsDestroyed);
+        Assert.Equal(93, lukas.Statistics!.ShipsDestroyed);
+        Assert.Equal(7, lukas.Statistics.ShipsLost);
         Assert.Equal(0.25, lukas.Statistics.SoloRatio);
         Assert.Equal("Gang", lukas.Statistics.GeneralStyle);
         Assert.False(lukas.Statistics.NoHistoryMarker);
-        Assert.Equal(3, lukas.Statistics.PodLosses);
         Assert.Equal("Lukas Naarii", lukas.Identity!.CharacterName);
         Assert.Equal(98000001, lukas.Identity.CorporationId);
         Assert.Null(lukas.Identity.AllianceId);
@@ -86,7 +86,8 @@ public sealed class EngineInputReaderTests
         Assert.Equal("2026-09-08T00:00:00.0000000Z", lukas.CoverageStartUtc);
 
         var tral = results[1].Inputs!;
-        Assert.Equal(0, tral.Statistics!.PodLosses);
+        Assert.Equal(5, tral.Statistics!.ShipsDestroyed);
+        Assert.Equal(1, tral.Statistics.ShipsLost);
         Assert.False(tral.Statistics.NoHistoryMarker);
         Assert.Equal(99000001, tral.Identity!.AllianceId);
         Assert.Null(tral.CoverageStartUtc);
@@ -279,8 +280,8 @@ public sealed class EngineInputReaderTests
             INSERT INTO main.zkill_killmail_attackers (killmail_id, character_id, corporation_id, alliance_id, ship_type_id) VALUES
                 (1, {Lukas}, 98000001, NULL, 11567),
                 (3, {Symptom}, 98000002, NULL, 11567);
-            INSERT INTO main.zkill_statistics_cache (character_id, ships_destroyed, solo_kills, solo_ratio, avg_gang_size, ships_lost, solo_losses, general_style, checked_at_utc, no_history_marker, pod_losses) VALUES
-                ({Lukas}, 100, 20, 0.25, 4.5, 10, 1, 'Gang', 1789862400, 0, 3);
+            INSERT INTO main.zkill_statistics_cache (character_id, ships_destroyed, solo_kills, solo_ratio, avg_gang_size, ships_lost, solo_losses, general_style, checked_at_utc, no_history_marker, pod_kills, pod_losses) VALUES
+                ({Lukas}, 100, 20, 0.25, 4.5, 10, 1, 'Gang', 1789862400, 0, 7, 3);
             INSERT INTO main.zkill_statistics_cache (character_id, ships_destroyed, solo_kills, solo_ratio, avg_gang_size, ships_lost, solo_losses, general_style, checked_at_utc) VALUES
                 ({Tral}, 5, 0, 0.0, 6.0, 1, 0, 'Fleet', 1789862400);
             INSERT INTO main.pilot_identity_cache (input_name, character_id, character_name, verify_status, security_status, corporation_id, corporation_name, corporation_ticker, alliance_id, alliance_name, alliance_ticker, cached_at_utc) VALUES
