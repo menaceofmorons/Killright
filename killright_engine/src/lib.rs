@@ -554,6 +554,22 @@ fn build_group_response(
             recent_window_configuration.recent_window_days,
         )
     };
+    let scored_relationships = match scored_relationships {
+        Ok(relationships) => relationships,
+        Err(reason) => {
+            return PilotAnalysisResponse {
+                character_id,
+                recent_style: None,
+                is_recent_podder: None,
+                threat: None,
+                group_detection: None,
+                derived_activity: None,
+                failure: Some(reason),
+                timings_ms: None,
+                timing_counts: None,
+            };
+        }
+    };
     if timing_recorder::is_active() {
         timing_recorder::add_count("direct_relationships", direct_relationships.len() as i64);
         timing_recorder::add_count("chain_relationships", chained_relationships.len() as i64);
@@ -602,7 +618,7 @@ fn diagnose_group_detection(
         .iter()
         .copied()
         .collect::<HashSet<i64>>();
-    let diagnostics = run_group_detection_diagnostics(
+    let diagnostics = match run_group_detection_diagnostics(
         &inputs.direct_evidence,
         &inputs.chain_evidence,
         &inputs.identities,
@@ -610,7 +626,10 @@ fn diagnose_group_detection(
         &npc_corporation_ids,
         recent_window_configuration.recent_window_days,
         Utc::now(),
-    );
+    ) {
+        Ok(diagnostics) => diagnostics,
+        Err(reason) => return failure(&reason),
+    };
 
     GroupDetectionDiagnosticsEnvelope {
         character_id: request.character_id,
@@ -1076,6 +1095,7 @@ mod tests {
                 "sampleFactor": { "minimum": 0.5, "maximum": 1.0, "saturatesAtCountedSharedKills": 10 },
                 "splitBonus": 20,
                 "chainDiscount": 0.75,
+                "chainStrengthMaximum": 75,
                 "intermediaryBonus": { "perAdditional": 10, "maximum": 30 }
             }"#,
         )

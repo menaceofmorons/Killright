@@ -44,6 +44,7 @@ const SETTINGS_TEMPLATE: &str = r#"{
         "sampleFactor": {"minimum": 0.5, "maximum": 1.0, "saturatesAtCountedSharedKills": 10},
         "splitBonus": 20,
         "chainDiscount": 0.75,
+        "chainStrengthMaximum": 75,
         "intermediaryBonus": {"perAdditional": 10, "maximum": 30}
     },
     "style": {"blobMinimumAverageAttackers": BLOB, "fleetMinimumAverageAttackers": 11, "podderMinimumSharePercent": 35, "podderMinimumKillCount": 5}

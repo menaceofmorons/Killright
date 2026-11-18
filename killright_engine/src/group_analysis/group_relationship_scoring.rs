@@ -35,7 +35,7 @@ pub fn score_and_select_relationships(
     chained_relationships: &[ChainedRelationship],
     configuration: &GroupDetectionConfiguration,
     recent_window_days: i64,
-) -> Vec<ScoredRelationship> {
+) -> Result<Vec<ScoredRelationship>, String> {
     let mut direct_by_pair: HashMap<(i64, i64), &DirectRelationship> = HashMap::new();
 
     for direct in direct_relationships {
@@ -64,24 +64,29 @@ pub fn score_and_select_relationships(
             best_chain_for_pair(candidates, configuration, recent_window_days)
         });
 
-        let direct_strength_raw = direct.map(|relationship| {
-            direct_strength(
-                relationship.counted_shared_kills,
-                configuration.minimum_shared_events,
-                configuration.strength_step,
-            )
-        });
+        let direct_strength_rounded = direct
+            .map(|relationship| {
+                round_to_integer(direct_strength(
+                    relationship.counted_shared_kills,
+                    configuration.minimum_shared_events,
+                    configuration.strength_step,
+                ))
+            })
+            .transpose()?;
 
-        let chain_wins = match (direct_strength_raw, &best_chain) {
-            (Some(direct_strength), Some((chain_strength, _, _))) => {
-                *chain_strength > direct_strength
-            }
+        let chain_strength_rounded = best_chain
+            .as_ref()
+            .map(|(chain_strength, _, _)| round_to_integer(*chain_strength))
+            .transpose()?;
+
+        let chain_wins = match (direct_strength_rounded, chain_strength_rounded) {
+            (Some(direct_strength), Some(chain_strength)) => chain_strength > direct_strength,
             (None, Some(_)) => true,
             _ => false,
         };
 
         if chain_wins {
-            let (chain_strength, chain_confidence, _winning_chain) =
+            let (_, chain_confidence, _winning_chain) =
                 best_chain.expect("chain_wins implies a winning chain");
             let intermediaries_in_scan = intermediaries_in_scan_for_pair(
                 chain_candidates.expect("chain_wins implies chain candidates exist"),
@@ -91,8 +96,8 @@ pub fn score_and_select_relationships(
                 pilot_a: pair.0,
                 pilot_b: pair.1,
                 link_type: RelationshipLinkType::Chain,
-                strength: round_to_integer(chain_strength),
-                confidence: round_to_integer(chain_confidence),
+                strength: chain_strength_rounded.expect("chain_wins implies a chain strength"),
+                confidence: round_to_integer(chain_confidence)?,
                 total_shared_kills: None,
                 last_shared_kill_time_utc: None,
                 intermediaries_in_scan: Some(intermediaries_in_scan),
@@ -110,8 +115,8 @@ pub fn score_and_select_relationships(
                 pilot_a: pair.0,
                 pilot_b: pair.1,
                 link_type: RelationshipLinkType::Direct,
-                strength: round_to_integer(direct_strength_raw.expect("direct present")),
-                confidence: round_to_integer(confidence),
+                strength: direct_strength_rounded.expect("direct present"),
+                confidence: round_to_integer(confidence)?,
                 total_shared_kills: Some(relationship.counted_shared_kills),
                 last_shared_kill_time_utc: Some(relationship.last_counted_kill_time_utc.clone()),
                 intermediaries_in_scan: None,
@@ -124,7 +129,7 @@ pub fn score_and_select_relationships(
             .cmp(&right.pilot_a)
             .then(left.pilot_b.cmp(&right.pilot_b))
     });
-    relationships
+    Ok(relationships)
 }
 
 fn best_chain_for_pair<'a>(
@@ -154,6 +159,7 @@ fn best_chain_for_pair<'a>(
             let strength = chain_strength(
                 weaker_strength,
                 configuration.chain_discount,
+                configuration.chain_strength_maximum,
                 chain.chain_age_days,
                 recent_window_days,
             );
@@ -296,13 +302,16 @@ pub(crate) fn sample_factor(
 pub(crate) fn chain_strength(
     weaker_link_strength: f64,
     chain_discount: f64,
+    chain_strength_maximum: f64,
     chain_age_days: f64,
     recent_window_days: i64,
 ) -> f64 {
     let window = recent_window_days.max(1) as f64;
     let age_decay = (1.0 - chain_age_days / window).max(0.0);
 
-    (weaker_link_strength * chain_discount * age_decay).clamp(0.0, 100.0)
+    (weaker_link_strength * chain_discount * age_decay)
+        .min(chain_strength_maximum)
+        .max(0.0)
 }
 
 pub(crate) fn intermediary_bonus(
@@ -325,8 +334,13 @@ pub(crate) fn chain_confidence(
     .min(100.0)
 }
 
-pub(crate) fn round_to_integer(value: f64) -> i32 {
-    value.max(0.0).trunc() as i32
+pub(crate) fn round_to_integer(value: f64) -> Result<i32, String> {
+    let truncated = value.max(0.0).trunc();
+    if !value.is_finite() || truncated > f64::from(i32::MAX) {
+        return Err(format!("value {value} does not fit a whole-number score"));
+    }
+    i32::try_from(truncated as i64)
+        .map_err(|_| format!("value {value} does not fit a whole-number score"))
 }
 
 #[cfg(test)]
@@ -365,6 +379,7 @@ mod tests {
             },
             split_bonus: 20,
             chain_discount: 0.75,
+            chain_strength_maximum: 75.0,
             intermediary_bonus: IntermediaryBonusConfiguration {
                 per_additional: 10,
                 maximum: 30,
@@ -418,53 +433,53 @@ mod tests {
     #[test]
     fn direct_confidence_duo_two_kills_two_to_three_attackers_is_fifty() {
         let confidence = direct_confidence(&[2, 3], false, 2, 2, &configuration());
-        assert_eq!(round_to_integer(confidence), 50);
+        assert_eq!(round_to_integer(confidence).unwrap(), 50);
     }
 
     #[test]
     fn direct_confidence_trio_ten_kills_two_to_three_attackers_is_one_hundred() {
         let confidence = direct_confidence(&[2; 10], false, 10, 2, &configuration());
-        assert_eq!(round_to_integer(confidence), 100);
+        assert_eq!(round_to_integer(confidence).unwrap(), 100);
     }
 
     #[test]
     fn direct_confidence_same_roam_ten_kills_eight_to_ten_attackers_is_twenty_five() {
         let confidence = direct_confidence(&[9; 10], false, 10, 2, &configuration());
-        assert_eq!(round_to_integer(confidence), 25);
+        assert_eq!(round_to_integer(confidence).unwrap(), 25);
     }
 
     #[test]
     fn direct_confidence_mixed_six_kills_half_four_to_five_half_eight_to_ten_is_thirty_seven() {
         let gang_sizes = vec![4, 4, 4, 9, 9, 9];
         let confidence = direct_confidence(&gang_sizes, false, 6, 2, &configuration());
-        assert_eq!(round_to_integer(confidence), 37);
+        assert_eq!(round_to_integer(confidence).unwrap(), 37);
     }
 
     #[test]
     fn direct_confidence_ex_corporation_pair_four_kills_four_to_five_attackers_split_is_sixty_six()
     {
         let confidence = direct_confidence(&[4, 4, 4, 4], true, 4, 2, &configuration());
-        assert_eq!(round_to_integer(confidence), 66);
+        assert_eq!(round_to_integer(confidence).unwrap(), 66);
     }
 
     #[test]
     fn direct_strength_at_minimum_is_ten() {
-        assert_eq!(round_to_integer(direct_strength(2, 2, 10)), 10);
+        assert_eq!(round_to_integer(direct_strength(2, 2, 10)).unwrap(), 10);
     }
 
     #[test]
     fn direct_strength_caps_at_one_hundred() {
-        assert_eq!(round_to_integer(direct_strength(20, 2, 10)), 100);
+        assert_eq!(round_to_integer(direct_strength(20, 2, 10)).unwrap(), 100);
     }
 
     #[test]
     fn chain_strength_at_zero_age_applies_only_discount() {
-        assert_eq!(chain_strength(100.0, 0.75, 0.0, 14), 75.0);
+        assert_eq!(chain_strength(100.0, 0.75, 75.0, 0.0, 14), 75.0);
     }
 
     #[test]
     fn chain_strength_decays_to_zero_at_window_end() {
-        assert_eq!(chain_strength(100.0, 0.75, 14.0, 14), 0.0);
+        assert_eq!(chain_strength(100.0, 0.75, 75.0, 14.0, 14), 0.0);
     }
 
     #[test]
@@ -472,7 +487,8 @@ mod tests {
         let direct_relationships = vec![direct(100, 200, 5, vec![3, 3, 3, 3, 3], false)];
 
         let relationships =
-            score_and_select_relationships(&direct_relationships, &[], &configuration(), 14);
+            score_and_select_relationships(&direct_relationships, &[], &configuration(), 14)
+                .unwrap();
 
         assert_eq!(relationships.len(), 1);
         assert_eq!(relationships[0].link_type, RelationshipLinkType::Direct);
@@ -486,7 +502,8 @@ mod tests {
         let chained_relationships = vec![chain(100, 300, 200, true, 11, vec![2; 11], 0.0)];
 
         let relationships =
-            score_and_select_relationships(&[], &chained_relationships, &configuration(), 14);
+            score_and_select_relationships(&[], &chained_relationships, &configuration(), 14)
+                .unwrap();
 
         assert_eq!(relationships.len(), 1);
         assert_eq!(relationships[0].link_type, RelationshipLinkType::Chain);
@@ -506,7 +523,8 @@ mod tests {
             &chained_relationships,
             &configuration(),
             14,
-        );
+        )
+        .unwrap();
 
         assert_eq!(relationships.len(), 1);
         assert_eq!(relationships[0].link_type, RelationshipLinkType::Chain);
@@ -522,7 +540,8 @@ mod tests {
             &chained_relationships,
             &configuration(),
             14,
-        );
+        )
+        .unwrap();
 
         assert_eq!(relationships.len(), 1);
         assert_eq!(relationships[0].link_type, RelationshipLinkType::Direct);
@@ -540,9 +559,65 @@ mod tests {
         ];
 
         let relationships =
-            score_and_select_relationships(&[], &chained_relationships, &configuration(), 14);
+            score_and_select_relationships(&[], &chained_relationships, &configuration(), 14)
+                .unwrap();
 
         assert_eq!(relationships.len(), 1);
         assert_eq!(relationships[0].confidence, 80);
+    }
+
+    #[test]
+    fn chain_that_rounds_down_to_the_direct_strength_reports_direct() {
+        let direct_relationships = vec![direct(100, 300, 5, vec![2; 5], false)];
+        let chained_relationships = vec![chain(100, 300, 200, false, 10, vec![2; 10], 5.6414)];
+
+        let relationships = score_and_select_relationships(
+            &direct_relationships,
+            &chained_relationships,
+            &configuration(),
+            14,
+        )
+        .unwrap();
+
+        assert_eq!(relationships.len(), 1);
+        assert_eq!(relationships[0].link_type, RelationshipLinkType::Direct);
+        assert_eq!(relationships[0].strength, 40);
+    }
+
+    #[test]
+    fn chain_whose_rounded_strength_exceeds_direct_reports_chain() {
+        let direct_relationships = vec![direct(100, 300, 5, vec![2; 5], false)];
+        let chained_relationships = vec![chain(100, 300, 200, false, 10, vec![2; 10], 5.0)];
+
+        let relationships = score_and_select_relationships(
+            &direct_relationships,
+            &chained_relationships,
+            &configuration(),
+            14,
+        )
+        .unwrap();
+
+        assert_eq!(relationships[0].link_type, RelationshipLinkType::Chain);
+        assert_eq!(relationships[0].strength, 43);
+    }
+
+    #[test]
+    fn chain_strength_never_exceeds_the_configured_maximum() {
+        let mut lowered = configuration();
+        lowered.chain_strength_maximum = 30.0;
+        let chained_relationships = vec![chain(100, 300, 200, true, 11, vec![2; 11], 0.0)];
+
+        let relationships =
+            score_and_select_relationships(&[], &chained_relationships, &lowered, 14).unwrap();
+
+        assert_eq!(relationships[0].strength, 30);
+    }
+
+    #[test]
+    fn round_to_integer_fails_with_a_reason_when_the_value_does_not_fit() {
+        assert!(round_to_integer(f64::from(i32::MAX) * 2.0).is_err());
+        assert!(round_to_integer(f64::NAN).is_err());
+        assert!(round_to_integer(f64::INFINITY).is_err());
+        assert_eq!(round_to_integer(40.9).unwrap(), 40);
     }
 }

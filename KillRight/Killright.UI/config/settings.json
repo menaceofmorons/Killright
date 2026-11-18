@@ -184,6 +184,7 @@
     },
     "splitBonus": 20,
     "chainDiscount": 0.75,
+    "chainStrengthMaximum": 75,
     "intermediaryBonus": {
       "perAdditional": 10,
       "maximum": 30
