@@ -122,6 +122,7 @@ pub(crate) const THREAT_CONFIGURATION_JSON: &str = r#"{
 
   "gating": {
     "mediumCap": 40,
+    "killLossCap1": 40,
     "highCap": 60,
     "mediumRatioMaximum": 0.5,
     "highRatioBelow": 1.0,

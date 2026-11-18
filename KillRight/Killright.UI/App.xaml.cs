@@ -78,7 +78,7 @@ public partial class App : Application
         _unobservedFailureSubscription = BackgroundFailureRecorder.Attach(EngineFailureLog.Record);
 
         var settingsPath = ApplicationSettingsLoader.GetDefaultSettingsPath();
-        var settingsResult = ApplicationSettingsLoader.Load(settingsPath);
+        var settingsResult = ApplicationSettingsLoader.Load(settingsPath, EngineFailureLog.Record);
 
         if (!settingsResult.Succeeded)
         {

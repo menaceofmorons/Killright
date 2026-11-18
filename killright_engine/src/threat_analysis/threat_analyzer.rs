@@ -8,6 +8,7 @@ use crate::shared::recent_style_contract::{
     STYLE_BLOB, STYLE_FLEET, STYLE_GANG, STYLE_INACTIVE, STYLE_SOLO, STYLE_UNKNOWN, STYLE_VICTIM,
 };
 use crate::threat_analysis::threat_analysis_response::ThreatAnalysisResponse;
+use crate::threat_analysis::threat_configuration_loader::THREAT_SCORE_MAXIMUM;
 use crate::threat_analysis::threat_configuration_models::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -43,6 +44,7 @@ pub fn analyze_intrinsic_threat(
     configuration: &ThreatConfiguration,
     statistics: Option<&ZKillStatisticsSnapshot>,
     recent_killmails: &[RecentKillmailSnapshot],
+    has_cached_killmails: bool,
     identity: Option<&PilotIdentitySnapshot>,
     coverage_start_utc: Option<DateTime<Utc>>,
     now: DateTime<Utc>,
@@ -52,7 +54,7 @@ pub fn analyze_intrinsic_threat(
     let gate = evaluate_threat_gate(
         &configuration.gating,
         statistics,
-        recent_killmails,
+        has_cached_killmails,
         recent_style,
     );
 
@@ -60,40 +62,76 @@ pub fn analyze_intrinsic_threat(
         return ThreatAnalysisResponse { score: 0 };
     }
 
-    let historical_capability =
-        calculate_historical_capability_score(&configuration.historical_capability, statistics);
+    let components = calculate_component_scores(configuration, statistics, identity);
 
-    let survivability = calculate_survivability_score(&configuration.survivability, statistics);
-
-    let loss_quality = calculate_loss_quality_score(&configuration.loss_quality, statistics);
-
-    let recent_activity = calculate_recent_activity_modifier(
+    let recent_activity = calculate_recent_activity_diagnostics(
         &configuration.recent_activity,
+        configuration
+            .component_weights
+            .recent_activity
+            .maximum_score,
         recent_killmails,
         coverage_start_utc,
         now,
         recent_window_days,
-    );
+    )
+    .score;
 
-    let security = calculate_security_modifier(&configuration.security_status, identity);
-
-    let raw_score = historical_capability as f64
-        + survivability as f64
-        + loss_quality as f64
+    let raw_score = components.historical_capability as f64
+        + components.survivability as f64
+        + components.loss_quality as f64
         + recent_activity
-        + security as f64;
+        + components.security as f64;
 
     let (score, _) = finalize_threat_score(&configuration.gating, &gate, raw_score, recent_style);
 
     ThreatAnalysisResponse { score }
 }
 
+pub(crate) struct ComponentScores {
+    pub historical_capability: i32,
+    pub survivability: i32,
+    pub loss_quality: i32,
+    pub security: i32,
+}
+
+fn clamp_to_component_maximum(score: i32, maximum: i32) -> i32 {
+    score.clamp(0, maximum.max(0))
+}
+
+pub(crate) fn calculate_component_scores(
+    configuration: &ThreatConfiguration,
+    statistics: Option<&ZKillStatisticsSnapshot>,
+    identity: Option<&PilotIdentitySnapshot>,
+) -> ComponentScores {
+    let weights = &configuration.component_weights;
+
+    ComponentScores {
+        historical_capability: clamp_to_component_maximum(
+            calculate_historical_capability_score(&configuration.historical_capability, statistics),
+            weights.historical_capability.maximum_score,
+        ),
+        survivability: clamp_to_component_maximum(
+            calculate_survivability_score(&configuration.survivability, statistics),
+            weights.survivability.maximum_score,
+        ),
+        loss_quality: clamp_to_component_maximum(
+            calculate_loss_quality_score(&configuration.loss_quality, statistics),
+            weights.loss_quality.maximum_score,
+        ),
+        security: clamp_to_component_maximum(
+            calculate_security_modifier(&configuration.security_status, identity),
+            weights.security_status.maximum_score,
+        ),
+    }
+}
+
 pub(crate) fn is_threat_none(
     statistics: Option<&ZKillStatisticsSnapshot>,
-    recent_killmails: &[RecentKillmailSnapshot],
+    has_cached_killmails: bool,
 ) -> bool {
     match statistics {
-        None => recent_killmails.is_empty(),
+        None => !has_cached_killmails,
         Some(statistics) => statistics.no_history_marker,
     }
 }
@@ -126,7 +164,7 @@ fn ratio_cap(
     let ratio = statistics.ships_destroyed as f64 / ship_losses as f64;
 
     if ratio <= configuration.medium_ratio_maximum {
-        Some(configuration.medium_cap)
+        Some(configuration.kill_loss_cap_1)
     } else if ratio < configuration.high_ratio_below {
         Some(configuration.high_cap)
     } else {
@@ -137,10 +175,10 @@ fn ratio_cap(
 pub(crate) fn evaluate_threat_gate(
     configuration: &GatingConfiguration,
     statistics: Option<&ZKillStatisticsSnapshot>,
-    recent_killmails: &[RecentKillmailSnapshot],
+    has_cached_killmails: bool,
     recent_style: &str,
 ) -> ThreatGate {
-    if is_threat_none(statistics, recent_killmails) {
+    if is_threat_none(statistics, has_cached_killmails) {
         return ThreatGate {
             rule: GateRule::NoData,
             cap: None,
@@ -187,7 +225,7 @@ pub(crate) fn finalize_threat_score(
     raw_score: f64,
     recent_style: &str,
 ) -> (i32, bool) {
-    let mut score = raw_score.round().clamp(0.0, 100.0) as i32;
+    let mut score = raw_score.round().clamp(0.0, THREAT_SCORE_MAXIMUM as f64) as i32;
 
     if let Some(cap) = gate.cap {
         score = score.min(cap);
@@ -237,7 +275,7 @@ pub(crate) fn calculate_historical_capability_score(
         .map(|modifier| modifier.score)
         .unwrap_or(0);
 
-    (kill_volume_score + solo_kill_score + solo_ratio_score + style_score).clamp(0, 40)
+    kill_volume_score + solo_kill_score + solo_ratio_score + style_score
 }
 
 pub(crate) fn calculate_survivability_score(
@@ -317,25 +355,9 @@ pub(crate) struct RecentActivityDiagnostics {
     pub score: f64,
 }
 
-fn calculate_recent_activity_modifier(
-    configuration: &RecentActivityConfiguration,
-    recent_killmails: &[RecentKillmailSnapshot],
-    coverage_start_utc: Option<DateTime<Utc>>,
-    now: DateTime<Utc>,
-    recent_window_days: i64,
-) -> f64 {
-    calculate_recent_activity_diagnostics(
-        configuration,
-        recent_killmails,
-        coverage_start_utc,
-        now,
-        recent_window_days,
-    )
-    .score
-}
-
 pub(crate) fn calculate_recent_activity_diagnostics(
     configuration: &RecentActivityConfiguration,
+    maximum_score: i32,
     recent_killmails: &[RecentKillmailSnapshot],
     coverage_start_utc: Option<DateTime<Utc>>,
     now: DateTime<Utc>,
@@ -377,7 +399,8 @@ pub(crate) fn calculate_recent_activity_diagnostics(
         .count();
 
     let daily_rate = counted_kills as f64 / observed_days;
-    let score = interpolate_recent_activity_score(&configuration.points, daily_rate);
+    let score = interpolate_recent_activity_score(&configuration.points, daily_rate)
+        .clamp(0.0, maximum_score.max(0) as f64);
 
     RecentActivityDiagnostics {
         coverage_start_present: true,
@@ -546,6 +569,7 @@ mod tests {
             &configuration(),
             statistics,
             recent_killmails,
+            !recent_killmails.is_empty(),
             None,
             Some(now() - chrono::Duration::days(1)),
             now(),
@@ -561,6 +585,7 @@ mod tests {
             &configuration(),
             None,
             &[],
+            false,
             None,
             None,
             now(),
@@ -580,6 +605,7 @@ mod tests {
             &configuration(),
             Some(&stats),
             &killmails,
+            !killmails.is_empty(),
             None,
             None,
             now(),
@@ -626,6 +652,7 @@ mod tests {
             &configuration(),
             None,
             &killmails,
+            !killmails.is_empty(),
             None,
             Some(coverage_start),
             now(),
@@ -645,6 +672,7 @@ mod tests {
             &configuration(),
             None,
             &killmails,
+            !killmails.is_empty(),
             None,
             Some(coverage_start),
             now(),
@@ -668,6 +696,7 @@ mod tests {
             &configuration(),
             None,
             &killmails,
+            !killmails.is_empty(),
             None,
             Some(coverage_start),
             now(),
@@ -707,6 +736,7 @@ mod tests {
             &configuration(),
             None,
             &killmails,
+            !killmails.is_empty(),
             None,
             Some(coverage_start),
             now(),
@@ -781,6 +811,7 @@ mod tests {
             &configuration(),
             Some(&stats),
             &killmails,
+            !killmails.is_empty(),
             Some(&pilot),
             Some(now() - chrono::Duration::days(1)),
             now(),
@@ -841,8 +872,8 @@ mod tests {
         let ratio_only = statistics_with_style(10, 100, "solo");
 
         let first =
-            evaluate_threat_gate(&configuration.gating, Some(&style_and_ratio), &[], "solo");
-        let second = evaluate_threat_gate(&configuration.gating, Some(&ratio_only), &[], "solo");
+            evaluate_threat_gate(&configuration.gating, Some(&style_and_ratio), false, "solo");
+        let second = evaluate_threat_gate(&configuration.gating, Some(&ratio_only), false, "solo");
 
         assert_eq!(first.rule, GateRule::Capped);
         assert_eq!(first.cap, Some(40));
@@ -867,8 +898,7 @@ mod tests {
     #[test]
     fn statistics_missing_applies_no_general_style_or_ratio_gate() {
         let configuration = configuration();
-        let killmails = vec![killmail(false)];
-        let gate = evaluate_threat_gate(&configuration.gating, None, &killmails, "solo");
+        let gate = evaluate_threat_gate(&configuration.gating, None, true, "solo");
 
         assert_eq!(gate.rule, GateRule::Uncapped);
         assert_eq!(gate.cap, None);
@@ -906,6 +936,152 @@ mod tests {
     }
 
     #[test]
+    fn security_modifier_cases_from_the_specification() {
+        let configuration = configuration();
+        let cases = [
+            (Some(0.1), 0),
+            (Some(0.0), 0),
+            (Some(-0.1), 1),
+            (Some(-2.0), 1),
+            (Some(-2.1), 3),
+            (Some(-5.0), 3),
+            (Some(-5.1), 5),
+            (None, 0),
+        ];
+
+        for (status, expected) in cases {
+            let pilot = identity(status);
+
+            assert_eq!(
+                calculate_security_modifier(&configuration.security_status, Some(&pilot)),
+                expected,
+                "{status:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn security_modifier_follows_the_configured_bands() {
+        let mut configuration = configuration();
+        configuration.security_status.bands[0].below_security_status = 1.0;
+        configuration.security_status.bands[0].score = 2;
+        let pilot = identity(Some(0.5));
+
+        assert_eq!(
+            calculate_security_modifier(&configuration.security_status, Some(&pilot)),
+            2
+        );
+    }
+
+    #[test]
+    fn pilot_with_no_statistics_and_only_old_cached_killmails_is_not_none() {
+        let coverage_start = Some(now() - chrono::Duration::days(1));
+        let analyze = |has_cached: bool| {
+            analyze_intrinsic_threat(
+                &configuration(),
+                None,
+                &[],
+                has_cached,
+                None,
+                coverage_start,
+                now(),
+                14,
+                "solo",
+            )
+            .score
+        };
+
+        assert_eq!(analyze(false), 0);
+        assert_eq!(analyze(true), 1);
+    }
+
+    #[test]
+    fn none_gate_tests_all_cached_killmails_not_the_recent_window() {
+        let configuration = configuration();
+
+        assert_eq!(
+            evaluate_threat_gate(&configuration.gating, None, false, "solo").rule,
+            GateRule::NoData
+        );
+        assert_eq!(
+            evaluate_threat_gate(&configuration.gating, None, true, "solo").rule,
+            GateRule::Uncapped
+        );
+    }
+
+    #[test]
+    fn components_never_exceed_their_maximum_with_out_of_range_band_scores() {
+        let mut configuration = configuration();
+        configuration.historical_capability.kill_volume_bands[6].score = 90;
+        configuration.survivability.ratios[5].score = 90;
+        configuration.loss_quality.no_losses_with_kills_score = 90;
+        configuration.security_status.bands[2].score = 90;
+        configuration.recent_activity.points[4].score = 90.0;
+        let stats = statistics_with_style(100_000, 0, "solo");
+        let pilot = identity(Some(-9.0));
+
+        let components = calculate_component_scores(&configuration, Some(&stats), Some(&pilot));
+        let activity = calculate_recent_activity_diagnostics(
+            &configuration.recent_activity,
+            configuration
+                .component_weights
+                .recent_activity
+                .maximum_score,
+            &busy_recent_killmails(),
+            Some(now() - chrono::Duration::days(1)),
+            now(),
+            14,
+        );
+
+        assert_eq!(components.historical_capability, 40);
+        assert_eq!(components.survivability, 25);
+        assert_eq!(components.loss_quality, 20);
+        assert_eq!(components.security, 5);
+        assert_eq!(activity.score, 10.0);
+    }
+
+    #[test]
+    fn component_maxima_come_from_the_configuration() {
+        let mut configuration = configuration();
+        configuration
+            .component_weights
+            .historical_capability
+            .maximum_score = 10;
+        let stats = statistics_with_style(100_000, 0, "solo");
+
+        let components = calculate_component_scores(&configuration, Some(&stats), None);
+
+        assert_eq!(components.historical_capability, 10);
+    }
+
+    #[test]
+    fn medium_cap_and_kill_loss_cap_1_are_independent() {
+        let mut configuration = configuration();
+        configuration.gating.medium_cap = 30;
+        let victim = statistics_with_style(60, 100, "victim");
+        let half_ratio = statistics_with_style(10, 100, "solo");
+
+        let medium =
+            evaluate_threat_gate(&configuration.gating, Some(&victim), false, STYLE_SOLO).cap;
+        let kill_loss =
+            evaluate_threat_gate(&configuration.gating, Some(&half_ratio), false, STYLE_SOLO).cap;
+
+        assert_eq!(medium, Some(30));
+        assert_eq!(kill_loss, Some(40));
+
+        configuration.gating.medium_cap = 40;
+        configuration.gating.kill_loss_cap_1 = 35;
+
+        let medium =
+            evaluate_threat_gate(&configuration.gating, Some(&victim), false, STYLE_SOLO).cap;
+        let kill_loss =
+            evaluate_threat_gate(&configuration.gating, Some(&half_ratio), false, STYLE_SOLO).cap;
+
+        assert_eq!(medium, Some(40));
+        assert_eq!(kill_loss, Some(35));
+    }
+
+    #[test]
     fn positive_security_status_never_returns_the_maximum() {
         let configuration = configuration();
         let pilot = identity(Some(5.0));
@@ -935,7 +1111,7 @@ mod tests {
         for general in ALL_STYLE_CODES {
             for recent in ALL_STYLE_CODES {
                 let stats = statistics_with_style(10, 5, general);
-                let gate = evaluate_threat_gate(&configuration.gating, Some(&stats), &[], recent);
+                let gate = evaluate_threat_gate(&configuration.gating, Some(&stats), false, recent);
                 let general_non_combat = general == STYLE_VICTIM || general == STYLE_INACTIVE;
                 let recent_non_combat =
                     recent == STYLE_VICTIM || recent == STYLE_INACTIVE || recent == STYLE_UNKNOWN;
@@ -961,7 +1137,7 @@ mod tests {
 
         for display in ["Vict", "Victim", "Inactive", "Solo", "Gang"] {
             let stats = statistics_with_style(10, 5, display);
-            let gate = evaluate_threat_gate(&configuration.gating, Some(&stats), &[], STYLE_SOLO);
+            let gate = evaluate_threat_gate(&configuration.gating, Some(&stats), false, STYLE_SOLO);
 
             assert_eq!(gate.rule, GateRule::Uncapped, "{display}");
         }

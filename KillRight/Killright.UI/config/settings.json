@@ -43,7 +43,8 @@
     "blobMinimumAverageAttackers": 5,
     "fleetMinimumAverageAttackers": 11,
     "podderMinimumSharePercent": 35,
-    "podderMinimumKillCount": 5
+    "podderMinimumKillCount": 5,
+    "recentSoloSharePercent": 60
   },
   "threat": {
     "version": "2.0",
@@ -162,6 +163,7 @@
     },
     "gating": {
       "mediumCap": 40,
+      "killLossCap1": 40,
       "highCap": 60,
       "mediumRatioMaximum": 0.5,
       "highRatioBelow": 1.0,

@@ -108,12 +108,68 @@ public sealed class ApplicationSettingsLoaderTests
     }
 
     [Fact]
-    public void Load_QualificationThresholdBelowMinimum_IsAdjustedToDefault()
+    public void Load_QualificationThresholdBelowMinimum_IsSetToMinimumAndLogged()
     {
-        var result = LoadResult("{ \"qualificationFleetThreshold\": 2 }");
+        var log = new List<string>();
+
+        var result = LoadResult("{ \"qualificationFleetThreshold\": 2 }", log);
 
         Assert.True(result.Succeeded);
+        Assert.Equal(3, result.Settings!.QualificationFleetThreshold);
+        Assert.Contains("Setting 'qualificationFleetThreshold' read as 2; using 3 (below the minimum of 3).", log);
+    }
+
+    [Fact]
+    public void Load_QualificationThresholdMissing_TakesDefaultElevenAndLogs()
+    {
+        var log = new List<string>();
+
+        var result = LoadResult("{ }", log);
+
         Assert.Equal(11, result.Settings!.QualificationFleetThreshold);
+        Assert.Contains("Setting 'qualificationFleetThreshold' read as missing; using the default 11.", log);
+    }
+
+    [Fact]
+    public void Load_RealSettingsFile_LogsNoAdjustment()
+    {
+        var log = new List<string>();
+
+        ApplicationSettingsLoader.Load(ApplicationSettingsLoader.GetDefaultSettingsPath(), log.Add);
+
+        Assert.Empty(log);
+    }
+
+    [Fact]
+    public void Load_BandsMissing_TakeBuiltInBandsAndLog()
+    {
+        var log = new List<string>();
+
+        var settings = LoadResult("{ }", log).Settings!;
+
+        Assert.Equal(ThreatBandSetting.Defaults.Select(band => band.Name), settings.ThreatBands.Select(band => band.Name));
+        Assert.Equal(RelationshipConfidenceBandSetting.Defaults.Select(band => band.Name), settings.RelationshipConfidenceBands.Select(band => band.Name));
+        Assert.Contains("Setting 'threatBands' read as missing; using the built-in bands.", log);
+        Assert.Contains("Setting 'relationshipConfidenceBands' read as missing; using the built-in bands.", log);
+    }
+
+    [Theory]
+    [InlineData("null", "null", "null")]
+    [InlineData("[]", "[]", "empty")]
+    [InlineData("[{ \"name\": \"A\", \"minimumScore\": 1, \"maximumScore\": 20 }, { \"name\": \"B\", \"minimumScore\": 30, \"maximumScore\": 100 }]", "[A 1-20, B 30-100]", "gapped, overlapping or not starting at 1")]
+    [InlineData("[{ \"name\": \"A\", \"minimumScore\": 1, \"maximumScore\": 60 }, { \"name\": \"B\", \"minimumScore\": 50, \"maximumScore\": 100 }]", "[A 1-60, B 50-100]", "gapped, overlapping or not starting at 1")]
+    [InlineData("[{ \"name\": \"A\", \"minimumScore\": 1, \"maximumScore\": 50 }]", "[A 1-50]", "not covering 1 to 100")]
+    public void Load_InvalidBands_TakeBuiltInBandsAndLog(string bands, string described, string reason)
+    {
+        var log = new List<string>();
+
+        var result = LoadResult($"{{ \"threatBands\": {bands}, \"relationshipConfidenceBands\": {bands} }}", log);
+
+        Assert.True(result.Succeeded);
+        Assert.Same(ThreatBandSetting.Defaults, result.Settings!.ThreatBands);
+        Assert.Same(RelationshipConfidenceBandSetting.Defaults, result.Settings.RelationshipConfidenceBands);
+        Assert.Contains($"Setting 'threatBands' read as {described}; using the built-in bands ({reason}).", log);
+        Assert.Contains($"Setting 'relationshipConfidenceBands' read as {described}; using the built-in bands ({reason}).", log);
     }
 
     [Fact]
@@ -137,14 +193,14 @@ public sealed class ApplicationSettingsLoaderTests
 
     private static string TempPath() => System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"killright-settings-{Guid.NewGuid():N}.json");
 
-    private static SettingsLoadResult LoadResult(string json)
+    private static SettingsLoadResult LoadResult(string json, List<string>? log = null)
     {
         var path = TempPath();
         System.IO.File.WriteAllText(path, json);
 
         try
         {
-            return ApplicationSettingsLoader.Load(path);
+            return ApplicationSettingsLoader.Load(path, log is null ? null : log.Add);
         }
         finally
         {
@@ -183,8 +239,6 @@ public sealed class ApplicationSettingsLoaderTests
     }
 
     [Theory]
-    [InlineData("threatBands")]
-    [InlineData("relationshipConfidenceBands")]
     [InlineData("sde")]
     [InlineData("threat")]
     [InlineData("groupDetection")]

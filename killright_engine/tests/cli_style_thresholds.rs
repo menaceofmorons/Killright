@@ -35,7 +35,7 @@ const SETTINGS_TEMPLATE: &str = r#"{
         },
         "recentActivity": {"points": [{"dailyRate": 0.0, "score": 0.0}, {"dailyRate": 1.0, "score": 10.0}]},
         "securityStatus": {"bands": [{"belowSecurityStatus": 0.0, "score": 1}]},
-        "gating": {"mediumCap": 40, "highCap": 60, "mediumRatioMaximum": 0.5, "highRatioBelow": 1.0, "floor": 1}
+        "gating": {"mediumCap": 40, "killLossCap1": 40, "highCap": 60, "mediumRatioMaximum": 0.5, "highRatioBelow": 1.0, "floor": 1}
     },
     "groupDetection": {
         "minimumSharedEvents": 2,
@@ -47,7 +47,7 @@ const SETTINGS_TEMPLATE: &str = r#"{
         "chainStrengthMaximum": 75,
         "intermediaryBonus": {"perAdditional": 10, "maximum": 30}
     },
-    "style": {"blobMinimumAverageAttackers": BLOB, "fleetMinimumAverageAttackers": 11, "podderMinimumSharePercent": 35, "podderMinimumKillCount": 5}
+    "style": {"blobMinimumAverageAttackers": BLOB, "fleetMinimumAverageAttackers": 11, "podderMinimumSharePercent": 35, "podderMinimumKillCount": 5, "recentSoloSharePercent": 60}
 }"#;
 
 const REQUEST: &str = r#"{"character_id":42,"killmails":[

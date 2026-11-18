@@ -51,23 +51,43 @@ public sealed class ThreatBandSetting
         new ThreatBandSetting { Name = "Extreme", MinimumScore = 81, MaximumScore = 100 }
     };
 
-    public static IReadOnlyList<ThreatBandSetting> ValidateOrDefault(IReadOnlyList<ThreatBandSetting>? bands)
+    public static IReadOnlyList<ThreatBandSetting> ValidateOrDefault(IReadOnlyList<ThreatBandSetting>? bands, Action<string>? log = null)
     {
-        if (bands is null || bands.Count == 0)
-            return Defaults;
+        var problem = FirstProblem(bands);
 
-        var ordered = bands.OrderBy(band => band.MinimumScore).ToList();
+        if (problem is not null)
+        {
+            SettingsAdjustment.LogBandsReplaced(
+                "threatBands",
+                bands?.Select(band => (band.Name, band.MinimumScore, band.MaximumScore)),
+                problem,
+                log ?? (_ => { }));
+
+            return Defaults;
+        }
+
+        return bands!.OrderBy(band => band.MinimumScore).ToList();
+    }
+
+    private static string? FirstProblem(IReadOnlyList<ThreatBandSetting>? bands)
+    {
+        if (bands is null)
+            return "null";
+
+        if (bands.Count == 0)
+            return "empty";
+
         var expectedMinimum = 1;
 
-        foreach (var band in ordered)
+        foreach (var band in bands.OrderBy(band => band.MinimumScore))
         {
             if (band.MinimumScore != expectedMinimum || band.MaximumScore < band.MinimumScore)
-                return Defaults;
+                return "gapped, overlapping or not starting at 1";
 
             expectedMinimum = band.MaximumScore + 1;
         }
 
-        return expectedMinimum == 101 ? ordered : Defaults;
+        return expectedMinimum == 101 ? null : "not covering 1 to 100";
     }
 }
 
@@ -86,23 +106,43 @@ public sealed class RelationshipConfidenceBandSetting
         new RelationshipConfidenceBandSetting { Name = "High", MinimumScore = 76, MaximumScore = 100 }
     };
 
-    public static IReadOnlyList<RelationshipConfidenceBandSetting> ValidateOrDefault(IReadOnlyList<RelationshipConfidenceBandSetting>? bands)
+    public static IReadOnlyList<RelationshipConfidenceBandSetting> ValidateOrDefault(IReadOnlyList<RelationshipConfidenceBandSetting>? bands, Action<string>? log = null)
     {
-        if (bands is null || bands.Count == 0)
-            return Defaults;
+        var problem = FirstProblem(bands);
 
-        var ordered = bands.OrderBy(band => band.MinimumScore).ToList();
+        if (problem is not null)
+        {
+            SettingsAdjustment.LogBandsReplaced(
+                "relationshipConfidenceBands",
+                bands?.Select(band => (band.Name, band.MinimumScore, band.MaximumScore)),
+                problem,
+                log ?? (_ => { }));
+
+            return Defaults;
+        }
+
+        return bands!.OrderBy(band => band.MinimumScore).ToList();
+    }
+
+    private static string? FirstProblem(IReadOnlyList<RelationshipConfidenceBandSetting>? bands)
+    {
+        if (bands is null)
+            return "null";
+
+        if (bands.Count == 0)
+            return "empty";
+
         var expectedMinimum = 1;
 
-        foreach (var band in ordered)
+        foreach (var band in bands.OrderBy(band => band.MinimumScore))
         {
             if (band.MinimumScore != expectedMinimum || band.MaximumScore < band.MinimumScore)
-                return Defaults;
+                return "gapped, overlapping or not starting at 1";
 
             expectedMinimum = band.MaximumScore + 1;
         }
 
-        return expectedMinimum == 101 ? ordered : Defaults;
+        return expectedMinimum == 101 ? null : "not covering 1 to 100";
     }
 }
 
@@ -123,12 +163,12 @@ public sealed record NetworkSettings
 
     public ZkillSettings Zkill { get; init; } = new();
 
-    public NetworkSettings Normalized()
+    internal NetworkSettings Normalized(Action<string> log)
     {
         return new NetworkSettings
         {
-            EsiMaxConcurrency = EsiMaxConcurrency >= 1 ? EsiMaxConcurrency : DefaultEsiMaxConcurrency,
-            Zkill = (Zkill ?? new ZkillSettings()).Normalized()
+            EsiMaxConcurrency = SettingsAdjustment.Limit("network.esiMaxConcurrency", EsiMaxConcurrency, 1, null, log),
+            Zkill = (Zkill ?? new ZkillSettings()).Normalized(log)
         };
     }
 }
@@ -161,16 +201,16 @@ public sealed record ZkillSettings
 
     public int RateLimitPauseSeconds { get; init; } = DefaultRateLimitPauseSeconds;
 
-    public ZkillSettings Normalized()
+    internal ZkillSettings Normalized(Action<string> log)
     {
         return new ZkillSettings
         {
-            RequestBudget = RequestBudget >= 1 ? Math.Min(RequestBudget, MaximumRequestBudget) : DefaultRequestBudget,
-            BudgetWindowSeconds = BudgetWindowSeconds >= 1 ? BudgetWindowSeconds : DefaultBudgetWindowSeconds,
-            MaxConcurrency = MaxConcurrency >= 1 ? MaxConcurrency : DefaultMaxConcurrency,
-            RequestTimeoutSeconds = RequestTimeoutSeconds >= 1 ? RequestTimeoutSeconds : DefaultRequestTimeoutSeconds,
+            RequestBudget = SettingsAdjustment.Limit("network.zkill.requestBudget", RequestBudget, 1, MaximumRequestBudget, log),
+            BudgetWindowSeconds = SettingsAdjustment.Limit("network.zkill.budgetWindowSeconds", BudgetWindowSeconds, 1, null, log),
+            MaxConcurrency = SettingsAdjustment.Limit("network.zkill.maxConcurrency", MaxConcurrency, 1, null, log),
+            RequestTimeoutSeconds = SettingsAdjustment.Limit("network.zkill.requestTimeoutSeconds", RequestTimeoutSeconds, 1, null, log),
             RetryCount = RetryCount,
-            RateLimitPauseSeconds = RateLimitPauseSeconds >= 1 ? RateLimitPauseSeconds : DefaultRateLimitPauseSeconds
+            RateLimitPauseSeconds = SettingsAdjustment.Limit("network.zkill.rateLimitPauseSeconds", RateLimitPauseSeconds, 1, null, log)
         };
     }
 }
@@ -183,13 +223,13 @@ public sealed record DatabaseSettings
 
     public int IdleCheckpointSeconds { get; init; } = KillRightDatabaseOptions.DefaultIdleCheckpointSeconds;
 
-    public DatabaseSettings Normalized()
+    internal DatabaseSettings Normalized(Action<string> log)
     {
         return new DatabaseSettings
         {
-            BusyTimeoutSeconds = KillRightDatabaseOptions.NormalizeBusyTimeoutSeconds(BusyTimeoutSeconds),
-            PageCacheMegabytes = KillRightDatabaseOptions.NormalizePageCacheMegabytes(PageCacheMegabytes),
-            IdleCheckpointSeconds = KillRightDatabaseOptions.NormalizeIdleCheckpointSeconds(IdleCheckpointSeconds)
+            BusyTimeoutSeconds = SettingsAdjustment.Limit("database.busyTimeoutSeconds", BusyTimeoutSeconds, 1, null, log),
+            PageCacheMegabytes = SettingsAdjustment.Limit("database.pageCacheMegabytes", PageCacheMegabytes, 1, null, log),
+            IdleCheckpointSeconds = SettingsAdjustment.Limit("database.idleCheckpointSeconds", IdleCheckpointSeconds, 1, null, log)
         };
     }
 }

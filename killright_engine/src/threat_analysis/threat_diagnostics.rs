@@ -4,9 +4,8 @@ use crate::contracts::PilotIdentitySnapshot;
 use crate::contracts::RecentKillmailSnapshot;
 use crate::contracts::ZKillStatisticsSnapshot;
 use crate::threat_analysis::threat_analyzer::{
-    calculate_historical_capability_score, calculate_loss_quality_score,
-    calculate_recent_activity_diagnostics, calculate_security_modifier,
-    calculate_survivability_score, evaluate_threat_gate, finalize_threat_score, GateRule,
+    calculate_component_scores, calculate_recent_activity_diagnostics, evaluate_threat_gate,
+    finalize_threat_score, GateRule,
 };
 use crate::threat_analysis::threat_configuration_models::ThreatConfiguration;
 
@@ -35,6 +34,7 @@ pub fn analyze_intrinsic_threat_diagnostics(
     configuration: &ThreatConfiguration,
     statistics: Option<&ZKillStatisticsSnapshot>,
     recent_killmails: &[RecentKillmailSnapshot],
+    has_cached_killmails: bool,
     identity: Option<&PilotIdentitySnapshot>,
     coverage_start_utc: Option<DateTime<Utc>>,
     now: DateTime<Utc>,
@@ -43,6 +43,10 @@ pub fn analyze_intrinsic_threat_diagnostics(
 ) -> ThreatDiagnostics {
     let recent_activity = calculate_recent_activity_diagnostics(
         &configuration.recent_activity,
+        configuration
+            .component_weights
+            .recent_activity
+            .maximum_score,
         recent_killmails,
         coverage_start_utc,
         now,
@@ -52,7 +56,7 @@ pub fn analyze_intrinsic_threat_diagnostics(
     let gate = evaluate_threat_gate(
         &configuration.gating,
         statistics,
-        recent_killmails,
+        has_cached_killmails,
         recent_style,
     );
 
@@ -74,11 +78,13 @@ pub fn analyze_intrinsic_threat_diagnostics(
         };
     }
 
-    let historical_capability =
-        calculate_historical_capability_score(&configuration.historical_capability, statistics);
-    let survivability = calculate_survivability_score(&configuration.survivability, statistics);
-    let loss_quality = calculate_loss_quality_score(&configuration.loss_quality, statistics);
-    let security_modifier = calculate_security_modifier(&configuration.security_status, identity);
+    let components = calculate_component_scores(configuration, statistics, identity);
+    let (historical_capability, survivability, loss_quality, security_modifier) = (
+        components.historical_capability,
+        components.survivability,
+        components.loss_quality,
+        components.security,
+    );
 
     let raw_score = historical_capability as f64
         + survivability as f64
@@ -167,6 +173,7 @@ mod tests {
             &configuration(),
             Some(&stats),
             &[],
+            false,
             None,
             None,
             now(),
@@ -189,6 +196,7 @@ mod tests {
             &configuration(),
             Some(&stats),
             &[],
+            false,
             None,
             None,
             now(),
@@ -220,6 +228,7 @@ mod tests {
             &configuration(),
             None,
             &killmails,
+            !killmails.is_empty(),
             None,
             Some(coverage_start),
             now(),
@@ -242,6 +251,7 @@ mod tests {
             &configuration(),
             Some(&stats),
             &[],
+            false,
             None,
             None,
             now(),
@@ -271,6 +281,7 @@ mod tests {
             &configuration(),
             Some(&stats),
             &[],
+            false,
             None,
             None,
             now(),
@@ -292,6 +303,7 @@ mod tests {
             &configuration(),
             Some(&stats),
             &[],
+            false,
             None,
             None,
             now(),
@@ -314,6 +326,7 @@ mod tests {
             &configuration(),
             Some(&stats),
             &killmails,
+            !killmails.is_empty(),
             None,
             coverage_start,
             now(),
@@ -324,6 +337,7 @@ mod tests {
             &configuration(),
             Some(&stats),
             &killmails,
+            !killmails.is_empty(),
             None,
             coverage_start,
             now(),
@@ -345,6 +359,7 @@ mod tests {
             &configuration(),
             Some(&stats),
             &[],
+            false,
             None,
             None,
             now(),

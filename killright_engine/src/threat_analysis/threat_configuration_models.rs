@@ -23,6 +23,8 @@ pub struct ThreatConfiguration {
 pub struct GatingConfiguration {
     #[serde(rename = "mediumCap")]
     pub medium_cap: i32,
+    #[serde(rename = "killLossCap1")]
+    pub kill_loss_cap_1: i32,
     #[serde(rename = "highCap")]
     pub high_cap: i32,
     #[serde(rename = "mediumRatioMaximum")]

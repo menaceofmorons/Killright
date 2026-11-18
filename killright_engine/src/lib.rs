@@ -307,6 +307,7 @@ fn build_pilot_response(
             threat_configuration,
             inputs.statistics.as_ref(),
             &recent_window_killmails,
+            !inputs.all_killmails.is_empty(),
             inputs.identity.as_ref(),
             coverage_start_utc,
             now,
@@ -689,6 +690,7 @@ fn diagnose_threat(
         threat_configuration,
         pilot.statistics.as_ref(),
         &recent_window_killmails,
+        !pilot.killmails.is_empty(),
         pilot.identity.as_ref(),
         coverage_start_utc,
         now,
@@ -1070,6 +1072,7 @@ mod tests {
             fleet_minimum_average_attackers: 11.0,
             podder_minimum_share_percent: 35.0,
             podder_minimum_kill_count: 5,
+            recent_solo_share_percent: 60.0,
         };
 
         (
@@ -1398,6 +1401,25 @@ mod tests {
         assert_eq!(single.recent_style, batch.recent_style);
         assert_eq!(single.threat, batch.threat);
         assert_eq!(single.derived_activity, batch.derived_activity);
+    }
+
+    #[test]
+    fn pilot_with_no_statistics_and_only_killmails_outside_the_recent_window_is_not_none() {
+        let (window, style, threat) = configurations();
+        let mut identity = fixture_identity(LUKAS, "Lukas Naarii", 98000001, None);
+        identity.security_status = Some(-6.0);
+        let outside_window = ago(window.recent_window_days + 20);
+        let pilots = vec![PilotInputs {
+            character_id: LUKAS,
+            killmails: vec![fixture_killmail(1, LUKAS, &outside_window, false, 1, 587)],
+            statistics: None,
+            identity: Some(identity),
+            coverage_start_utc: None,
+        }];
+
+        let response = analyze_pilots_batch(&[LUKAS], &pilots, &window, &style, &threat).remove(0);
+
+        assert_eq!(response.threat.unwrap().score, 5);
     }
 
     #[test]

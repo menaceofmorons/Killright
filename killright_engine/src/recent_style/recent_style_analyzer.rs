@@ -105,6 +105,7 @@ mod tests {
             fleet_minimum_average_attackers: 11.0,
             podder_minimum_share_percent: 35.0,
             podder_minimum_kill_count: 5,
+            recent_solo_share_percent: 60.0,
         }
     }
 
