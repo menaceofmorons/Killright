@@ -15,6 +15,7 @@ using Xunit;
 
 namespace Killright.UI.Tests.Analysis;
 
+[Collection("RealEngine")]
 public sealed class ScanWiringIntegrationTests
 {
     private const long PilotA = 95465499;
