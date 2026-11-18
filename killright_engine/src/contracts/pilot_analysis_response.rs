@@ -29,6 +29,9 @@ pub struct PilotAnalysisResponse {
     pub failure: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub failure_detail: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub timings_ms: Option<BTreeMap<String, f64>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -48,6 +51,7 @@ mod tests {
             group_detection: None,
             derived_activity: None,
             failure: None,
+            failure_detail: None,
             timings_ms: None,
             timing_counts: None,
         }

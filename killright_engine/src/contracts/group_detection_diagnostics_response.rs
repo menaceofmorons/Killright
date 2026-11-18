@@ -14,6 +14,9 @@ pub struct GroupDetectionDiagnosticsEnvelope {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub failure: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub failure_detail: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]

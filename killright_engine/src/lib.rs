@@ -48,6 +48,7 @@ pub const ENGINE_CONTRACT_VERSION: u32 = 2;
 const FAILURE_SETTINGS: &str = "settings_failure";
 const FAILURE_INITIALIZE: &str = "initialize_failure";
 const FAILURE_INTERNAL: &str = "internal_error";
+const FAILURE_NUMERIC_CONVERSION: &str = "numeric_conversion_failure";
 
 #[derive(Debug, Serialize)]
 struct InitializeResponse {
@@ -327,6 +328,7 @@ fn build_pilot_response(
         group_detection: None,
         derived_activity: Some(derived_activity),
         failure: None,
+        failure_detail: None,
         timings_ms: None,
         timing_counts: None,
     }
@@ -341,6 +343,7 @@ fn failed_pilot_response(character_id: i64, reason: &str) -> PilotAnalysisRespon
         group_detection: None,
         derived_activity: None,
         failure: Some(reason.to_string()),
+        failure_detail: None,
         timings_ms: None,
         timing_counts: None,
     }
@@ -557,19 +560,7 @@ fn build_group_response(
     };
     let scored_relationships = match scored_relationships {
         Ok(relationships) => relationships,
-        Err(reason) => {
-            return PilotAnalysisResponse {
-                character_id,
-                recent_style: None,
-                is_recent_podder: None,
-                threat: None,
-                group_detection: None,
-                derived_activity: None,
-                failure: Some(reason),
-                timings_ms: None,
-                timing_counts: None,
-            };
-        }
+        Err(reason) => return numeric_conversion_pilot_response(character_id, reason),
     };
     if timing_recorder::is_active() {
         timing_recorder::add_count("direct_relationships", direct_relationships.len() as i64);
@@ -593,8 +584,36 @@ fn build_group_response(
         group_detection: Some(GroupDetectionResponse { relationships }),
         derived_activity: None,
         failure: None,
+        failure_detail: None,
         timings_ms: None,
         timing_counts: None,
+    }
+}
+
+fn numeric_conversion_pilot_response(character_id: i64, detail: String) -> PilotAnalysisResponse {
+    PilotAnalysisResponse {
+        character_id,
+        recent_style: None,
+        is_recent_podder: None,
+        threat: None,
+        group_detection: None,
+        derived_activity: None,
+        failure: Some(FAILURE_NUMERIC_CONVERSION.to_string()),
+        failure_detail: Some(detail),
+        timings_ms: None,
+        timing_counts: None,
+    }
+}
+
+fn numeric_conversion_diagnostics_envelope(
+    character_id: i64,
+    detail: String,
+) -> GroupDetectionDiagnosticsEnvelope {
+    GroupDetectionDiagnosticsEnvelope {
+        character_id,
+        diagnostics: None,
+        failure: Some(FAILURE_NUMERIC_CONVERSION.to_string()),
+        failure_detail: Some(detail),
     }
 }
 
@@ -607,6 +626,7 @@ fn diagnose_group_detection(
         character_id: request.character_id,
         diagnostics: None,
         failure: Some(reason.to_string()),
+        failure_detail: None,
     };
     if request.scanned_character_ids.is_none() {
         return failure("missing_scanned_character_ids");
@@ -629,13 +649,16 @@ fn diagnose_group_detection(
         Utc::now(),
     ) {
         Ok(diagnostics) => diagnostics,
-        Err(reason) => return failure(&reason),
+        Err(reason) => {
+            return numeric_conversion_diagnostics_envelope(request.character_id, reason)
+        }
     };
 
     GroupDetectionDiagnosticsEnvelope {
         character_id: request.character_id,
         diagnostics: Some(diagnostics.into()),
         failure: None,
+        failure_detail: None,
     }
 }
 
@@ -779,6 +802,7 @@ fn group_detection_diagnostics_failure(character_id: i64, reason: &str) -> *mut 
         character_id,
         diagnostics: None,
         failure: Some(reason.to_string()),
+        failure_detail: None,
     })
 }
 
@@ -874,6 +898,7 @@ fn failure_response(character_id: i64, reason: &str) -> *mut c_char {
         group_detection: None,
         derived_activity: None,
         failure: Some(reason.to_string()),
+        failure_detail: None,
         timings_ms: None,
         timing_counts: None,
     })
@@ -1493,6 +1518,23 @@ mod tests {
 
         assert_eq!(response.failure.as_deref(), Some("unreadable_request"));
         assert!(response.group_detection.is_none());
+    }
+
+    #[test]
+    fn numeric_conversion_failure_is_a_code_with_the_reason_in_the_detail() {
+        let pilot = numeric_conversion_pilot_response(LUKAS, "value NaN".to_string());
+        let envelope = numeric_conversion_diagnostics_envelope(LUKAS, "value NaN".to_string());
+
+        assert_eq!(pilot.failure.as_deref(), Some("numeric_conversion_failure"));
+        assert_eq!(pilot.failure_detail.as_deref(), Some("value NaN"));
+        assert_eq!(
+            envelope.failure.as_deref(),
+            Some("numeric_conversion_failure")
+        );
+        assert_eq!(envelope.failure_detail.as_deref(), Some("value NaN"));
+        let json = serde_json::to_value(&pilot).unwrap();
+        assert_eq!(json["failure"], "numeric_conversion_failure");
+        assert_eq!(json["failure_detail"], "value NaN");
     }
 
     #[test]

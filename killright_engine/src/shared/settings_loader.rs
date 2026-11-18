@@ -307,6 +307,21 @@ mod tests {
     }
 
     #[test]
+    fn load_engine_settings_from_path_rejects_chain_strength_maximum_outside_zero_to_hundred() {
+        for (label, value) in [("above", "150"), ("negative", "-1")] {
+            assert!(
+                load_with_replacement(
+                    label,
+                    "\"chainStrengthMaximum\": 75",
+                    &format!("\"chainStrengthMaximum\": {value}")
+                )
+                .is_err(),
+                "{label}"
+            );
+        }
+    }
+
+    #[test]
     fn load_engine_settings_from_path_rejects_non_positive_strength_step() {
         assert!(
             load_with_replacement("step", "\"strengthStep\": 10", "\"strengthStep\": 0").is_err()
