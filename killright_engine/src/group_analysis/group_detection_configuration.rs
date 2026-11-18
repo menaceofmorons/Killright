@@ -86,6 +86,13 @@ fn validate_weights_and_factors(configuration: &GroupDetectionConfiguration) -> 
         ));
     }
 
+    if !(0.0..=100.0).contains(&configuration.chain_strength_maximum) {
+        return Err(format!(
+            "chainStrengthMaximum {} must be within 0-100",
+            configuration.chain_strength_maximum
+        ));
+    }
+
     Ok(())
 }
 
