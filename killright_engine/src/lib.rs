@@ -991,7 +991,7 @@ mod tests {
                     avg_gang_size: 4.0,
                     ships_lost: 12,
                     solo_losses: 2,
-                    general_style: "Gang".to_string(),
+                    general_style: "gang".to_string(),
                     checked_at_utc: recent.clone(),
                     no_history_marker: false,
                 }),

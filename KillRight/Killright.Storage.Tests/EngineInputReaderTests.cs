@@ -76,7 +76,7 @@ public sealed class EngineInputReaderTests
         Assert.Equal(93, lukas.Statistics!.ShipsDestroyed);
         Assert.Equal(7, lukas.Statistics.ShipsLost);
         Assert.Equal(0.25, lukas.Statistics.SoloRatio);
-        Assert.Equal("Gang", lukas.Statistics.GeneralStyle);
+        Assert.Equal("gang", lukas.Statistics.GeneralStyle);
         Assert.False(lukas.Statistics.NoHistoryMarker);
         Assert.Equal("Lukas Naarii", lukas.Identity!.CharacterName);
         Assert.Equal(98000001, lukas.Identity.CorporationId);
@@ -261,6 +261,23 @@ public sealed class EngineInputReaderTests
             phases);
     }
 
+    [Theory]
+    [InlineData("Vict")]
+    [InlineData("Solo(b)")]
+    [InlineData("Solo Beginner")]
+    public async Task ReadPilotInputs_StoredDisplayText_IsReplacedByTheStyleCodeFromTheStatistics(string stored)
+    {
+        var fixture = CreateFixture();
+        Execute(fixture.Database, $"""
+            INSERT INTO main.zkill_statistics_cache (character_id, ships_destroyed, solo_kills, solo_ratio, avg_gang_size, ships_lost, solo_losses, general_style, checked_at_utc, no_history_marker, pod_kills, pod_losses) VALUES
+                ({Lukas}, 10, 3, 80.0, 1.0, 1, 0, '{stored}', 1789862400, 0, 0, 0);
+            """);
+
+        var result = Assert.Single(await fixture.Reader.ReadPilotInputsAsync([Lukas]));
+
+        Assert.Equal("solo_beginner", result.Inputs!.Statistics!.GeneralStyle);
+    }
+
     private static Fixture CreateFixture(Action<string>? log = null)
     {
         var path = Path.Combine(Path.GetTempPath(), $"engineInput.{Guid.NewGuid():N}.db");
@@ -281,9 +298,9 @@ public sealed class EngineInputReaderTests
                 (1, {Lukas}, 98000001, NULL, 11567),
                 (3, {Symptom}, 98000002, NULL, 11567);
             INSERT INTO main.zkill_statistics_cache (character_id, ships_destroyed, solo_kills, solo_ratio, avg_gang_size, ships_lost, solo_losses, general_style, checked_at_utc, no_history_marker, pod_kills, pod_losses) VALUES
-                ({Lukas}, 100, 20, 0.25, 4.5, 10, 1, 'Gang', 1789862400, 0, 7, 3);
+                ({Lukas}, 100, 20, 0.25, 4.5, 10, 1, 'gang', 1789862400, 0, 7, 3);
             INSERT INTO main.zkill_statistics_cache (character_id, ships_destroyed, solo_kills, solo_ratio, avg_gang_size, ships_lost, solo_losses, general_style, checked_at_utc) VALUES
-                ({Tral}, 5, 0, 0.0, 6.0, 1, 0, 'Fleet', 1789862400);
+                ({Tral}, 5, 0, 0.0, 6.0, 1, 0, 'fleet', 1789862400);
             INSERT INTO main.pilot_identity_cache (input_name, character_id, character_name, verify_status, security_status, corporation_id, corporation_name, corporation_ticker, alliance_id, alliance_name, alliance_ticker, cached_at_utc) VALUES
                 ('Lukas Naarii', {Lukas}, 'Lukas Naarii', 'Verified', 1.2, 98000001, 'Corp One', 'ONE', NULL, NULL, NULL, 1789862400),
                 ('T''ral Vsengne', {Tral}, 'T''ral Vsengne', 'Verified', 0.4, 98000002, 'Corp Two', 'TWO', 99000001, 'Alliance Two', 'ATWO', 1789862400);

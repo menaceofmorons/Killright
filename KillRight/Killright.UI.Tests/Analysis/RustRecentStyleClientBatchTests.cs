@@ -14,12 +14,12 @@ public sealed class RustRecentStyleClientBatchTests
 
     private const string Success =
         "{\"results\":["
-        + "{\"character_id\":95465499,\"recent_style\":\"Solo\",\"is_recent_podder\":true,\"threat\":{\"score\":30},"
+        + "{\"character_id\":95465499,\"recent_style\":\"solo\",\"is_recent_podder\":true,\"threat\":{\"score\":30},"
         + "\"derived_activity\":{\"has_public_activity_data\":true,\"kills_week\":3,\"solo_week\":1,"
         + "\"info_week_losses\":4,"
         + "\"newest_non_pod_killmail\":{\"kill_time_utc\":\"2026-09-28T10:00:00.0000000Z\",\"activity_type\":\"Loss\"},"
         + "\"newest_non_pod_kill_time_utc\":\"2026-09-27T08:30:00+00:00\"}},"
-        + "{\"character_id\":91321792,\"recent_style\":\"Gang\",\"is_recent_podder\":false,\"threat\":{\"score\":0},"
+        + "{\"character_id\":91321792,\"recent_style\":\"gang\",\"is_recent_podder\":false,\"threat\":{\"score\":0},"
         + "\"derived_activity\":{\"has_public_activity_data\":false}}"
         + "],\"timings_ms\":{\"batch_total\":12.5,\"killmails_query\":3.0},\"timing_counts\":{\"pilots_analyzed\":2,\"pilot_failures\":0}}";
 
@@ -72,7 +72,7 @@ public sealed class RustRecentStyleClientBatchTests
     {
         var response =
             "{\"results\":["
-            + "{\"character_id\":95465499,\"recent_style\":\"Solo\",\"is_recent_podder\":false,\"threat\":{\"score\":30}},"
+            + "{\"character_id\":95465499,\"recent_style\":\"solo\",\"is_recent_podder\":false,\"threat\":{\"score\":30}},"
             + "{\"character_id\":91321792,\"failure\":\"repository_read_error:killmails\"}"
             + "]}";
         var client = new RustRecentStyleClient(new FakeRuntime(response), new FakeEngineInputReader());
@@ -170,7 +170,7 @@ public sealed class RustRecentStyleClientBatchTests
         var pilot = request.RootElement.GetProperty("pilots")[0];
         Assert.Equal(1, pilot.GetProperty("killmails")[0].GetProperty("killmail_id").GetInt64());
         Assert.Equal(587, pilot.GetProperty("killmails")[0].GetProperty("ship_type_id").GetInt64());
-        Assert.Equal("Gang", pilot.GetProperty("statistics").GetProperty("general_style").GetString());
+        Assert.Equal("gang", pilot.GetProperty("statistics").GetProperty("general_style").GetString());
         Assert.Equal("Lukas Naarii", pilot.GetProperty("identity").GetProperty("character_name").GetString());
         Assert.Equal("2026-09-08T00:00:00+00:00", pilot.GetProperty("coverage_start_utc").GetString());
     }
@@ -232,7 +232,7 @@ public sealed class RustRecentStyleClientBatchTests
     public async Task AnalyzePilotsAsync_ResponseWithoutTiming_RecordsNoEngineRows()
     {
         var timings = new ScanTimings();
-        var client = new RustRecentStyleClient(new FakeRuntime("{\"results\":[{\"character_id\":95465499,\"recent_style\":\"Solo\",\"is_recent_podder\":false,\"threat\":{\"score\":30}}]}"), new FakeEngineInputReader());
+        var client = new RustRecentStyleClient(new FakeRuntime("{\"results\":[{\"character_id\":95465499,\"recent_style\":\"solo\",\"is_recent_podder\":false,\"threat\":{\"score\":30}}]}"), new FakeEngineInputReader());
 
         await client.AnalyzePilotsAsync([Lukas], timings: timings);
 

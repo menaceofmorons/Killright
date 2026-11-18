@@ -1,6 +1,8 @@
 using System.Globalization;
 using Microsoft.Data.Sqlite;
+using Killright.Core.Style;
 using Killright.Shared.Data;
+using Killright.Shared.zKill;
 using Killright.Storage.Database;
 using Killright.Storage.Diagnostics;
 using Killright.Storage.Sde;
@@ -350,15 +352,30 @@ public sealed class EngineInputReader : IEngineInputReader
 
         while (reader.Read())
         {
+            var podKills = reader.GetNullableInt32(10) ?? 0;
+            var podLosses = reader.GetNullableInt32(11) ?? 0;
+            var noHistory = reader.GetNullableBoolean(9) ?? false;
+            var statistics = new zKillStatistics
+            {
+                shipsDestroyed = reader.GetInt32(1),
+                soloKills = reader.GetInt32(2),
+                soloRatio = reader.GetDouble(3),
+                avgGangSize = reader.GetDouble(4),
+                shipsLost = reader.GetInt32(5),
+                soloLosses = reader.GetInt32(6),
+                podKills = podKills,
+                podLosses = podLosses,
+                NoHistory = noHistory
+            };
             var row = new EngineStatisticsRow(
                 CharacterId: reader.GetInt64(0),
-                ShipsDestroyed: Math.Max(0, reader.GetInt32(1) - (reader.GetNullableInt32(10) ?? 0)),
-                SoloKills: reader.GetInt32(2),
-                SoloRatio: reader.GetDouble(3),
-                AvgGangSize: reader.GetDouble(4),
-                ShipsLost: Math.Max(0, reader.GetInt32(5) - (reader.GetNullableInt32(11) ?? 0)),
-                SoloLosses: reader.GetInt32(6),
-                GeneralStyle: reader.GetString(7),
+                ShipsDestroyed: Math.Max(0, statistics.shipsDestroyed - podKills),
+                SoloKills: statistics.soloKills,
+                SoloRatio: statistics.soloRatio,
+                AvgGangSize: statistics.avgGangSize,
+                ShipsLost: Math.Max(0, statistics.shipsLost - podLosses),
+                SoloLosses: statistics.soloLosses,
+                GeneralStyle: StoredStyleCode(reader.GetString(7), statistics),
                 CheckedAtUtc: FormatEngineTime(reader.GetUtcDateTimeOffset(8)),
                 NoHistoryMarker: reader.GetNullableBoolean(9) ?? false);
 
@@ -366,6 +383,13 @@ public sealed class EngineInputReader : IEngineInputReader
         }
 
         return results;
+    }
+
+    private static string StoredStyleCode(string stored, zKillStatistics statistics)
+    {
+        return StyleCodes.TryFromCode(stored, out _)
+            ? stored
+            : StyleCodes.ToCode(GeneralStyleClassifier.Classify(statistics).Classification);
     }
 
     private static List<EngineIdentityRow> ReadIdentities(

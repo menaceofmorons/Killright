@@ -12,7 +12,7 @@ public sealed class EngineRequestInputTests
     private const long Tral = 91321792;
 
     private const string PilotResponse =
-        "{\"character_id\":95465499,\"recent_style\":\"Solo\",\"is_recent_podder\":false,\"threat\":{\"score\":30}}";
+        "{\"character_id\":95465499,\"recent_style\":\"solo\",\"is_recent_podder\":false,\"threat\":{\"score\":30}}";
 
     private const string GroupResponse =
         "{\"character_id\":95465499,\"group_detection\":{\"relationships\":[]}}";
@@ -129,7 +129,7 @@ public sealed class EngineRequestInputTests
 
         using var request = JsonDocument.Parse(runtime.LastRequest!);
         Assert.Equal(Lukas, request.RootElement.GetProperty("pilot").GetProperty("character_id").GetInt64());
-        Assert.Equal("Gang", request.RootElement.GetProperty("pilot").GetProperty("statistics").GetProperty("general_style").GetString());
+        Assert.Equal("gang", request.RootElement.GetProperty("pilot").GetProperty("statistics").GetProperty("general_style").GetString());
     }
 
     [Fact]

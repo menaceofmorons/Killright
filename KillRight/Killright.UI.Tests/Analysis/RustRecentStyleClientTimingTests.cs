@@ -7,10 +7,10 @@ namespace Killright.UI.Tests.Analysis;
 public sealed class RustRecentStyleClientTimingTests
 {
     private const string PilotResponseWithoutTiming =
-        "{\"character_id\":95465499,\"recent_style\":\"Solo\",\"is_recent_podder\":false,\"threat\":{\"score\":30}}";
+        "{\"character_id\":95465499,\"recent_style\":\"solo\",\"is_recent_podder\":false,\"threat\":{\"score\":30}}";
 
     private const string PilotResponseWithTiming =
-        "{\"character_id\":95465499,\"recent_style\":\"Solo\",\"is_recent_podder\":false,\"threat\":{\"score\":30},"
+        "{\"character_id\":95465499,\"recent_style\":\"solo\",\"is_recent_podder\":false,\"threat\":{\"score\":30},"
         + "\"timings_ms\":{\"pilot_total\":4.5,\"killmails_query\":2.25},\"timing_counts\":{\"killmail_rows\":12}}";
 
     private const string GroupResponseWithTiming =
