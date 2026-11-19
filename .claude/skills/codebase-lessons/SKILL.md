@@ -37,3 +37,6 @@ metadata:
 - Group Detection skips pairs whose current identities share a corporation; seeded test pilots need distinct corporation ids (WS-1.4)
 - A stub `HttpMessageHandler` that returns synchronously ignores a pre-cancelled token; cancellation tests need a handler that awaits the token (WS-1.5)
 - `DataTable.Load` types each column from the first row; with SQLite dynamic typing, load into explicit string columns (WS-1.5)
+- `HttpListener` on `127.0.0.1` runs in tests without admin rights and gives a real HTTP round trip (e.g. decompression checks) (WS-1.5)
+- `ScanPipelineSourceTests` asserts on `MainWindow.xaml.cs` text; moving code out of `MainWindow` can break it (WS-1.5)
+- ID-based rules on a pilot use `Pilot.CorporationId`; the `Corporation` object is present only when the name resolved (WS-1.5)
