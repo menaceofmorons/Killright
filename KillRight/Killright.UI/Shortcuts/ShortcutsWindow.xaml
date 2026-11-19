@@ -16,6 +16,10 @@
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary Source="/Killright.UI;component/Theme/ChromeStyles.xaml" />
             </ResourceDictionary.MergedDictionaries>
+            <Style x:Key="HelpParagraph" TargetType="TextBlock">
+                <Setter Property="TextWrapping" Value="Wrap" />
+                <Setter Property="Margin" Value="0,0,0,8" />
+            </Style>
         </ResourceDictionary>
     </Window.Resources>
     <DockPanel Margin="12">
@@ -27,201 +31,144 @@
                 Click="Close_Click" />
         <TabControl>
             <TabItem Header="{x:Static resources:UiText.ShortcutsTabShortcuts}">
-                <ListBox BorderThickness="0"
-                         Background="Transparent"
-                         Margin="0,8,0,0">
-                    <ListBoxItem>
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="{x:Static resources:UiText.ShortcutsKeyOpenMenu}" FontWeight="Bold" Width="120" />
-                            <TextBlock Text="{x:Static resources:UiText.ShortcutsActionOpenMenu}" />
-                        </StackPanel>
-                    </ListBoxItem>
-                    <ListBoxItem>
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="{x:Static resources:UiText.ShortcutsKeyQuit}" FontWeight="Bold" Width="120" />
-                            <TextBlock Text="{x:Static resources:UiText.ShortcutsActionQuit}" />
-                        </StackPanel>
-                    </ListBoxItem>
-                    <ListBoxItem>
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="{x:Static resources:UiText.ShortcutsKeyHelp}" FontWeight="Bold" Width="120" />
-                            <TextBlock Text="{x:Static resources:UiText.ShortcutsActionHelp}" />
-                        </StackPanel>
-                    </ListBoxItem>
-                    <ListBoxItem>
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="{x:Static resources:UiText.ShortcutsKeyRevealDeveloperTab}" FontWeight="Bold" Width="120" />
-                            <TextBlock Text="{x:Static resources:UiText.ShortcutsActionRevealDeveloperTab}" TextWrapping="Wrap" Width="230" />
-                        </StackPanel>
-                    </ListBoxItem>
-                    <ListBoxItem>
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="{x:Static resources:UiText.ShortcutsKeyMoveWindow}" FontWeight="Bold" Width="120" />
-                            <TextBlock Text="{x:Static resources:UiText.ShortcutsActionMoveWindow}" />
-                        </StackPanel>
-                    </ListBoxItem>
-                    <ListBoxItem>
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="{x:Static resources:UiText.ShortcutsKeyMinimizeWindow}" FontWeight="Bold" Width="120" />
-                            <TextBlock Text="{x:Static resources:UiText.ShortcutsActionMinimizeWindow}" />
-                        </StackPanel>
-                    </ListBoxItem>
-                    <ListBoxItem>
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="{x:Static resources:UiText.ShortcutsKeyClearFilters}" FontWeight="Bold" Width="120" />
-                            <TextBlock Text="{x:Static resources:UiText.ShortcutsActionClearFilters}" />
-                        </StackPanel>
-                    </ListBoxItem>
-                    <ListBoxItem>
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="{x:Static resources:UiText.ShortcutsKeyPilotFilter}" FontWeight="Bold" Width="120" />
-                            <TextBlock Text="{x:Static resources:UiText.ShortcutsActionPilotFilter}" />
-                        </StackPanel>
-                    </ListBoxItem>
-                </ListBox>
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
+                    <ItemsControl ItemsSource="{Binding ShortcutGroups}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Margin="0,0,0,10">
+                                    <TextBlock Text="{Binding Title}" FontWeight="Bold" Margin="0,0,0,4" />
+                                    <ItemsControl ItemsSource="{Binding Entries}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <StackPanel Orientation="Horizontal" Margin="8,0,0,2">
+                                                    <TextBlock Text="{Binding Key}" FontWeight="Bold" Width="120" />
+                                                    <TextBlock Text="{Binding Action}" TextWrapping="Wrap" Width="230" />
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
             </TabItem>
             <TabItem Header="{x:Static resources:UiText.ShortcutsTabStyle}">
-                <ListBox BorderThickness="0"
-                         Background="Transparent"
-                         Margin="0,8,0,0">
-                    <ListBoxItem>
-                        <StackPanel Orientation="Horizontal">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                             <TextBlock Text="{x:Static resources:UiText.ShortcutsStyleCodeBlob}" FontWeight="Bold" Width="24" />
-                            <TextBlock Text="{x:Static resources:UiText.ShortcutsStyleWordBlob}" />
+                            <TextBlock Text="{Binding StyleBlob}" TextWrapping="Wrap" Width="320" />
                         </StackPanel>
-                    </ListBoxItem>
-                    <ListBoxItem>
-                        <StackPanel Orientation="Horizontal">
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                             <TextBlock Text="{x:Static resources:UiText.ShortcutsStyleCodeFleet}" FontWeight="Bold" Width="24" />
-                            <TextBlock Text="{x:Static resources:UiText.ShortcutsStyleWordFleet}" />
+                            <TextBlock Text="{Binding StyleFleet}" TextWrapping="Wrap" Width="320" />
                         </StackPanel>
-                    </ListBoxItem>
-                    <ListBoxItem>
-                        <StackPanel Orientation="Horizontal">
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                             <TextBlock Text="{x:Static resources:UiText.ShortcutsStyleCodeGang}" FontWeight="Bold" Width="24" />
-                            <TextBlock Text="{x:Static resources:UiText.ShortcutsStyleWordGang}" />
+                            <TextBlock Text="{Binding StyleGang}" TextWrapping="Wrap" Width="320" />
                         </StackPanel>
-                    </ListBoxItem>
-                    <ListBoxItem>
-                        <StackPanel Orientation="Horizontal">
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                             <TextBlock Text="{x:Static resources:UiText.ShortcutsStyleCodeInactive}" FontWeight="Bold" Width="24" />
                             <TextBlock Text="{x:Static resources:UiText.ShortcutsStyleWordInactive}" />
                         </StackPanel>
-                    </ListBoxItem>
-                    <ListBoxItem>
-                        <StackPanel Orientation="Horizontal">
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                             <TextBlock Text="{x:Static resources:UiText.ShortcutsStyleCodeSolo}" FontWeight="Bold" Width="24" />
                             <TextBlock Text="{x:Static resources:UiText.ShortcutsStyleWordSolo}" />
                         </StackPanel>
-                    </ListBoxItem>
-                    <ListBoxItem>
-                        <StackPanel Orientation="Horizontal">
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                             <TextBlock Text="{x:Static resources:UiText.ShortcutsStyleCodeUnknown}" FontWeight="Bold" Width="24" />
                             <TextBlock Text="{x:Static resources:UiText.ShortcutsStyleWordUnknown}" />
                         </StackPanel>
-                    </ListBoxItem>
-                    <ListBoxItem>
-                        <StackPanel Orientation="Horizontal">
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                             <TextBlock Text="{x:Static resources:UiText.ShortcutsStyleCodeVictim}" FontWeight="Bold" Width="24" />
                             <TextBlock Text="{x:Static resources:UiText.ShortcutsStyleWordVictim}" />
                         </StackPanel>
-                    </ListBoxItem>
-                    <ListBoxItem>
-                        <Border Height="12" />
-                    </ListBoxItem>
-                    <ListBoxItem>
                         <Rectangle Height="1"
                                    Width="160"
+                                   Margin="0,12,0,8"
                                    HorizontalAlignment="Left"
                                    Stroke="Gray"
                                    StrokeThickness="1"
                                    StrokeDashArray="2,2" />
-                    </ListBoxItem>
-                    <ListBoxItem>
-                        <StackPanel Orientation="Horizontal">
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                             <TextBlock Text="{x:Static resources:UiText.ShortcutsSuffixBeginnerCode}" FontWeight="Bold" Width="24" />
                             <TextBlock Text="{x:Static resources:UiText.ShortcutsSuffixBeginnerDescription}" TextWrapping="Wrap" Width="320" />
                         </StackPanel>
-                    </ListBoxItem>
-                    <ListBoxItem>
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="{x:Static resources:UiText.ShortcutsSuffixPodderCode}" FontWeight="Bold" Width="24" />
                             <TextBlock Text="{x:Static resources:UiText.ShortcutsSuffixPodderDescription}" TextWrapping="Wrap" Width="320" />
                         </StackPanel>
-                    </ListBoxItem>
-                </ListBox>
+                    </StackPanel>
+                </ScrollViewer>
             </TabItem>
             <TabItem Header="{x:Static resources:UiText.ShortcutsTabThreat}">
-                <ListBox BorderThickness="0"
-                         Background="Transparent"
-                         Margin="0,8,0,0">
-                    <ListBoxItem>
-                        <StackPanel Orientation="Horizontal">
-                            <controls:ThreatGlyph Band="None" Margin="0,0,10,0" />
-                            <TextBlock Text="{x:Static resources:UiText.ThreatBandNone}" VerticalAlignment="Center" />
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
+                    <StackPanel>
+                        <TextBlock Text="{Binding ThreatIntro}" Style="{StaticResource HelpParagraph}" />
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                            <controls:ThreatGlyph Band="None" Margin="0,0,10,0" VerticalAlignment="Top" />
+                            <TextBlock Text="{Binding ThreatNone}" TextWrapping="Wrap" Width="320" />
                         </StackPanel>
-                    </ListBoxItem>
-                    <ListBoxItem>
-                        <StackPanel Orientation="Horizontal">
-                            <controls:ThreatGlyph Band="1" Margin="0,0,10,0" />
-                            <TextBlock Text="{x:Static resources:UiText.ThreatBandLow}" VerticalAlignment="Center" />
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                            <controls:ThreatGlyph Band="1" Margin="0,0,10,0" VerticalAlignment="Top" />
+                            <TextBlock Text="{Binding ThreatLow}" TextWrapping="Wrap" Width="320" />
                         </StackPanel>
-                    </ListBoxItem>
-                    <ListBoxItem>
-                        <StackPanel Orientation="Horizontal">
-                            <controls:ThreatGlyph Band="2" Margin="0,0,10,0" />
-                            <TextBlock Text="{x:Static resources:UiText.ThreatBandMedium}" VerticalAlignment="Center" />
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                            <controls:ThreatGlyph Band="2" Margin="0,0,10,0" VerticalAlignment="Top" />
+                            <TextBlock Text="{Binding ThreatMedium}" TextWrapping="Wrap" Width="320" />
                         </StackPanel>
-                    </ListBoxItem>
-                    <ListBoxItem>
-                        <StackPanel Orientation="Horizontal">
-                            <controls:ThreatGlyph Band="3" Margin="0,0,10,0" />
-                            <TextBlock Text="{x:Static resources:UiText.ThreatBandHigh}" VerticalAlignment="Center" />
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                            <controls:ThreatGlyph Band="3" Margin="0,0,10,0" VerticalAlignment="Top" />
+                            <TextBlock Text="{Binding ThreatHigh}" TextWrapping="Wrap" Width="320" />
                         </StackPanel>
-                    </ListBoxItem>
-                    <ListBoxItem>
-                        <StackPanel Orientation="Horizontal">
-                            <controls:ThreatGlyph Band="4" Margin="0,0,10,0" />
-                            <TextBlock Text="{x:Static resources:UiText.ThreatBandVeryHigh}" VerticalAlignment="Center" />
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                            <controls:ThreatGlyph Band="4" Margin="0,0,10,0" VerticalAlignment="Top" />
+                            <TextBlock Text="{Binding ThreatVeryHigh}" TextWrapping="Wrap" Width="320" />
                         </StackPanel>
-                    </ListBoxItem>
-                    <ListBoxItem>
-                        <StackPanel Orientation="Horizontal">
-                            <controls:ThreatGlyph Band="5" Margin="0,0,10,0" />
-                            <TextBlock Text="{x:Static resources:UiText.ThreatBandExtreme}" VerticalAlignment="Center" />
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                            <controls:ThreatGlyph Band="5" Margin="0,0,10,0" VerticalAlignment="Top" />
+                            <TextBlock Text="{Binding ThreatExtreme}" TextWrapping="Wrap" Width="320" />
                         </StackPanel>
-                    </ListBoxItem>
-                    <ListBoxItem>
                         <StackPanel Orientation="Horizontal">
                             <controls:ThreatGlyph Band="Unk" Margin="0,0,10,0" />
                             <TextBlock Text="{x:Static resources:UiText.ThreatBandUnk}" VerticalAlignment="Center" />
                         </StackPanel>
-                    </ListBoxItem>
-                </ListBox>
+                    </StackPanel>
+                </ScrollViewer>
             </TabItem>
             <TabItem Header="{x:Static resources:UiText.ShortcutsTabRelationship}">
-                <ListBox BorderThickness="0"
-                         Background="Transparent"
-                         Margin="0,8,0,0">
-                    <ListBoxItem>
-                        <StackPanel Orientation="Horizontal">
-                            <controls:ConfidenceGlyph Confidence="1" Margin="0,0,10,0" />
-                            <TextBlock Text="{x:Static resources:UiText.RelationshipBandLow}" VerticalAlignment="Center" />
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
+                    <StackPanel>
+                        <TextBlock Text="{Binding RelationshipIntro}" Style="{StaticResource HelpParagraph}" />
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                            <controls:ConfidenceGlyph Confidence="1" Margin="0,0,10,0" VerticalAlignment="Top" />
+                            <TextBlock Text="{Binding RelationshipLow}" TextWrapping="Wrap" Width="320" />
                         </StackPanel>
-                    </ListBoxItem>
-                    <ListBoxItem>
-                        <StackPanel Orientation="Horizontal">
-                            <controls:ConfidenceGlyph Confidence="2" Margin="0,0,10,0" />
-                            <TextBlock Text="{x:Static resources:UiText.RelationshipBandMedium}" VerticalAlignment="Center" />
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                            <controls:ConfidenceGlyph Confidence="2" Margin="0,0,10,0" VerticalAlignment="Top" />
+                            <TextBlock Text="{Binding RelationshipMedium}" TextWrapping="Wrap" Width="320" />
                         </StackPanel>
-                    </ListBoxItem>
-                    <ListBoxItem>
                         <StackPanel Orientation="Horizontal">
-                            <controls:ConfidenceGlyph Confidence="3" Margin="0,0,10,0" />
-                            <TextBlock Text="{x:Static resources:UiText.RelationshipBandHigh}" VerticalAlignment="Center" />
+                            <controls:ConfidenceGlyph Confidence="3" Margin="0,0,10,0" VerticalAlignment="Top" />
+                            <TextBlock Text="{Binding RelationshipHigh}" TextWrapping="Wrap" Width="320" />
                         </StackPanel>
-                    </ListBoxItem>
-                </ListBox>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+            <TabItem Header="{x:Static resources:UiText.ShortcutsTabGroup}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
+                    <StackPanel>
+                        <TextBlock Text="{Binding GroupIntro}" Style="{StaticResource HelpParagraph}" />
+                        <TextBlock Text="{Binding GroupDirect}" Style="{StaticResource HelpParagraph}" />
+                        <TextBlock Text="{Binding GroupChain}" Style="{StaticResource HelpParagraph}" />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+            <TabItem Header="{x:Static resources:UiText.ShortcutsTabAbout}">
+                <StackPanel Margin="0,8,0,0">
+                    <TextBlock Text="{Binding AboutVersion}" Style="{StaticResource HelpParagraph}" />
+                </StackPanel>
             </TabItem>
         </TabControl>
     </DockPanel>
