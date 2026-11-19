@@ -31,8 +31,8 @@ public partial class MenuModalWindow : Window
 
     public MenuModalWindow(MainWindow owner)
     {
-        InitializeComponent();
         _owner = owner;
+        InitializeComponent();
         _workingState = App.UiState.Current;
         _workingSkipBackupOnClose = App.SkipBackupOnClose;
         AlwaysOnTopCheckBox.IsChecked = _workingState.AlwaysOnTop;
