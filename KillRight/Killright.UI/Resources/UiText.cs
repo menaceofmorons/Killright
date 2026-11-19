@@ -158,6 +158,8 @@ public static class UiText
     public static string InfoSheetLabelWeapon => Strings.Get("InfoSheet.Label.Weapon");
     public static string InfoSheetLabelVictim => Strings.Get("InfoSheet.Label.Victim");
     public static string InfoSheetLabelAttackers => Strings.Get("InfoSheet.Label.Attackers");
+    public static string InfoSheetLabelVerify => Strings.Get("InfoSheet.Label.Verify");
+    public static string InfoSheetLabelNotes => Strings.Get("InfoSheet.Label.Notes");
     public static string InfoSheetLoading => Strings.Get("InfoSheet.Loading");
     public static string InfoSheetSourceBirthday => Strings.Get("InfoSheet.Source.Birthday");
     public static string InfoSheetTableWeek => Strings.Get("InfoSheet.Table.Week");

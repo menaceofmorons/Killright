@@ -22,9 +22,25 @@
             Padding="10">
         <StackPanel MinWidth="220">
             <Border Style="{StaticResource SheetTitleStyle}">
-                <TextBlock Text="{Binding StatsTitle}" FontWeight="Bold" HorizontalAlignment="Center" Foreground="{DynamicResource Brush.Text.Primary}" />
+                <ItemsControl ItemsSource="{Binding TitleLines}" Focusable="False">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Text}" FontWeight="Bold" HorizontalAlignment="Center">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsError}" Value="True">
+                                                <Setter Property="Foreground" Value="{DynamicResource Brush.Threat.Red}" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
             </Border>
-            <TextBlock Text="{Binding ErrorLine}" Visibility="{Binding ErrorLineVisibility}" Margin="0,6,0,0" Foreground="{DynamicResource Brush.Threat.Red}" />
 
             <Grid Margin="0,6,0,0">
                 <Grid.ColumnDefinitions>
@@ -89,17 +105,17 @@
 
             <StackPanel Visibility="{Binding DeveloperFieldsVisibility}" Margin="0,6,0,0">
                 <TextBlock Foreground="{DynamicResource Brush.Text.Primary}">
-                    <Run Text="Verify: " FontWeight="Bold" /><Run Text="{Binding VerifyValue, Mode=OneWay}" />
+                    <Run Text="{x:Static resources:UiText.InfoSheetLabelVerify}" FontWeight="Bold" /><Run Text="{Binding VerifyValue, Mode=OneWay}" />
                 </TextBlock>
                 <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource Brush.Text.Primary}">
-                    <Run Text="Notes: " FontWeight="Bold" /><Run Text="{Binding NotesValue, Mode=OneWay}" />
+                    <Run Text="{x:Static resources:UiText.InfoSheetLabelNotes}" FontWeight="Bold" /><Run Text="{Binding NotesValue, Mode=OneWay}" />
                 </TextBlock>
             </StackPanel>
 
             <Border Style="{StaticResource SheetTitleStyle}" Margin="0,10,0,0">
                 <TextBlock Text="{x:Static resources:UiText.InfoSheetLabelLastActivityTitle}" FontWeight="Bold" HorizontalAlignment="Center" Foreground="{DynamicResource Brush.Text.Primary}" />
             </Border>
-            <StackPanel Margin="0,4,0,0">
+            <StackPanel Margin="0,4,0,0" Visibility="{Binding LastActivityBodyVisibility}">
                 <TextBlock Foreground="{DynamicResource Brush.Text.Primary}">
                     <Run Text="{x:Static resources:UiText.InfoSheetLabelDateTime}" FontWeight="Bold" /><Run Text="{Binding LastActivityDateTimeValue, Mode=OneWay}" />
                 </TextBlock>

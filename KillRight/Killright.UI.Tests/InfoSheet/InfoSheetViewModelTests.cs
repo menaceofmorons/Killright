@@ -112,8 +112,8 @@ public sealed class InfoSheetViewModelTests
         await viewModel.LoadAsync();
 
         Assert.Equal("unk", viewModel.BirthdayValue);
-        Assert.Equal("-", viewModel.LastActivityDateTimeValue);
-        Assert.Equal("-", viewModel.LastActivityShipValue);
+        Assert.Equal(string.Empty, viewModel.LastActivityDateTimeValue);
+        Assert.Equal(string.Empty, viewModel.LastActivityShipValue);
         Assert.Equal(Visibility.Collapsed, viewModel.LastActivityKillOnlyVisibility);
         Assert.Equal(Visibility.Collapsed, viewModel.ErrorLineVisibility);
     }
@@ -165,7 +165,7 @@ public sealed class InfoSheetViewModelTests
         await viewModel.LoadAsync();
 
         Assert.Equal(0, lastActivityCalls);
-        Assert.Equal("-", viewModel.LastActivityDateTimeValue);
+        Assert.Equal(string.Empty, viewModel.LastActivityDateTimeValue);
     }
 
     [Fact]
@@ -201,7 +201,8 @@ public sealed class InfoSheetViewModelTests
         Assert.Equal(UiText.FormatErrorLoading(UiText.InfoSheetSourceLastActivity), viewModel.ErrorLine);
         Assert.Equal(Visibility.Visible, viewModel.ErrorLineVisibility);
         Assert.Equal("2015-06-12", viewModel.BirthdayValue);
-        Assert.Equal("-", viewModel.LastActivityDateTimeValue);
+        Assert.Equal(UiText.PlaceholderDash, viewModel.LastActivityDateTimeValue);
+        Assert.Equal(Visibility.Visible, viewModel.LastActivityBodyVisibility);
     }
 
     [Fact]
@@ -453,6 +454,113 @@ public sealed class InfoSheetViewModelTests
         }
 
         throw new FileNotFoundException("InfoSheetWindow.xaml");
+    }
+
+    [Fact]
+    public void Failure_ListsErrorLineBeforeStatsTitle()
+    {
+        var viewModel = new InfoSheetViewModel(
+            CreateRow(statsFailureSource: "zKill statistics"),
+            false,
+            _ => Task.FromResult<InfoSheetTotals?>(null),
+            _ => Task.FromResult<DateOnly?>(null),
+            _ => Task.FromResult<PilotLastActivitySummary?>(null));
+
+        Assert.Equal(
+            [UiText.FormatErrorLoading("zKill statistics"), UiText.FormatStatsTitle("T'ral Vsengne")],
+            viewModel.TitleLines.Select(line => line.Text));
+        Assert.True(viewModel.TitleLines[0].IsError);
+        Assert.False(viewModel.TitleLines[1].IsError);
+    }
+
+    [Fact]
+    public async Task LoadFailure_OrdersErrorLineBeforeStatsTitle()
+    {
+        var viewModel = new InfoSheetViewModel(
+            CreateRow(),
+            false,
+            _ => Task.FromResult<InfoSheetTotals?>(null),
+            _ => throw new InvalidOperationException("read failed"),
+            _ => Task.FromResult<PilotLastActivitySummary?>(null));
+
+        Assert.Single(viewModel.TitleLines);
+
+        await viewModel.LoadAsync();
+
+        Assert.Equal(
+            [UiText.FormatErrorLoading(UiText.InfoSheetSourceBirthday), UiText.FormatStatsTitle("T'ral Vsengne")],
+            viewModel.TitleLines.Select(line => line.Text));
+    }
+
+    [Fact]
+    public async Task NoFailure_ShowsOnlyStatsTitle()
+    {
+        var viewModel = new InfoSheetViewModel(
+            CreateRow(),
+            false,
+            _ => Task.FromResult<InfoSheetTotals?>(null),
+            _ => Task.FromResult<DateOnly?>(null),
+            _ => Task.FromResult<PilotLastActivitySummary?>(null));
+
+        await viewModel.LoadAsync();
+
+        Assert.Equal([UiText.FormatStatsTitle("T'ral Vsengne")], viewModel.TitleLines.Select(line => line.Text));
+    }
+
+    [Fact]
+    public async Task NoKillmail_LeavesLastActivityBodyEmpty()
+    {
+        var viewModel = new InfoSheetViewModel(
+            CreateRow(),
+            false,
+            _ => Task.FromResult<InfoSheetTotals?>(null),
+            _ => Task.FromResult<DateOnly?>(null),
+            _ => Task.FromResult<PilotLastActivitySummary?>(null));
+
+        await viewModel.LoadAsync();
+
+        Assert.Equal(Visibility.Collapsed, viewModel.LastActivityBodyVisibility);
+        Assert.Equal(string.Empty, viewModel.LastActivityDateTimeValue);
+        Assert.Equal(string.Empty, viewModel.LastActivityKillLossValue);
+        Assert.Equal(string.Empty, viewModel.LastActivitySystemValue);
+        Assert.Equal(string.Empty, viewModel.LastActivityShipValue);
+        Assert.Equal(Visibility.Collapsed, viewModel.LastActivityKillOnlyVisibility);
+    }
+
+    [Fact]
+    public async Task Killmail_FillsLastActivityBody()
+    {
+        var viewModel = new InfoSheetViewModel(
+            CreateRow(),
+            false,
+            _ => Task.FromResult<InfoSheetTotals?>(null),
+            _ => Task.FromResult<DateOnly?>(null),
+            _ => Task.FromResult<PilotLastActivitySummary?>(KillSummary()));
+
+        await viewModel.LoadAsync();
+
+        Assert.Equal(Visibility.Visible, viewModel.LastActivityBodyVisibility);
+        Assert.Equal("Jita", viewModel.LastActivitySystemValue);
+    }
+
+    [Fact]
+    public void BeforeLoad_LastActivityBodyIsVisible()
+    {
+        var viewModel = new InfoSheetViewModel(
+            CreateRow(),
+            false,
+            _ => Task.FromResult<InfoSheetTotals?>(null),
+            _ => Task.FromResult<DateOnly?>(null),
+            _ => new TaskCompletionSource<PilotLastActivitySummary?>().Task);
+
+        Assert.Equal(Visibility.Visible, viewModel.LastActivityBodyVisibility);
+    }
+
+    [Fact]
+    public void UiText_InfoSheetDeveloperLabels_HaveResourceValues()
+    {
+        Assert.Equal("Verify: ", UiText.InfoSheetLabelVerify);
+        Assert.Equal("Notes: ", UiText.InfoSheetLabelNotes);
     }
 
     [Fact]

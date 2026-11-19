@@ -12,7 +12,7 @@ public sealed class InfoSheetDismissalSourceTests
 
         Assert.Contains("e.Handled = true;", pilotPath);
         Assert.Contains("Dispatcher.BeginInvoke(DispatcherPriority.Input", pilotPath);
-        Assert.Contains("OpenInfoSheet(row, screenPosition)", pilotPath);
+        Assert.Contains("OpenInfoSheet(row, screenPosition, ", pilotPath);
         Assert.DoesNotContain("OpenInfoSheet(row, PointToScreen(e.GetPosition(this)))", body);
     }
 
