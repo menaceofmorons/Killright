@@ -470,6 +470,8 @@ public sealed class PilotIdentityResolverTests
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
             () => fixture.Resolver.ResolveAsync([Tral], cancellationToken: source.Token));
+
+        Assert.Empty(fixture.Esi.NameBatches);
     }
 
     [Fact]

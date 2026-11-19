@@ -314,8 +314,8 @@ public sealed class PilotLastActivityResolverTests
     public async Task ResolveAsync_CancelledDuringLookup_EndsAsCancellation()
     {
         using var source = new CancellationTokenSource();
-        var (resolver, client, _, _) = Create(result: KillResult(Now.AddDays(-9)));
-        client.CancelOnCall = source;
+        var (resolver, _, _, _) = Create(result: KillResult(Now.AddDays(-9)));
+        source.Cancel();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => resolver.ResolveAsync(Lukas, source.Token));
     }
@@ -401,14 +401,12 @@ public sealed class PilotLastActivityResolverTests
 
         public int Calls { get; private set; }
 
-        public CancellationTokenSource? CancelOnCall { get; set; }
-
         public long RequestCount => Calls;
 
         public async Task<zKillLastKillmailResult> GetLastKillmailAsync(long characterId, CancellationToken cancellationToken = default)
         {
             Calls++;
-            Cancel(CancelOnCall);
+            cancellationToken.ThrowIfCancellationRequested();
 
             if (_gate is not null)
                 await _gate;
