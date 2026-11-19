@@ -41,6 +41,22 @@ public sealed class EsiEntityNameCacheTests
     }
 
     [Fact]
+    public async Task GetNamesAsync_MoreThanFiveHundredIds_ReturnsEveryName()
+    {
+        var cache = CreateCache();
+        var entities = Enumerable.Range(1, 1100)
+            .Select(id => new EsiEntityName(id, EsiEntityTypes.Alliance, $"Alliance {id}"))
+            .ToList();
+
+        await cache.UpsertAsync(entities);
+
+        var names = await cache.GetNamesAsync(entities.Select(entity => entity.EntityId).ToList());
+
+        Assert.Equal(1100, names.Count);
+        Assert.Equal("Alliance 1100", names[1100]);
+    }
+
+    [Fact]
     public async Task GetNamesAsync_UnknownId_IsOmitted()
     {
         var cache = CreateCache();

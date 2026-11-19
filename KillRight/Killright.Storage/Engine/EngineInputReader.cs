@@ -345,7 +345,9 @@ public sealed class EngineInputReader : IEngineInputReader
                                SELECT character_id, ships_destroyed, solo_kills, solo_ratio, avg_gang_size, ships_lost,
                                       solo_losses, general_style, checked_at_utc, no_history_marker, pod_kills, pod_losses
                                FROM main.zkill_statistics_cache
-                               WHERE character_id IN ({IdList(command, characterIds)});
+                               WHERE character_id IN ({IdList(command, characterIds)})
+                                 AND months_processed = 1
+                                 AND pod_losses IS NOT NULL;
                                """;
 
         using var reader = command.ExecuteReader();
@@ -353,7 +355,7 @@ public sealed class EngineInputReader : IEngineInputReader
         while (reader.Read())
         {
             var podKills = reader.GetNullableInt32(10) ?? 0;
-            var podLosses = reader.GetNullableInt32(11) ?? 0;
+            var podLosses = reader.GetInt32(11);
             var noHistory = reader.GetNullableBoolean(9) ?? false;
             var statistics = new zKillStatistics
             {

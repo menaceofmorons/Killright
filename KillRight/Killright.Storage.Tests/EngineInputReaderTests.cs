@@ -269,13 +269,32 @@ public sealed class EngineInputReaderTests
     {
         var fixture = CreateFixture();
         Execute(fixture.Database, $"""
-            INSERT INTO main.zkill_statistics_cache (character_id, ships_destroyed, solo_kills, solo_ratio, avg_gang_size, ships_lost, solo_losses, general_style, checked_at_utc, no_history_marker, pod_kills, pod_losses) VALUES
-                ({Lukas}, 10, 3, 80.0, 1.0, 1, 0, '{stored}', 1789862400, 0, 0, 0);
+            INSERT INTO main.zkill_statistics_cache (character_id, ships_destroyed, solo_kills, solo_ratio, avg_gang_size, ships_lost, solo_losses, general_style, checked_at_utc, months_processed, no_history_marker, pod_kills, pod_losses) VALUES
+                ({Lukas}, 10, 3, 80.0, 1.0, 1, 0, '{stored}', 1789862400, 1, 0, 0, 0);
             """);
 
         var result = Assert.Single(await fixture.Reader.ReadPilotInputsAsync([Lukas]));
 
         Assert.Equal("solo_beginner", result.Inputs!.Statistics!.GeneralStyle);
+    }
+
+    [Theory]
+    [InlineData("NULL", "0")]
+    [InlineData("0", "0")]
+    [InlineData("1", "NULL")]
+    public async Task ReadPilotInputs_StatisticsRowTheCacheTreatsAsAbsent_IsNotReadAsData(string monthsProcessed, string podLosses)
+    {
+        var fixture = CreateFixture();
+        Execute(fixture.Database, $"""
+            INSERT INTO main.zkill_statistics_cache (character_id, ships_destroyed, solo_kills, solo_ratio, avg_gang_size, ships_lost, solo_losses, general_style, checked_at_utc, months_processed, no_history_marker, pod_kills, pod_losses) VALUES
+                ({Lukas}, 10, 3, 0.8, 1.0, 1, 0, 'solo_beginner', 1789862400, {monthsProcessed}, 0, 0, {podLosses});
+            """);
+
+        var result = Assert.Single(await fixture.Reader.ReadPilotInputsAsync([Lukas]));
+
+        Assert.Null(result.Inputs!.Statistics);
+        var cached = await new Killright.Storage.zKill.zKillStatisticsCache(fixture.Database).GetManyAsync([Lukas], TimeSpan.FromDays(36500));
+        Assert.Empty(cached);
     }
 
     private static Fixture CreateFixture(Action<string>? log = null)
@@ -297,10 +316,10 @@ public sealed class EngineInputReaderTests
             INSERT INTO main.zkill_killmail_attackers (killmail_id, character_id, corporation_id, alliance_id, ship_type_id) VALUES
                 (1, {Lukas}, 98000001, NULL, 11567),
                 (3, {Symptom}, 98000002, NULL, 11567);
-            INSERT INTO main.zkill_statistics_cache (character_id, ships_destroyed, solo_kills, solo_ratio, avg_gang_size, ships_lost, solo_losses, general_style, checked_at_utc, no_history_marker, pod_kills, pod_losses) VALUES
-                ({Lukas}, 100, 20, 0.25, 4.5, 10, 1, 'gang', 1789862400, 0, 7, 3);
-            INSERT INTO main.zkill_statistics_cache (character_id, ships_destroyed, solo_kills, solo_ratio, avg_gang_size, ships_lost, solo_losses, general_style, checked_at_utc) VALUES
-                ({Tral}, 5, 0, 0.0, 6.0, 1, 0, 'fleet', 1789862400);
+            INSERT INTO main.zkill_statistics_cache (character_id, ships_destroyed, solo_kills, solo_ratio, avg_gang_size, ships_lost, solo_losses, general_style, checked_at_utc, months_processed, no_history_marker, pod_kills, pod_losses) VALUES
+                ({Lukas}, 100, 20, 0.25, 4.5, 10, 1, 'gang', 1789862400, 1, 0, 7, 3);
+            INSERT INTO main.zkill_statistics_cache (character_id, ships_destroyed, solo_kills, solo_ratio, avg_gang_size, ships_lost, solo_losses, general_style, checked_at_utc, months_processed, pod_kills, pod_losses) VALUES
+                ({Tral}, 5, 0, 0.0, 6.0, 1, 0, 'fleet', 1789862400, 1, 0, 0);
             INSERT INTO main.pilot_identity_cache (input_name, character_id, character_name, verify_status, security_status, corporation_id, corporation_name, corporation_ticker, alliance_id, alliance_name, alliance_ticker, cached_at_utc) VALUES
                 ('Lukas Naarii', {Lukas}, 'Lukas Naarii', 'Verified', 1.2, 98000001, 'Corp One', 'ONE', NULL, NULL, NULL, 1789862400),
                 ('T''ral Vsengne', {Tral}, 'T''ral Vsengne', 'Verified', 0.4, 98000002, 'Corp Two', 'TWO', 99000001, 'Alliance Two', 'ATWO', 1789862400);
