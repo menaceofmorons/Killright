@@ -67,7 +67,7 @@ public static class PilotReportRowFactory
             SecuritySortKey = PilotGridSortKeys.Security(pilot.SecurityStatus),
             WeekSortKey = PilotGridSortKeys.Week(hasActivity ? activity!.KillsWeek : null, hasActivity ? activity!.SoloWeek : null),
             LastKillSortKey = PilotGridSortKeys.LastKill(lastKillAge),
-            StatsFailureSource = GetStatsFailureSource(statisticsCallFailed, recentCallFailed, activity, engineFailureReason)
+            StatsFailureSource = GetStatsFailureSource(affiliationFailed, statisticsCallFailed, recentCallFailed, engineFailureReason)
         };
     }
 
@@ -161,20 +161,25 @@ public static class PilotReportRowFactory
     }
 
     private static string? GetStatsFailureSource(
+        bool affiliationFailed,
         bool statisticsCallFailed,
         bool recentCallFailed,
-        zKillActivity? activity,
         string? engineFailureReason)
     {
-        if (engineFailureReason is not null)
-            return "killright_engine";
+        var sources = new List<string>();
+
+        if (affiliationFailed)
+            sources.Add(UiText.InfoSheetSourceEsi);
 
         if (statisticsCallFailed)
-            return "zKill statistics";
+            sources.Add(UiText.InfoSheetSourceStatistics);
 
-        if (recentCallFailed || activity is null)
-            return "zKill recent killmails";
+        if (recentCallFailed)
+            sources.Add(UiText.InfoSheetSourceRecent);
 
-        return null;
+        if (engineFailureReason is not null)
+            sources.Add(UiText.InfoSheetSourceEngine);
+
+        return sources.Count == 0 ? null : string.Join(UiText.NotesSeparator, sources);
     }
 }
