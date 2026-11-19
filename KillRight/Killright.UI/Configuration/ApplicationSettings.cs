@@ -36,19 +36,17 @@ public sealed class ApplicationSettings
 
 public sealed class ThreatBandSetting
 {
-    public string Name { get; init; } = string.Empty;
-
     public int MinimumScore { get; init; }
 
     public int MaximumScore { get; init; }
 
     public static IReadOnlyList<ThreatBandSetting> Defaults { get; } = new[]
     {
-        new ThreatBandSetting { Name = "Low", MinimumScore = 1, MaximumScore = 20 },
-        new ThreatBandSetting { Name = "Medium", MinimumScore = 21, MaximumScore = 40 },
-        new ThreatBandSetting { Name = "High", MinimumScore = 41, MaximumScore = 60 },
-        new ThreatBandSetting { Name = "Very High", MinimumScore = 61, MaximumScore = 80 },
-        new ThreatBandSetting { Name = "Extreme", MinimumScore = 81, MaximumScore = 100 }
+        new ThreatBandSetting { MinimumScore = 1, MaximumScore = 20 },
+        new ThreatBandSetting { MinimumScore = 21, MaximumScore = 40 },
+        new ThreatBandSetting { MinimumScore = 41, MaximumScore = 60 },
+        new ThreatBandSetting { MinimumScore = 61, MaximumScore = 80 },
+        new ThreatBandSetting { MinimumScore = 81, MaximumScore = 100 }
     };
 
     public static IReadOnlyList<ThreatBandSetting> ValidateOrDefault(IReadOnlyList<ThreatBandSetting>? bands, Action<string>? log = null)
@@ -59,7 +57,7 @@ public sealed class ThreatBandSetting
         {
             SettingsAdjustment.LogBandsReplaced(
                 "threatBands",
-                bands?.Select(band => (band.Name, band.MinimumScore, band.MaximumScore)),
+                bands?.Select(band => (band.MinimumScore, band.MaximumScore)),
                 problem,
                 log ?? (_ => { }));
 
@@ -93,17 +91,15 @@ public sealed class ThreatBandSetting
 
 public sealed class RelationshipConfidenceBandSetting
 {
-    public string Name { get; init; } = string.Empty;
-
     public int MinimumScore { get; init; }
 
     public int MaximumScore { get; init; }
 
     public static IReadOnlyList<RelationshipConfidenceBandSetting> Defaults { get; } = new[]
     {
-        new RelationshipConfidenceBandSetting { Name = "Low", MinimumScore = 1, MaximumScore = 25 },
-        new RelationshipConfidenceBandSetting { Name = "Medium", MinimumScore = 26, MaximumScore = 75 },
-        new RelationshipConfidenceBandSetting { Name = "High", MinimumScore = 76, MaximumScore = 100 }
+        new RelationshipConfidenceBandSetting { MinimumScore = 1, MaximumScore = 25 },
+        new RelationshipConfidenceBandSetting { MinimumScore = 26, MaximumScore = 75 },
+        new RelationshipConfidenceBandSetting { MinimumScore = 76, MaximumScore = 100 }
     };
 
     public static IReadOnlyList<RelationshipConfidenceBandSetting> ValidateOrDefault(IReadOnlyList<RelationshipConfidenceBandSetting>? bands, Action<string>? log = null)
@@ -114,7 +110,7 @@ public sealed class RelationshipConfidenceBandSetting
         {
             SettingsAdjustment.LogBandsReplaced(
                 "relationshipConfidenceBands",
-                bands?.Select(band => (band.Name, band.MinimumScore, band.MaximumScore)),
+                bands?.Select(band => (band.MinimumScore, band.MaximumScore)),
                 problem,
                 log ?? (_ => { }));
 

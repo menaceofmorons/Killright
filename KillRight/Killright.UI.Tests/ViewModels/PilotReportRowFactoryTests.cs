@@ -28,7 +28,7 @@ public sealed class PilotReportRowFactoryTests
         var activity = new zKillActivity(95465499, true, 4, 2, null, null, DateTimeOffset.UtcNow);
 
         var row = PilotReportRowFactory.FromPilot(
-            CreatePilot(), activity, null, StyleClassification.Solo, false, "Low", false, false, null);
+            CreatePilot(), activity, null, StyleClassification.Solo, false, "1", false, false, null);
 
         Assert.Equal("4/2", row.Week);
         Assert.Equal("4", row.Kills);
@@ -42,7 +42,7 @@ public sealed class PilotReportRowFactoryTests
         var derived = new PilotDerivedActivity(true, 4, 2, null, null, null, 3);
 
         var row = PilotReportRowFactory.FromPilot(
-            CreatePilot(), activity, null, StyleClassification.Solo, false, "Low", false, false, null, derived);
+            CreatePilot(), activity, null, StyleClassification.Solo, false, "1", false, false, null, derived);
 
         Assert.Equal("4/2", row.Week);
         Assert.Equal("4", row.InfoWeekKills);
@@ -57,14 +57,14 @@ public sealed class PilotReportRowFactoryTests
         var derived = new PilotDerivedActivity(true, 0, 2, null, null, null, 0);
 
         var row = PilotReportRowFactory.FromPilot(
-            CreatePilot(), activity, null, StyleClassification.Solo, false, "Low", false, false, null, derived);
+            CreatePilot(), activity, null, StyleClassification.Solo, false, "1", false, false, null, derived);
 
         Assert.Equal("-", row.InfoWeekKills);
         Assert.Equal("2", row.InfoWeekSolos);
         Assert.Equal("-", row.InfoWeekLosses);
 
         var withoutData = PilotReportRowFactory.FromPilot(
-            CreatePilot(), null, null, StyleClassification.Solo, false, "Low", false, false, null);
+            CreatePilot(), null, null, StyleClassification.Solo, false, "1", false, false, null);
 
         Assert.Equal("-", withoutData.InfoWeekKills);
         Assert.Equal("-", withoutData.InfoWeekSolos);
@@ -77,7 +77,7 @@ public sealed class PilotReportRowFactoryTests
         var activity = new zKillActivity(95465499, true, 0, 2, null, null, DateTimeOffset.UtcNow);
 
         var row = PilotReportRowFactory.FromPilot(
-            CreatePilot(), activity, null, StyleClassification.Solo, false, "Low", false, false, null);
+            CreatePilot(), activity, null, StyleClassification.Solo, false, "1", false, false, null);
 
         Assert.Equal("-/2", row.Week);
         Assert.Equal("0", row.Kills);
@@ -89,7 +89,7 @@ public sealed class PilotReportRowFactoryTests
         var row = PilotReportRowFactory.FromPilot(
             CreatePilot(), null, null, StyleClassification.GangBeginner, false, "Unk", false, false, null);
 
-        Assert.Equal("Gang(b)", row.RecentStyle);
+        Assert.Equal("Gang (beginner)", row.RecentStyle);
         Assert.Equal("Unk", row.GeneralStyle);
     }
 

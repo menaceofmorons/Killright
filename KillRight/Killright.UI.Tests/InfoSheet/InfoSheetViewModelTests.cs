@@ -15,7 +15,7 @@ public sealed class InfoSheetViewModelTests
             CharacterId = characterId,
             InputName = "T'ral Vsengne",
             Pilot = "T'ral Vsengne",
-            Threat = "Low",
+            Threat = "1",
             SecurityStatus = "1.23",
             InfoWeekKills = "4",
             InfoWeekSolos = "2",
@@ -411,7 +411,7 @@ public sealed class InfoSheetViewModelTests
 
         var viewModel = CreateFactionViewModel(row, _ => throw new InvalidOperationException("SDE table missing"));
 
-        Assert.Equal("An", viewModel.FactionValue);
+        Assert.Equal("Ag", viewModel.FactionValue);
     }
 
     [Fact]

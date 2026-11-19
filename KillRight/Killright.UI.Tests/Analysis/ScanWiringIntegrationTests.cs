@@ -58,10 +58,10 @@ public sealed class ScanWiringIntegrationTests
     }
 
     [Theory]
-    [InlineData("solo", "Very High")]
-    [InlineData("solo_beginner", "High")]
-    [InlineData("gang", "Very High")]
-    [InlineData("gang_beginner", "High")]
+    [InlineData("solo", "4")]
+    [InlineData("solo_beginner", "3")]
+    [InlineData("gang", "4")]
+    [InlineData("gang_beginner", "3")]
     public async Task GeneralStyleCodeStoredByTheApplication_DrivesTheStyleModifierInTheRealEngineThreat(string code, string expectedBand)
     {
         Assert.True(StyleCodes.TryFromCode(code, out _));
@@ -93,8 +93,8 @@ public sealed class ScanWiringIntegrationTests
         var withPods = Statistics(shipsDestroyed: 1000, soloKills: 150, shipsLost: 100, soloLosses: 50);
         withPods.podKills = 900;
 
-        Assert.Equal("Very High", await ThreatBandFor(IntegrationPaths.ShippedSettingsPath(), withoutPods));
-        Assert.Equal("Medium", await ThreatBandFor(IntegrationPaths.ShippedSettingsPath(), withPods));
+        Assert.Equal("4", await ThreatBandFor(IntegrationPaths.ShippedSettingsPath(), withoutPods));
+        Assert.Equal("2", await ThreatBandFor(IntegrationPaths.ShippedSettingsPath(), withPods));
     }
 
     [Fact]
@@ -107,8 +107,8 @@ public sealed class ScanWiringIntegrationTests
 
         try
         {
-            Assert.Equal("Medium", shipped);
-            Assert.Equal("Low", await ThreatBandFor(lowered, statistics));
+            Assert.Equal("2", shipped);
+            Assert.Equal("1", await ThreatBandFor(lowered, statistics));
         }
         finally
         {

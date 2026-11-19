@@ -440,6 +440,8 @@ public static class ThreatBandMapper
     public const string None = "None";
     public const string Unknown = "Unk";
 
+    public static string PositionKey(int position) => position.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
     public static string MapScore(int? score, IReadOnlyList<ThreatBandSetting> bands)
     {
         if (score is not int value)
@@ -448,10 +450,10 @@ public static class ThreatBandMapper
         if (value <= 0)
             return None;
 
-        foreach (var band in bands)
+        for (var index = 0; index < bands.Count; index++)
         {
-            if (value >= band.MinimumScore && value <= band.MaximumScore)
-                return band.Name;
+            if (value >= bands[index].MinimumScore && value <= bands[index].MaximumScore)
+                return PositionKey(index + 1);
         }
 
         return None;

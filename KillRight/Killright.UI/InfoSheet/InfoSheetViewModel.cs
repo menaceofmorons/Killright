@@ -144,7 +144,7 @@ public sealed class InfoSheetViewModel : INotifyPropertyChanged
         StatsTitle = UiText.FormatStatsTitle(row.Pilot);
         _errorLine = row.StatsFailureSource is null ? string.Empty : UiText.FormatErrorLoading(row.StatsFailureSource);
         _errorLineVisibility = row.StatsFailureSource is null ? Visibility.Collapsed : Visibility.Visible;
-        ThreatValue = row.Threat;
+        ThreatValue = UiText.GetThreatBandDisplay(row.Threat);
         SecValue = row.SecurityStatus;
         WeekKillsValue = row.InfoWeekKills;
         WeekSolosValue = row.InfoWeekSolos;

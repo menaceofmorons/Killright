@@ -7,12 +7,12 @@ namespace Killright.UI.Tests.ViewModels;
 public sealed class RelationshipConfidenceBandMapperTests
 {
     [Theory]
-    [InlineData(1, "Low")]
-    [InlineData(25, "Low")]
-    [InlineData(26, "Medium")]
-    [InlineData(75, "Medium")]
-    [InlineData(76, "High")]
-    [InlineData(100, "High")]
+    [InlineData(1, "1")]
+    [InlineData(25, "1")]
+    [InlineData(26, "2")]
+    [InlineData(75, "2")]
+    [InlineData(76, "3")]
+    [InlineData(100, "3")]
     public void MapScore_WithinDefaultBands_ReturnsExpectedName(int confidence, string expected)
     {
         var result = RelationshipConfidenceBandMapper.MapScore(confidence, RelationshipConfidenceBandSetting.Defaults);

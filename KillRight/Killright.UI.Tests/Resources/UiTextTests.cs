@@ -22,11 +22,11 @@ public sealed class UiTextTests
     }
 
     [Theory]
-    [InlineData("Low")]
-    [InlineData("Very High")]
-    public void GetThreatBandDisplay_ResolvesKnownBand(string band)
+    [InlineData("1", "Low")]
+    [InlineData("4", "Very High")]
+    public void GetThreatBandDisplay_ResolvesKnownBand(string band, string expected)
     {
-        Assert.Equal(band, UiText.GetThreatBandDisplay(band));
+        Assert.Equal(expected, UiText.GetThreatBandDisplay(band));
     }
 
     [Fact]

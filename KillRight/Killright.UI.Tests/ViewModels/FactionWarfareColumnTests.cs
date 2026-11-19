@@ -15,7 +15,7 @@ public sealed class FactionWarfareColumnTests
     [InlineData(500004L, "Ga")]
     [InlineData(500002L, "Mn")]
     [InlineData(500003L, "Am")]
-    [InlineData(500011L, "An")]
+    [InlineData(500011L, "Ag")]
     [InlineData(500010L, "Gu")]
     public void FromPilot_EnlistedPilot_ShowsShortCodeForFactionId(long factionId, string expected)
     {
@@ -78,6 +78,6 @@ public sealed class FactionWarfareColumnTests
             FactionId = factionId
         };
 
-        return PilotReportRowFactory.FromPilot(pilot, null, null, StyleClassification.Solo, false, "Low", false, false, null);
+        return PilotReportRowFactory.FromPilot(pilot, null, null, StyleClassification.Solo, false, "1", false, false, null);
     }
 }

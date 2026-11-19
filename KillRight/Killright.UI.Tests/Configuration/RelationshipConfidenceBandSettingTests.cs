@@ -32,8 +32,8 @@ public sealed class RelationshipConfidenceBandSettingTests
     {
         var custom = new[]
         {
-            new RelationshipConfidenceBandSetting { Name = "High", MinimumScore = 51, MaximumScore = 100 },
-            new RelationshipConfidenceBandSetting { Name = "Low", MinimumScore = 1, MaximumScore = 50 }
+            new RelationshipConfidenceBandSetting { MinimumScore = 51, MaximumScore = 100 },
+            new RelationshipConfidenceBandSetting { MinimumScore = 1, MaximumScore = 50 }
         };
 
         var log = new List<string>();
@@ -41,8 +41,8 @@ public sealed class RelationshipConfidenceBandSettingTests
         var result = RelationshipConfidenceBandSetting.ValidateOrDefault(custom, log.Add);
 
         Assert.Empty(log);
-        Assert.Equal("Low", result[0].Name);
-        Assert.Equal("High", result[1].Name);
+        Assert.Equal(1, result[0].MinimumScore);
+        Assert.Equal(51, result[1].MinimumScore);
     }
 
     [Fact]
@@ -50,8 +50,8 @@ public sealed class RelationshipConfidenceBandSettingTests
     {
         var malformed = new[]
         {
-            new RelationshipConfidenceBandSetting { Name = "Low", MinimumScore = 1, MaximumScore = 20 },
-            new RelationshipConfidenceBandSetting { Name = "High", MinimumScore = 30, MaximumScore = 100 }
+            new RelationshipConfidenceBandSetting { MinimumScore = 1, MaximumScore = 20 },
+            new RelationshipConfidenceBandSetting { MinimumScore = 30, MaximumScore = 100 }
         };
 
         var log = new List<string>();
@@ -59,7 +59,7 @@ public sealed class RelationshipConfidenceBandSettingTests
         var result = RelationshipConfidenceBandSetting.ValidateOrDefault(malformed, log.Add);
 
         Assert.Same(RelationshipConfidenceBandSetting.Defaults, result);
-        Assert.Equal(new[] { "Setting 'relationshipConfidenceBands' read as [Low 1-20, High 30-100]; using the built-in bands (gapped, overlapping or not starting at 1)." }, log);
+        Assert.Equal(new[] { "Setting 'relationshipConfidenceBands' read as [1-20, 30-100]; using the built-in bands (gapped, overlapping or not starting at 1)." }, log);
     }
 
     [Fact]
@@ -68,8 +68,8 @@ public sealed class RelationshipConfidenceBandSettingTests
         var log = new List<string>();
         var malformed = new[]
         {
-            new RelationshipConfidenceBandSetting { Name = "Low", MinimumScore = 1, MaximumScore = 60 },
-            new RelationshipConfidenceBandSetting { Name = "High", MinimumScore = 50, MaximumScore = 100 }
+            new RelationshipConfidenceBandSetting { MinimumScore = 1, MaximumScore = 60 },
+            new RelationshipConfidenceBandSetting { MinimumScore = 50, MaximumScore = 100 }
         };
 
         var result = RelationshipConfidenceBandSetting.ValidateOrDefault(malformed, log.Add);
@@ -83,7 +83,7 @@ public sealed class RelationshipConfidenceBandSettingTests
     {
         var malformed = new[]
         {
-            new RelationshipConfidenceBandSetting { Name = "Low", MinimumScore = 1, MaximumScore = 50 }
+            new RelationshipConfidenceBandSetting { MinimumScore = 1, MaximumScore = 50 }
         };
 
         var log = new List<string>();
@@ -91,6 +91,6 @@ public sealed class RelationshipConfidenceBandSettingTests
         var result = RelationshipConfidenceBandSetting.ValidateOrDefault(malformed, log.Add);
 
         Assert.Same(RelationshipConfidenceBandSetting.Defaults, result);
-        Assert.Equal(new[] { "Setting 'relationshipConfidenceBands' read as [Low 1-50]; using the built-in bands (not covering 1 to 100)." }, log);
+        Assert.Equal(new[] { "Setting 'relationshipConfidenceBands' read as [1-50]; using the built-in bands (not covering 1 to 100)." }, log);
     }
 }
