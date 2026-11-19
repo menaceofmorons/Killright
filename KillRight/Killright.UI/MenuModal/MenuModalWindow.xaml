@@ -9,6 +9,8 @@
         ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False"
+        Background="{DynamicResource Brush.Window.Background}"
+        Foreground="{DynamicResource Brush.Text.Primary}"
         PreviewKeyDown="Window_PreviewKeyDown">
     <DockPanel Margin="12">
         <StackPanel DockPanel.Dock="Bottom"
@@ -36,6 +38,73 @@
                               Margin="0,8,0,0"
                               Checked="SkipBackupOnClose_Changed"
                               Unchecked="SkipBackupOnClose_Changed" />
+                    <Grid x:Name="OptionsRow" Margin="0,12,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="{x:Static resources:UiText.MenuAppearanceTheme}" />
+                            <ComboBox x:Name="ThemeComboBox"
+                                      Width="150"
+                                      HorizontalAlignment="Left"
+                                      Margin="0,4,0,0"
+                                      SelectionChanged="Theme_Changed">
+                                <ComboBoxItem Content="{x:Static resources:UiText.MenuAppearanceThemeLight}" Tag="Light" />
+                                <ComboBoxItem Content="{x:Static resources:UiText.MenuAppearanceThemeDark}" Tag="Dark" />
+                                <ComboBoxItem Content="{x:Static resources:UiText.MenuAppearanceThemeFollowWindows}" Tag="FollowWindows" />
+                            </ComboBox>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1">
+                            <TextBlock Text="{x:Static resources:UiText.MenuAppearanceGridFontSize}" />
+                            <ComboBox x:Name="FontTierComboBox"
+                                      Width="150"
+                                      HorizontalAlignment="Left"
+                                      Margin="0,4,0,0"
+                                      SelectionChanged="FontTier_Changed">
+                                <ComboBoxItem Content="{x:Static resources:UiText.MenuAppearanceFontSizeLarge}" Tag="Large" />
+                                <ComboBoxItem Content="{x:Static resources:UiText.MenuAppearanceFontSizeMedium}" Tag="Medium" />
+                                <ComboBoxItem Content="{x:Static resources:UiText.MenuAppearanceFontSizeSmall}" Tag="Small" />
+                                <ComboBoxItem Content="{x:Static resources:UiText.MenuAppearanceFontSizeTiny}" Tag="Tiny" />
+                            </ComboBox>
+                        </StackPanel>
+                    </Grid>
+                    <TextBlock Text="{x:Static resources:UiText.MenuAppearanceHighlightColours}" Margin="0,12,0,0" />
+                    <StackPanel x:Name="ColoursRow" Orientation="Horizontal" Margin="0,4,0,0">
+                        <StackPanel Margin="0,0,16,0">
+                            <TextBlock Text="{x:Static resources:UiText.MenuAppearanceHighlightPilot}" Margin="0,0,0,2" />
+                            <Button x:Name="PilotSwatchButton" Width="44" Height="26" HorizontalAlignment="Left" Padding="2" Click="PilotSwatchButton_Click">
+                                <Border x:Name="PilotSwatchChip" Width="34" Height="16" BorderBrush="Gray" BorderThickness="1" />
+                            </Button>
+                            <Popup x:Name="PilotSwatchPopup" PlacementTarget="{Binding ElementName=PilotSwatchButton}" Placement="Bottom" StaysOpen="False" AllowsTransparency="True">
+                                <Border Background="{DynamicResource Brush.Window.Background}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" Padding="8,8,2,2">
+                                    <WrapPanel x:Name="PilotSwatchPanel" Orientation="Horizontal" Width="220" />
+                                </Border>
+                            </Popup>
+                        </StackPanel>
+                        <StackPanel Margin="0,0,16,0">
+                            <TextBlock Text="{x:Static resources:UiText.MenuAppearanceHighlightRelated}" Margin="0,0,0,2" />
+                            <Button x:Name="RelatedSwatchButton" Width="44" Height="26" HorizontalAlignment="Left" Padding="2" Click="RelatedSwatchButton_Click">
+                                <Border x:Name="RelatedSwatchChip" Width="34" Height="16" BorderBrush="Gray" BorderThickness="1" />
+                            </Button>
+                            <Popup x:Name="RelatedSwatchPopup" PlacementTarget="{Binding ElementName=RelatedSwatchButton}" Placement="Bottom" StaysOpen="False" AllowsTransparency="True">
+                                <Border Background="{DynamicResource Brush.Window.Background}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" Padding="8,8,2,2">
+                                    <WrapPanel x:Name="RelatedSwatchPanel" Orientation="Horizontal" Width="220" />
+                                </Border>
+                            </Popup>
+                        </StackPanel>
+                        <StackPanel>
+                            <TextBlock Text="{x:Static resources:UiText.MenuAppearanceHighlightNewPilot}" Margin="0,0,0,2" />
+                            <Button x:Name="NewPilotSwatchButton" Width="44" Height="26" HorizontalAlignment="Left" Padding="2" Click="NewPilotSwatchButton_Click">
+                                <Border x:Name="NewPilotSwatchChip" Width="34" Height="16" BorderBrush="Gray" BorderThickness="1" />
+                            </Button>
+                            <Popup x:Name="NewPilotSwatchPopup" PlacementTarget="{Binding ElementName=NewPilotSwatchButton}" Placement="Bottom" StaysOpen="False" AllowsTransparency="True">
+                                <Border Background="{DynamicResource Brush.Window.Background}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" Padding="8,8,2,2">
+                                    <WrapPanel x:Name="NewPilotSwatchPanel" Orientation="Horizontal" Width="220" />
+                                </Border>
+                            </Popup>
+                        </StackPanel>
+                    </StackPanel>
                     <TextBlock Text="{x:Static resources:UiText.MenuConfigDefaultSectionTitle}"
                                FontWeight="Bold"
                                Margin="0,16,0,4" />
@@ -53,55 +122,6 @@
                                 Margin="8,0,0,0"
                                 Click="ResetSystem_Click" />
                     </StackPanel>
-                </StackPanel>
-            </TabItem>
-            <TabItem Header="{x:Static resources:UiText.MenuTabAppearance}">
-                <StackPanel Margin="12">
-                    <TextBlock Text="{x:Static resources:UiText.MenuAppearanceTheme}" />
-                    <ComboBox x:Name="ThemeComboBox"
-                              Margin="0,4,0,12"
-                              SelectionChanged="Theme_Changed">
-                        <ComboBoxItem Content="{x:Static resources:UiText.MenuAppearanceThemeLight}" Tag="Light" />
-                        <ComboBoxItem Content="{x:Static resources:UiText.MenuAppearanceThemeDark}" Tag="Dark" />
-                        <ComboBoxItem Content="{x:Static resources:UiText.MenuAppearanceThemeFollowWindows}" Tag="FollowWindows" />
-                    </ComboBox>
-                    <TextBlock Text="{x:Static resources:UiText.MenuAppearanceGridFontSize}" />
-                    <ComboBox x:Name="FontTierComboBox"
-                              Margin="0,4,0,12"
-                              SelectionChanged="FontTier_Changed">
-                        <ComboBoxItem Content="{x:Static resources:UiText.MenuAppearanceFontSizeLarge}" Tag="Large" />
-                        <ComboBoxItem Content="{x:Static resources:UiText.MenuAppearanceFontSizeMedium}" Tag="Medium" />
-                        <ComboBoxItem Content="{x:Static resources:UiText.MenuAppearanceFontSizeSmall}" Tag="Small" />
-                        <ComboBoxItem Content="{x:Static resources:UiText.MenuAppearanceFontSizeTiny}" Tag="Tiny" />
-                    </ComboBox>
-                    <TextBlock Text="{x:Static resources:UiText.MenuAppearanceHighlightColours}" />
-                    <TextBlock Text="{x:Static resources:UiText.MenuAppearanceHighlightPilot}" Margin="0,8,0,2" />
-                    <Button x:Name="PilotSwatchButton" Width="44" Height="26" HorizontalAlignment="Left" Padding="2" Click="PilotSwatchButton_Click">
-                        <Border x:Name="PilotSwatchChip" Width="34" Height="16" BorderBrush="Gray" BorderThickness="1" />
-                    </Button>
-                    <Popup x:Name="PilotSwatchPopup" PlacementTarget="{Binding ElementName=PilotSwatchButton}" Placement="Bottom" StaysOpen="False" AllowsTransparency="True">
-                        <Border Background="{DynamicResource Brush.Window.Background}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" Padding="8,8,2,2">
-                            <WrapPanel x:Name="PilotSwatchPanel" Orientation="Horizontal" Width="220" />
-                        </Border>
-                    </Popup>
-                    <TextBlock Text="{x:Static resources:UiText.MenuAppearanceHighlightRelated}" Margin="0,8,0,2" />
-                    <Button x:Name="RelatedSwatchButton" Width="44" Height="26" HorizontalAlignment="Left" Padding="2" Click="RelatedSwatchButton_Click">
-                        <Border x:Name="RelatedSwatchChip" Width="34" Height="16" BorderBrush="Gray" BorderThickness="1" />
-                    </Button>
-                    <Popup x:Name="RelatedSwatchPopup" PlacementTarget="{Binding ElementName=RelatedSwatchButton}" Placement="Bottom" StaysOpen="False" AllowsTransparency="True">
-                        <Border Background="{DynamicResource Brush.Window.Background}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" Padding="8,8,2,2">
-                            <WrapPanel x:Name="RelatedSwatchPanel" Orientation="Horizontal" Width="220" />
-                        </Border>
-                    </Popup>
-                    <TextBlock Text="{x:Static resources:UiText.MenuAppearanceHighlightNewPilot}" Margin="0,8,0,2" />
-                    <Button x:Name="NewPilotSwatchButton" Width="44" Height="26" HorizontalAlignment="Left" Padding="2" Click="NewPilotSwatchButton_Click">
-                        <Border x:Name="NewPilotSwatchChip" Width="34" Height="16" BorderBrush="Gray" BorderThickness="1" />
-                    </Button>
-                    <Popup x:Name="NewPilotSwatchPopup" PlacementTarget="{Binding ElementName=NewPilotSwatchButton}" Placement="Bottom" StaysOpen="False" AllowsTransparency="True">
-                        <Border Background="{DynamicResource Brush.Window.Background}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" Padding="8,8,2,2">
-                            <WrapPanel x:Name="NewPilotSwatchPanel" Orientation="Horizontal" Width="220" />
-                        </Border>
-                    </Popup>
                 </StackPanel>
             </TabItem>
             <TabItem Header="{x:Static resources:UiText.MenuTabColumns}">

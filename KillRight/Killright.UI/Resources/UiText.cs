@@ -49,7 +49,6 @@ public static class UiText
     public static string MenuConfigSave => Strings.Get("Menu.Config.Save");
     public static string MenuConfigResetMine => Strings.Get("Menu.Config.ResetMine");
     public static string MenuConfigResetSystem => Strings.Get("Menu.Config.ResetSystem");
-    public static string MenuTabAppearance => Strings.Get("Menu.Tab.Appearance");
     public static string MenuAppearanceTheme => Strings.Get("Menu.Appearance.Theme");
     public static string MenuAppearanceThemeLight => Strings.Get("Menu.Appearance.ThemeLight");
     public static string MenuAppearanceThemeDark => Strings.Get("Menu.Appearance.ThemeDark");

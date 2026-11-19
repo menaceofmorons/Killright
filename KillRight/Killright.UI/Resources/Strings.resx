@@ -76,7 +76,6 @@
   <data name="Menu.Config.Save" xml:space="preserve"><value>Save</value></data>
   <data name="Menu.Config.ResetMine" xml:space="preserve"><value>Reset Mine</value></data>
   <data name="Menu.Config.ResetSystem" xml:space="preserve"><value>Reset System</value></data>
-  <data name="Menu.Tab.Appearance" xml:space="preserve"><value>Appearance</value></data>
   <data name="Menu.Appearance.Theme" xml:space="preserve"><value>Theme</value></data>
   <data name="Menu.Appearance.ThemeLight" xml:space="preserve"><value>Light</value></data>
   <data name="Menu.Appearance.ThemeDark" xml:space="preserve"><value>Dark</value></data>

@@ -8,7 +8,9 @@
         Height="480"
         ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner"
-        ShowInTaskbar="False">
+        ShowInTaskbar="False"
+        Background="{DynamicResource Brush.Window.Background}"
+        Foreground="{DynamicResource Brush.Text.Primary}">
     <DockPanel Margin="12">
         <Button DockPanel.Dock="Bottom"
                 Content="{x:Static resources:UiText.ShortcutsButtonClose}"
