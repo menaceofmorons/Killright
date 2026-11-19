@@ -4,6 +4,7 @@
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         xmlns:controls="clr-namespace:Killright.UI.Controls"
         xmlns:resources="clr-namespace:Killright.UI.Resources"
+        xmlns:viewModels="clr-namespace:Killright.UI.ViewModels"
         Title="{x:Static resources:UiText.WindowTitleMain}"
         WindowStyle="None"
         ResizeMode="CanResize"
@@ -19,11 +20,13 @@
     </shell:WindowChrome.WindowChrome>
     <Window.Resources>
         <controls:SpaceIndentConverter x:Key="SpaceIndentConverter" />
+        <viewModels:FactionNameTooltipConverter x:Key="FactionNameTooltipConverter" />
         <Style x:Key="ColumnHeaderStyle" TargetType="DataGridColumnHeader">
             <Setter Property="Background" Value="{DynamicResource Brush.Header.Background}" />
             <Setter Property="Foreground" Value="{DynamicResource Brush.Header.Text}" />
             <Setter Property="Height" Value="{DynamicResource GridHeaderHeight}" />
             <Setter Property="Padding" Value="0" />
+            <Setter Property="FontWeight" Value="Bold" />
             <Setter Property="HorizontalContentAlignment" Value="Left" />
         </Style>
         <Style x:Key="ColumnHeaderStyleCentered" TargetType="DataGridColumnHeader" BasedOn="{StaticResource ColumnHeaderStyle}">
@@ -225,6 +228,7 @@
                             <Style TargetType="TextBlock">
                                 <Setter Property="HorizontalAlignment" Value="Stretch" />
                                 <Setter Property="TextAlignment" Value="Center" />
+                                <Setter Property="ToolTip" Value="{Binding StyleTooltip}" />
                             </Style>
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
@@ -252,13 +256,14 @@
                             <Style TargetType="TextBlock">
                                 <Setter Property="HorizontalAlignment" Value="Stretch" />
                                 <Setter Property="TextAlignment" Value="Center" />
+                                <Setter Property="ToolTip" Value="{Binding FactionId, Converter={StaticResource FactionNameTooltipConverter}}" />
                             </Style>
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
                     <DataGridTextColumn x:Name="ColumnLastActive" Header="{x:Static resources:UiText.GridColumnHeaderLastKill}" Binding="{Binding LastKill}" SortMemberPath="LastKillSortKey" Width="90" />
                     <DataGridTextColumn x:Name="ColumnNotes" Header="{x:Static resources:UiText.GridColumnHeaderNotes}" Binding="{Binding Notes}" Width="260" />
                     <DataGridTextColumn x:Name="ColumnVerify" Header="{x:Static resources:UiText.GridColumnHeaderVerify}" Binding="{Binding Verify}" Width="70" />
-                    <DataGridTextColumn x:Name="ColumnGroup" Header="{x:Static resources:UiText.GridColumnHeaderGroup}" Binding="{Binding Group}" Width="90" />
+                    <DataGridTextColumn x:Name="ColumnGroup" Header="{x:Static resources:UiText.GridColumnHeaderGroup}" Binding="{Binding Group}" Width="90" CanUserSort="False" />
                 </DataGrid.Columns>
             </DataGrid>
         </ScrollViewer>

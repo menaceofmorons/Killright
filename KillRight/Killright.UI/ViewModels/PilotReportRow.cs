@@ -39,6 +39,7 @@ public class PilotReportRow : INotifyPropertyChanged
     public string RecentStyle { get; set; } = string.Empty;
     public StyleClassification GeneralStyleClassification { get; set; } = StyleClassification.Unknown;
     public StyleClassification RecentStyleClassification { get; set; } = StyleClassification.Unknown;
+    public string? StyleTooltip => PilotGridTooltips.Style(GeneralStyle, RecentStyle);
     public string Week { get; set; } = string.Empty;
     public string Kills { get; set; } = string.Empty;
     public string Solos { get; set; } = string.Empty;
