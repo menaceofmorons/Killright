@@ -209,6 +209,20 @@
 
   <data name="Placeholder.Dash" xml:space="preserve"><value>-</value></data>
   <data name="Placeholder.Unk" xml:space="preserve"><value>Unk</value></data>
+  <data name="Placeholder.UnkLower" xml:space="preserve"><value>unk</value></data>
+  <data name="Placeholder.UnknownGlyph" xml:space="preserve"><value>?</value></data>
+  <data name="Grid.Verify.Verified" xml:space="preserve"><value>V</value></data>
+  <data name="Grid.Verify.Partial" xml:space="preserve"><value>P</value></data>
+  <data name="Grid.LastKill.HoursFormat" xml:space="preserve"><value>{0}h</value></data>
+  <data name="Grid.LastKill.DaysFormat" xml:space="preserve"><value>{0}d</value></data>
+  <data name="Grid.LastKill.Over" xml:space="preserve"><value>&gt;30d</value></data>
+  <data name="Grid.Filter.IgnorePrefix" xml:space="preserve"><value>(I) </value></data>
+  <data name="Grid.Filter.FilterPrefix" xml:space="preserve"><value>(F) </value></data>
+  <data name="Notes.Call.Esi" xml:space="preserve"><value>ESI</value></data>
+  <data name="Notes.Call.Statistics" xml:space="preserve"><value>zKillboard statistics</value></data>
+  <data name="Notes.Call.Recent" xml:space="preserve"><value>zKillboard recent killmails</value></data>
+  <data name="Notes.Call.Engine" xml:space="preserve"><value>engine</value></data>
+  <data name="Notes.Separator" xml:space="preserve"><value>, </value></data>
 
   <data name="Style.Word.Inactive" xml:space="preserve"><value>Inactive</value></data>
   <data name="Style.Word.Victim" xml:space="preserve"><value>Victim</value></data>

@@ -116,7 +116,7 @@ public sealed class EngineRuntimeWorkStreamIntegrationTests
         });
 
         var row = PilotReportRowFactory.FromPilot(
-            new Pilot { InputName = "Lukas Naarii", CharacterId = Lukas, VerifyStatus = VerifyStatus.Partial },
+            new Pilot { InputName = "Lukas Naarii", CharacterId = Lukas, VerifyStatus = VerifyStatus.Partial, CorporationId = 1 },
             null,
             null,
             results[0].RecentStyle,
@@ -127,7 +127,8 @@ public sealed class EngineRuntimeWorkStreamIntegrationTests
             results[0].FailureReason);
 
         Assert.Equal("Unk", row.Threat);
-        Assert.Contains("killright_engine analysis failed (missing_runtime)", row.Notes);
+        Assert.Equal("engine", row.Notes);
+        Assert.True(row.DataRetrievalFailed);
     }
 
     [Fact]

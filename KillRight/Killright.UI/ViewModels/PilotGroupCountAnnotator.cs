@@ -1,3 +1,4 @@
+using Killright.UI.Resources;
 using Killright.UI.Analysis;
 
 namespace Killright.UI.ViewModels;
@@ -23,7 +24,7 @@ public static class PilotGroupCountAnnotator
         }
     }
 
-    private static string FormatGroupCount(int count) => count == 0 ? "-" : count.ToString();
+    private static string FormatGroupCount(int count) => count == 0 ? UiText.PlaceholderDash : count.ToString();
 
     private static void AnnotateAlliance(IReadOnlyList<PilotReportRow> rows)
     {

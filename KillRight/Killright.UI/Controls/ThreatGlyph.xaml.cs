@@ -54,7 +54,7 @@ public partial class ThreatGlyph : UserControl
         "3" => new GlyphSpec(WedgeKind.Half, "Brush.Threat.Amber", "Brush.Border", true, string.Empty),
         "4" => new GlyphSpec(WedgeKind.ThreeQuarter, "Brush.Threat.Amber", "Brush.Border", true, string.Empty),
         "5" => new GlyphSpec(WedgeKind.Full, "Brush.Threat.Red", "Brush.Border", false, string.Empty),
-        _ => new GlyphSpec(WedgeKind.None, null, "Brush.Border", false, "?")
+        _ => new GlyphSpec(WedgeKind.None, null, "Brush.Border", false, UiText.PlaceholderUnknownGlyph)
     };
 
     private void Render(string band)
