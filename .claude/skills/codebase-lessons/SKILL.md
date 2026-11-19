@@ -35,3 +35,4 @@ metadata:
 - `f64::NAN.max(0.0)` returns 0.0, so check `is_finite()` before any `max(0.0)` clamp that precedes a checked numeric conversion (WS-1.4)
 - xunit test classes that initialise the real engine share one `[Collection("RealEngine")]`; the engine runtime is process-wide, so parallel classes fail intermittently (WS-1.4)
 - Group Detection skips pairs whose current identities share a corporation; seeded test pilots need distinct corporation ids (WS-1.4)
+- A stub `HttpMessageHandler` that returns synchronously ignores a pre-cancelled token; cancellation tests need a handler that awaits the token (WS-1.5)
