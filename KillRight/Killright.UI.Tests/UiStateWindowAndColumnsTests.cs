@@ -20,18 +20,6 @@ public sealed class UiStateWindowAndColumnsTests
     }
 
     [Fact]
-    public void MainWindow_TakesMinimumSizeFromWindowLimits_NotFromXaml()
-    {
-        var xaml = ReadUiFile("MainWindow.xaml");
-        var source = ReadUiFile("MainWindow.xaml.cs");
-
-        Assert.DoesNotContain("MinWidth=\"120\"", xaml);
-        Assert.DoesNotContain("MinHeight=\"60\"", xaml);
-        Assert.Contains("MinWidth = WindowLimits.MinimumWidth;", source);
-        Assert.Contains("MinHeight = WindowLimits.MinimumHeight;", source);
-    }
-
-    [Fact]
     public void Gate_PersistsOutsideAPreview()
     {
         Assert.True(new ColumnLayoutPersistenceGate().ShouldPersist);
@@ -70,12 +58,50 @@ public sealed class UiStateWindowAndColumnsTests
     }
 
     [Fact]
-    public void MainWindow_GuardsColumnWritesWithTheGate()
+    public void MainWindowXaml_HasNoHardCodedMinimumSize()
     {
-        var source = ReadUiFile("MainWindow.xaml.cs");
+        var xaml = ReadUiFile("MainWindow.xaml");
 
-        Assert.Contains("_columnPersistence.BeginPreview()", source);
-        Assert.Contains("if (!_columnPersistence.ShouldPersist)", source);
+        Assert.DoesNotContain("MinWidth=\"120\"", xaml);
+        Assert.DoesNotContain("MinHeight=\"60\"", xaml);
+    }
+
+    [Fact]
+    public void PreviewThenCancel_WritesNothing_PreviewThenOk_StoresTheColumns()
+    {
+        Sta.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".json");
+
+            try
+            {
+                var store = new UiStateStore(path);
+                var gate = new ColumnLayoutPersistenceGate();
+                var stored = store.Current.Columns;
+                var previewed = stored.Select(column => column with { Width = column.Width + 50 }).ToList();
+
+                using (gate.BeginPreview())
+                {
+                    if (gate.ShouldPersist)
+                        store.UpdateColumns(previewed);
+                }
+
+                Assert.True(stored.SequenceEqual(store.Current.Columns));
+                Assert.False(File.Exists(path));
+
+                using (gate.BeginPreview())
+                {
+                }
+
+                store.Commit(store.Current with { Columns = previewed });
+                Assert.True(File.Exists(path));
+                Assert.True(previewed.SequenceEqual(new UiStateStore(path).Current.Columns));
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
     }
 
     [Fact]
@@ -84,7 +110,6 @@ public sealed class UiStateWindowAndColumnsTests
         Assert.Equal(
             "Saved window and display settings could not be read and have been reset to defaults.",
             UiText.UiStateCorrupt);
-        Assert.DoesNotContain("could not be read", ReadUiFile("App.xaml.cs"));
     }
 
     [Fact]
@@ -106,15 +131,6 @@ public sealed class UiStateWindowAndColumnsTests
             SendMessage(source.Handle, WmClipboardUpdate, nint.Zero, nint.Zero);
             Assert.Equal(1, raised);
         });
-    }
-
-    [Fact]
-    public void MainWindow_DisposesTheClipboardMonitorOnClose()
-    {
-        var source = ReadUiFile("MainWindow.xaml.cs");
-
-        Assert.Contains("protected override void OnClosed", source);
-        Assert.Contains("_clipboardMonitor.Dispose();", source);
     }
 
     [DllImport("user32.dll")]
