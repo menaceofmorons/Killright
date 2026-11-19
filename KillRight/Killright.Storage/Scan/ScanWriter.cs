@@ -33,6 +33,7 @@ public static class ScanWriter
         WriteStatistics(connection, transaction, batch.Statistics);
         KillmailBulkWriter.Write(connection, transaction, batch.Killmails, qualificationFleetThreshold, cachedAtUtc);
         ClearNoHistoryMarkers(connection, transaction, batch.NoHistoryClears);
+        SetNoHistoryMarkers(connection, transaction, batch.NoHistoryMarks);
         WriteActivities(connection, transaction, batch.Activities);
 
         scope.Commit();
@@ -170,6 +171,25 @@ public static class ScanWriter
                     var ids = string.Join(", ", chunk.Select(id => parameters.Add(id)));
 
                     return $"UPDATE main.zkill_statistics_cache SET no_history_marker = 0 WHERE character_id IN ({ids});";
+                });
+        }
+    }
+
+    private static void SetNoHistoryMarkers(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        IReadOnlyList<long> characterIds)
+    {
+        foreach (var chunk in characterIds.Chunk(ChunkSize))
+        {
+            Execute(
+                connection,
+                transaction,
+                parameters =>
+                {
+                    var ids = string.Join(", ", chunk.Select(id => parameters.Add(id)));
+
+                    return $"UPDATE main.zkill_statistics_cache SET no_history_marker = 1 WHERE character_id IN ({ids});";
                 });
         }
     }

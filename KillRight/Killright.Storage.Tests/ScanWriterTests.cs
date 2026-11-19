@@ -92,6 +92,22 @@ public sealed class ScanWriterTests
     }
 
     [Fact]
+    public async Task Commit_NoHistoryMark_SetsTheMarkerOnTheStatisticsRow()
+    {
+        var database = CreateDatabase();
+        await new zKillStatisticsCache(database).UpsertAsync(Lukas, Statistics(), "Gang", false);
+        var batch = new ScanWriteBatch();
+        batch.AddNoHistoryMark(Lukas);
+
+        using (var session = database.OpenScanSession())
+            ScanWriter.Commit(session, batch, Threshold, Now);
+
+        var statistics = await new zKillStatisticsCache(database).GetAsync(Lukas, TimeSpan.FromDays(30));
+
+        Assert.True(statistics!.NoHistory);
+    }
+
+    [Fact]
     public void Commit_FailureRollsBackEveryWriteOfTheScan()
     {
         var database = CreateDatabase();

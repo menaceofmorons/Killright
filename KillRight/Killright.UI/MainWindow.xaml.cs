@@ -1179,17 +1179,19 @@ public partial class MainWindow : Window
 
         storedActivities.TryGetValue(characterId, out var storedActivity);
 
-        (DateTimeOffset? NewLastSuccessfulCallUtc, bool Failed, int? PastSecondsRequested) recentRefresh;
+        RecentRefreshOutcome recentRefresh;
 
         using (timings.Measure(ScanTimings.PilotLevel, "recent_refresh", characterId))
         {
-            recentRefresh = await RefreshRecentKillmailsAsync(
+            recentRefresh = await RecentKillmailRefresher.RefreshAsync(
+                App.zKillClient,
                 characterId,
                 position,
                 storedActivity,
                 statistics,
                 statisticsFetchedThisScan,
                 writes,
+                ApplicationClock.UtcNow,
                 timings,
                 cancellationToken);
         }
@@ -1269,65 +1271,6 @@ public partial class MainWindow : Window
         }
 
         return (statistics, true);
-    }
-
-    private static async Task<(DateTimeOffset? NewLastSuccessfulCallUtc, bool Failed, int? PastSecondsRequested)> RefreshRecentKillmailsAsync(
-        long characterId,
-        int position,
-        zKillActivity? storedActivity,
-        zKillStatistics? statistics,
-        bool statisticsFetchedThisScan,
-        ScanWriteBatch writes,
-        ScanTimings? timings,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            var now = ApplicationClock.UtcNow;
-            var lastSuccessfulCallUtc = storedActivity?.LastSuccessfulRecentCallUtc;
-
-            if (RecentCallScheduler.ShouldSkipForInterval(lastSuccessfulCallUtc, now))
-                return (null, false, null);
-
-            var noHistory = statistics?.NoHistory ?? false;
-
-            if (!noHistory
-                && statisticsFetchedThisScan
-                && RecentCallScheduler.ShouldShortCircuit(statistics?.months, now))
-            {
-                return (now, false, null);
-            }
-
-            var pastSeconds = RecentCallScheduler.CalculatePastSeconds(lastSuccessfulCallUtc, now);
-            zKillRecentKillmailResult result;
-
-            using (timings.Measure(ScanTimings.PilotLevel, "zkill_http", characterId))
-            {
-                result = await App.zKillClient.GetRecentKillmailsAsync(characterId, pastSeconds, cancellationToken);
-            }
-
-            switch (result.Outcome)
-            {
-                case zKillRecentKillmailOutcome.Success:
-                    if (result.RawKillmails.Count > 0)
-                    {
-                        writes.AddKillmails(position, characterId, result.RawKillmails);
-                        writes.AddNoHistoryClear(characterId);
-                    }
-
-                    return (now, false, pastSeconds);
-
-                case zKillRecentKillmailOutcome.NoHistory:
-                    return (now, false, pastSeconds);
-
-                default:
-                    return (null, true, null);
-            }
-        }
-        catch
-        {
-            return (null, true, null);
-        }
     }
 
 }
