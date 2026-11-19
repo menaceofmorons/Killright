@@ -10,6 +10,13 @@ using Xunit;
 
 namespace Killright.UI.Tests.Scan;
 
+[CollectionDefinition(Name, DisableParallelization = true)]
+public sealed class ApplicationClockCollection
+{
+    public const string Name = "ApplicationClock";
+}
+
+[Collection(ApplicationClockCollection.Name)]
 public sealed class PilotIdentityResolverTests
 {
     private const string Tral = "T'ral Vsengne";
