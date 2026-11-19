@@ -2,6 +2,7 @@ using Killright.Core.Models;
 using Killright.Integration.Esi;
 using Killright.Shared;
 using Killright.Shared.Constants;
+using Killright.Shared.Time;
 using Killright.Storage.Database;
 using Killright.Storage.Diagnostics;
 using Killright.Storage.Identity;
@@ -28,7 +29,7 @@ public sealed class PilotIdentityResolver
         _identityCache = identityCache;
         _nameCache = nameCache;
         _maxConcurrency = maxConcurrency;
-        _utcNow = utcNow ?? (() => DateTime.UtcNow);
+        _utcNow = utcNow ?? (() => ApplicationClock.UtcNow.UtcDateTime);
     }
 
     public async Task<IReadOnlyList<Pilot>> ResolveAsync(
@@ -362,6 +363,7 @@ public sealed class PilotIdentityResolver
                 VerifyStatus = VerifyStatus.Partial,
                 SecurityStatus = SecurityStatus,
                 Corporation = corporation,
+                CorporationId = CorporationId,
                 Alliance = alliance,
                 AllianceId = AllianceId,
                 Birthday = Birthday,

@@ -65,6 +65,24 @@ public sealed class IgnoreListFilterTests
     }
 
     [Fact]
+    public void IsIgnored_CorporationIdWithoutResolvedName_MatchesCorporationEntry()
+    {
+        var pilot = CreatePilot(95465499) with { CorporationId = 98765 };
+        var ignoreList = new[] { new IgnoreListEntry { Id = 98765, Type = IgnoreEntryType.Corporation, Name = "Test Corp" } };
+
+        Assert.True(IgnoreListFilter.IsIgnored(pilot, ignoreList));
+    }
+
+    [Fact]
+    public void IsIgnored_AllianceIdWithoutResolvedName_MatchesAllianceEntry()
+    {
+        var pilot = CreatePilot(95465499, allianceId: 99001) with { Alliance = null };
+        var ignoreList = new[] { new IgnoreListEntry { Id = 99001, Type = IgnoreEntryType.Alliance, Name = "Test Alliance" } };
+
+        Assert.True(IgnoreListFilter.IsIgnored(pilot, ignoreList));
+    }
+
+    [Fact]
     public void IsIgnored_NoCorporationResolved_DoesNotMatchCorporationEntry()
     {
         var pilot = CreatePilot(95465499);

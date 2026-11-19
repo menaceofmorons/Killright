@@ -12,8 +12,8 @@ public static class IgnoreListFilter
             var matches = entry.Type switch
             {
                 IgnoreEntryType.Pilot => pilot.CharacterId == entry.Id,
-                IgnoreEntryType.Corporation => pilot.Corporation?.CorporationId == entry.Id,
-                IgnoreEntryType.Alliance => pilot.AllianceId == entry.Id,
+                IgnoreEntryType.Corporation => (pilot.CorporationId ?? pilot.Corporation?.CorporationId) == entry.Id,
+                IgnoreEntryType.Alliance => (pilot.AllianceId ?? pilot.Alliance?.AllianceId) == entry.Id,
                 _ => false
             };
 

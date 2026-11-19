@@ -270,7 +270,8 @@ public partial class App : Application
                 EsiClient,
                 PilotIdentityCache,
                 EsiEntityNameCache,
-                Settings.Network.EsiMaxConcurrency);
+                Settings.Network.EsiMaxConcurrency,
+                () => ApplicationClock.UtcNow.UtcDateTime);
 
         var zKillHandler =
             new HttpClientHandler
