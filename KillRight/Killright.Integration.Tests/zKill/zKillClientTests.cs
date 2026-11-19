@@ -251,6 +251,98 @@ public sealed class zKillClientTests
     }
 
     [Fact]
+    public async Task GetRecentKillmailsAsync_MultiplePages_MergesAllPagesInOrderAndCountsEachAgainstBudget()
+    {
+        var handler = new ScriptedHttpMessageHandler()
+            .OnUriContaining("pastSeconds/3600/page/3/", HttpStatusCode.OK, "[]")
+            .OnUriContaining("pastSeconds/3600/page/2/", HttpStatusCode.OK, KillmailPage(3, 4))
+            .OnUriContaining("pastSeconds/3600/", HttpStatusCode.OK, KillmailPage(1, 2));
+        var limiter = new CountingLimiter();
+        var client = new zKillClient(new HttpClient(handler), limiter: limiter);
+
+        var result = await client.GetRecentKillmailsAsync(95465499, 3600);
+
+        Assert.Equal(zKillRecentKillmailOutcome.Success, result.Outcome);
+        Assert.Equal([1L, 2L, 3L, 4L], result.RawKillmails.Select(k => k.KillmailId).ToArray());
+        Assert.Equal(3, limiter.Calls);
+        Assert.Equal(3, client.RequestCount);
+    }
+
+    [Fact]
+    public async Task GetRecentKillmailsAsync_SecondPageFails_ReturnsFailureWithNothing()
+    {
+        var handler = new ScriptedHttpMessageHandler()
+            .OnUriContaining("pastSeconds/3600/page/2/", HttpStatusCode.InternalServerError)
+            .OnUriContaining("pastSeconds/3600/", HttpStatusCode.OK, KillmailPage(1, 2));
+        var client = new zKillClient(new HttpClient(handler));
+
+        var result = await client.GetRecentKillmailsAsync(95465499, 3600);
+
+        Assert.Equal(zKillRecentKillmailOutcome.Failure, result.Outcome);
+        Assert.Empty(result.RawKillmails);
+    }
+
+    [Fact]
+    public async Task GetRecentKillmailsAsync_RateLimitedOnSecondPage_PausesAndReturnsFailure()
+    {
+        var handler = new ScriptedHttpMessageHandler()
+            .OnUriContaining("pastSeconds/3600/page/2/", HttpStatusCode.TooManyRequests)
+            .OnUriContaining("pastSeconds/3600/", HttpStatusCode.OK, KillmailPage(1, 2));
+        var limiter = new CountingLimiter();
+        var client = new zKillClient(new HttpClient(handler), limiter: limiter);
+
+        var result = await client.GetRecentKillmailsAsync(95465499, 3600);
+
+        Assert.Equal(zKillRecentKillmailOutcome.Failure, result.Outcome);
+        Assert.Equal(1, client.RateLimitedCount);
+        Assert.Equal(1, limiter.Pauses);
+    }
+
+    [Fact]
+    public async Task GetLastKillmailAsync_MultiPageReply_ReadsOnePage()
+    {
+        var handler = new ScriptedHttpMessageHandler()
+            .OnUriContaining("page/2/", HttpStatusCode.OK, KillmailPage(3, 4))
+            .OnUriContaining("api/characterID/95465499/", HttpStatusCode.OK, KillmailPage(1, 2));
+        var client = new zKillClient(new HttpClient(handler));
+
+        var result = await client.GetLastKillmailAsync(95465499);
+
+        Assert.Equal(zKillLastKillmailOutcome.Success, result.Outcome);
+        Assert.Equal(1, client.RequestCount);
+    }
+
+    private static string KillmailPage(params long[] ids)
+    {
+        var items = ids.Select(id => $$$"""
+            {"killmail_id":{{{id}}},"killmail_time":"2026-09-20T10:00:00Z","solar_system_id":30000142,
+             "victim":{"character_id":999,"ship_type_id":587},"attackers":[],
+             "zkb":{"hash":"h{{{id}}}","locationID":40000001,"solo":true,"npc":false}}
+            """);
+
+        return "[" + string.Join(",", items) + "]";
+    }
+
+    private sealed class CountingLimiter : Killright.Integration.RateLimiting.IRequestStartLimiter
+    {
+        public int Calls { get; private set; }
+
+        public int Pauses { get; private set; }
+
+        public long TotalWaitMilliseconds => 0;
+
+        public bool IsPaused => false;
+
+        public void Pause(TimeSpan duration) => Pauses++;
+
+        public Task WaitAsync(CancellationToken cancellationToken = default)
+        {
+            Calls++;
+            return Task.CompletedTask;
+        }
+    }
+
+    [Fact]
     public async Task GetRecentKillmailsAsync_Throws_ReturnsFailureOutcome()
     {
         var handler = new ScriptedHttpMessageHandler()
