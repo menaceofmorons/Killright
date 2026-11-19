@@ -1,6 +1,7 @@
 <UserControl x:Class="Killright.UI.Diagnostics.DiagnosticsView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:resources="clr-namespace:Killright.UI.Resources">
 
     <DockPanel Margin="8">
 
@@ -8,46 +9,47 @@
             <TextBlock x:Name="ClockText" FontWeight="Bold" Margin="0,0,0,6" />
 
             <WrapPanel Margin="0,0,0,6">
-                <Button Content="-30" Width="60" Margin="2" Click="Minus30_Click" />
-                <Button Content="-7" Width="60" Margin="2" Click="Minus7_Click" />
-                <Button Content="-1" Width="60" Margin="2" Click="Minus1_Click" />
-                <Button Content="Reset" Width="80" Margin="2" Click="ResetClock_Click" />
-                <Button Content="+1" Width="60" Margin="2" Click="Plus1_Click" />
-                <Button Content="+7" Width="60" Margin="2" Click="Plus7_Click" />
-                <Button Content="+30" Width="60" Margin="2" Click="Plus30_Click" />
+                <Button Content="{x:Static resources:UiText.DeveloperControlMinus30}" Width="60" Margin="2" Click="Minus30_Click" />
+                <Button Content="{x:Static resources:UiText.DeveloperControlMinus7}" Width="60" Margin="2" Click="Minus7_Click" />
+                <Button Content="{x:Static resources:UiText.DeveloperControlMinus1}" Width="60" Margin="2" Click="Minus1_Click" />
+                <Button Content="{x:Static resources:UiText.DeveloperControlClockReset}" Width="80" Margin="2" Click="ResetClock_Click" />
+                <Button Content="{x:Static resources:UiText.DeveloperControlPlus1}" Width="60" Margin="2" Click="Plus1_Click" />
+                <Button Content="{x:Static resources:UiText.DeveloperControlPlus7}" Width="60" Margin="2" Click="Plus7_Click" />
+                <Button Content="{x:Static resources:UiText.DeveloperControlPlus30}" Width="60" Margin="2" Click="Plus30_Click" />
             </WrapPanel>
 
             <WrapPanel Margin="0,0,0,6">
-                <Button Content="Refresh" Width="140" Margin="2" Click="Refresh_Click" />
-                <Button Content="Remove Expired Killmails" Width="190" Margin="2" Click="RemoveExpired_Click" />
-                <Button Content="Copy Diagnostic Summary" Width="200" Margin="2" Click="CopySummary_Click" />
+                <Button Content="{x:Static resources:UiText.DeveloperControlRefresh}" Width="140" Margin="2" Click="Refresh_Click" />
+                <Button Content="{x:Static resources:UiText.DeveloperControlRemoveExpired}" Width="190" Margin="2" Click="RemoveExpired_Click" />
+                <Button Content="{x:Static resources:UiText.DeveloperControlCopySummary}" Width="200" Margin="2" Click="CopySummary_Click" />
             </WrapPanel>
 
             <WrapPanel Margin="0,0,0,6">
-                <Button Content="Clear Identity Cache" Width="170" Margin="2" Click="ClearIdentity_Click" />
-                <Button Content="Clear Activity Cache" Width="170" Margin="2" Click="ClearActivity_Click" />
-                <Button x:Name="ClearKillmailButton" Content="Clear Killmail Cache" Width="170" Margin="2" Click="ClearKillmail_Click" />
-                <Button Content="Clear Statistics Cache" Width="170" Margin="2" Click="ClearStatistics_Click" />
-                <Button Content="Clear All" Width="170" Margin="2" Click="ClearAll_Click" />
+                <Button Content="{x:Static resources:UiText.DeveloperControlClearIdentity}" Width="170" Margin="2" Click="ClearIdentity_Click" />
+                <Button Content="{x:Static resources:UiText.DeveloperControlClearActivity}" Width="170" Margin="2" Click="ClearActivity_Click" />
+                <Button x:Name="ClearKillmailButton" Content="{x:Static resources:UiText.DeveloperControlClearKillmail}" Width="170" Margin="2" Click="ClearKillmail_Click" />
+                <Button Content="{x:Static resources:UiText.DeveloperControlClearStatistics}" Width="170" Margin="2" Click="ClearStatistics_Click" />
+                <Button Content="{x:Static resources:UiText.DeveloperControlClearAll}" Width="170" Margin="2" Click="ClearAll_Click" />
             </WrapPanel>
 
+            <TextBlock x:Name="StatusText" Foreground="Firebrick" FontWeight="Bold" TextWrapping="Wrap" Margin="0,0,0,6" Visibility="Collapsed" />
             <TextBlock x:Name="SummaryText" FontFamily="Consolas" />
         </StackPanel>
 
         <TabControl>
-            <TabItem Header="Identity Cache">
+            <TabItem Header="{x:Static resources:UiText.DeveloperControlTabIdentityCache}">
                 <DataGrid x:Name="IdentityGrid" IsReadOnly="True" AutoGenerateColumns="True" />
             </TabItem>
 
-            <TabItem Header="Activity Cache">
+            <TabItem Header="{x:Static resources:UiText.DeveloperControlTabActivityCache}">
                 <DataGrid x:Name="ActivityGrid" IsReadOnly="True" AutoGenerateColumns="True" />
             </TabItem>
 
-            <TabItem Header="Recent Killmails">
+            <TabItem Header="{x:Static resources:UiText.DeveloperControlTabRecentKillmails}">
                 <DataGrid x:Name="KillmailGrid" IsReadOnly="True" AutoGenerateColumns="True" />
             </TabItem>
 
-            <TabItem Header="Diagnostics">
+            <TabItem Header="{x:Static resources:UiText.DeveloperControlTabDiagnostics}">
                 <TextBox x:Name="DiagnosticsText"
                          FontFamily="Consolas"
                          IsReadOnly="True"
@@ -57,14 +59,14 @@
                          HorizontalScrollBarVisibility="Auto" />
             </TabItem>
 
-            <TabItem Header="Diagnostics Queries">
+            <TabItem Header="{x:Static resources:UiText.DeveloperControlTabDiagnosticsQueries}">
                 <DockPanel Margin="6">
                     <StackPanel DockPanel.Dock="Top" Orientation="Vertical" Margin="0,0,0,8">
                         <WrapPanel Margin="0,0,0,6">
-                            <TextBlock Text="Query:" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <TextBlock Text="{x:Static resources:UiText.DeveloperControlQueryLabel}" VerticalAlignment="Center" Margin="0,0,6,0" />
                             <ComboBox x:Name="QuerySelector" Width="320" Margin="0,0,6,0" />
-                            <Button Content="Run Query" Width="120" Margin="2" Click="RunQuery_Click" />
-                            <Button Content="Copy Results" Width="120" Margin="2" Click="CopyQueryResults_Click" />
+                            <Button Content="{x:Static resources:UiText.DeveloperControlRunQuery}" Width="120" Margin="2" Click="RunQuery_Click" />
+                            <Button Content="{x:Static resources:UiText.DeveloperControlCopyResults}" Width="120" Margin="2" Click="CopyQueryResults_Click" />
                         </WrapPanel>
 
                         <TextBox x:Name="QueryText"
@@ -83,13 +85,13 @@
                 </DockPanel>
             </TabItem>
 
-            <TabItem Header="Group Detection">
+            <TabItem Header="{x:Static resources:UiText.DeveloperControlTabGroupDetection}">
                 <DockPanel Margin="6">
                     <StackPanel DockPanel.Dock="Top" Orientation="Vertical" Margin="0,0,0,8">
                         <WrapPanel Margin="0,0,0,6">
-                            <TextBlock Text="Scanned Character IDs (comma-separated):" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <TextBlock Text="{x:Static resources:UiText.DeveloperControlScannedIdsLabel}" VerticalAlignment="Center" Margin="0,0,6,0" />
                             <TextBox x:Name="GroupDetectionScanSetText" Width="320" Margin="0,0,6,0" />
-                            <Button Content="Run Group Detection Diagnostics" Width="220" Margin="2" Click="RunGroupDetectionDiagnostics_Click" />
+                            <Button Content="{x:Static resources:UiText.DeveloperControlRunGroupDetection}" Width="220" Margin="2" Click="RunGroupDetectionDiagnostics_Click" />
                         </WrapPanel>
                         <TextBlock x:Name="GroupDetectionTimingText" FontFamily="Consolas" />
                     </StackPanel>
@@ -102,30 +104,30 @@
                         </Grid.RowDefinitions>
 
                         <DockPanel Grid.Row="0">
-                            <TextBlock DockPanel.Dock="Top" Text="Direct Relationships" FontWeight="Bold" Margin="0,0,0,2" />
+                            <TextBlock DockPanel.Dock="Top" Text="{x:Static resources:UiText.DeveloperControlDirectRelationships}" FontWeight="Bold" Margin="0,0,0,2" />
                             <DataGrid x:Name="DirectRelationshipsGrid" IsReadOnly="True" AutoGenerateColumns="True" />
                         </DockPanel>
 
                         <DockPanel Grid.Row="1">
-                            <TextBlock DockPanel.Dock="Top" Text="Chains" FontWeight="Bold" Margin="0,4,0,2" />
+                            <TextBlock DockPanel.Dock="Top" Text="{x:Static resources:UiText.DeveloperControlChains}" FontWeight="Bold" Margin="0,4,0,2" />
                             <DataGrid x:Name="ChainsGrid" IsReadOnly="True" AutoGenerateColumns="True" />
                         </DockPanel>
 
                         <DockPanel Grid.Row="2">
-                            <TextBlock DockPanel.Dock="Top" Text="Intermediary Hubs" FontWeight="Bold" Margin="0,4,0,2" />
+                            <TextBlock DockPanel.Dock="Top" Text="{x:Static resources:UiText.DeveloperControlIntermediaryHubs}" FontWeight="Bold" Margin="0,4,0,2" />
                             <DataGrid x:Name="HubsGrid" IsReadOnly="True" AutoGenerateColumns="True" />
                         </DockPanel>
                     </Grid>
                 </DockPanel>
             </TabItem>
 
-            <TabItem Header="Threat Breakdown">
+            <TabItem Header="{x:Static resources:UiText.DeveloperControlTabThreatBreakdown}">
                 <DockPanel Margin="6">
                     <StackPanel DockPanel.Dock="Top" Orientation="Vertical" Margin="0,0,0,8">
                         <WrapPanel Margin="0,0,0,6">
-                            <TextBlock Text="Character ID:" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <TextBlock Text="{x:Static resources:UiText.DeveloperControlCharacterIdLabel}" VerticalAlignment="Center" Margin="0,0,6,0" />
                             <TextBox x:Name="ThreatDiagnosticsCharacterIdText" Width="160" Margin="0,0,6,0" />
-                            <Button Content="Run Threat Diagnostics" Width="180" Margin="2" Click="RunThreatDiagnostics_Click" />
+                            <Button Content="{x:Static resources:UiText.DeveloperControlRunThreat}" Width="180" Margin="2" Click="RunThreatDiagnostics_Click" />
                         </WrapPanel>
                     </StackPanel>
 

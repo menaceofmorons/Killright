@@ -248,4 +248,66 @@
   <data name="Style.LetterCode.Unknown" xml:space="preserve"><value>U</value></data>
   <data name="Style.LetterCode.PodderSuffix" xml:space="preserve"><value>x</value></data>
   <data name="Message.UiStateCorrupt" xml:space="preserve"><value>Saved window and display settings could not be read and have been reset to defaults.</value></data>
+  <data name="Developer.Control.Minus30" xml:space="preserve"><value>-30</value></data>
+  <data name="Developer.Control.Minus7" xml:space="preserve"><value>-7</value></data>
+  <data name="Developer.Control.Minus1" xml:space="preserve"><value>-1</value></data>
+  <data name="Developer.Control.ClockReset" xml:space="preserve"><value>Reset</value></data>
+  <data name="Developer.Control.Plus1" xml:space="preserve"><value>+1</value></data>
+  <data name="Developer.Control.Plus7" xml:space="preserve"><value>+7</value></data>
+  <data name="Developer.Control.Plus30" xml:space="preserve"><value>+30</value></data>
+  <data name="Developer.Control.Refresh" xml:space="preserve"><value>Refresh</value></data>
+  <data name="Developer.Control.RemoveExpired" xml:space="preserve"><value>Remove Expired Killmails</value></data>
+  <data name="Developer.Control.CopySummary" xml:space="preserve"><value>Copy Diagnostic Summary</value></data>
+  <data name="Developer.Control.ClearIdentity" xml:space="preserve"><value>Clear Identity Cache</value></data>
+  <data name="Developer.Control.ClearActivity" xml:space="preserve"><value>Clear Activity Cache</value></data>
+  <data name="Developer.Control.ClearKillmail" xml:space="preserve"><value>Clear Killmail Cache</value></data>
+  <data name="Developer.Control.ClearStatistics" xml:space="preserve"><value>Clear Statistics Cache</value></data>
+  <data name="Developer.Control.ClearAll" xml:space="preserve"><value>Clear All</value></data>
+  <data name="Developer.Control.TabIdentityCache" xml:space="preserve"><value>Identity Cache</value></data>
+  <data name="Developer.Control.TabActivityCache" xml:space="preserve"><value>Activity Cache</value></data>
+  <data name="Developer.Control.TabRecentKillmails" xml:space="preserve"><value>Recent Killmails</value></data>
+  <data name="Developer.Control.TabDiagnostics" xml:space="preserve"><value>Diagnostics</value></data>
+  <data name="Developer.Control.TabDiagnosticsQueries" xml:space="preserve"><value>Diagnostics Queries</value></data>
+  <data name="Developer.Control.TabGroupDetection" xml:space="preserve"><value>Group Detection</value></data>
+  <data name="Developer.Control.TabThreatBreakdown" xml:space="preserve"><value>Threat Breakdown</value></data>
+  <data name="Developer.Control.QueryLabel" xml:space="preserve"><value>Query:</value></data>
+  <data name="Developer.Control.RunQuery" xml:space="preserve"><value>Run Query</value></data>
+  <data name="Developer.Control.CopyResults" xml:space="preserve"><value>Copy Results</value></data>
+  <data name="Developer.Control.ScannedIdsLabel" xml:space="preserve"><value>Scanned Character IDs (comma-separated):</value></data>
+  <data name="Developer.Control.RunGroupDetection" xml:space="preserve"><value>Run Group Detection Diagnostics</value></data>
+  <data name="Developer.Control.DirectRelationships" xml:space="preserve"><value>Direct Relationships</value></data>
+  <data name="Developer.Control.Chains" xml:space="preserve"><value>Chains</value></data>
+  <data name="Developer.Control.IntermediaryHubs" xml:space="preserve"><value>Intermediary Hubs</value></data>
+  <data name="Developer.Control.CharacterIdLabel" xml:space="preserve"><value>Character ID:</value></data>
+  <data name="Developer.Control.RunThreat" xml:space="preserve"><value>Run Threat Diagnostics</value></data>
+  <data name="Developer.Message.DialogTitle" xml:space="preserve"><value>KillRight Developer Diagnostics</value></data>
+  <data name="Developer.Message.EnterScannedIds" xml:space="preserve"><value>Enter one or more scanned character IDs.</value></data>
+  <data name="Developer.Message.EnterCharacterId" xml:space="preserve"><value>Enter a numeric character ID.</value></data>
+  <data name="Developer.Message.ConfirmClearIdentity" xml:space="preserve"><value>Clear Identity Cache?
+
+This will force fresh ESI lookups.</value></data>
+  <data name="Developer.Message.ConfirmClearActivity" xml:space="preserve"><value>Clear Activity Cache?
+
+This will clear the stored Last Active and Last Kill, the cached last killmails and the months-processed flag, and statistics will be fetched again at the next scan. Each pilot's last recent-call time and coverage start are kept.</value></data>
+  <data name="Developer.Message.ConfirmClearKillmail" xml:space="preserve"><value>Clear Recent Killmail Cache?
+
+This will force recent killmail retrieval and reset the last recent-call time. Retained qualifying killmails are not deleted.</value></data>
+  <data name="Developer.Message.ConfirmClearStatistics" xml:space="preserve"><value>Clear Statistics Cache?
+
+This will force fresh zKill statistics lookups.</value></data>
+  <data name="Developer.Message.ConfirmClearAllLocked" xml:space="preserve"><value>Clear All Caches?
+
+This will clear the identity, activity and statistics caches. The killmail cache is locked and will not be cleared.</value></data>
+  <data name="Developer.Message.ConfirmClearAll" xml:space="preserve"><value>Clear All Caches?
+
+This will clear the identity, activity, recent killmail and statistics caches, and reset the last recent-call time. Retained qualifying killmails are not deleted.</value></data>
+  <data name="Developer.Message.Failed" xml:space="preserve"><value>{0} failed: {1}</value></data>
+  <data name="Developer.Message.ActionRemoveExpired" xml:space="preserve"><value>Remove expired killmails</value></data>
+  <data name="Developer.Message.ActionGroupDetection" xml:space="preserve"><value>Group detection diagnostics</value></data>
+  <data name="Developer.Message.ActionThreat" xml:space="preserve"><value>Threat diagnostics</value></data>
+  <data name="Developer.Message.ActionRefresh" xml:space="preserve"><value>Refresh</value></data>
+  <data name="Developer.Message.ActionClock" xml:space="preserve"><value>Change developer clock</value></data>
+  <data name="Developer.Message.ActionClear" xml:space="preserve"><value>Clear cache</value></data>
+  <data name="Developer.Message.ActionCopy" xml:space="preserve"><value>Copy to clipboard</value></data>
+  <data name="Developer.Message.ActionQuery" xml:space="preserve"><value>Run query</value></data>
 </root>

@@ -4,6 +4,8 @@ using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using Killright.Shared.Time;
+using Killright.Storage.Diagnostics;
+using Killright.UI.Resources;
 
 namespace Killright.UI.Diagnostics;
 
@@ -307,6 +309,7 @@ public partial class DiagnosticsView : UserControl
     };
 
     private readonly DiagnosticsDataService _service;
+    private readonly DeveloperCacheOperations _cacheOperations;
     private readonly EngineDiagnosticsClient _engineDiagnosticsClient;
     private DataTable _lastQueryRows = new();
     private bool _alphaReleaseSchemaLocked;
@@ -315,6 +318,7 @@ public partial class DiagnosticsView : UserControl
     {
         InitializeComponent();
         _service = new DiagnosticsDataService(App.Database);
+        _cacheOperations = new DeveloperCacheOperations(_service);
         _engineDiagnosticsClient = new EngineDiagnosticsClient(App.EngineRuntime, App.EngineInputReader);
 
         QuerySelector.ItemsSource = DiagnosticQueries.Keys;
@@ -418,18 +422,17 @@ public partial class DiagnosticsView : UserControl
 
     private void Refresh_Click(object sender, RoutedEventArgs e)
     {
-        RefreshAll();
-        RunSelectedQuery();
+        Guarded(UiText.DeveloperMessageActionRefresh, ReloadAll);
     }
 
     private void RunQuery_Click(object sender, RoutedEventArgs e)
     {
-        RunSelectedQuery();
+        Guarded(UiText.DeveloperMessageActionQuery, RunSelectedQuery);
     }
 
     private void CopyQueryResults_Click(object sender, RoutedEventArgs e)
     {
-        Clipboard.SetText(BuildQueryResultText());
+        Guarded(UiText.DeveloperMessageActionCopy, () => Clipboard.SetText(BuildQueryResultText()));
     }
 
     private string BuildQueryResultText()
@@ -472,39 +475,43 @@ public partial class DiagnosticsView : UserControl
 
         if (scannedCharacterIds.Count == 0)
         {
-            MessageBox.Show(
-                "Enter one or more scanned character IDs.",
-                "KillRight Developer Diagnostics",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+            Inform(UiText.DeveloperMessageEnterScannedIds);
             return;
         }
 
-        var result = await _engineDiagnosticsClient.DiagnoseGroupDetectionAsync(scannedCharacterIds);
+        ShowStatus(await DeveloperToolGuard.RunAsync(
+            async () =>
+            {
+                var result = await _engineDiagnosticsClient.DiagnoseGroupDetectionAsync(scannedCharacterIds);
 
-        DirectRelationshipsGrid.ItemsSource = result.DirectRelationships.DefaultView;
-        ChainsGrid.ItemsSource = result.Chains.DefaultView;
-        HubsGrid.ItemsSource = result.Hubs.DefaultView;
+                DirectRelationshipsGrid.ItemsSource = result.DirectRelationships.DefaultView;
+                ChainsGrid.ItemsSource = result.Chains.DefaultView;
+                HubsGrid.ItemsSource = result.Hubs.DefaultView;
 
-        GroupDetectionTimingText.Text =
-            $"Direct Analysis:  {result.DirectAnalysisDurationMs} ms\n" +
-            $"Chain Analysis:   {result.ChainAnalysisDurationMs} ms";
+                GroupDetectionTimingText.Text =
+                    $"Direct Analysis:  {result.DirectAnalysisDurationMs} ms\n" +
+                    $"Chain Analysis:   {result.ChainAnalysisDurationMs} ms";
+            },
+            UiText.DeveloperMessageActionGroupDetection,
+            EngineFailureLog.Record));
     }
 
     private async void RunThreatDiagnostics_Click(object sender, RoutedEventArgs e)
     {
         if (!long.TryParse(ThreatDiagnosticsCharacterIdText.Text.Trim(), out var characterId))
         {
-            MessageBox.Show(
-                "Enter a numeric character ID.",
-                "KillRight Developer Diagnostics",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+            Inform(UiText.DeveloperMessageEnterCharacterId);
             return;
         }
 
-        var table = await _engineDiagnosticsClient.DiagnoseThreatAsync(characterId);
-        ThreatBreakdownGrid.ItemsSource = table.DefaultView;
+        ShowStatus(await DeveloperToolGuard.RunAsync(
+            async () =>
+            {
+                var table = await _engineDiagnosticsClient.DiagnoseThreatAsync(characterId);
+                ThreatBreakdownGrid.ItemsSource = table.DefaultView;
+            },
+            UiText.DeveloperMessageActionThreat,
+            EngineFailureLog.Record));
     }
 
     private static List<long> ParseCharacterIds(string text)
@@ -517,80 +524,55 @@ public partial class DiagnosticsView : UserControl
             .ToList();
     }
 
-    private void Minus30_Click(object sender, RoutedEventArgs e)
-    {
-        ApplicationClock.AddDays(-30);
-        RefreshAll();
-        RunSelectedQuery();
-    }
+    private void Minus30_Click(object sender, RoutedEventArgs e) => ShiftClock(-30);
 
-    private void Minus7_Click(object sender, RoutedEventArgs e)
-    {
-        ApplicationClock.AddDays(-7);
-        RefreshAll();
-        RunSelectedQuery();
-    }
+    private void Minus7_Click(object sender, RoutedEventArgs e) => ShiftClock(-7);
 
-    private void Minus1_Click(object sender, RoutedEventArgs e)
-    {
-        ApplicationClock.AddDays(-1);
-        RefreshAll();
-        RunSelectedQuery();
-    }
+    private void Minus1_Click(object sender, RoutedEventArgs e) => ShiftClock(-1);
 
-    private void Plus1_Click(object sender, RoutedEventArgs e)
-    {
-        ApplicationClock.AddDays(1);
-        RefreshAll();
-        RunSelectedQuery();
-    }
+    private void Plus1_Click(object sender, RoutedEventArgs e) => ShiftClock(1);
 
-    private void Plus7_Click(object sender, RoutedEventArgs e)
-    {
-        ApplicationClock.AddDays(7);
-        RefreshAll();
-        RunSelectedQuery();
-    }
+    private void Plus7_Click(object sender, RoutedEventArgs e) => ShiftClock(7);
 
-    private void Plus30_Click(object sender, RoutedEventArgs e)
-    {
-        ApplicationClock.AddDays(30);
-        RefreshAll();
-        RunSelectedQuery();
-    }
+    private void Plus30_Click(object sender, RoutedEventArgs e) => ShiftClock(30);
 
     private void ResetClock_Click(object sender, RoutedEventArgs e)
     {
-        ApplicationClock.Reset();
-        RefreshAll();
-        RunSelectedQuery();
+        Guarded(UiText.DeveloperMessageActionClock, () =>
+        {
+            ApplicationClock.Reset();
+            ReloadAll();
+        });
+    }
+
+    private void ShiftClock(int days)
+    {
+        Guarded(UiText.DeveloperMessageActionClock, () =>
+        {
+            ApplicationClock.AddDays(days);
+            ReloadAll();
+        });
     }
 
     private async void RemoveExpired_Click(object sender, RoutedEventArgs e)
     {
-        await App.RecentKillmailCache.RemoveExpiredAsync();
-        RefreshAll();
-        RunSelectedQuery();
+        var failure = await DeveloperToolGuard.RunAsync(
+            () => App.RecentKillmailCache.RemoveExpiredAsync(),
+            UiText.DeveloperMessageActionRemoveExpired,
+            EngineFailureLog.Record,
+            offUiThread: true);
+
+        ShowStatus(failure ?? Reload());
     }
 
     private void ClearIdentity_Click(object sender, RoutedEventArgs e)
     {
-        if (!Confirm("Clear Identity Cache?\n\nThis will force fresh ESI lookups."))
-            return;
-
-        ClearIdentityCache();
-        RefreshAll();
-        RunSelectedQuery();
+        ClearCaches(UiText.DeveloperMessageConfirmClearIdentity, _cacheOperations.ClearIdentityCache);
     }
 
     private void ClearActivity_Click(object sender, RoutedEventArgs e)
     {
-        if (!Confirm("Clear Activity Cache?\n\nThis will clear derived activity rows, the stored Last Active and Last Kill, the last recent-call time, and the cached last killmails, and statistics will be fetched again at the next scan."))
-            return;
-
-        ClearActivityCache();
-        RefreshAll();
-        RunSelectedQuery();
+        ClearCaches(UiText.DeveloperMessageConfirmClearActivity, _cacheOperations.ClearActivityCache);
     }
 
     private void ClearKillmail_Click(object sender, RoutedEventArgs e)
@@ -598,85 +580,85 @@ public partial class DiagnosticsView : UserControl
         if (_alphaReleaseSchemaLocked)
             return;
 
-        if (!Confirm("Clear Recent Killmail Cache?\n\nThis will force recent killmail retrieval and reset the last recent-call time. Retained qualifying killmails are not deleted."))
-            return;
-
-        ClearKillmailCache();
-        RefreshAll();
-        RunSelectedQuery();
+        ClearCaches(UiText.DeveloperMessageConfirmClearKillmail, _cacheOperations.ClearKillmailCache);
     }
 
     private void ClearStatistics_Click(object sender, RoutedEventArgs e)
     {
-        if (!Confirm("Clear Statistics Cache?\n\nThis will force fresh zKill statistics lookups."))
-            return;
-
-        ClearStatisticsCache();
-        RefreshAll();
-        RunSelectedQuery();
+        ClearCaches(UiText.DeveloperMessageConfirmClearStatistics, _cacheOperations.ClearStatisticsCache);
     }
 
     private void ClearAll_Click(object sender, RoutedEventArgs e)
     {
         var message = _alphaReleaseSchemaLocked
-            ? "Clear All Caches?\n\nThis will clear the identity, activity and statistics caches. The killmail cache is locked and will not be cleared."
-            : "Clear All Caches?\n\nThis will clear the identity, activity, recent killmail and statistics caches, and reset the last recent-call time. Retained qualifying killmails are not deleted.";
+            ? UiText.DeveloperMessageConfirmClearAllLocked
+            : UiText.DeveloperMessageConfirmClearAll;
 
-        if (!Confirm(message))
+        ClearCaches(message, () =>
+        {
+            _cacheOperations.ClearIdentityCache();
+            _cacheOperations.ClearActivityCache();
+
+            if (!_alphaReleaseSchemaLocked)
+                _cacheOperations.ClearKillmailCache();
+
+            _cacheOperations.ClearStatisticsCache();
+        });
+    }
+
+    private void ClearCaches(string confirmation, Action clear)
+    {
+        if (!Confirm(confirmation))
             return;
 
-        ClearIdentityCache();
-        ClearActivityCache();
-
-        if (!_alphaReleaseSchemaLocked)
-            ClearKillmailCache();
-
-        ClearStatisticsCache();
-        RefreshAll();
-        RunSelectedQuery();
-    }
-
-    private void ClearIdentityCache()
-    {
-        _service.ExecuteNonQuery("DELETE FROM main.pilot_identity_cache;");
-    }
-
-    private void ClearActivityCache()
-    {
-        _service.ExecuteNonQuery("DELETE FROM main.zkill_activity_cache;");
-        _service.ExecuteNonQuery("DELETE FROM main.pilot_last_killmail_cache;");
-        _service.ExecuteNonQuery("UPDATE main.zkill_statistics_cache SET months_processed = NULL;");
-    }
-
-    private void ClearKillmailCache()
-    {
-        _service.ExecuteNonQuery("""
-            DELETE FROM main.zkill_killmail_attackers
-            WHERE killmail_id IN (
-                SELECT killmail_id
-                FROM main.zkill_killmails
-                WHERE is_qualifying = 0
-            );
-            """);
-        _service.ExecuteNonQuery("DELETE FROM main.zkill_killmails WHERE is_qualifying = 0;");
-        _service.ExecuteNonQuery("UPDATE main.zkill_activity_cache SET last_recent_call_utc = NULL;");
-    }
-
-    private void ClearStatisticsCache()
-    {
-        _service.ExecuteNonQuery("DELETE FROM main.zkill_statistics_cache;");
+        Guarded(UiText.DeveloperMessageActionClear, () =>
+        {
+            clear();
+            ReloadAll();
+        });
     }
 
     private void CopySummary_Click(object sender, RoutedEventArgs e)
     {
-        Clipboard.SetText(DiagnosticsText.Text);
+        Guarded(UiText.DeveloperMessageActionCopy, () => Clipboard.SetText(DiagnosticsText.Text));
+    }
+
+    private void ReloadAll()
+    {
+        RefreshAll();
+        RunSelectedQuery();
+    }
+
+    private string? Reload()
+    {
+        return DeveloperToolGuard.Run(ReloadAll, UiText.DeveloperMessageActionRefresh, EngineFailureLog.Record);
+    }
+
+    private void Guarded(string action, Action work)
+    {
+        ShowStatus(DeveloperToolGuard.Run(work, action, EngineFailureLog.Record));
+    }
+
+    private void ShowStatus(string? failure)
+    {
+        StatusText.Text = failure ?? string.Empty;
+        StatusText.Visibility = failure is null ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private static void Inform(string message)
+    {
+        MessageBox.Show(
+            message,
+            UiText.DeveloperMessageDialogTitle,
+            MessageBoxButton.OK,
+            MessageBoxImage.Information);
     }
 
     private static bool Confirm(string message)
     {
         return MessageBox.Show(
             message,
-            "KillRight Developer Diagnostics",
+            UiText.DeveloperMessageDialogTitle,
             MessageBoxButton.YesNo,
             MessageBoxImage.Warning) == MessageBoxResult.Yes;
     }
