@@ -263,7 +263,7 @@ public sealed class zKillClient : IzKillClient
         if (statistics.groups is not null && statistics.groups.Values.Any(group => group is null))
             throw new JsonException("statistics contain a null group");
 
-        statistics.podKills =ExtractPodKills(statistics);
+        statistics.podKills = ExtractPodKills(statistics);
         statistics.podLosses = ExtractPodLosses(statistics);
 
         return new zKillStatisticsResult(zKillStatisticsOutcome.Success, statistics);
