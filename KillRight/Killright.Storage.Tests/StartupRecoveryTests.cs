@@ -7,19 +7,19 @@ namespace Killright.Storage.Tests;
 
 public sealed class StartupRecoveryTests
 {
-    public static TheoryData<string> GuardedSteps =>
-    [
-        "quarantine",
-        "exists",
-        "restore",
-        "open",
-        "schema",
-        "requalify"
-    ];
+    public static TheoryData<string, string> GuardedSteps => new()
+    {
+        { "quarantine", "quarantine" },
+        { "exists", "restore" },
+        { "restore", "restore" },
+        { "open", "open" },
+        { "schema", "schema check" },
+        { "requalify", "requalify" }
+    };
 
     [Theory]
     [MemberData(nameof(GuardedSteps))]
-    public void Run_StepThrows_YieldsRefusalAndRecordsIt(string failingStep)
+    public void Run_StepThrows_YieldsRefusalAndRecordsTheStep(string failingStep, string loggedStep)
     {
         var records = new List<string>();
         var steps = HealthySteps(failingStep);
@@ -27,7 +27,10 @@ public sealed class StartupRecoveryTests
         var result = GuardedStartup.Run(steps, records.Add);
 
         Assert.Equal(StartupOutcome.DatabaseRefused, result.Outcome);
-        Assert.Contains(records, record => record.StartsWith("Startup refused", StringComparison.Ordinal));
+        Assert.Contains(
+            records,
+            record => record.StartsWith("Startup refused", StringComparison.Ordinal)
+                && record.Contains($"Failed step: {loggedStep}.", StringComparison.Ordinal));
     }
 
     [Fact]
