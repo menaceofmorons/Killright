@@ -15,7 +15,6 @@ public static class PilotListParser
 
     private static bool IsValidEveCharacterName(string input)
     {
-
         if (string.IsNullOrWhiteSpace(input))
             return false;
 
@@ -30,34 +29,7 @@ public static class PilotListParser
         if (value.Contains("  ", StringComparison.Ordinal))
             return false;
 
-        if (value.Any(character => !IsAllowedCharacter(character)))
-            return false;
-
-        var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-
-        if (parts.Length is < 1 or > 3)
-            return false;
-
-        if (parts.Any(part => !IsValidNamePart(part)))
-            return false;
-
-        var givenName = parts.Length == 1 ? parts[0] : string.Join(' ', parts.Take(parts.Length - 1));
-
-        if (givenName.Length > 24)
-            return false;
-
-        if (parts.Length > 1 && parts[^1].Length > 12)
-            return false;
-
-        return true;
-    }
-
-    private static bool IsValidNamePart(string value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-            return false;
-
-        return IsLetterOrDigit(value[0]) && IsLetterOrDigit(value[^1]);
+        return value.All(IsAllowedCharacter);
     }
 
     private static bool IsAllowedCharacter(char value)
