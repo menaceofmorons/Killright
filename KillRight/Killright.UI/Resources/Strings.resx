@@ -192,11 +192,7 @@
   <data name="InfoSheet.Table.Solos" xml:space="preserve"><value>Solos</value></data>
   <data name="InfoSheet.Table.Losses" xml:space="preserve"><value>Losses</value></data>
   <data name="InfoSheet.Source.Birthday" xml:space="preserve"><value>Birthday</value></data>
-  <data name="InfoSheet.Source.Statistics" xml:space="preserve"><value>zKill statistics</value></data>
   <data name="InfoSheet.Source.LastActivity" xml:space="preserve"><value>Last Activity</value></data>
-  <data name="InfoSheet.Source.Esi" xml:space="preserve"><value>ESI</value></data>
-  <data name="InfoSheet.Source.Recent" xml:space="preserve"><value>zKill recent killmails</value></data>
-  <data name="InfoSheet.Source.Engine" xml:space="preserve"><value>killright_engine</value></data>
   <data name="InfoSheet.StatsTitleFormat" xml:space="preserve"><value>Stats for {0}</value></data>
   <data name="InfoSheet.ErrorLoadingFormat" xml:space="preserve"><value>Error loading {0}</value></data>
 

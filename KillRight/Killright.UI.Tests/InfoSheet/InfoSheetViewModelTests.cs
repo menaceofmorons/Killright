@@ -209,7 +209,7 @@ public sealed class InfoSheetViewModelTests
     public async Task LoadAsync_BothReadsFailWithExistingStatsFailure_ListsAllSourcesInOneLine()
     {
         var viewModel = new InfoSheetViewModel(
-            CreateRow(statsFailureSource: "zKill statistics"),
+            CreateRow(statsFailureSource: "zKillboard statistics"),
             false,
             _ => Task.FromResult<InfoSheetTotals?>(null),
             _ => throw new InvalidOperationException("read failed"),
@@ -218,7 +218,7 @@ public sealed class InfoSheetViewModelTests
         await viewModel.LoadAsync();
 
         Assert.Equal(
-            UiText.FormatErrorLoading($"zKill statistics, {UiText.InfoSheetSourceBirthday}, {UiText.InfoSheetSourceLastActivity}"),
+            UiText.FormatErrorLoading($"zKillboard statistics, {UiText.InfoSheetSourceBirthday}, {UiText.InfoSheetSourceLastActivity}"),
             viewModel.ErrorLine);
         Assert.Equal(Visibility.Visible, viewModel.ErrorLineVisibility);
     }
@@ -317,7 +317,7 @@ public sealed class InfoSheetViewModelTests
         await viewModel.LoadAsync();
 
         Assert.Equal("-", viewModel.TotalKillsValue);
-        Assert.Equal(UiText.FormatErrorLoading(UiText.InfoSheetSourceStatistics), viewModel.ErrorLine);
+        Assert.Equal(UiText.FormatErrorLoading(UiText.NotesCallStatistics), viewModel.ErrorLine);
         Assert.Equal(Visibility.Visible, viewModel.ErrorLineVisibility);
     }
 
@@ -460,14 +460,14 @@ public sealed class InfoSheetViewModelTests
     public void Failure_ListsErrorLineBeforeStatsTitle()
     {
         var viewModel = new InfoSheetViewModel(
-            CreateRow(statsFailureSource: "zKill statistics"),
+            CreateRow(statsFailureSource: "zKillboard statistics"),
             false,
             _ => Task.FromResult<InfoSheetTotals?>(null),
             _ => Task.FromResult<DateOnly?>(null),
             _ => Task.FromResult<PilotLastActivitySummary?>(null));
 
         Assert.Equal(
-            [UiText.FormatErrorLoading("zKill statistics"), UiText.FormatStatsTitle("T'ral Vsengne")],
+            [UiText.FormatErrorLoading("zKillboard statistics"), UiText.FormatStatsTitle("T'ral Vsengne")],
             viewModel.TitleLines.Select(line => line.Text));
         Assert.True(viewModel.TitleLines[0].IsError);
         Assert.False(viewModel.TitleLines[1].IsError);

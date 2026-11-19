@@ -167,11 +167,7 @@ public static class UiText
     public static string InfoSheetTableKills => Strings.Get("InfoSheet.Table.Kills");
     public static string InfoSheetTableSolos => Strings.Get("InfoSheet.Table.Solos");
     public static string InfoSheetTableLosses => Strings.Get("InfoSheet.Table.Losses");
-    public static string InfoSheetSourceStatistics => Strings.Get("InfoSheet.Source.Statistics");
     public static string InfoSheetSourceLastActivity => Strings.Get("InfoSheet.Source.LastActivity");
-    public static string InfoSheetSourceEsi => Strings.Get("InfoSheet.Source.Esi");
-    public static string InfoSheetSourceRecent => Strings.Get("InfoSheet.Source.Recent");
-    public static string InfoSheetSourceEngine => Strings.Get("InfoSheet.Source.Engine");
 
     public static string FormatStatsTitle(string pilotName) =>
         string.Format(CultureInfo.CurrentCulture, Strings.Get("InfoSheet.StatsTitleFormat"), pilotName);
