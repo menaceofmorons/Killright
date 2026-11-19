@@ -1,4 +1,5 @@
 using System.Windows;
+using Killright.UI.Resources;
 
 namespace Killright.UI.Shortcuts;
 
@@ -10,7 +11,25 @@ public partial class ShortcutsWindow : Window
         InitializeComponent();
     }
 
-    private void Close_Click(object sender, RoutedEventArgs e)
+    private void Ok_Click(object sender, RoutedEventArgs e)
+    {
+        var error = F1SizeRecorder.Record(ActualWidth, ActualHeight);
+
+        if (error is not null)
+        {
+            MessageBox.Show(
+                this,
+                string.Format(UiText.ShortcutsSizingWriteFailed, error),
+                UiText.WindowTitleShortcuts,
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
+
+        Close();
+    }
+
+    private void Cancel_Click(object sender, RoutedEventArgs e)
     {
         Close();
     }
