@@ -264,6 +264,11 @@
   <data name="Style.LetterCode.Inactive" xml:space="preserve"><value>I</value></data>
   <data name="Style.LetterCode.Unknown" xml:space="preserve"><value>U</value></data>
   <data name="Style.LetterCode.PodderSuffix" xml:space="preserve"><value>x</value></data>
+  <data name="Startup.Failure.Title" xml:space="preserve"><value>KillRight cannot start</value></data>
+  <data name="Startup.Failure.Text" xml:space="preserve"><value>{0} See the log file for details.</value></data>
+  <data name="Startup.Failure.SettingsUnreadable" xml:space="preserve"><value>The settings file is missing or could not be read.</value></data>
+  <data name="Startup.Failure.SettingsInvalid" xml:space="preserve"><value>The settings file is not valid.</value></data>
+  <data name="Startup.Failure.EngineSettings" xml:space="preserve"><value>The engine could not load the settings.</value></data>
   <data name="Message.UiStateCorrupt" xml:space="preserve"><value>Saved window and display settings could not be read and have been reset to defaults.</value></data>
   <data name="Developer.Control.Minus30" xml:space="preserve"><value>-30</value></data>
   <data name="Developer.Control.Minus7" xml:space="preserve"><value>-7</value></data>

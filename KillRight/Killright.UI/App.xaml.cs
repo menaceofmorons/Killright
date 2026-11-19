@@ -85,6 +85,7 @@ public partial class App : Application
         {
             EngineFailureLog.Record($"Startup refused: {settingsResult.Failure}");
 
+            ShowStartupFailure(StartupFailureMessage.ReasonFor(settingsResult));
             Shutdown();
             return;
         }
@@ -104,6 +105,7 @@ public partial class App : Application
         {
             EngineFailureLog.Record($"Startup refused: the engine rejected the settings file. {engineRuntime.InitializeFailureReason}");
 
+            ShowStartupFailure(StartupFailureReason.EngineSettingsRejected);
             Shutdown();
             return;
         }
@@ -340,6 +342,15 @@ public partial class App : Application
             () => PurgeScheduler.RunStartupPassAsync(),
             "Startup purge",
             EngineFailureLog.Record);
+    }
+
+    private static void ShowStartupFailure(StartupFailureReason reason)
+    {
+        MessageBox.Show(
+            StartupFailureMessage.TextFor(reason),
+            StartupFailureMessage.Title,
+            MessageBoxButton.OK,
+            MessageBoxImage.Error);
     }
 
     private static void RecordPurgePassTiming(string tag, double milliseconds)

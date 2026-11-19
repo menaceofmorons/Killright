@@ -5,17 +5,25 @@ using Killright.Storage.Database;
 
 namespace Killright.UI.Configuration;
 
+public enum SettingsFailureKind
+{
+    Unreadable,
+    Invalid
+}
+
 public sealed record SettingsLoadResult
 {
     public ApplicationSettings? Settings { get; private init; }
 
     public string? Failure { get; private init; }
 
+    public SettingsFailureKind? FailureKind { get; private init; }
+
     public bool Succeeded => Settings is not null;
 
     public static SettingsLoadResult Success(ApplicationSettings settings) => new() { Settings = settings };
 
-    public static SettingsLoadResult Failed(string failure) => new() { Failure = failure };
+    public static SettingsLoadResult Failed(string failure, SettingsFailureKind kind = SettingsFailureKind.Invalid) => new() { Failure = failure, FailureKind = kind };
 }
 
 public static class ApplicationSettingsLoader
@@ -44,13 +52,13 @@ public static class ApplicationSettingsLoader
         try
         {
             if (!File.Exists(path))
-                return SettingsLoadResult.Failed($"The settings file was not found at '{path}'.");
+                return SettingsLoadResult.Failed($"The settings file was not found at '{path}'.", SettingsFailureKind.Unreadable);
 
             json = File.ReadAllText(path);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or System.Security.SecurityException)
         {
-            return SettingsLoadResult.Failed($"The settings file at '{path}' could not be read. {exception.Message}");
+            return SettingsLoadResult.Failed($"The settings file at '{path}' could not be read. {exception.Message}", SettingsFailureKind.Unreadable);
         }
 
         ApplicationSettings? settings;
