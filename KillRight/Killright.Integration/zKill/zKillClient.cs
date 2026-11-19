@@ -175,12 +175,40 @@ public sealed class zKillClient : IzKillClient
         CancellationToken cancellationToken = default)
     {
         var safePastSeconds = Math.Max(1, pastSeconds);
+        var failure = new zKillRecentKillmailResult(zKillRecentKillmailOutcome.Failure, []);
+        var merged = new List<RawKillmail>();
+        var seenIds = new HashSet<long>();
 
-        return await GetWithRetryAsync(
-            $"api/characterID/{characterId}/pastSeconds/{safePastSeconds}/",
-            ReadRecentKillmailsAsync,
-            new zKillRecentKillmailResult(zKillRecentKillmailOutcome.Failure, []),
-            cancellationToken);
+        for (var page = 1; ; page++)
+        {
+            var pageSuffix = page == 1 ? string.Empty : $"page/{page}/";
+
+            var result = await GetWithRetryAsync(
+                $"api/characterID/{characterId}/pastSeconds/{safePastSeconds}/{pageSuffix}",
+                ReadRecentKillmailsAsync,
+                failure,
+                cancellationToken);
+
+            if (result.Outcome == zKillRecentKillmailOutcome.Failure)
+                return failure;
+
+            if (result.Outcome == zKillRecentKillmailOutcome.NoHistory)
+                return page == 1 ? result : failure;
+
+            var added = 0;
+
+            foreach (var killmail in result.RawKillmails)
+            {
+                if (seenIds.Add(killmail.KillmailId))
+                {
+                    merged.Add(killmail);
+                    added++;
+                }
+            }
+
+            if (added == 0)
+                return new zKillRecentKillmailResult(zKillRecentKillmailOutcome.Success, merged);
+        }
     }
 
     private static async Task<zKillRecentKillmailResult> ReadRecentKillmailsAsync(
