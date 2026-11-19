@@ -5,8 +5,6 @@
         xmlns:controls="clr-namespace:Killright.UI.Controls"
         xmlns:resources="clr-namespace:Killright.UI.Resources"
         Title="{x:Static resources:UiText.WindowTitleMain}"
-        MinWidth="120"
-        MinHeight="60"
         WindowStyle="None"
         ResizeMode="CanResize"
         Background="{DynamicResource Brush.Window.Background}"

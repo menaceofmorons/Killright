@@ -48,6 +48,7 @@ public partial class MainWindow : Window
     private readonly IReadOnlyList<RelationshipConfidenceBandSetting> _relationshipConfidenceBands;
     private ClipboardMonitor? _clipboardMonitor;
     private bool _menuModalOpen;
+    private readonly ColumnLayoutPersistenceGate _columnPersistence = new();
     private InfoSheetWindow? _infoSheet;
     private PilotReportRow? _pendingHoverRow;
     private IReadOnlySet<string>? _previousScanKeys;
@@ -65,6 +66,8 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        MinWidth = WindowLimits.MinimumWidth;
+        MinHeight = WindowLimits.MinimumHeight;
         _viewModel = new MainWindowViewModel();
         DataContext = _viewModel;
         CollectionViewSource.GetDefaultView(_viewModel.Pilots).Filter = item => item is PilotReportRow row && _filters.IsVisible(row);
@@ -158,6 +161,8 @@ public partial class MainWindow : Window
 
     internal void ApplyPreviewColumns(UiStateModel state)
     {
+        using var preview = _columnPersistence.BeginPreview();
+
         foreach (var columnState in state.Columns.OrderBy(column => column.DisplayIndex))
         {
             if (!_columnsById.TryGetValue(columnState.Id, out var column))
@@ -193,6 +198,9 @@ public partial class MainWindow : Window
 
     private void PersistColumnLayout()
     {
+        if (!_columnPersistence.ShouldPersist)
+            return;
+
         // Width/DisplayIndex changes (dragging a column border or header) fire
         // this via HookColumnLiveUpdateEvents/PilotGrid_ColumnDisplayIndexChanged
         // even while a Developer-gated column's rendered Visibility only
@@ -616,6 +624,18 @@ public partial class MainWindow : Window
 
         _clipboardMonitor = new ClipboardMonitor(handle);
         _clipboardMonitor.ClipboardChanged += ClipboardChanged;
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        if (_clipboardMonitor is not null)
+        {
+            _clipboardMonitor.ClipboardChanged -= ClipboardChanged;
+            _clipboardMonitor.Dispose();
+            _clipboardMonitor = null;
+        }
+
+        base.OnClosed(e);
     }
 
     protected override void OnClosing(CancelEventArgs e)

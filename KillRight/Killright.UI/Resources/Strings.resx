@@ -245,4 +245,5 @@
   <data name="Style.LetterCode.Inactive" xml:space="preserve"><value>I</value></data>
   <data name="Style.LetterCode.Unknown" xml:space="preserve"><value>U</value></data>
   <data name="Style.LetterCode.PodderSuffix" xml:space="preserve"><value>x</value></data>
+  <data name="Message.UiStateCorrupt" xml:space="preserve"><value>Saved window and display settings could not be read and have been reset to defaults.</value></data>
 </root>

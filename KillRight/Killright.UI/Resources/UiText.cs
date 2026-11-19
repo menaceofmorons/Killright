@@ -4,6 +4,7 @@ namespace Killright.UI.Resources;
 
 public static class UiText
 {
+    public static string UiStateCorrupt => Strings.Get("Message.UiStateCorrupt");
     public static string WindowTitleMain => Strings.Get("Window.Title.Main");
     public static string GridColumnHeaderThreat => Strings.Get("Grid.ColumnHeader.Threat");
     public static string GridColumnHeaderPilot => Strings.Get("Grid.ColumnHeader.Pilot");

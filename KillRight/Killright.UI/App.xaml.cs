@@ -21,6 +21,7 @@ using Killright.UI.Analysis;
 using Killright.UI.Configuration;
 using Killright.UI.Diagnostics;
 using Killright.UI.InfoSheet;
+using Killright.UI.Resources;
 using Killright.UI.Scan;
 using Killright.UI.Sde;
 using Killright.UI.Theme;
@@ -120,7 +121,7 @@ public partial class App : Application
         if (UiState.WasCorruptOnLoad)
         {
             MessageBox.Show(
-                "Saved window and display settings could not be read and have been reset to defaults.",
+                UiText.UiStateCorrupt,
                 "KillRight",
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
