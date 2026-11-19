@@ -1,5 +1,4 @@
 using Killright.Core.Activity;
-using Killright.Core.Style;
 using Killright.Integration.zKill;
 using Killright.Shared.zKill;
 using Killright.Storage.Diagnostics;
@@ -56,18 +55,6 @@ public static class RecentKillmailRefresher
                     return new RecentRefreshOutcome(now, false, pastSeconds);
 
                 case zKillRecentKillmailOutcome.NoHistory:
-                    if (statistics is null)
-                    {
-                        var noHistoryStatistics = new zKillStatistics { NoHistory = true };
-
-                        writes.AddStatistics(new PendingStatistics(
-                            characterId,
-                            noHistoryStatistics,
-                            StyleCodes.ToCode(GeneralStyleClassifier.Classify(noHistoryStatistics).Classification),
-                            true,
-                            now));
-                    }
-
                     writes.AddNoHistoryMark(characterId);
                     return new RecentRefreshOutcome(now, false, pastSeconds);
 

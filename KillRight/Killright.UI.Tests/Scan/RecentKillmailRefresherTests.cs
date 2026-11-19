@@ -43,15 +43,14 @@ public sealed class RecentKillmailRefresherTests
     }
 
     [Fact]
-    public async Task Refresh_InvalidIdAnswerWithNoStatisticsRow_AlsoWritesANoHistoryStatisticsRow()
+    public async Task Refresh_InvalidIdAnswerWithNoStatisticsRow_WritesNoStatisticsRow()
     {
         var client = new FakeClient(zKillRecentKillmailOutcome.NoHistory);
         var writes = new ScanWriteBatch();
 
         await Refresh(client, null, writes);
 
-        Assert.Equal([Lukas], writes.NoHistoryMarks);
-        Assert.True(Assert.Single(writes.Statistics).NoHistory);
+        Assert.Empty(writes.Statistics);
     }
 
     [Fact]
