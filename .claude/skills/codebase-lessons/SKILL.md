@@ -18,7 +18,7 @@ metadata:
 - This file merges with `merge=union`, so dedupe at release.
 
 ### Build & Tooling
-- In a worktree, a hook refuses Bash commands that combine `git` with heredocs or `&&` chains; run plain single commands and write files with the Write tool (WS-1.2)
+- In a worktree, a hook refuses Bash commands that use heredocs or `&&` chains, with or without `git`; run plain single commands and write files with the Write tool (WS-1.2, WS-1.6)
 - Without a prior `dotnet restore KillRight/KillRight.sln`, `dotnet test --no-restore` can exit 0 with no output; check the test count, not the exit code (WS-1.2)
 - `killright_engine` builds its lib as `cdylib` + `rlib`; the CLI bin links the lib through `rlib`, and CLI integration tests in `tests/` run it via `CARGO_BIN_EXE_killright_engine_cli` (WS-1.3)
 
