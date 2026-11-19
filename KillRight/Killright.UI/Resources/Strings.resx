@@ -117,10 +117,6 @@
   <data name="Shortcuts.Action.OpenMenu" xml:space="preserve"><value>Open menu</value></data>
   <data name="Shortcuts.Key.Quit" xml:space="preserve"><value>Ctrl+Q</value></data>
   <data name="Shortcuts.Action.Quit" xml:space="preserve"><value>Quit</value></data>
-  <data name="Shortcuts.Key.Help" xml:space="preserve"><value>F1</value></data>
-  <data name="Shortcuts.Action.Help" xml:space="preserve"><value>Show this help</value></data>
-  <data name="Shortcuts.Key.RevealDeveloperTab" xml:space="preserve"><value>Ctrl+Shift+D</value></data>
-  <data name="Shortcuts.Action.RevealDeveloperTab" xml:space="preserve"><value>Reveal/hide Developer tab (inside menu)</value></data>
   <data name="Shortcuts.Key.MoveWindow" xml:space="preserve"><value>Alt + drag</value></data>
   <data name="Shortcuts.Action.MoveWindow" xml:space="preserve"><value>Move window</value></data>
   <data name="Shortcuts.Key.MinimizeWindow" xml:space="preserve"><value>Win+Down</value></data>
@@ -131,11 +127,8 @@
   <data name="Shortcuts.Action.PilotFilter" xml:space="preserve"><value>Filter to pilot (Pilot cell)</value></data>
   <data name="Shortcuts.Tab.Style" xml:space="preserve"><value>Style</value></data>
   <data name="Shortcuts.StyleCode.Blob" xml:space="preserve"><value>B</value></data>
-  <data name="Shortcuts.StyleWord.Blob" xml:space="preserve"><value>Blob</value></data>
   <data name="Shortcuts.StyleCode.Fleet" xml:space="preserve"><value>F</value></data>
-  <data name="Shortcuts.StyleWord.Fleet" xml:space="preserve"><value>Fleet</value></data>
   <data name="Shortcuts.StyleCode.Gang" xml:space="preserve"><value>G</value></data>
-  <data name="Shortcuts.StyleWord.Gang" xml:space="preserve"><value>Gang</value></data>
   <data name="Shortcuts.StyleCode.Inactive" xml:space="preserve"><value>I</value></data>
   <data name="Shortcuts.StyleWord.Inactive" xml:space="preserve"><value>Inactive</value></data>
   <data name="Shortcuts.StyleCode.Solo" xml:space="preserve"><value>S</value></data>
@@ -150,6 +143,30 @@
   <data name="Shortcuts.Suffix.PodderDescription" xml:space="preserve"><value>Suffix, indicates a podder (e.g. Sx means Solo podder).</value></data>
   <data name="Shortcuts.Tab.Threat" xml:space="preserve"><value>Threat</value></data>
   <data name="Shortcuts.Tab.Relationship" xml:space="preserve"><value>Relationship</value></data>
+  <data name="Shortcuts.Tab.Group" xml:space="preserve"><value>Group</value></data>
+  <data name="Shortcuts.Tab.About" xml:space="preserve"><value>About</value></data>
+  <data name="Shortcuts.Group.Window" xml:space="preserve"><value>Window</value></data>
+  <data name="Shortcuts.Group.Filters" xml:space="preserve"><value>Filters</value></data>
+  <data name="Shortcuts.Group.General" xml:space="preserve"><value>General</value></data>
+  <data name="Shortcuts.NumberFormat" xml:space="preserve"><value>0.##</value></data>
+  <data name="Shortcuts.StyleSize.Gang" xml:space="preserve"><value>Gang: an average of fewer than {0} attackers per kill.</value></data>
+  <data name="Shortcuts.StyleSize.Blob" xml:space="preserve"><value>Blob: an average of {0} to fewer than {1} attackers per kill.</value></data>
+  <data name="Shortcuts.StyleSize.Fleet" xml:space="preserve"><value>Fleet: an average of {0} or more attackers per kill.</value></data>
+  <data name="Shortcuts.Threat.Intro" xml:space="preserve"><value>Threat is a score from 0 to {0} for how dangerous a pilot is likely to be. It comes from kill history, how well the pilot survives, recent activity and security status. The label groups the score into a band.</value></data>
+  <data name="Shortcuts.Threat.None" xml:space="preserve"><value>None (0): no kill history, or only losses or inactivity.</value></data>
+  <data name="Shortcuts.Threat.Low" xml:space="preserve"><value>Low ({0}-{1}): little kill history, or an inactive or mostly victim record with a trace of recent activity.</value></data>
+  <data name="Shortcuts.Threat.Medium" xml:space="preserve"><value>Medium ({0}-{1}): some kills, or an inactive or victim record with real recent activity (such pilots never score higher).</value></data>
+  <data name="Shortcuts.Threat.High" xml:space="preserve"><value>High ({0}-{1}): an established killer with a solid record and steady activity.</value></data>
+  <data name="Shortcuts.Threat.VeryHigh" xml:space="preserve"><value>Very High ({0}-{1}): many kills with few losses, solo or in groups, and active recently.</value></data>
+  <data name="Shortcuts.Threat.Extreme" xml:space="preserve"><value>Extreme ({0}-{1}): a heavy kill history that rarely loses ships, and active right now.</value></data>
+  <data name="Shortcuts.Relationship.Intro" xml:space="preserve"><value>The Relationship number scores how strongly a pilot has flown with the pilot you hold, hover or filter on, counted from shared kills. The Low, Medium or High square beside it shows how far to trust that score.</value></data>
+  <data name="Shortcuts.Relationship.Low" xml:space="preserve"><value>Low ({0}-{1}): little evidence; the link may be chance.</value></data>
+  <data name="Shortcuts.Relationship.Medium" xml:space="preserve"><value>Medium ({0}-{1}): a believable link, not yet certain.</value></data>
+  <data name="Shortcuts.Relationship.High" xml:space="preserve"><value>High ({0}-{1}): strong evidence that the two fly together.</value></data>
+  <data name="Shortcuts.Group.Intro" xml:space="preserve"><value>The Group column counts the other pilots in this scan a pilot is linked to, shown as Direct/Chain, for example 3/-.</value></data>
+  <data name="Shortcuts.Group.Direct" xml:space="preserve"><value>Direct: pilots who appear on the same kills as this pilot.</value></data>
+  <data name="Shortcuts.Group.Chain" xml:space="preserve"><value>Chain: pilots linked only through exactly one other pilot, who need not be in the scan.</value></data>
+  <data name="Shortcuts.About.Version" xml:space="preserve"><value>KillRight version {0}</value></data>
 
   <data name="ThreatBand.None" xml:space="preserve"><value>None</value></data>
   <data name="ThreatBand.1" xml:space="preserve"><value>Low</value></data>
