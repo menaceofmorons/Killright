@@ -56,8 +56,9 @@ public sealed class PilotIdentityResolver
         {
             cachedRecords = await _identityCache.GetRecordsAsync(states.Keys.ToList(), session, cancellationToken);
         }
-        catch
+        catch (Exception exception) when (!IsCallerCancellation(exception, cancellationToken))
         {
+            EngineFailureLog.Record($"Identity cache read failed: {exception}");
             cachedRecords = new Dictionary<string, PilotIdentityCacheRecord>();
         }
 
@@ -165,7 +166,7 @@ public sealed class PilotIdentityResolver
             pilotsByKey[state.Key] = state.ToPilot(entityNames.Names);
 
             if (state.Changed)
-                await PersistAsync(state, now, writes);
+                await PersistAsync(state, now, writes, cancellationToken);
         }
 
         timings.Add(ScanTimings.ScanLevel, ScanTimings.CounterPrefix + "esi_names_resolved", namesResolved);
@@ -225,8 +226,9 @@ public sealed class PilotIdentityResolver
             foreach (var pair in await _nameCache.GetNamesAsync(wantedIds, session, cancellationToken))
                 names[pair.Key] = pair.Value;
         }
-        catch
+        catch (Exception exception) when (!IsCallerCancellation(exception, cancellationToken))
         {
+            EngineFailureLog.Record($"Entity name cache read failed: {exception}");
         }
 
         var missingIds = wantedIds.Where(id => !names.ContainsKey(id)).ToList();
@@ -259,14 +261,15 @@ public sealed class PilotIdentityResolver
         {
             await _nameCache.UpsertAsync(fetchedNames, cancellationToken);
         }
-        catch
+        catch (Exception exception) when (!IsCallerCancellation(exception, cancellationToken))
         {
+            EngineFailureLog.Record($"Entity name cache write failed: {exception}");
         }
 
         return (names, fetched.Count);
     }
 
-    private async Task PersistAsync(PilotState state, DateTime now, ScanWriteBatch? writes)
+    private async Task PersistAsync(PilotState state, DateTime now, ScanWriteBatch? writes, CancellationToken cancellationToken)
     {
         var record = state.Outcome == VerifyStatus.NoMatch
             ? new PilotIdentityCacheRecord
@@ -298,11 +301,17 @@ public sealed class PilotIdentityResolver
 
         try
         {
-            await _identityCache.UpsertRecordAsync(record);
+            await _identityCache.UpsertRecordAsync(record, cancellationToken);
         }
-        catch
+        catch (Exception exception) when (!IsCallerCancellation(exception, cancellationToken))
         {
+            EngineFailureLog.Record($"Identity cache write failed for {state.Key}: {exception}");
         }
+    }
+
+    private static bool IsCallerCancellation(Exception exception, CancellationToken cancellationToken)
+    {
+        return exception is OperationCanceledException && cancellationToken.IsCancellationRequested;
     }
 
     private sealed class PilotState

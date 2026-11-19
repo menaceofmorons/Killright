@@ -462,7 +462,138 @@ public sealed class PilotIdentityResolverTests
         Assert.Single(fixture.Esi.NameBatches);
     }
 
-    private static Fixture CreateFixture(int maxConcurrency = 8)
+    [Fact]
+    public async Task ResolveAsync_CancelledDuringIdentityCacheRead_EndsAsCancellation()
+    {
+        using var source = new CancellationTokenSource();
+        var fixture = CreateFixture(identityCache: new FaultingIdentityCache(source) { FailReads = true });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => fixture.Resolver.ResolveAsync([Tral], cancellationToken: source.Token));
+    }
+
+    [Fact]
+    public async Task ResolveAsync_CancelledDuringIdentityCacheWrite_EndsAsCancellation()
+    {
+        using var source = new CancellationTokenSource();
+        var fixture = CreateFixture(identityCache: new FaultingIdentityCache(source) { FailWrites = true });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => fixture.Resolver.ResolveAsync([Tral], cancellationToken: source.Token));
+    }
+
+    [Fact]
+    public async Task ResolveAsync_CancelledDuringEntityNameCacheRead_EndsAsCancellation()
+    {
+        using var source = new CancellationTokenSource();
+        var fixture = CreateFixture(nameCache: new FaultingNameCache(source) { FailReads = true });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => fixture.Resolver.ResolveAsync([Tral], cancellationToken: source.Token));
+    }
+
+    [Fact]
+    public async Task ResolveAsync_CancelledDuringEntityNameCacheWrite_EndsAsCancellation()
+    {
+        using var source = new CancellationTokenSource();
+        var fixture = CreateFixture(nameCache: new FaultingNameCache(source) { FailWrites = true });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => fixture.Resolver.ResolveAsync([Tral], cancellationToken: source.Token));
+    }
+
+    [Fact]
+    public async Task ResolveAsync_CacheFailuresWithoutCancellation_StillResolve()
+    {
+        using var source = new CancellationTokenSource();
+        var fixture = CreateFixture(
+            identityCache: new FaultingIdentityCache(null) { FailReads = true, FailWrites = true },
+            nameCache: new FaultingNameCache(null) { FailReads = true, FailWrites = true });
+
+        var pilots = await fixture.Resolver.ResolveAsync([Tral], cancellationToken: source.Token);
+
+        Assert.Equal(VerifyStatus.Partial, pilots[0].VerifyStatus);
+        Assert.Equal("Test Corp", pilots[0].Corporation!.Name);
+    }
+
+    private sealed class FaultingIdentityCache : IPilotIdentityCache
+    {
+        private readonly CancellationTokenSource? _source;
+
+        public FaultingIdentityCache(CancellationTokenSource? source) => _source = source;
+
+        public bool FailReads { get; set; }
+
+        public bool FailWrites { get; set; }
+
+        public Task<Pilot?> GetAsync(string inputName, TimeSpan maximumAge, CancellationToken cancellationToken = default)
+            => Task.FromResult<Pilot?>(null);
+
+        public Task UpsertAsync(Pilot pilot, CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task<DateOnly?> GetBirthdayAsync(string inputName, CancellationToken cancellationToken = default)
+            => Task.FromResult<DateOnly?>(null);
+
+        public Task<PilotIdentityCacheRecord?> GetRecordAsync(string inputName, CancellationToken cancellationToken = default)
+            => Task.FromResult<PilotIdentityCacheRecord?>(null);
+
+        public Task<IReadOnlyDictionary<string, PilotIdentityCacheRecord>> GetRecordsAsync(
+            IReadOnlyCollection<string> inputNames,
+            ScanDatabaseSession? session = null,
+            CancellationToken cancellationToken = default)
+        {
+            if (FailReads)
+                throw Fault(_source);
+
+            return Task.FromResult<IReadOnlyDictionary<string, PilotIdentityCacheRecord>>(new Dictionary<string, PilotIdentityCacheRecord>());
+        }
+
+        public Task UpsertRecordAsync(PilotIdentityCacheRecord record, CancellationToken cancellationToken = default)
+        {
+            if (FailWrites)
+                throw Fault(_source);
+
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class FaultingNameCache : IEsiEntityNameCache
+    {
+        private readonly CancellationTokenSource? _source;
+
+        public FaultingNameCache(CancellationTokenSource? source) => _source = source;
+
+        public bool FailReads { get; set; }
+
+        public bool FailWrites { get; set; }
+
+        public Task<IReadOnlyDictionary<long, string>> GetNamesAsync(IReadOnlyCollection<long> entityIds, CancellationToken cancellationToken = default)
+        {
+            if (FailReads)
+                throw Fault(_source);
+
+            return Task.FromResult<IReadOnlyDictionary<long, string>>(new Dictionary<long, string>());
+        }
+
+        public Task UpsertAsync(IReadOnlyCollection<EsiEntityName> names, CancellationToken cancellationToken = default)
+        {
+            if (FailWrites)
+                throw Fault(_source);
+
+            return Task.CompletedTask;
+        }
+    }
+
+    private static Exception Fault(CancellationTokenSource? source)
+    {
+        if (source is null)
+            return new InvalidOperationException("cache failed");
+
+        source.Cancel();
+        return new OperationCanceledException(source.Token);
+    }
+
+    private static Fixture CreateFixture(int maxConcurrency = 8, IPilotIdentityCache? identityCache = null, IEsiEntityNameCache? nameCache = null)
     {
         var path = Path.Combine(Path.GetTempPath(), $"identityResolver.{Guid.NewGuid():N}.db");
         var database = new KillRightDatabase(new KillRightDatabaseOptions { DatabasePath = path });
@@ -470,13 +601,13 @@ public sealed class PilotIdentityResolverTests
 
         var clock = new Clock(new DateTime(2026, 9, 30, 12, 0, 0, DateTimeKind.Utc));
         var esi = new FakeEsiClient();
-        var identityCache = new PilotIdentityCache(database);
-        var nameCache = new EsiEntityNameCache(database);
+        var realIdentityCache = new PilotIdentityCache(database);
+        var realNameCache = new EsiEntityNameCache(database);
 
         return new Fixture(
-            new PilotIdentityResolver(esi, identityCache, nameCache, maxConcurrency, () => clock.Now),
+            new PilotIdentityResolver(esi, identityCache ?? realIdentityCache, nameCache ?? realNameCache, maxConcurrency, () => clock.Now),
             esi,
-            identityCache,
+            realIdentityCache,
             clock,
             database);
     }
