@@ -102,6 +102,8 @@ public static class UiText
     public static string ShortcutsActionClearFilters => Strings.Get("Shortcuts.Action.ClearFilters");
     public static string ShortcutsKeyPilotFilter => Strings.Get("Shortcuts.Key.PilotFilter");
     public static string ShortcutsActionPilotFilter => Strings.Get("Shortcuts.Action.PilotFilter");
+    public static string ShortcutsKeyPilotHold => Strings.Get("Shortcuts.Key.PilotHold");
+    public static string ShortcutsActionPilotHold => Strings.Get("Shortcuts.Action.PilotHold");
     public static string ShortcutsTabStyle => Strings.Get("Shortcuts.Tab.Style");
     public static string ShortcutsStyleCodeBlob => Strings.Get("Shortcuts.StyleCode.Blob");
     public static string ShortcutsStyleCodeFleet => Strings.Get("Shortcuts.StyleCode.Fleet");

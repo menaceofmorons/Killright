@@ -88,7 +88,11 @@ public sealed class F1HelpContentTests
         var groups = Create().ShortcutGroups.ToDictionary(group => group.Title, group => group.Entries.Select(entry => entry.Key).ToArray());
 
         Assert.Equal(new[] { "Alt + drag", "Win+Down" }, groups["Window"]);
-        Assert.Equal(new[] { "Ctrl+R", "Ctrl+right-click" }, groups["Filters"]);
+        Assert.Equal(new[] { "Ctrl+R", "Ctrl+right-click", "Ctrl+left-click" }, groups["Filters"]);
+
+        var holdEntry = Create().ShortcutGroups.Single(group => group.Title == UiText.ShortcutsGroupFilters).Entries.Single(entry => entry.Key == UiText.ShortcutsKeyPilotHold);
+        Assert.Equal(UiText.ShortcutsActionPilotHold, holdEntry.Action);
+        Assert.Equal("Hold pilot (pilot row)", holdEntry.Action);
         Assert.Equal(new[] { "Ctrl+M", "Ctrl+Q" }, groups["General"]);
     }
 

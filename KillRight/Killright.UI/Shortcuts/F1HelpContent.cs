@@ -99,7 +99,8 @@ public sealed class F1HelpContent
             new[]
             {
                 new F1ShortcutEntry(UiText.ShortcutsKeyClearFilters, UiText.ShortcutsActionClearFilters),
-                new F1ShortcutEntry(UiText.ShortcutsKeyPilotFilter, UiText.ShortcutsActionPilotFilter)
+                new F1ShortcutEntry(UiText.ShortcutsKeyPilotFilter, UiText.ShortcutsActionPilotFilter),
+                new F1ShortcutEntry(UiText.ShortcutsKeyPilotHold, UiText.ShortcutsActionPilotHold)
             }),
         new F1ShortcutGroup(
             UiText.ShortcutsGroupGeneral,
