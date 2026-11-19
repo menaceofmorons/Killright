@@ -4,6 +4,14 @@ namespace Killright.UI.Resources;
 
 public static class UiText
 {
+    public static string StartupFailureTitle => Strings.Get("Startup.Failure.Title");
+    public static string StartupFailureSettingsUnreadable => Strings.Get("Startup.Failure.SettingsUnreadable");
+    public static string StartupFailureSettingsInvalid => Strings.Get("Startup.Failure.SettingsInvalid");
+    public static string StartupFailureEngineSettings => Strings.Get("Startup.Failure.EngineSettings");
+
+    public static string FormatStartupFailure(string reason) =>
+        string.Format(CultureInfo.CurrentCulture, Strings.Get("Startup.Failure.Text"), reason);
+
     public static string UiStateCorrupt => Strings.Get("Message.UiStateCorrupt");
     public static string WindowTitleMain => Strings.Get("Window.Title.Main");
     public static string GridColumnHeaderThreat => Strings.Get("Grid.ColumnHeader.Threat");
