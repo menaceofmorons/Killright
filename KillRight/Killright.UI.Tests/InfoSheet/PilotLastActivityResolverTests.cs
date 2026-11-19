@@ -280,6 +280,59 @@ public sealed class PilotLastActivityResolverTests
         Assert.Equal(Now.AddDays(-9), resolution.Killmail!.KillTimeUtc);
     }
 
+    [Fact]
+    public async Task ResolveAsync_CancelledDuringCacheRead_EndsAsCancellation()
+    {
+        using var source = new CancellationTokenSource();
+        var (resolver, _, cache, _) = Create();
+        cache.CancelOnRead = source;
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => resolver.ResolveAsync(Lukas, source.Token));
+    }
+
+    [Fact]
+    public async Task ResolveAsync_CancelledDuringCacheWrite_EndsAsCancellation()
+    {
+        using var source = new CancellationTokenSource();
+        var (resolver, _, cache, _) = Create(result: KillResult(Now.AddDays(-9)));
+        cache.CancelOnWrite = source;
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => resolver.ResolveAsync(Lukas, source.Token));
+    }
+
+    [Fact]
+    public async Task ResolveAsync_CancelledDuringLocalRead_EndsAsCancellation()
+    {
+        using var source = new CancellationTokenSource();
+        var (resolver, _, _, recent) = Create(result: KillResult(Now.AddDays(-9)));
+        recent.CancelOnRead = source;
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => resolver.ResolveAsync(Lukas, source.Token));
+    }
+
+    [Fact]
+    public async Task ResolveAsync_CancelledDuringLookup_EndsAsCancellation()
+    {
+        using var source = new CancellationTokenSource();
+        var (resolver, _, _, _) = Create(result: KillResult(Now.AddDays(-9)));
+        source.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => resolver.ResolveAsync(Lukas, source.Token));
+    }
+
+    [Fact]
+    public async Task ResolveAsync_CacheFailsWithoutCancellation_StillResolves()
+    {
+        using var source = new CancellationTokenSource();
+        var (resolver, _, cache, _) = Create(result: KillResult(Now.AddDays(-9)));
+        cache.FailReads = true;
+        cache.FailWrites = true;
+
+        var resolution = await resolver.ResolveAsync(Lukas, source.Token);
+
+        Assert.Equal(Now.AddDays(-9), resolution.Killmail!.KillTimeUtc);
+    }
+
     private static (PilotLastActivityResolver Resolver, FakeClient Client, FakeCache Cache, FakeRecent Recent) Create(
         PilotLastKillmailRecord? cached = null,
         zKillLastKillmailResult? result = null,
@@ -353,6 +406,7 @@ public sealed class PilotLastActivityResolverTests
         public async Task<zKillLastKillmailResult> GetLastKillmailAsync(long characterId, CancellationToken cancellationToken = default)
         {
             Calls++;
+            cancellationToken.ThrowIfCancellationRequested();
 
             if (_gate is not null)
                 await _gate;
@@ -372,10 +426,14 @@ public sealed class PilotLastActivityResolverTests
         public Dictionary<long, PilotLastKillmailRecord> Rows { get; } = [];
         public int Upserts { get; private set; }
         public bool FailReads { get; set; }
+        public CancellationTokenSource? CancelOnRead { get; set; }
+        public CancellationTokenSource? CancelOnWrite { get; set; }
         public bool FailWrites { get; set; }
 
         public Task<PilotLastKillmailRecord?> GetAsync(long characterId, CancellationToken cancellationToken = default)
         {
+            Cancel(CancelOnRead);
+
             if (FailReads)
                 throw new InvalidOperationException("read failed");
 
@@ -384,6 +442,8 @@ public sealed class PilotLastActivityResolverTests
 
         public Task UpsertAsync(PilotLastKillmailRecord record, CancellationToken cancellationToken = default)
         {
+            Cancel(CancelOnWrite);
+
             if (FailWrites)
                 throw new InvalidOperationException("write failed");
 
@@ -401,8 +461,12 @@ public sealed class PilotLastActivityResolverTests
 
         public bool Fail { get; set; }
 
+        public CancellationTokenSource? CancelOnRead { get; set; }
+
         public Task<PilotRecentKillmail?> GetMostRecentKillmailAsync(long characterId, CancellationToken cancellationToken = default)
         {
+            Cancel(CancelOnRead);
+
             if (Fail)
                 throw new InvalidOperationException("local read failed");
 
@@ -410,5 +474,14 @@ public sealed class PilotLastActivityResolverTests
         }
 
         public Task RemoveExpiredAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+    }
+
+    private static void Cancel(CancellationTokenSource? source)
+    {
+        if (source is null)
+            return;
+
+        source.Cancel();
+        source.Token.ThrowIfCancellationRequested();
     }
 }
