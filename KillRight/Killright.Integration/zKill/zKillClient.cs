@@ -260,7 +260,10 @@ public sealed class zKillClient : IzKillClient
         if (statistics is null)
             return new zKillStatisticsResult(zKillStatisticsOutcome.Failure, null);
 
-        statistics.podKills = ExtractPodKills(statistics);
+        if (statistics.groups is not null && statistics.groups.Values.Any(group => group is null))
+            throw new JsonException("statistics contain a null group");
+
+        statistics.podKills =ExtractPodKills(statistics);
         statistics.podLosses = ExtractPodLosses(statistics);
 
         return new zKillStatisticsResult(zKillStatisticsOutcome.Success, statistics);
@@ -346,6 +349,12 @@ public sealed class zKillClient : IzKillClient
 
         foreach (var killmail in payload)
         {
+            if (killmail is not { victim: not null, attackers: not null, zkb: not null }
+                || killmail.attackers.Any(attacker => attacker is null))
+            {
+                throw new JsonException("killmail is missing victim, attackers or zkb");
+            }
+
             var attackers = killmail.attackers
                 .Select(attacker => new KillmailAttacker(
                     attacker.character_id,
