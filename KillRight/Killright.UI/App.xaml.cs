@@ -212,11 +212,7 @@ public partial class App : Application
         SdeReferenceDataStore =
             new SdeReferenceDataStore(database);
 
-        var sdeHttpClient =
-            new HttpClient
-            {
-                Timeout = TimeSpan.FromSeconds(SdeClientOptions.RequestTimeoutSeconds)
-            };
+        var sdeHttpClient = SdeHttpClientFactory.Create();
 
         var sdeClient =
             new SdeClient(
@@ -225,7 +221,8 @@ public partial class App : Application
                 {
                     ManifestUrl = Settings.Sde.ManifestUrl,
                     DatasetZipUrl = Settings.Sde.DatasetZipUrl
-                });
+                },
+                EngineFailureLog.Record);
 
         var sdeIngestionService =
             new SdeIngestionService(
@@ -266,7 +263,8 @@ public partial class App : Application
             };
         EsiClient =
             new EsiClient(
-                esiHttpClient);
+                esiHttpClient,
+                log: EngineFailureLog.Record);
         IdentityResolver =
             new PilotIdentityResolver(
                 EsiClient,

@@ -37,7 +37,7 @@ public sealed class zKillClient : IzKillClient
         _http.BaseAddress ??= _options.BaseUri;
 
         if (!_http.DefaultRequestHeaders.UserAgent.Any())
-            _http.DefaultRequestHeaders.UserAgent.ParseAdd(_options.UserAgent);
+            _http.DefaultRequestHeaders.UserAgent.ParseAdd(ClientIdentity.UserAgent);
 
         if (!_http.DefaultRequestHeaders.AcceptEncoding.Any(x => x.Value.Equals("gzip", StringComparison.OrdinalIgnoreCase)))
             _http.DefaultRequestHeaders.AcceptEncoding.Add(new StringWithQualityHeaderValue("gzip"));

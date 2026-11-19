@@ -33,7 +33,7 @@ public sealed class EsiClient : IEsiClient
         _http.BaseAddress ??= _options.BaseUri;
         if (!_http.DefaultRequestHeaders.UserAgent.Any())
         {
-            _http.DefaultRequestHeaders.UserAgent.ParseAdd(_options.UserAgent);
+            _http.DefaultRequestHeaders.UserAgent.ParseAdd(ClientIdentity.UserAgent);
         }
     }
 
