@@ -53,6 +53,7 @@ public partial class MainWindow : Window
     private PilotReportRow? _pendingHoverRow;
     private IReadOnlySet<string>? _previousScanKeys;
     private readonly GridFilterState _filters = new();
+    private readonly PilotHoldState _hold = new();
 
     private static readonly string[] FilterableColumnIds =
     {
@@ -344,14 +345,11 @@ public partial class MainWindow : Window
 
         _hoverTimer.Stop();
         _pendingHoverRow = null;
-        RelationshipHighlightCalculator.Clear(_viewModel.Pilots);
+        _hold.Hover(null);
 
         _filters.ApplyPilotFilter(row, _viewModel.Pilots, App.SdeReferenceDataStore.IsNpcCorporation);
-        RelationshipHighlightCalculator.ApplyRelationshipValues(
-            _viewModel.Pilots,
-            row,
-            App.SdeReferenceDataStore.IsNpcCorporation,
-            _relationshipConfidenceBands);
+        _hold.SetFiltered(row);
+        RefreshRelationship();
 
         RefreshFilterView();
     }
@@ -365,7 +363,10 @@ public partial class MainWindow : Window
         _filters.Clear();
 
         if (pilotFilterWasActive)
-            RelationshipHighlightCalculator.Clear(_viewModel.Pilots);
+        {
+            _hold.SetFiltered(null);
+            RefreshRelationship();
+        }
 
         RefreshFilterView();
     }
@@ -390,12 +391,28 @@ public partial class MainWindow : Window
 
     private void PilotGrid_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (e.ClickCount != 2)
+        if (e.ClickCount is not (1 or 2))
             return;
 
         if (FindAncestor<DataGridCell>(e.OriginalSource as DependencyObject) is not { Column: var cellColumn } cell
             || cellColumn != ColumnPilot
             || FindAncestor<DataGridRow>(cell) is not { Item: PilotReportRow row })
+            return;
+
+        if ((Keyboard.Modifiers & ModifierKeys.Control) != 0)
+        {
+            e.Handled = true;
+
+            if (e.ClickCount == 1)
+            {
+                _hold.ToggleHold(row);
+                RefreshRelationship();
+            }
+
+            return;
+        }
+
+        if (e.ClickCount != 2)
             return;
 
         e.Handled = true;
@@ -408,7 +425,7 @@ public partial class MainWindow : Window
 
     private void PilotCell_MouseEnter(object sender, MouseEventArgs e)
     {
-        if (_filters.IsPilotFilterActive || sender is not DataGridCell { DataContext: PilotReportRow row })
+        if (sender is not DataGridCell { DataContext: PilotReportRow row })
             return;
 
         _pendingHoverRow = row;
@@ -418,31 +435,45 @@ public partial class MainWindow : Window
 
     private void PilotCell_MouseLeave(object sender, MouseEventArgs e)
     {
-        if (_filters.IsPilotFilterActive)
-            return;
-
         _hoverTimer.Stop();
         _pendingHoverRow = null;
-        RelationshipHighlightCalculator.Clear(_viewModel.Pilots);
+        _hold.Hover(null);
+        RefreshRelationship();
     }
 
     private void HoverTimer_Tick(object? sender, EventArgs e)
     {
         _hoverTimer.Stop();
+        _hold.Hover(_pendingHoverRow);
+        RefreshRelationship();
+    }
+
+    private void RefreshRelationship()
+    {
+        var rows = _viewModel.Pilots;
+        var isNpc = App.SdeReferenceDataStore.IsNpcCorporation;
+
+        if (_hold.RelationshipPilot is not { } relationshipPilot)
+        {
+            RelationshipHighlightCalculator.Clear(rows);
+            return;
+        }
+
+        RelationshipHighlightCalculator.ApplyRelationshipValues(rows, relationshipPilot, isNpc, _relationshipConfidenceBands);
+
+        if (_hold.HighlightPilot is not { } highlightPilot)
+        {
+            foreach (var row in rows)
+                row.HighlightBrush = null;
+
+            return;
+        }
 
         var resolvedTheme = AppearanceManager.ResolvedTheme;
         var pilotColor = ParseColor(HighlightColorResolver.ResolveHex(App.UiState.Current.PilotHighlightColorHex, resolvedTheme), UiStateDefaults.PilotHighlightColorHex);
         var relatedColor = ParseColor(HighlightColorResolver.ResolveHex(App.UiState.Current.RelatedHighlightColorHex, resolvedTheme), UiStateDefaults.RelatedHighlightColorHex);
 
-        RelationshipHighlightCalculator.Apply(
-            _viewModel.Pilots,
-            _pendingHoverRow,
-            App.SdeReferenceDataStore.IsNpcCorporation,
-            _relationshipConfidenceBands,
-            pilotColor,
-            relatedColor,
-            App.Settings.HighlightOpacity,
-            resolvedTheme);
+        RelationshipHighlightCalculator.ApplyTints(rows, highlightPilot, isNpc, pilotColor, relatedColor, App.Settings.HighlightOpacity, resolvedTheme);
     }
 
     private static Color ParseColor(string hex, string fallbackHex)
@@ -706,7 +737,9 @@ public partial class MainWindow : Window
         else if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.R)
         {
             e.Handled = true;
+            _hold.ReleaseHold();
             ClearFilters();
+            RefreshRelationship();
         }
         else if (e.Key == Key.F1)
         {
@@ -1079,6 +1112,7 @@ public partial class MainWindow : Window
                 using (timings.Measure(ScanTimings.ScanLevel, "grid_filters_clear"))
                 {
                     ClearFilters();
+                    _hold.Reset();
                 }
 
                 using (timings.Measure(ScanTimings.ScanLevel, "grid_flag"))
