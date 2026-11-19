@@ -41,7 +41,7 @@ public sealed class PilotReportRowFactoryTests
         var row = PilotReportRowFactory.FromPilot(
             CreatePilot(), null, null, StyleClassification.Unknown, false, "Unk", false, false, null);
 
-        Assert.Equal(UiText.InfoSheetSourceEsi, row.StatsFailureSource);
+        Assert.Equal(UiText.NotesCallEsi, row.StatsFailureSource);
     }
 
     [Fact]
@@ -229,9 +229,9 @@ public sealed class PilotReportRowFactoryTests
     }
 
     [Theory]
-    [InlineData(true, false, false, "killright_engine")]
-    [InlineData(false, true, false, "zKill statistics")]
-    [InlineData(false, false, true, "zKill recent killmails")]
+    [InlineData(true, false, false, "engine")]
+    [InlineData(false, true, false, "zKillboard statistics")]
+    [InlineData(false, false, true, "zKillboard recent killmails")]
     public void FromPilot_FailureFlags_ClassifyStatsFailureSource(bool engineFailed, bool statisticsCallFailed, bool recentCallFailed, string expectedSource)
     {
         var activity = new zKillActivity(95465499, true, 1, 0, null, null, DateTimeOffset.UtcNow);

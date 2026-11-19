@@ -219,7 +219,7 @@ public sealed class InfoSheetViewModel : INotifyPropertyChanged
         catch
         {
             ApplyTotals(null);
-            failedSources.Add(UiText.InfoSheetSourceStatistics);
+            failedSources.Add(UiText.NotesCallStatistics);
         }
 
         try

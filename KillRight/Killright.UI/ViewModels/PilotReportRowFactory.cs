@@ -169,16 +169,16 @@ public static class PilotReportRowFactory
         var sources = new List<string>();
 
         if (affiliationFailed)
-            sources.Add(UiText.InfoSheetSourceEsi);
+            sources.Add(UiText.NotesCallEsi);
 
         if (statisticsCallFailed)
-            sources.Add(UiText.InfoSheetSourceStatistics);
+            sources.Add(UiText.NotesCallStatistics);
 
         if (recentCallFailed)
-            sources.Add(UiText.InfoSheetSourceRecent);
+            sources.Add(UiText.NotesCallRecent);
 
         if (engineFailureReason is not null)
-            sources.Add(UiText.InfoSheetSourceEngine);
+            sources.Add(UiText.NotesCallEngine);
 
         return sources.Count == 0 ? null : string.Join(UiText.NotesSeparator, sources);
     }
