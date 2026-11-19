@@ -11,6 +11,13 @@
         ShowInTaskbar="False"
         Background="{DynamicResource Brush.Window.Background}"
         Foreground="{DynamicResource Brush.Text.Primary}">
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Killright.UI;component/Theme/ChromeStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Window.Resources>
     <DockPanel Margin="12">
         <Button DockPanel.Dock="Bottom"
                 Content="{x:Static resources:UiText.ShortcutsButtonClose}"

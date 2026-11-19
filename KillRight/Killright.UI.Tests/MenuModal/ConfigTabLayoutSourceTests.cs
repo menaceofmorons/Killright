@@ -87,6 +87,45 @@ public sealed class ConfigTabLayoutSourceTests
         Assert.Contains("Foreground=\"{DynamicResource Brush.Text.Primary}\"", window);
     }
 
+    [Theory]
+    [InlineData("MenuModal/MenuModalWindow.xaml")]
+    [InlineData("Shortcuts/ShortcutsWindow.xaml")]
+    public void SecondaryWindows_MergeTheThemedChromeStyles(string path)
+    {
+        Assert.Contains("Theme/ChromeStyles.xaml", Read(path));
+    }
+
+    [Theory]
+    [InlineData("TabControl")]
+    [InlineData("TabItem")]
+    [InlineData("Button")]
+    [InlineData("CheckBox")]
+    [InlineData("TextBox")]
+    [InlineData("ComboBox")]
+    [InlineData("ComboBoxItem")]
+    [InlineData("ListBox")]
+    [InlineData("ListBoxItem")]
+    [InlineData("ScrollBar")]
+    [InlineData("DataGrid")]
+    [InlineData("DataGridColumnHeader")]
+    [InlineData("DataGridRow")]
+    [InlineData("DataGridCell")]
+    public void ChromeStyles_StyleEveryStockControlFromThemeBrushes(string control)
+    {
+        var xaml = Read("Theme/ChromeStyles.xaml");
+        var start = xaml.IndexOf($"<Style TargetType=\"{control}\">", StringComparison.Ordinal);
+
+        Assert.True(start >= 0, control);
+        var end = xaml.IndexOf("</Style>", start, StringComparison.Ordinal);
+        Assert.Contains("DynamicResource Brush.", xaml[start..end]);
+    }
+
+    [Fact]
+    public void ChromeStyles_UseNoHardCodedColours()
+    {
+        Assert.DoesNotMatch("(Color|Fill|Stroke|Background|Foreground|BorderBrush)=\"#", Read("Theme/ChromeStyles.xaml"));
+    }
+
     private static string Row(string xaml, string name, string nextMarker)
     {
         var start = xaml.IndexOf($"x:Name=\"{name}\"", StringComparison.Ordinal);
