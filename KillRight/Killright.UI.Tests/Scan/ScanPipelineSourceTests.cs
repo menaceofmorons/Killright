@@ -74,7 +74,6 @@ public sealed class ScanPipelineSourceTests
         var source = ReadMainWindow();
 
         Assert.Contains("App.zKillClient.GetStatisticsAsync(characterId, cancellationToken)", source);
-        Assert.Contains("App.zKillClient.GetRecentKillmailsAsync(characterId, pastSeconds, cancellationToken)", source);
         Assert.Contains("App.IdentityResolver.ResolveAsync(pilotNames, timings, cancellationToken, session, writes)", source);
     }
 

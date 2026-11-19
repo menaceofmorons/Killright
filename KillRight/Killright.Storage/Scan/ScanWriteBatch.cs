@@ -25,6 +25,7 @@ public sealed class ScanWriteBatch
     private readonly List<PendingStatistics> _statistics = new();
     private readonly List<PendingKillmails> _killmails = new();
     private readonly List<long> _noHistoryClears = new();
+    private readonly List<long> _noHistoryMarks = new();
     private readonly List<zKillActivity> _activities = new();
 
     public bool IsEmpty
@@ -38,6 +39,7 @@ public sealed class ScanWriteBatch
                     && _statistics.Count == 0
                     && _killmails.Count == 0
                     && _noHistoryClears.Count == 0
+                    && _noHistoryMarks.Count == 0
                     && _activities.Count == 0;
             }
         }
@@ -71,6 +73,12 @@ public sealed class ScanWriteBatch
     {
         lock (_gate)
             _noHistoryClears.Add(characterId);
+    }
+
+    public void AddNoHistoryMark(long characterId)
+    {
+        lock (_gate)
+            _noHistoryMarks.Add(characterId);
     }
 
     public void AddActivity(zKillActivity activity)
@@ -136,6 +144,15 @@ public sealed class ScanWriteBatch
         {
             lock (_gate)
                 return _noHistoryClears.Distinct().ToList();
+        }
+    }
+
+    public IReadOnlyList<long> NoHistoryMarks
+    {
+        get
+        {
+            lock (_gate)
+                return _noHistoryMarks.Distinct().ToList();
         }
     }
 
