@@ -4,6 +4,7 @@ using Killright.Integration.zKill;
 using Killright.Shared;
 using Killright.Shared.zKill;
 using Killright.UI.Analysis;
+using Killright.UI.Resources;
 using Killright.UI.ViewModels;
 using Xunit;
 
@@ -20,6 +21,27 @@ public sealed class PilotReportRowFactoryTests
             CharacterName = "T'ral Vsengne",
             VerifyStatus = VerifyStatus.Partial
         };
+    }
+
+    private static Pilot CreateAffiliatedPilot()
+    {
+        return new Pilot
+        {
+            InputName = "T'ral Vsengne",
+            CharacterId = 95465499,
+            CharacterName = "T'ral Vsengne",
+            VerifyStatus = VerifyStatus.Partial,
+            CorporationId = 98000001
+        };
+    }
+
+    [Fact]
+    public void FromPilot_AffiliationFailed_StatsFailureSourceNamesEsi()
+    {
+        var row = PilotReportRowFactory.FromPilot(
+            CreatePilot(), null, null, StyleClassification.Unknown, false, "Unk", false, false, null);
+
+        Assert.Equal(UiText.InfoSheetSourceEsi, row.StatsFailureSource);
     }
 
     [Fact]
@@ -215,7 +237,7 @@ public sealed class PilotReportRowFactoryTests
         var activity = new zKillActivity(95465499, true, 1, 0, null, null, DateTimeOffset.UtcNow);
 
         var row = PilotReportRowFactory.FromPilot(
-            CreatePilot(),
+            CreateAffiliatedPilot(),
             activity,
             null,
             StyleClassification.Unknown,
@@ -229,12 +251,21 @@ public sealed class PilotReportRowFactoryTests
     }
 
     [Fact]
+    public void FromPilot_NoActivityAndNoFailedCall_StatsFailureSourceIsNull()
+    {
+        var row = PilotReportRowFactory.FromPilot(
+            CreateAffiliatedPilot(), null, null, StyleClassification.Unknown, false, "Unk", false, false, null);
+
+        Assert.Null(row.StatsFailureSource);
+    }
+
+    [Fact]
     public void FromPilot_NoFailures_StatsFailureSourceIsNull()
     {
         var activity = new zKillActivity(95465499, true, 1, 0, null, null, DateTimeOffset.UtcNow);
 
         var row = PilotReportRowFactory.FromPilot(
-            CreatePilot(), activity, null, StyleClassification.Unknown, false, "Unk", false, false, null);
+            CreateAffiliatedPilot(), activity, null, StyleClassification.Unknown, false, "Unk", false, false, null);
 
         Assert.Null(row.StatsFailureSource);
     }
