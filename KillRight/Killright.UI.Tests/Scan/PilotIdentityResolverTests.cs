@@ -1,6 +1,7 @@
 using Killright.Core.Models;
 using Killright.Integration.Esi;
 using Killright.Shared;
+using Killright.Shared.Time;
 using Killright.Storage.Database;
 using Killright.Storage.Identity;
 using Killright.Storage.Scan;
@@ -9,6 +10,13 @@ using Xunit;
 
 namespace Killright.UI.Tests.Scan;
 
+[CollectionDefinition(Name, DisableParallelization = true)]
+public sealed class ApplicationClockCollection
+{
+    public const string Name = "ApplicationClock";
+}
+
+[Collection(ApplicationClockCollection.Name)]
 public sealed class PilotIdentityResolverTests
 {
     private const string Tral = "T'ral Vsengne";
@@ -386,6 +394,72 @@ public sealed class PilotIdentityResolverTests
 
         Assert.Single(fixture.Esi.CharacterCalls);
         Assert.Equal(500003, pilots[0].FactionId);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_DefaultClock_FollowsApplicationClockForTimestampsAndExpiry()
+    {
+        var fixture = CreateFixture();
+        var resolver = new PilotIdentityResolver(fixture.Esi, fixture.IdentityCache, new EsiEntityNameCache(fixture.Database), 8);
+
+        try
+        {
+            ApplicationClock.SetOffsetDays(30);
+            await resolver.ResolveAsync([Tral, Symptom]);
+
+            var record = await fixture.IdentityCache.GetRecordAsync(Tral);
+            var expected = ApplicationClock.UtcNow.UtcDateTime;
+            Assert.True(Math.Abs((record!.CachedAtUtc - expected).TotalMinutes) < 5);
+            Assert.True(Math.Abs((record.SecurityStatusAtUtc!.Value - expected).TotalMinutes) < 5);
+
+            fixture.Esi.Reset();
+            ApplicationClock.AddDays(2);
+            await resolver.ResolveAsync([Tral, Symptom]);
+
+            Assert.Single(fixture.Esi.CharacterCalls);
+            Assert.Single(fixture.Esi.NameBatches);
+        }
+        finally
+        {
+            ApplicationClock.Reset();
+        }
+    }
+
+    [Fact]
+    public async Task ResolveAsync_EntityNameLookupFails_IgnoredCorporationStillRemoved()
+    {
+        var fixture = CreateFixture();
+        fixture.Esi.EntityNames.Clear();
+
+        var pilots = await fixture.Resolver.ResolveAsync([Tral]);
+        var ignoreList = new[] { new Killright.UI.UiState.IgnoreListEntry { Id = 98765, Type = IgnoreEntryType.Corporation, Name = "Test Corp" } };
+
+        Assert.Null(pilots[0].Corporation);
+        Assert.Empty(ScanPilotSelector.SelectForAnalysis(pilots, ignoreList));
+    }
+
+    [Fact]
+    public async Task ResolveAsync_UnrecognisedStoredVerifyStatus_IsTreatedAsAbsentWithoutThrowing()
+    {
+        var fixture = CreateFixture();
+        await fixture.Resolver.ResolveAsync([Tral]);
+
+        using (var connection = fixture.Database.OpenConnection())
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = "UPDATE main.pilot_identity_cache SET verify_status = 'Renamed';";
+            command.ExecuteNonQuery();
+        }
+
+        Assert.Null(await fixture.IdentityCache.GetRecordAsync(Tral));
+        Assert.Null(await fixture.IdentityCache.GetAsync(Tral, TimeSpan.FromDays(1)));
+        Assert.Empty(await fixture.IdentityCache.GetRecordsAsync([Tral]));
+
+        fixture.Esi.Reset();
+        var pilots = await fixture.Resolver.ResolveAsync([Tral]);
+
+        Assert.Equal(95465499, pilots[0].CharacterId);
+        Assert.Single(fixture.Esi.NameBatches);
     }
 
     private static Fixture CreateFixture(int maxConcurrency = 8)

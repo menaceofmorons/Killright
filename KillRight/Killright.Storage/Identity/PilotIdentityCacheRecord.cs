@@ -39,7 +39,9 @@ public sealed class PilotIdentityCacheRecord
             VerifyStatus = VerifyStatus,
             SecurityStatus = SecurityStatus,
             Corporation = corporation,
+            CorporationId = CorporationId,
             Alliance = alliance,
+            AllianceId = AllianceId,
             Birthday = Birthday,
             FactionId = FactionId
         };

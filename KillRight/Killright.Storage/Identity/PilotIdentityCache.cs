@@ -3,6 +3,7 @@ using Killright.Core.Models;
 using Killright.Shared;
 using Killright.Shared.Data;
 using Killright.Storage.Database;
+using Killright.Storage.Diagnostics;
 
 namespace Killright.Storage.Identity;
 
@@ -53,12 +54,15 @@ public sealed class PilotIdentityCache : IPilotIdentityCache
         if (DateTime.UtcNow - cachedAtUtc > maximumAge)
             return Task.FromResult<Pilot?>(null);
 
+        if (!TryReadVerifyStatus(reader, out var verifyStatus))
+            return Task.FromResult<Pilot?>(null);
+
         var record = new PilotIdentityCacheRecord
         {
             InputName = reader.GetString(0),
             CharacterId = reader.GetNullableInt64(1),
             CharacterName = reader.GetNullableString(2),
-            VerifyStatus = Enum.Parse<VerifyStatus>(reader.GetString(3)),
+            VerifyStatus = verifyStatus,
             SecurityStatus = reader.GetNullableDouble(4),
             CorporationId = reader.GetNullableInt64(5),
             CorporationName = reader.GetNullableString(6),
@@ -142,12 +146,15 @@ public sealed class PilotIdentityCache : IPilotIdentityCache
 
             while (reader.Read())
             {
+                if (!TryReadVerifyStatus(reader, out var verifyStatus))
+                    continue;
+
                 var record = new PilotIdentityCacheRecord
                 {
                     InputName = reader.GetString(0),
                     CharacterId = reader.GetNullableInt64(1),
                     CharacterName = reader.GetNullableString(2),
-                    VerifyStatus = Enum.Parse<VerifyStatus>(reader.GetString(3)),
+                    VerifyStatus = verifyStatus,
                     SecurityStatus = reader.GetNullableDouble(4),
                     CorporationId = reader.GetNullableInt64(5),
                     CorporationName = reader.GetNullableString(6),
@@ -202,12 +209,15 @@ public sealed class PilotIdentityCache : IPilotIdentityCache
         if (!reader.Read())
             return Task.FromResult<PilotIdentityCacheRecord?>(null);
 
+        if (!TryReadVerifyStatus(reader, out var verifyStatus))
+            return Task.FromResult<PilotIdentityCacheRecord?>(null);
+
         var record = new PilotIdentityCacheRecord
         {
             InputName = reader.GetString(0),
             CharacterId = reader.GetNullableInt64(1),
             CharacterName = reader.GetNullableString(2),
-            VerifyStatus = Enum.Parse<VerifyStatus>(reader.GetString(3)),
+            VerifyStatus = verifyStatus,
             SecurityStatus = reader.GetNullableDouble(4),
             CorporationId = reader.GetNullableInt64(5),
             CorporationName = reader.GetNullableString(6),
@@ -222,6 +232,17 @@ public sealed class PilotIdentityCache : IPilotIdentityCache
         };
 
         return Task.FromResult<PilotIdentityCacheRecord?>(record);
+    }
+
+    private static bool TryReadVerifyStatus(SqliteDataReader reader, out VerifyStatus verifyStatus)
+    {
+        var stored = reader.GetString(3);
+
+        if (Enum.TryParse(stored, out verifyStatus) && Enum.IsDefined(verifyStatus))
+            return true;
+
+        EngineFailureLog.Record($"read failure: pilot_identity_cache: unrecognised verify_status '{stored}'");
+        return false;
     }
 
     public Task UpsertAsync(Pilot pilot, CancellationToken cancellationToken = default)

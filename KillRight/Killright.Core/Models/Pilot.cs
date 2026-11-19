@@ -10,6 +10,7 @@ public sealed record Pilot
     public VerifyStatus VerifyStatus { get; init; }
     public double? SecurityStatus { get; init; }
     public Corporation? Corporation { get; init; }
+    public long? CorporationId { get; init; }
     public Alliance? Alliance { get; init; }
     public long? AllianceId { get; init; }
     public DateOnly? Birthday { get; init; }
