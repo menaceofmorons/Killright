@@ -62,8 +62,9 @@ public static class RecentKillmailRefresher
                     return new RecentRefreshOutcome(null, true, null);
             }
         }
-        catch
+        catch (Exception exception) when (!(exception is OperationCanceledException && cancellationToken.IsCancellationRequested))
         {
+            EngineFailureLog.Record($"Recent killmail refresh failed for character {characterId}: {exception}");
             return new RecentRefreshOutcome(null, true, null);
         }
     }

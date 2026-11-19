@@ -142,7 +142,7 @@ public sealed class ScanPipelineIntegrationTests
     }
 
     [Fact]
-    public async Task RecentCall_CancelledScanMidPaging_RecordsNoSuccessAndLeavesNothingToCommit()
+    public async Task RecentCall_CancelledScanMidPaging_PropagatesCancellationAndLeavesNothingToCommit()
     {
         var now = ApplicationClock.UtcNow;
         var client = new zKillClient(new HttpClient(new HangingHandler()));
@@ -150,12 +150,10 @@ public sealed class ScanPipelineIntegrationTests
         using var cancellation = new CancellationTokenSource();
         cancellation.CancelAfter(TimeSpan.FromMilliseconds(100));
 
-        var outcome = await RecentKillmailRefresher.RefreshAsync(
-            client, Lukas, 0, null, StatisticsWithCurrentMonth(now), true, writes, now, null, cancellation.Token);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => RecentKillmailRefresher.RefreshAsync(
+            client, Lukas, 0, null, StatisticsWithCurrentMonth(now), true, writes, now, null, cancellation.Token));
 
         Assert.True(cancellation.IsCancellationRequested);
-        Assert.True(outcome.Failed);
-        Assert.Null(outcome.NewLastSuccessfulCallUtc);
         Assert.True(writes.IsEmpty);
     }
 

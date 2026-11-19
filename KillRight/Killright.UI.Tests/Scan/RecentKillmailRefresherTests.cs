@@ -93,6 +93,17 @@ public sealed class RecentKillmailRefresherTests
         Assert.Equal(source.Token, client.Token);
     }
 
+    [Fact]
+    public async Task Refresh_CancelledScanToken_PropagatesCancellationInsteadOfFailing()
+    {
+        var client = new FakeClient(zKillRecentKillmailOutcome.Success) { ThrowOnCancelledToken = true };
+        using var source = new CancellationTokenSource();
+        await source.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => RecentKillmailRefresher.RefreshAsync(
+            client, Lukas, 0, null, new zKillStatistics(), false, new ScanWriteBatch(), Now, null, source.Token));
+    }
+
     private static Task<RecentRefreshOutcome> Refresh(FakeClient client, zKillStatistics? statistics, ScanWriteBatch writes)
     {
         return RecentKillmailRefresher.RefreshAsync(
@@ -105,12 +116,16 @@ public sealed class RecentKillmailRefresherTests
 
         public CancellationToken Token { get; private set; }
 
+        public bool ThrowOnCancelledToken { get; init; }
+
         public long RequestCount => Calls;
 
         public Task<zKillRecentKillmailResult> GetRecentKillmailsAsync(long characterId, int pastSeconds, CancellationToken cancellationToken = default)
         {
             Calls++;
             Token = cancellationToken;
+            if (ThrowOnCancelledToken)
+                cancellationToken.ThrowIfCancellationRequested();
             return Task.FromResult(new zKillRecentKillmailResult(outcome, Array.Empty<RawKillmail>()));
         }
 
