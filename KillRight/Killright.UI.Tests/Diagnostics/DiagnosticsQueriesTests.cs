@@ -72,6 +72,25 @@ public sealed class DiagnosticsQueriesTests
     }
 
     [Fact]
+    public void LoadRows_NullInFirstRowThenDatetimeText_LoadsEveryColumnAsText()
+    {
+        var (_, service) = CreateService();
+
+        var table = service.LoadRows("""
+            SELECT NULL AS started, 1 AS number
+            UNION ALL
+            SELECT '2026-09-28 00:00:00', 2;
+            """);
+
+        Assert.Equal(2, table.Rows.Count);
+        Assert.Equal(typeof(string), table.Columns["started"]!.DataType);
+        Assert.Equal(typeof(string), table.Columns["number"]!.DataType);
+        Assert.True(table.Rows[0].IsNull("started"));
+        Assert.Equal("2026-09-28 00:00:00", table.Rows[1]["started"]);
+        Assert.Equal("2", table.Rows[1]["number"]);
+    }
+
+    [Fact]
     public void ExecuteNonQuery_RunsThroughTheWriteGate()
     {
         var (database, service) = CreateService();

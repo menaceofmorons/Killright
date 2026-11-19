@@ -62,7 +62,21 @@ public sealed class DiagnosticsDataService
         using var reader = command.ExecuteReader();
 
         var table = new DataTable();
-        table.Load(reader);
+
+        for (var column = 0; column < reader.FieldCount; column++)
+            table.Columns.Add(reader.GetName(column), typeof(string));
+
+        var values = new object[reader.FieldCount];
+
+        while (reader.Read())
+        {
+            for (var column = 0; column < values.Length; column++)
+                values[column] = reader.IsDBNull(column)
+                    ? DBNull.Value
+                    : Convert.ToString(reader.GetValue(column), System.Globalization.CultureInfo.InvariantCulture)!;
+
+            table.Rows.Add(values);
+        }
 
         return table;
     }
