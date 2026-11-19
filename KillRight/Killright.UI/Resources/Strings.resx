@@ -125,6 +125,8 @@
   <data name="Shortcuts.Action.ClearFilters" xml:space="preserve"><value>Clear grid filters</value></data>
   <data name="Shortcuts.Key.PilotFilter" xml:space="preserve"><value>Ctrl+right-click</value></data>
   <data name="Shortcuts.Action.PilotFilter" xml:space="preserve"><value>Filter to pilot (Pilot cell)</value></data>
+  <data name="Shortcuts.Key.PilotHold" xml:space="preserve"><value>Ctrl+left-click</value></data>
+  <data name="Shortcuts.Action.PilotHold" xml:space="preserve"><value>Hold pilot (pilot row)</value></data>
   <data name="Shortcuts.Tab.Style" xml:space="preserve"><value>Style</value></data>
   <data name="Shortcuts.StyleCode.Blob" xml:space="preserve"><value>B</value></data>
   <data name="Shortcuts.StyleCode.Fleet" xml:space="preserve"><value>F</value></data>
