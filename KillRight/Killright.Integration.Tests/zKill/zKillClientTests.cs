@@ -195,6 +195,38 @@ public sealed class zKillClientTests
         Assert.Equal(3074, raw.Attackers[0].WeaponTypeId);
     }
 
+    [Theory]
+    [InlineData("\"victim\":null,\"attackers\":[],\"zkb\":{\"hash\":\"a\"}")]
+    [InlineData("\"victim\":{\"character_id\":1},\"attackers\":null,\"zkb\":{\"hash\":\"a\"}")]
+    [InlineData("\"victim\":{\"character_id\":1},\"attackers\":[],\"zkb\":null")]
+    [InlineData("\"victim\":{\"character_id\":1},\"attackers\":[null],\"zkb\":{\"hash\":\"a\"}")]
+    public async Task GetRecentKillmailsAsync_NullPayloadField_ReturnsFailureOutcome(string fields)
+    {
+        var handler = new ScriptedHttpMessageHandler()
+            .OnUriContaining("api/characterID/95465499/pastSeconds", HttpStatusCode.OK,
+                "[{\"killmail_id\":1,\"killmail_time\":\"2026-09-20T10:00:00Z\",\"solar_system_id\":1," + fields + "}]");
+
+        var client = new zKillClient(new HttpClient(handler));
+
+        var result = await client.GetRecentKillmailsAsync(95465499, 3600);
+
+        Assert.Equal(zKillRecentKillmailOutcome.Failure, result.Outcome);
+        Assert.Empty(result.RawKillmails);
+    }
+
+    [Fact]
+    public async Task GetStatisticsAsync_NullGroupEntry_ReturnsFailureOutcome()
+    {
+        var handler = new ScriptedHttpMessageHandler()
+            .OnUriContaining("api/stats/characterID/91321792", HttpStatusCode.OK, "{\"groups\":{\"29\":null}}");
+
+        var client = new zKillClient(new HttpClient(handler));
+
+        var result = await client.GetStatisticsAsync(91321792);
+
+        Assert.Equal(zKillStatisticsOutcome.Failure, result.Outcome);
+    }
+
     [Fact]
     public async Task GetRecentKillmailsAsync_EmptyArray_ReturnsSuccessWithNoKillmails()
     {
