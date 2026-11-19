@@ -81,10 +81,25 @@ public sealed class zKillClient : IzKillClient
 
         for (var attempt = 1; ; attempt++)
         {
-            await StartRequestAsync(cancellationToken);
+            try
+            {
+                await StartRequestAsync(cancellationToken);
+            }
+            catch (ZkillRateLimitedException)
+            {
+                LogFailure(uri, "refused during rate-limit pause");
+                return failure;
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                LogFailure(uri, "request budget wait was cancelled");
+                return failure;
+            }
 
             using var attemptCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             attemptCancellation.CancelAfter(_options.RequestTimeout);
+
+            string cause;
 
             try
             {
@@ -96,21 +111,42 @@ public sealed class zKillClient : IzKillClient
                     return failure;
                 }
 
+                if (!response.IsSuccessStatusCode)
+                {
+                    LogFailure(uri, $"HTTP {(int)response.StatusCode}");
+                    return failure;
+                }
+
                 return await read(response, attemptCancellation.Token);
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
                 Interlocked.Increment(ref _timeoutCount);
+                cause = $"timed out after {_options.RequestTimeout.TotalSeconds:0.###} s";
             }
-            catch (HttpRequestException)
+            catch (Exception exception) when (exception is HttpRequestException or IOException)
             {
+                cause = $"connection failure: {exception.Message}";
+            }
+            catch (Exception exception) when (exception is JsonException or NotSupportedException or InvalidOperationException)
+            {
+                LogFailure(uri, $"unreadable response: {exception.Message}");
+                return failure;
             }
 
             if (attempt >= attempts)
+            {
+                LogFailure(uri, cause);
                 return failure;
+            }
 
             Interlocked.Increment(ref _retryCount);
         }
+    }
+
+    private void LogFailure(string uri, string cause)
+    {
+        _log?.Invoke($"zKill call {uri} failed: {cause}");
     }
 
     private void HandleRateLimited(HttpResponseMessage response)
@@ -140,18 +176,11 @@ public sealed class zKillClient : IzKillClient
     {
         var safePastSeconds = Math.Max(1, pastSeconds);
 
-        try
-        {
-            return await GetWithRetryAsync(
-                $"api/characterID/{characterId}/pastSeconds/{safePastSeconds}/",
-                ReadRecentKillmailsAsync,
-                new zKillRecentKillmailResult(zKillRecentKillmailOutcome.Failure, []),
-                cancellationToken);
-        }
-        catch
-        {
-            return new zKillRecentKillmailResult(zKillRecentKillmailOutcome.Failure, []);
-        }
+        return await GetWithRetryAsync(
+            $"api/characterID/{characterId}/pastSeconds/{safePastSeconds}/",
+            ReadRecentKillmailsAsync,
+            new zKillRecentKillmailResult(zKillRecentKillmailOutcome.Failure, []),
+            cancellationToken);
     }
 
     private static async Task<zKillRecentKillmailResult> ReadRecentKillmailsAsync(
@@ -179,18 +208,11 @@ public sealed class zKillClient : IzKillClient
         long characterId,
         CancellationToken cancellationToken = default)
     {
-        try
-        {
-            return await GetWithRetryAsync(
-                $"api/stats/characterID/{characterId}/kills/",
-                ReadStatisticsAsync,
-                new zKillStatisticsResult(zKillStatisticsOutcome.Failure, null),
-                cancellationToken);
-        }
-        catch
-        {
-            return new zKillStatisticsResult(zKillStatisticsOutcome.Failure, null);
-        }
+        return await GetWithRetryAsync(
+            $"api/stats/characterID/{characterId}/kills/",
+            ReadStatisticsAsync,
+            new zKillStatisticsResult(zKillStatisticsOutcome.Failure, null),
+            cancellationToken);
     }
 
     private static async Task<zKillStatisticsResult> ReadStatisticsAsync(
@@ -220,18 +242,11 @@ public sealed class zKillClient : IzKillClient
         long characterId,
         CancellationToken cancellationToken = default)
     {
-        try
-        {
-            return await GetWithRetryAsync(
-                $"api/characterID/{characterId}/",
-                (response, token) => ReadLastKillmailAsync(response, characterId, token),
-                LastKillmailFailure,
-                cancellationToken);
-        }
-        catch
-        {
-            return LastKillmailFailure;
-        }
+        return await GetWithRetryAsync(
+            $"api/characterID/{characterId}/",
+            (response, token) => ReadLastKillmailAsync(response, characterId, token),
+            LastKillmailFailure,
+            cancellationToken);
     }
 
     private static async Task<zKillLastKillmailResult> ReadLastKillmailAsync(

@@ -69,9 +69,8 @@ public sealed class zKillClientRequestControlTests
         var call = client.GetStatisticsAsync(Lukas, cancellation.Token);
         await handler.FirstCallStarted;
         cancellation.Cancel();
-        var result = await call;
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => call);
 
-        Assert.Equal(zKillStatisticsOutcome.Failure, result.Outcome);
         Assert.Equal(1, handler.Calls);
         Assert.Equal(0, client.TimeoutCount);
         Assert.Equal(0, client.RetryCount);

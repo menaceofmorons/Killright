@@ -18,9 +18,16 @@ public sealed class EsiClient : IEsiClient
     private long _requestCount;
     private long _backoffUntilTicks;
 
-    public EsiClient(HttpClient http, EsiClientOptions? options = null, Func<DateTimeOffset>? utcNow = null)
+    private readonly Action<string>? _log;
+
+    public EsiClient(
+        HttpClient http,
+        EsiClientOptions? options = null,
+        Func<DateTimeOffset>? utcNow = null,
+        Action<string>? log = null)
     {
         _http = http;
+        _log = log;
         _options = options ?? new EsiClientOptions();
         _utcNow = utcNow ?? (() => DateTimeOffset.UtcNow);
         _http.BaseAddress ??= _options.BaseUri;
@@ -124,7 +131,7 @@ public sealed class EsiClient : IEsiClient
             using var response = await SendCountedAsync(
                 () => _http.GetAsync($"characters/{characterId}/?datasource={_options.DataSource}", cancellationToken));
 
-            if (response is null || !response.IsSuccessStatusCode)
+            if (!IsUsable(response, "character details"))
                 return null;
 
             var dto = await response.Content.ReadFromJsonAsync<EsiCharacterResponse>(JsonOptions, cancellationToken);
@@ -141,8 +148,9 @@ public sealed class EsiClient : IEsiClient
                 dto.Birthday is null ? null : DateOnly.FromDateTime(dto.Birthday.Value.UtcDateTime),
                 dto.FactionId);
         }
-        catch
+        catch (Exception exception) when (IsCallFailure(exception, cancellationToken))
         {
+            LogFailure("character details", exception);
             return null;
         }
     }
@@ -155,15 +163,53 @@ public sealed class EsiClient : IEsiClient
             using var response = await SendCountedAsync(
                 () => _http.PostAsJsonAsync(requestUri, body, JsonOptions, cancellationToken));
 
-            if (response is null || !response.IsSuccessStatusCode)
+            if (!IsUsable(response, requestUri))
                 return null;
 
             return await response.Content.ReadFromJsonAsync<T>(JsonOptions, cancellationToken);
         }
-        catch
+        catch (Exception exception) when (IsCallFailure(exception, cancellationToken))
         {
+            LogFailure(requestUri, exception);
             return null;
         }
+    }
+
+    private bool IsUsable([System.Diagnostics.CodeAnalysis.NotNullWhen(true)] HttpResponseMessage? response, string call)
+    {
+        if (response is null)
+        {
+            _log?.Invoke($"ESI call {call} skipped: rate-limit backoff in effect");
+            return false;
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            _log?.Invoke($"ESI call {call} failed: HTTP {(int)response.StatusCode}");
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool IsCallFailure(Exception exception, CancellationToken cancellationToken)
+    {
+        return exception switch
+        {
+            OperationCanceledException => !cancellationToken.IsCancellationRequested,
+            HttpRequestException or IOException => true,
+            JsonException or NotSupportedException or InvalidOperationException => true,
+            _ => false
+        };
+    }
+
+    private void LogFailure(string call, Exception exception)
+    {
+        var cause = exception is OperationCanceledException
+            ? "timed out"
+            : $"{exception.GetType().Name}: {exception.Message}";
+
+        _log?.Invoke($"ESI call {call} failed: {cause}");
     }
 
     private async Task<HttpResponseMessage?> SendCountedAsync(Func<Task<HttpResponseMessage>> send)
@@ -284,6 +330,7 @@ public sealed class EsiClient : IEsiClient
             using var response = await _http.PostAsJsonAsync(requestUri, names, JsonOptions, cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
+                _log?.Invoke($"ESI call {requestUri} failed: HTTP {(int)response.StatusCode}");
                 return new EntityLookupResult(false, null);
             }
 
@@ -296,8 +343,9 @@ public sealed class EsiClient : IEsiClient
             };
             return new EntityLookupResult(true, match);
         }
-        catch
+        catch (Exception exception) when (IsCallFailure(exception, cancellationToken))
         {
+            LogFailure("exact name lookup", exception);
             return new EntityLookupResult(false, null);
         }
     }
@@ -341,12 +389,14 @@ public sealed class EsiClient : IEsiClient
             using var response = await _http.GetAsync(uri, cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
+                _log?.Invoke($"ESI call {uri} failed: HTTP {(int)response.StatusCode}");
                 return default;
             }
             return await response.Content.ReadFromJsonAsync<T>(JsonOptions, cancellationToken);
         }
-        catch
+        catch (Exception exception) when (IsCallFailure(exception, cancellationToken))
         {
+            LogFailure(uri, exception);
             return default;
         }
     }

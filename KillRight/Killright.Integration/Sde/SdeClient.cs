@@ -9,10 +9,13 @@ public sealed class SdeClient : ISdeClient
     private readonly HttpClient _http;
     private readonly SdeClientOptions _options;
 
-    public SdeClient(HttpClient http, SdeClientOptions? options = null)
+    private readonly Action<string>? _log;
+
+    public SdeClient(HttpClient http, SdeClientOptions? options = null, Action<string>? log = null)
     {
         _http = http;
         _options = options ?? new SdeClientOptions();
+        _log = log;
 
         if (!_http.DefaultRequestHeaders.UserAgent.Any())
             _http.DefaultRequestHeaders.UserAgent.ParseAdd(_options.UserAgent);
@@ -29,7 +32,10 @@ public sealed class SdeClient : ISdeClient
             using var response = await _http.GetAsync(_options.ManifestUrl, cancellationToken);
 
             if (!response.IsSuccessStatusCode)
+            {
+                LogFailure("manifest", $"HTTP {(int)response.StatusCode}");
                 return new SdeManifestResult(SdeManifestOutcome.Failure, null);
+            }
 
             await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
             using var reader = new StreamReader(stream);
@@ -47,10 +53,12 @@ public sealed class SdeClient : ISdeClient
                     return new SdeManifestResult(SdeManifestOutcome.Success, buildNumber);
             }
 
+            LogFailure("manifest", "no build number in response");
             return new SdeManifestResult(SdeManifestOutcome.Failure, null);
         }
-        catch
+        catch (Exception exception) when (IsCallFailure(exception, cancellationToken))
         {
+            LogFailure("manifest", Describe(exception));
             return new SdeManifestResult(SdeManifestOutcome.Failure, null);
         }
     }
@@ -68,7 +76,10 @@ public sealed class SdeClient : ISdeClient
                 cancellationToken);
 
             if (!response.IsSuccessStatusCode)
+            {
+                LogFailure("dataset download", $"HTTP {(int)response.StatusCode}");
                 return new SdeDatasetDownloadResult(SdeDatasetDownloadOutcome.Failure);
+            }
 
             var totalBytes = response.Content.Headers.ContentLength;
 
@@ -90,10 +101,34 @@ public sealed class SdeClient : ISdeClient
 
             return new SdeDatasetDownloadResult(SdeDatasetDownloadOutcome.Success);
         }
-        catch
+        catch (Exception exception) when (IsCallFailure(exception, cancellationToken))
         {
+            LogFailure("dataset download", Describe(exception));
             return new SdeDatasetDownloadResult(SdeDatasetDownloadOutcome.Failure);
         }
+    }
+
+    private static bool IsCallFailure(Exception exception, CancellationToken cancellationToken)
+    {
+        return exception switch
+        {
+            OperationCanceledException => !cancellationToken.IsCancellationRequested,
+            HttpRequestException or IOException or UnauthorizedAccessException => true,
+            JsonException or FormatException or InvalidOperationException or NotSupportedException => true,
+            _ => false
+        };
+    }
+
+    private static string Describe(Exception exception)
+    {
+        return exception is OperationCanceledException
+            ? "timed out"
+            : $"{exception.GetType().Name}: {exception.Message}";
+    }
+
+    private void LogFailure(string call, string cause)
+    {
+        _log?.Invoke($"SDE {call} failed: {cause}");
     }
 
     private static long? TryReadSdeBuildNumber(string jsonLine)
