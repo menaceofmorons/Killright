@@ -589,7 +589,7 @@ public partial class MainWindow : Window
 
     private static string GetBindingPath(DataGridColumn column) => column switch
     {
-        DataGridBoundColumn bound => ((Binding)bound.Binding).Path.Path,
+        DataGridBoundColumn bound => string.IsNullOrEmpty(bound.SortMemberPath) ? ((Binding)bound.Binding).Path.Path : bound.SortMemberPath,
         DataGridTemplateColumn template => template.SortMemberPath ?? string.Empty,
         _ => string.Empty
     };

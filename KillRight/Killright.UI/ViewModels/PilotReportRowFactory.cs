@@ -25,6 +25,9 @@ public static class PilotReportRowFactory
         PilotDerivedActivity? derivedActivity = null)
     {
         var generalResult = GeneralStyleClassifier.Classify(statistics);
+        var affiliationFailed = HasAffiliationFailed(pilot);
+        var lastKillAge = GetLastKillAge(activity);
+        var hasActivity = activity?.HasPublicActivityData == true;
 
         return new PilotReportRow
         {
@@ -32,15 +35,16 @@ public static class PilotReportRowFactory
             InputName = pilot.InputName,
             Pilot = GetPilotName(pilot),
             EngineAnalysisFailed = engineFailureReason is not null,
+            DataRetrievalFailed = affiliationFailed || statisticsCallFailed || recentCallFailed || engineFailureReason is not null,
             Verify = GetVerifyDisplay(pilot.VerifyStatus),
             Threat = string.IsNullOrWhiteSpace(threatBand)
                 ? UiText.ThreatBandUnk
                 : threatBand,
             SecurityStatus = SecurityStatusFormatter.Format(pilot.SecurityStatus),
-            Group = "unk",
+            Group = UiText.PlaceholderUnkLower,
             CorporationId = pilot.Corporation?.CorporationId,
-            Corporation = pilot.Corporation?.Name ?? "unk",
-            CorporationPlain = pilot.Corporation?.Name ?? "unk",
+            Corporation = pilot.Corporation?.Name ?? UiText.PlaceholderUnkLower,
+            CorporationPlain = pilot.Corporation?.Name ?? UiText.PlaceholderUnkLower,
             AllianceId = pilot.Alliance?.AllianceId,
             Alliance = GetAllianceDisplay(pilot),
             AlliancePlain = GetAllianceDisplay(pilot),
@@ -54,11 +58,15 @@ public static class PilotReportRowFactory
             Week = $"{FormatWeekSideValue(activity?.HasPublicActivityData, activity?.KillsWeek)}/{FormatWeekSideValue(activity?.HasPublicActivityData, activity?.SoloWeek)}",
             Kills = FormatActivityValue(activity?.HasPublicActivityData, activity?.KillsWeek),
             Solos = FormatActivityValue(activity?.HasPublicActivityData, activity?.SoloWeek),
-            LastKill = FormatLastKill(activity),
+            LastKill = lastKillAge is { } age ? FormatKillAge(age) : UiText.PlaceholderDash,
             InfoWeekKills = FormatWeekSideValue(activity?.HasPublicActivityData, activity?.KillsWeek),
             InfoWeekSolos = FormatWeekSideValue(activity?.HasPublicActivityData, activity?.SoloWeek),
             InfoWeekLosses = FormatInfoCount(derivedActivity?.InfoWeekLosses),
-            Notes = GetNotes(activity, statistics, statisticsCallFailed, recentCallFailed, engineFailureReason),
+            Notes = GetNotes(affiliationFailed, statisticsCallFailed, recentCallFailed, engineFailureReason is not null),
+            ThreatSortKey = PilotGridSortKeys.Threat(threatBand),
+            SecuritySortKey = PilotGridSortKeys.Security(pilot.SecurityStatus),
+            WeekSortKey = PilotGridSortKeys.Week(hasActivity ? activity!.KillsWeek : null, hasActivity ? activity!.SoloWeek : null),
+            LastKillSortKey = PilotGridSortKeys.LastKill(lastKillAge),
             StatsFailureSource = GetStatsFailureSource(statisticsCallFailed, recentCallFailed, activity, engineFailureReason)
         };
     }
@@ -82,9 +90,9 @@ public static class PilotReportRowFactory
     {
         return verifyStatus switch
         {
-            VerifyStatus.Verified => "V",
-            VerifyStatus.Partial => "P",
-            _ => "unk"
+            VerifyStatus.Verified => UiText.GridVerifyVerified,
+            VerifyStatus.Partial => UiText.GridVerifyPartial,
+            _ => UiText.PlaceholderUnkLower
         };
     }
 
@@ -115,55 +123,41 @@ public static class PilotReportRowFactory
         return formatted == "0" ? UiText.PlaceholderDash : formatted;
     }
 
-    private static string FormatLastKill(zKillActivity? activity)
-    {
-        if (activity?.LastKillUtc is not { } lastKillUtc)
-            return UiText.PlaceholderDash;
+    private static TimeSpan? GetLastKillAge(zKillActivity? activity) =>
+        activity?.LastKillUtc is { } lastKillUtc ? ApplicationClock.UtcNow - lastKillUtc : null;
 
-        return FormatKillAge(ApplicationClock.UtcNow - lastKillUtc);
-    }
+    internal static bool HasAffiliationFailed(Pilot pilot) =>
+        pilot.VerifyStatus == VerifyStatus.Failed
+        || (pilot.CharacterId is not null && pilot.CorporationId is null && pilot.Corporation is null);
 
     internal static string FormatKillAge(TimeSpan age)
     {
         if (age.TotalHours < 24)
-            return $"{Math.Max(1, (int)Math.Ceiling(age.TotalHours))}h";
+            return UiText.FormatLastKillHours(Math.Max(1, (int)Math.Ceiling(age.TotalHours)));
 
         if (age.TotalDays < 30)
-            return $"{(int)age.TotalDays}d";
+            return UiText.FormatLastKillDays((int)age.TotalDays);
 
-        return ">30d";
+        return UiText.GridLastKillOver;
     }
 
-    private static string GetNotes(
-        zKillActivity? activity,
-        zKillStatistics? statistics,
-        bool statisticsCallFailed,
-        bool recentCallFailed,
-        string? engineFailureReason)
+    internal static string GetNotes(bool affiliationFailed, bool statisticsCallFailed, bool recentCallFailed, bool engineFailed)
     {
-        if (engineFailureReason is not null)
-            return $"ESI identity loaded; killright_engine analysis failed ({engineFailureReason}).";
+        var failedCalls = new List<string>();
+
+        if (affiliationFailed)
+            failedCalls.Add(UiText.NotesCallEsi);
 
         if (statisticsCallFailed)
-            return "ESI identity loaded; zKill statistics call failed.";
+            failedCalls.Add(UiText.NotesCallStatistics);
 
-        if (activity is null)
-            return "ESI identity loaded; zKill activity not loaded.";
+        if (recentCallFailed)
+            failedCalls.Add(UiText.NotesCallRecent);
 
-        if (!string.IsNullOrWhiteSpace(activity.Error))
-            return "ESI identity loaded; zKill unavailable.";
+        if (engineFailed)
+            failedCalls.Add(UiText.NotesCallEngine);
 
-        if (!activity.HasPublicActivityData)
-        {
-            if (recentCallFailed)
-                return "ESI identity loaded; zKill recent killmail call failed.";
-
-            return statistics is null
-                ? "ESI identity loaded; no public zKill activity or stats available."
-                : "ESI identity loaded; zKill stats loaded; no recent activity.";
-        }
-
-        return $"Public zKill activity checked {activity.CheckedAtUtc:yyyy-MM-dd HH:mm} UTC.";
+        return string.Join(UiText.NotesSeparator, failedCalls);
     }
 
     private static string? GetStatsFailureSource(

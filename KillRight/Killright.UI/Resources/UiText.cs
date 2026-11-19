@@ -185,6 +185,26 @@ public static class UiText
 
     public static string PlaceholderDash => Strings.Get("Placeholder.Dash");
     public static string PlaceholderUnk => Strings.Get("Placeholder.Unk");
+    public static string PlaceholderUnkLower => Strings.Get("Placeholder.UnkLower");
+    public static string PlaceholderUnknownGlyph => Strings.Get("Placeholder.UnknownGlyph");
+
+    public static string GridVerifyVerified => Strings.Get("Grid.Verify.Verified");
+    public static string GridVerifyPartial => Strings.Get("Grid.Verify.Partial");
+    public static string GridLastKillOver => Strings.Get("Grid.LastKill.Over");
+    public static string GridFilterIgnorePrefix => Strings.Get("Grid.Filter.IgnorePrefix");
+    public static string GridFilterFilterPrefix => Strings.Get("Grid.Filter.FilterPrefix");
+
+    public static string FormatLastKillHours(int hours) =>
+        string.Format(CultureInfo.InvariantCulture, Strings.Get("Grid.LastKill.HoursFormat"), hours);
+
+    public static string FormatLastKillDays(int days) =>
+        string.Format(CultureInfo.InvariantCulture, Strings.Get("Grid.LastKill.DaysFormat"), days);
+
+    public static string NotesCallEsi => Strings.Get("Notes.Call.Esi");
+    public static string NotesCallStatistics => Strings.Get("Notes.Call.Statistics");
+    public static string NotesCallRecent => Strings.Get("Notes.Call.Recent");
+    public static string NotesCallEngine => Strings.Get("Notes.Call.Engine");
+    public static string NotesSeparator => Strings.Get("Notes.Separator");
 
     public static string? FactionShortCode(long? factionId)
     {

@@ -1,3 +1,4 @@
+using Killright.UI.Resources;
 using Killright.Core.Style;
 using Killright.UI.UiState;
 
@@ -22,8 +23,6 @@ public readonly record struct GridFilterEntry(GridFilterField Field, GridFilterM
 
 public sealed class GridFilterState
 {
-    public const string IgnoreHeaderPrefix = "(I) ";
-    public const string FilterHeaderPrefix = "(F) ";
 
     private readonly List<GridFilterEntry> _entries = new();
     private HashSet<PilotReportRow>? _pilotVisibleRows;
@@ -116,14 +115,14 @@ public sealed class GridFilterState
     public string HeaderPrefix(string columnId)
     {
         if (columnId == ColumnIds.Pilot)
-            return _pilotVisibleRows is not null ? FilterHeaderPrefix : string.Empty;
+            return _pilotVisibleRows is not null ? UiText.GridFilterFilterPrefix : string.Empty;
 
         var onColumn = _entries.Where(entry => ColumnIdOf(entry.Field) == columnId).ToList();
 
         if (onColumn.Count == 0)
             return string.Empty;
 
-        return onColumn.Any(entry => entry.Mode == GridFilterMode.FilterTo) ? FilterHeaderPrefix : IgnoreHeaderPrefix;
+        return onColumn.Any(entry => entry.Mode == GridFilterMode.FilterTo) ? UiText.GridFilterFilterPrefix : UiText.GridFilterIgnorePrefix;
     }
 
     public bool CarriesFilter(string columnId) => HeaderPrefix(columnId).Length > 0;

@@ -1,4 +1,5 @@
 using System.Windows.Media;
+using Killright.UI.Resources;
 using Killright.UI.Analysis;
 using Killright.UI.Configuration;
 using Killright.UI.UiState;
@@ -143,7 +144,7 @@ public static class RelationshipHighlightCalculator
 
     private static void ResetRelationshipValues(PilotReportRow row)
     {
-        row.RelationshipStrengthDisplay = "-";
+        row.RelationshipStrengthDisplay = UiText.PlaceholderDash;
         row.RelationshipConfidenceBand = null;
     }
 

@@ -1,3 +1,4 @@
+using Killright.UI.Resources;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows.Media;
@@ -20,6 +21,7 @@ public class PilotReportRow : INotifyPropertyChanged
     public IReadOnlyList<PilotRelationship> GroupRelationships { get; set; } = Array.Empty<PilotRelationship>();
     public string Pilot { get; set; } = string.Empty;
     public bool EngineAnalysisFailed { get; set; }
+    public bool DataRetrievalFailed { get; set; }
     public string Verify { get; set; } = string.Empty;
     public string Threat { get; set; } = string.Empty;
     public string SecurityStatus { get; set; } = string.Empty;
@@ -46,6 +48,10 @@ public class PilotReportRow : INotifyPropertyChanged
     public string InfoWeekLosses { get; set; } = string.Empty;
     public string Notes { get; set; } = string.Empty;
     public string? StatsFailureSource { get; set; }
+    public int ThreatSortKey { get; set; }
+    public double SecuritySortKey { get; set; }
+    public long WeekSortKey { get; set; }
+    public double LastKillSortKey { get; set; }
 
     private Brush? _highlightBrush;
     public Brush? HighlightBrush
@@ -73,7 +79,7 @@ public class PilotReportRow : INotifyPropertyChanged
             ? RowBackgroundKind.NewPilot
             : RowBackgroundKind.None;
 
-    private string _relationshipStrengthDisplay = "-";
+    private string _relationshipStrengthDisplay = UiText.PlaceholderDash;
     public string RelationshipStrengthDisplay
     {
         get => _relationshipStrengthDisplay;
