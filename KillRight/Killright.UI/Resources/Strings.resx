@@ -153,16 +153,16 @@
   <data name="Shortcuts.Tab.Relationship" xml:space="preserve"><value>Relationship</value></data>
 
   <data name="ThreatBand.None" xml:space="preserve"><value>None</value></data>
-  <data name="ThreatBand.Low" xml:space="preserve"><value>Low</value></data>
-  <data name="ThreatBand.Medium" xml:space="preserve"><value>Medium</value></data>
-  <data name="ThreatBand.High" xml:space="preserve"><value>High</value></data>
-  <data name="ThreatBand.Very High" xml:space="preserve"><value>Very High</value></data>
-  <data name="ThreatBand.Extreme" xml:space="preserve"><value>Extreme</value></data>
+  <data name="ThreatBand.1" xml:space="preserve"><value>Low</value></data>
+  <data name="ThreatBand.2" xml:space="preserve"><value>Medium</value></data>
+  <data name="ThreatBand.3" xml:space="preserve"><value>High</value></data>
+  <data name="ThreatBand.4" xml:space="preserve"><value>Very High</value></data>
+  <data name="ThreatBand.5" xml:space="preserve"><value>Extreme</value></data>
   <data name="ThreatBand.Unk" xml:space="preserve"><value>Unk</value></data>
 
-  <data name="RelationshipBand.Low" xml:space="preserve"><value>Low</value></data>
-  <data name="RelationshipBand.Medium" xml:space="preserve"><value>Medium</value></data>
-  <data name="RelationshipBand.High" xml:space="preserve"><value>High</value></data>
+  <data name="RelationshipBand.1" xml:space="preserve"><value>Low</value></data>
+  <data name="RelationshipBand.2" xml:space="preserve"><value>Medium</value></data>
+  <data name="RelationshipBand.3" xml:space="preserve"><value>High</value></data>
 
   <data name="InfoSheet.Label.Birthday" xml:space="preserve"><value>Birthday: </value></data>
   <data name="InfoSheet.Label.Threat" xml:space="preserve"><value>Threat: </value></data>
@@ -183,7 +183,7 @@
   <data name="Faction.Code.500004" xml:space="preserve"><value>Ga</value></data>
   <data name="Faction.Code.500002" xml:space="preserve"><value>Mn</value></data>
   <data name="Faction.Code.500003" xml:space="preserve"><value>Am</value></data>
-  <data name="Faction.Code.500011" xml:space="preserve"><value>An</value></data>
+  <data name="Faction.Code.500011" xml:space="preserve"><value>Ag</value></data>
   <data name="Faction.Code.500010" xml:space="preserve"><value>Gu</value></data>
   <data name="InfoSheet.Label.Faction" xml:space="preserve"><value>Faction: </value></data>
   <data name="InfoSheet.Table.Week" xml:space="preserve"><value>Week</value></data>
@@ -211,10 +211,10 @@
   <data name="Placeholder.Unk" xml:space="preserve"><value>Unk</value></data>
 
   <data name="Style.Word.Inactive" xml:space="preserve"><value>Inactive</value></data>
-  <data name="Style.Word.Victim" xml:space="preserve"><value>Vict</value></data>
-  <data name="Style.Word.SoloBeginner" xml:space="preserve"><value>Solo(b)</value></data>
+  <data name="Style.Word.Victim" xml:space="preserve"><value>Victim</value></data>
+  <data name="Style.Word.SoloBeginner" xml:space="preserve"><value>Solo (beginner)</value></data>
   <data name="Style.Word.Solo" xml:space="preserve"><value>Solo</value></data>
-  <data name="Style.Word.GangBeginner" xml:space="preserve"><value>Gang(b)</value></data>
+  <data name="Style.Word.GangBeginner" xml:space="preserve"><value>Gang (beginner)</value></data>
   <data name="Style.Word.Gang" xml:space="preserve"><value>Gang</value></data>
   <data name="Style.Word.Blob" xml:space="preserve"><value>Blob</value></data>
   <data name="Style.Word.Fleet" xml:space="preserve"><value>Fleet</value></data>

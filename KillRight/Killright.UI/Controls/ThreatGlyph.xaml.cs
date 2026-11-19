@@ -49,11 +49,11 @@ public partial class ThreatGlyph : UserControl
     public static GlyphSpec Describe(string band) => band switch
     {
         "None" => new GlyphSpec(WedgeKind.None, null, "Brush.Border", false, UiText.PlaceholderDash),
-        "Low" => new GlyphSpec(WedgeKind.None, null, "Brush.Threat.Amber", true, string.Empty),
-        "Medium" => new GlyphSpec(WedgeKind.Quarter, "Brush.Threat.Amber", "Brush.Border", true, string.Empty),
-        "High" => new GlyphSpec(WedgeKind.Half, "Brush.Threat.Amber", "Brush.Border", true, string.Empty),
-        "Very High" => new GlyphSpec(WedgeKind.ThreeQuarter, "Brush.Threat.Amber", "Brush.Border", true, string.Empty),
-        "Extreme" => new GlyphSpec(WedgeKind.Full, "Brush.Threat.Red", "Brush.Border", false, string.Empty),
+        "1" => new GlyphSpec(WedgeKind.None, null, "Brush.Threat.Amber", true, string.Empty),
+        "2" => new GlyphSpec(WedgeKind.Quarter, "Brush.Threat.Amber", "Brush.Border", true, string.Empty),
+        "3" => new GlyphSpec(WedgeKind.Half, "Brush.Threat.Amber", "Brush.Border", true, string.Empty),
+        "4" => new GlyphSpec(WedgeKind.ThreeQuarter, "Brush.Threat.Amber", "Brush.Border", true, string.Empty),
+        "5" => new GlyphSpec(WedgeKind.Full, "Brush.Threat.Red", "Brush.Border", false, string.Empty),
         _ => new GlyphSpec(WedgeKind.None, null, "Brush.Border", false, "?")
     };
 

@@ -8,11 +8,11 @@ namespace Killright.UI.Tests.Controls;
 public sealed class ThreatGlyphTests
 {
     [Theory]
-    [InlineData("Low", ThreatGlyph.WedgeKind.None, null, "Brush.Threat.Amber", true)]
-    [InlineData("Medium", ThreatGlyph.WedgeKind.Quarter, "Brush.Threat.Amber", "Brush.Border", true)]
-    [InlineData("High", ThreatGlyph.WedgeKind.Half, "Brush.Threat.Amber", "Brush.Border", true)]
-    [InlineData("Very High", ThreatGlyph.WedgeKind.ThreeQuarter, "Brush.Threat.Amber", "Brush.Border", true)]
-    [InlineData("Extreme", ThreatGlyph.WedgeKind.Full, "Brush.Threat.Red", "Brush.Border", false)]
+    [InlineData("1", ThreatGlyph.WedgeKind.None, null, "Brush.Threat.Amber", true)]
+    [InlineData("2", ThreatGlyph.WedgeKind.Quarter, "Brush.Threat.Amber", "Brush.Border", true)]
+    [InlineData("3", ThreatGlyph.WedgeKind.Half, "Brush.Threat.Amber", "Brush.Border", true)]
+    [InlineData("4", ThreatGlyph.WedgeKind.ThreeQuarter, "Brush.Threat.Amber", "Brush.Border", true)]
+    [InlineData("5", ThreatGlyph.WedgeKind.Full, "Brush.Threat.Red", "Brush.Border", false)]
     [InlineData("None", ThreatGlyph.WedgeKind.None, null, "Brush.Border", false)]
     [InlineData("Unk", ThreatGlyph.WedgeKind.None, null, "Brush.Border", false)]
     public void Describe_BandMapsToWedgeFillAndRing(string band, ThreatGlyph.WedgeKind wedge, string? wedgeBrush, string ringBrush, bool showRing)
@@ -28,7 +28,7 @@ public sealed class ThreatGlyphTests
     [Fact]
     public void Describe_NoBandUsesRedRingOrYellow()
     {
-        foreach (var band in new[] { "None", "Low", "Medium", "High", "Very High", "Extreme", "Unk" })
+        foreach (var band in new[] { "None", "1", "2", "3", "4", "5", "Unk" })
         {
             var spec = ThreatGlyph.Describe(band);
 
@@ -38,9 +38,9 @@ public sealed class ThreatGlyphTests
     }
 
     [Theory]
-    [InlineData("Low", false, true, false)]
-    [InlineData("Very High", true, true, false)]
-    [InlineData("Extreme", false, false, true)]
+    [InlineData("1", false, true, false)]
+    [InlineData("4", true, true, false)]
+    [InlineData("5", false, false, true)]
     public void Render_SetsWedgeRingAndFullFillVisibility(string band, bool wedgeVisible, bool ringVisible, bool fullVisible)
     {
         Sta.Run(() =>

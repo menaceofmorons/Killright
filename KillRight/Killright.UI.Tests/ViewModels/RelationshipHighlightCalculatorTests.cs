@@ -64,7 +64,7 @@ public sealed class RelationshipHighlightCalculatorTests
             new[] { hovered, other }, hovered, _ => true, RelationshipConfidenceBandSetting.Defaults, PilotColor, RelatedColor, Opacity);
 
         Assert.Equal("80", other.RelationshipStrengthDisplay);
-        Assert.Equal("High", other.RelationshipConfidenceBand);
+        Assert.Equal("3", other.RelationshipConfidenceBand);
     }
 
     [Fact]
@@ -83,7 +83,7 @@ public sealed class RelationshipHighlightCalculatorTests
 
         Assert.NotNull(other.HighlightBrush);
         Assert.Equal("42", other.RelationshipStrengthDisplay);
-        Assert.Equal("Low", other.RelationshipConfidenceBand);
+        Assert.Equal("1", other.RelationshipConfidenceBand);
     }
 
     [Fact]
@@ -118,7 +118,7 @@ public sealed class RelationshipHighlightCalculatorTests
     {
         var rows = new[]
         {
-            new PilotReportRow { HighlightBrush = new SolidColorBrush(PilotColor), RelationshipStrengthDisplay = "50", RelationshipConfidenceBand = "High" }
+            new PilotReportRow { HighlightBrush = new SolidColorBrush(PilotColor), RelationshipStrengthDisplay = "50", RelationshipConfidenceBand = "3" }
         };
 
         RelationshipHighlightCalculator.Clear(rows);
@@ -145,7 +145,7 @@ public sealed class RelationshipHighlightCalculatorTests
             new[] { pilot, related, sameGroup }, pilot, _ => false, RelationshipConfidenceBandSetting.Defaults);
 
         Assert.Equal("42", related.RelationshipStrengthDisplay);
-        Assert.Equal("High", related.RelationshipConfidenceBand);
+        Assert.Equal("3", related.RelationshipConfidenceBand);
         Assert.Equal("-", sameGroup.RelationshipStrengthDisplay);
         Assert.Equal("-", pilot.RelationshipStrengthDisplay);
         Assert.Null(pilot.HighlightBrush);
@@ -157,7 +157,7 @@ public sealed class RelationshipHighlightCalculatorTests
     public void ApplyRelationshipValues_PilotWithoutCharacterId_ResetsValues()
     {
         var pilot = new PilotReportRow { CharacterId = null };
-        var other = new PilotReportRow { CharacterId = 2, RelationshipStrengthDisplay = "50", RelationshipConfidenceBand = "High" };
+        var other = new PilotReportRow { CharacterId = 2, RelationshipStrengthDisplay = "50", RelationshipConfidenceBand = "3" };
 
         RelationshipHighlightCalculator.ApplyRelationshipValues(
             new[] { pilot, other }, pilot, _ => false, RelationshipConfidenceBandSetting.Defaults);

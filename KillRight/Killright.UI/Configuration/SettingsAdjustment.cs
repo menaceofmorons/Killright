@@ -26,16 +26,16 @@ internal static class SettingsAdjustment
         log($"Setting '{name}' read as missing; using the default {defaultText}.");
     }
 
-    public static void LogBandsReplaced(string name, IEnumerable<(string Name, int Minimum, int Maximum)>? bands, string reason, Action<string> log)
+    public static void LogBandsReplaced(string name, IEnumerable<(int Minimum, int Maximum)>? bands, string reason, Action<string> log)
     {
         log($"Setting '{name}' read as {DescribeBands(bands)}; using the built-in bands ({reason}).");
     }
 
-    private static string DescribeBands(IEnumerable<(string Name, int Minimum, int Maximum)>? bands)
+    private static string DescribeBands(IEnumerable<(int Minimum, int Maximum)>? bands)
     {
         if (bands is null)
             return "null";
 
-        return "[" + string.Join(", ", bands.Select(band => $"{band.Name} {band.Minimum}-{band.Maximum}")) + "]";
+        return "[" + string.Join(", ", bands.Select(band => $"{band.Minimum}-{band.Maximum}")) + "]";
     }
 }

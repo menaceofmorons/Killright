@@ -37,14 +37,14 @@ public partial class ConfidenceGlyph : UserControl
 
         switch (confidence)
         {
-            case "Low":
+            case "1":
                 RingOutline.Visibility = Visibility.Visible;
                 break;
-            case "Medium":
+            case "2":
                 RingOutline.Visibility = Visibility.Visible;
                 BottomHalfFill.Visibility = Visibility.Visible;
                 break;
-            case "High":
+            case "3":
                 FullFill.Visibility = Visibility.Visible;
                 break;
             case null or "":

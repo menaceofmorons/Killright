@@ -147,8 +147,8 @@ public sealed class ApplicationSettingsLoaderTests
 
         var settings = LoadResult("{ }", log).Settings!;
 
-        Assert.Equal(ThreatBandSetting.Defaults.Select(band => band.Name), settings.ThreatBands.Select(band => band.Name));
-        Assert.Equal(RelationshipConfidenceBandSetting.Defaults.Select(band => band.Name), settings.RelationshipConfidenceBands.Select(band => band.Name));
+        Assert.Equal(ThreatBandSetting.Defaults.Select(band => (band.MinimumScore, band.MaximumScore)), settings.ThreatBands.Select(band => (band.MinimumScore, band.MaximumScore)));
+        Assert.Equal(RelationshipConfidenceBandSetting.Defaults.Select(band => (band.MinimumScore, band.MaximumScore)), settings.RelationshipConfidenceBands.Select(band => (band.MinimumScore, band.MaximumScore)));
         Assert.Contains("Setting 'threatBands' read as missing; using the built-in bands.", log);
         Assert.Contains("Setting 'relationshipConfidenceBands' read as missing; using the built-in bands.", log);
     }
@@ -156,9 +156,9 @@ public sealed class ApplicationSettingsLoaderTests
     [Theory]
     [InlineData("null", "null", "null")]
     [InlineData("[]", "[]", "empty")]
-    [InlineData("[{ \"name\": \"A\", \"minimumScore\": 1, \"maximumScore\": 20 }, { \"name\": \"B\", \"minimumScore\": 30, \"maximumScore\": 100 }]", "[A 1-20, B 30-100]", "gapped, overlapping or not starting at 1")]
-    [InlineData("[{ \"name\": \"A\", \"minimumScore\": 1, \"maximumScore\": 60 }, { \"name\": \"B\", \"minimumScore\": 50, \"maximumScore\": 100 }]", "[A 1-60, B 50-100]", "gapped, overlapping or not starting at 1")]
-    [InlineData("[{ \"name\": \"A\", \"minimumScore\": 1, \"maximumScore\": 50 }]", "[A 1-50]", "not covering 1 to 100")]
+    [InlineData("[{ \"minimumScore\": 1, \"maximumScore\": 20 }, { \"minimumScore\": 30, \"maximumScore\": 100 }]", "[1-20, 30-100]", "gapped, overlapping or not starting at 1")]
+    [InlineData("[{ \"minimumScore\": 1, \"maximumScore\": 60 }, { \"minimumScore\": 50, \"maximumScore\": 100 }]", "[1-60, 50-100]", "gapped, overlapping or not starting at 1")]
+    [InlineData("[{ \"minimumScore\": 1, \"maximumScore\": 50 }]", "[1-50]", "not covering 1 to 100")]
     public void Load_InvalidBands_TakeBuiltInBandsAndLog(string bands, string described, string reason)
     {
         var log = new List<string>();

@@ -129,16 +129,16 @@ public static class UiText
     public static string ShortcutsTabRelationship => Strings.Get("Shortcuts.Tab.Relationship");
 
     public static string ThreatBandNone => Strings.Get("ThreatBand.None");
-    public static string ThreatBandLow => Strings.Get("ThreatBand.Low");
-    public static string ThreatBandMedium => Strings.Get("ThreatBand.Medium");
-    public static string ThreatBandHigh => Strings.Get("ThreatBand.High");
-    public static string ThreatBandVeryHigh => Strings.Get("ThreatBand.Very High");
-    public static string ThreatBandExtreme => Strings.Get("ThreatBand.Extreme");
+    public static string ThreatBandLow => Strings.Get("ThreatBand.1");
+    public static string ThreatBandMedium => Strings.Get("ThreatBand.2");
+    public static string ThreatBandHigh => Strings.Get("ThreatBand.3");
+    public static string ThreatBandVeryHigh => Strings.Get("ThreatBand.4");
+    public static string ThreatBandExtreme => Strings.Get("ThreatBand.5");
     public static string ThreatBandUnk => Strings.Get("ThreatBand.Unk");
 
-    public static string RelationshipBandLow => Strings.Get("RelationshipBand.Low");
-    public static string RelationshipBandMedium => Strings.Get("RelationshipBand.Medium");
-    public static string RelationshipBandHigh => Strings.Get("RelationshipBand.High");
+    public static string RelationshipBandLow => Strings.Get("RelationshipBand.1");
+    public static string RelationshipBandMedium => Strings.Get("RelationshipBand.2");
+    public static string RelationshipBandHigh => Strings.Get("RelationshipBand.3");
 
     public static string GetThreatBandDisplay(string? bandName) =>
         string.IsNullOrWhiteSpace(bandName) ? ThreatBandUnk : Strings.Get($"ThreatBand.{bandName}", bandName);
