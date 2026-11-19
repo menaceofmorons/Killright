@@ -15,8 +15,8 @@ public sealed class UiStateWindowAndColumnsTests
     [Fact]
     public void WindowLimits_MatchTheMinimumSizeSettings()
     {
-        Assert.Equal(480, WindowLimits.MinimumWidth);
-        Assert.Equal(240, WindowLimits.MinimumHeight);
+        Assert.Equal(60, WindowLimits.MinimumWidth);
+        Assert.Equal(60, WindowLimits.MinimumHeight);
     }
 
     [Fact]
