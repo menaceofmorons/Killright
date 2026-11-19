@@ -6,6 +6,8 @@ using Killright.UI.ViewModels;
 
 namespace Killright.UI.InfoSheet;
 
+public sealed record InfoSheetTitleLine(string Text, bool IsError);
+
 public sealed class InfoSheetViewModel : INotifyPropertyChanged
 {
     private readonly PilotReportRow _row;
@@ -27,6 +29,7 @@ public sealed class InfoSheetViewModel : INotifyPropertyChanged
     private string _lastActivityVictimValue;
     private string _lastActivityAttackersValue;
     private Visibility _lastActivityKillOnlyVisibility;
+    private Visibility _lastActivityBodyVisibility = Visibility.Visible;
 
     public string StatsTitle { get; }
     public string ThreatValue { get; }
@@ -43,6 +46,14 @@ public sealed class InfoSheetViewModel : INotifyPropertyChanged
     public Visibility FactionVisibility { get; }
 
     public event PropertyChangedEventHandler? PropertyChanged;
+
+    public IReadOnlyList<InfoSheetTitleLine> TitleLines { get; private set; }
+
+    public Visibility LastActivityBodyVisibility
+    {
+        get => _lastActivityBodyVisibility;
+        private set => SetField(ref _lastActivityBodyVisibility, value);
+    }
 
     public string ErrorLine
     {
@@ -144,6 +155,7 @@ public sealed class InfoSheetViewModel : INotifyPropertyChanged
         StatsTitle = UiText.FormatStatsTitle(row.Pilot);
         _errorLine = row.StatsFailureSource is null ? string.Empty : UiText.FormatErrorLoading(row.StatsFailureSource);
         _errorLineVisibility = row.StatsFailureSource is null ? Visibility.Collapsed : Visibility.Visible;
+        TitleLines = BuildTitleLines();
         ThreatValue = UiText.GetThreatBandDisplay(row.Threat);
         SecValue = row.SecurityStatus;
         WeekKillsValue = row.InfoWeekKills;
@@ -188,11 +200,11 @@ public sealed class InfoSheetViewModel : INotifyPropertyChanged
         try
         {
             var birthday = await _loadBirthday(_row.InputName);
-            BirthdayValue = birthday?.ToString("yyyy-MM-dd") ?? "unk";
+            BirthdayValue = birthday?.ToString("yyyy-MM-dd") ?? UiText.PlaceholderUnkLower;
         }
         catch
         {
-            BirthdayValue = "unk";
+            BirthdayValue = UiText.PlaceholderUnkLower;
             failedSources.Add(UiText.InfoSheetSourceBirthday);
         }
 
@@ -216,11 +228,14 @@ public sealed class InfoSheetViewModel : INotifyPropertyChanged
                 ? await _loadLastActivity(characterId)
                 : null;
 
-            ApplyLastActivity(lastActivity);
+            if (lastActivity is null)
+                ApplyNoLastActivity();
+            else
+                ApplyLastActivity(lastActivity);
         }
         catch
         {
-            ApplyLastActivity(null);
+            ApplyLastActivityPlaceholders();
             failedSources.Add(UiText.InfoSheetSourceLastActivity);
         }
 
@@ -236,6 +251,17 @@ public sealed class InfoSheetViewModel : INotifyPropertyChanged
 
         ErrorLine = UiText.FormatErrorLoading(string.Join(", ", sources));
         ErrorLineVisibility = Visibility.Visible;
+        TitleLines = BuildTitleLines();
+        OnPropertyChanged(nameof(TitleLines));
+    }
+
+    private IReadOnlyList<InfoSheetTitleLine> BuildTitleLines()
+    {
+        var stats = new InfoSheetTitleLine(StatsTitle, false);
+
+        return _errorLineVisibility == Visibility.Visible
+            ? [new InfoSheetTitleLine(_errorLine, true), stats]
+            : [stats];
     }
 
     private static string? SafeFactionName(Func<long, string?>? lookupFactionName, long factionId)
@@ -257,16 +283,50 @@ public sealed class InfoSheetViewModel : INotifyPropertyChanged
         TotalLossesValue = PilotReportRowFactory.FormatInfoCount(totals?.Losses);
     }
 
-    private void ApplyLastActivity(PilotLastActivitySummary? lastActivity)
+    private void ApplyNoLastActivity()
     {
-        LastActivityDateTimeValue = lastActivity?.DateTime ?? "-";
-        LastActivityKillLossValue = lastActivity?.KillLoss ?? "-";
-        LastActivitySystemValue = lastActivity?.System ?? "-";
-        LastActivityShipValue = lastActivity?.Ship ?? "-";
-        LastActivityWeaponValue = lastActivity?.Weapon ?? "-";
-        LastActivityVictimValue = lastActivity?.Victim ?? "-";
-        LastActivityAttackersValue = lastActivity?.Attackers ?? "-";
-        LastActivityKillOnlyVisibility = lastActivity is { IsKill: true } ? Visibility.Visible : Visibility.Collapsed;
+        SetLastActivityValues(string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty);
+        LastActivityKillOnlyVisibility = Visibility.Collapsed;
+        LastActivityBodyVisibility = Visibility.Collapsed;
+    }
+
+    private void ApplyLastActivityPlaceholders()
+    {
+        var dash = UiText.PlaceholderDash;
+        SetLastActivityValues(dash, dash, dash, dash, dash, dash, dash);
+        LastActivityKillOnlyVisibility = Visibility.Collapsed;
+        LastActivityBodyVisibility = Visibility.Visible;
+    }
+
+    private void ApplyLastActivity(PilotLastActivitySummary lastActivity)
+    {
+        var dash = UiText.PlaceholderDash;
+        SetLastActivityValues(
+            lastActivity.DateTime ?? dash,
+            lastActivity.KillLoss ?? dash,
+            lastActivity.System ?? dash,
+            lastActivity.Ship ?? dash,
+            lastActivity.Weapon ?? dash,
+            lastActivity.Victim ?? dash,
+            lastActivity.Attackers ?? dash);
+        LastActivityKillOnlyVisibility = lastActivity.IsKill ? Visibility.Visible : Visibility.Collapsed;
+        LastActivityBodyVisibility = Visibility.Visible;
+    }
+
+    private void SetLastActivityValues(string dateTime, string killLoss, string system, string ship, string weapon, string victim, string attackers)
+    {
+        LastActivityDateTimeValue = dateTime;
+        LastActivityKillLossValue = killLoss;
+        LastActivitySystemValue = system;
+        LastActivityShipValue = ship;
+        LastActivityWeaponValue = weapon;
+        LastActivityVictimValue = victim;
+        LastActivityAttackersValue = attackers;
+    }
+
+    private void OnPropertyChanged(string propertyName)
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 
     private void SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)

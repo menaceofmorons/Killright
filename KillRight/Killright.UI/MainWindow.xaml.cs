@@ -247,7 +247,7 @@ public partial class MainWindow : Window
         }
 
         if (FindAncestor<DataGridCell>(e.OriginalSource as DependencyObject) is not { Column: var cellColumn } cell
-            || FindAncestor<DataGridRow>(cell) is not { Item: PilotReportRow row })
+            || FindAncestor<DataGridRow>(cell) is not { Item: PilotReportRow row } dataRow)
             return;
 
         if (cellColumn == ColumnPilot)
@@ -261,7 +261,9 @@ public partial class MainWindow : Window
 
             e.Handled = true;
             var screenPosition = PointToScreen(e.GetPosition(this));
-            Dispatcher.BeginInvoke(DispatcherPriority.Input, () => OpenInfoSheet(row, screenPosition));
+            var rowTopLeft = dataRow.PointToScreen(new Point(0, 0));
+            var rowBottomRight = dataRow.PointToScreen(new Point(dataRow.ActualWidth, dataRow.ActualHeight));
+            Dispatcher.BeginInvoke(DispatcherPriority.Input, () => OpenInfoSheet(row, screenPosition, new Rect(rowTopLeft, rowBottomRight)));
             return;
         }
 
@@ -455,7 +457,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private void OpenInfoSheet(PilotReportRow row, Point screenPosition)
+    private void OpenInfoSheet(PilotReportRow row, Point screenPosition, Rect screenRow)
     {
         _infoSheet?.Close();
 
@@ -472,10 +474,23 @@ public partial class MainWindow : Window
         var infoSheet = new InfoSheetWindow(viewModel)
         {
             Owner = this,
-            Topmost = Topmost,
-            Left = screenPosition.X / dpi.DpiScaleX,
-            Top = screenPosition.Y / dpi.DpiScaleY
+            Topmost = Topmost
         };
+
+        var sheetSize = MeasureInfoSheet(infoSheet);
+        var rowInDips = new Rect(
+            screenRow.X / dpi.DpiScaleX,
+            screenRow.Y / dpi.DpiScaleY,
+            screenRow.Width / dpi.DpiScaleX,
+            screenRow.Height / dpi.DpiScaleY);
+        var visibleArea = new Rect(
+            SystemParameters.VirtualScreenLeft,
+            SystemParameters.VirtualScreenTop,
+            SystemParameters.VirtualScreenWidth,
+            SystemParameters.VirtualScreenHeight);
+        var placement = InfoSheetPlacement.Calculate(screenPosition.X / dpi.DpiScaleX, rowInDips, sheetSize, visibleArea);
+        infoSheet.Left = placement.X;
+        infoSheet.Top = placement.Y;
 
         infoSheet.Closed += (_, _) =>
         {
@@ -486,6 +501,15 @@ public partial class MainWindow : Window
         infoSheet.Show();
 
         _ = LoadInfoSheetAsync(viewModel, row, lookupTag);
+    }
+
+    private static Size MeasureInfoSheet(InfoSheetWindow infoSheet)
+    {
+        if (infoSheet.Content is not FrameworkElement content)
+            return new Size(0, 0);
+
+        content.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        return content.DesiredSize;
     }
 
     private static Task<InfoSheetTotals?> LoadTotalsForInfoSheetAsync(long characterId)

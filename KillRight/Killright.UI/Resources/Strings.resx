@@ -207,6 +207,8 @@
   <data name="Sde.Failure.Download" xml:space="preserve"><value>The reference-data download failed.</value></data>
   <data name="Sde.Failure.Unexpected" xml:space="preserve"><value>An unexpected error occurred.</value></data>
 
+  <data name="InfoSheet.Label.Verify" xml:space="preserve"><value>Verify: </value></data>
+  <data name="InfoSheet.Label.Notes" xml:space="preserve"><value>Notes: </value></data>
   <data name="Placeholder.Dash" xml:space="preserve"><value>-</value></data>
   <data name="Placeholder.Unk" xml:space="preserve"><value>Unk</value></data>
   <data name="Placeholder.UnkLower" xml:space="preserve"><value>unk</value></data>

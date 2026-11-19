@@ -16,7 +16,7 @@ public sealed class NoHardcodedUiStringsTests
             ["MainWindow.xaml"] = Array.Empty<string>(),
             [Path.Combine("MenuModal", "MenuModalWindow.xaml")] = new[] { string.Empty, "Developer", "⠿" },
             [Path.Combine("Shortcuts", "ShortcutsWindow.xaml")] = Array.Empty<string>(),
-            [Path.Combine("InfoSheet", "InfoSheetWindow.xaml")] = new[] { "Verify: ", "Notes: " },
+            [Path.Combine("InfoSheet", "InfoSheetWindow.xaml")] = Array.Empty<string>(),
             [Path.Combine("Sde", "SdeFirstRunLoadWindow.xaml")] = Array.Empty<string>(),
         };
 
