@@ -40,3 +40,6 @@ metadata:
 - `HttpListener` on `127.0.0.1` runs in tests without admin rights and gives a real HTTP round trip (e.g. decompression checks) (WS-1.5)
 - `ScanPipelineSourceTests` asserts on `MainWindow.xaml.cs` text; moving code out of `MainWindow` can break it (WS-1.5)
 - ID-based rules on a pilot use `Pilot.CorporationId`; the `Corporation` object is present only when the name resolved (WS-1.5)
+- Tests that call `AppearanceManager.ApplyTheme` or `ApplyNewPilotColor` mutate the shared `Application.Resources`; put them in a serialised collection (`DisableParallelization = true`) and restore merged dictionaries, or theme-brush tests fail intermittently (WS-1.7)
+- A new UI test never asserts on `.xaml.cs` source text; put the logic in a testable class and assert its behaviour (WS-1.7)
+- A modal startup dialog blocks process-exit integration tests; the test must find and dismiss it (user32 `EnumWindows`) before asserting exit (WS-1.7)
