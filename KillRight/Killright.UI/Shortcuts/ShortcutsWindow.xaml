@@ -14,6 +14,7 @@
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary Source="/Killright.UI;component/Theme/ChromeStyles.xaml" />
             </ResourceDictionary.MergedDictionaries>
+            <Thickness x:Key="HelpContentInset">12</Thickness>
             <Style x:Key="HelpParagraph" TargetType="TextBlock">
                 <Setter Property="TextWrapping" Value="Wrap" />
                 <Setter Property="Margin" Value="0,0,0,8" />
@@ -29,8 +30,8 @@
                 Click="Close_Click" />
         <TabControl>
             <TabItem Header="{x:Static resources:UiText.ShortcutsTabShortcuts}">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
-                    <ItemsControl ItemsSource="{Binding ShortcutGroups}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <ItemsControl ItemsSource="{Binding ShortcutGroups}" Margin="{StaticResource HelpContentInset}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
                                 <StackPanel Margin="0,0,0,10">
@@ -39,8 +40,8 @@
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
                                                 <StackPanel Orientation="Horizontal" Margin="8,0,0,2">
-                                                    <TextBlock Text="{Binding Key}" FontWeight="Bold" Width="120" />
-                                                    <TextBlock Text="{Binding Action}" TextWrapping="Wrap" Width="230" />
+                                                    <TextBlock Text="{Binding Key}" FontWeight="Bold" Width="110" />
+                                                    <TextBlock Text="{Binding Action}" TextWrapping="Wrap" Width="216" />
                                                 </StackPanel>
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
@@ -52,19 +53,19 @@
                 </ScrollViewer>
             </TabItem>
             <TabItem Header="{x:Static resources:UiText.ShortcutsTabStyle}">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
-                    <StackPanel>
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="{StaticResource HelpContentInset}">
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                             <TextBlock Text="{x:Static resources:UiText.ShortcutsStyleCodeFleet}" FontWeight="Bold" Width="24" />
-                            <TextBlock Text="{Binding StyleFleet}" TextWrapping="Wrap" Width="320" />
+                            <TextBlock Text="{Binding StyleFleet}" TextWrapping="Wrap" Width="296" />
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                             <TextBlock Text="{x:Static resources:UiText.ShortcutsStyleCodeBlob}" FontWeight="Bold" Width="24" />
-                            <TextBlock Text="{Binding StyleBlob}" TextWrapping="Wrap" Width="320" />
+                            <TextBlock Text="{Binding StyleBlob}" TextWrapping="Wrap" Width="296" />
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                             <TextBlock Text="{x:Static resources:UiText.ShortcutsStyleCodeGang}" FontWeight="Bold" Width="24" />
-                            <TextBlock Text="{Binding StyleGang}" TextWrapping="Wrap" Width="320" />
+                            <TextBlock Text="{Binding StyleGang}" TextWrapping="Wrap" Width="296" />
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                             <TextBlock Text="{x:Static resources:UiText.ShortcutsStyleCodeSolo}" FontWeight="Bold" Width="24" />
@@ -95,42 +96,42 @@
                         <TextBlock Text="{x:Static resources:UiText.ShortcutsSuffixHeading}" FontWeight="Bold" Margin="0,0,0,4" />
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                             <TextBlock Text="{x:Static resources:UiText.ShortcutsSuffixBeginnerCode}" FontWeight="Bold" Width="24" />
-                            <TextBlock Text="{x:Static resources:UiText.ShortcutsSuffixBeginnerDescription}" TextWrapping="Wrap" Width="320" />
+                            <TextBlock Text="{x:Static resources:UiText.ShortcutsSuffixBeginnerDescription}" TextWrapping="Wrap" Width="296" />
                         </StackPanel>
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="{x:Static resources:UiText.ShortcutsSuffixPodderCode}" FontWeight="Bold" Width="24" />
-                            <TextBlock Text="{x:Static resources:UiText.ShortcutsSuffixPodderDescription}" TextWrapping="Wrap" Width="320" />
+                            <TextBlock Text="{x:Static resources:UiText.ShortcutsSuffixPodderDescription}" TextWrapping="Wrap" Width="296" />
                         </StackPanel>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
             <TabItem Header="{x:Static resources:UiText.ShortcutsTabThreat}">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
-                    <StackPanel>
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="{StaticResource HelpContentInset}">
                         <TextBlock Text="{Binding ThreatIntro}" Style="{StaticResource HelpParagraph}" />
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                             <controls:ThreatGlyph Band="None" Margin="0,0,10,0" VerticalAlignment="Top" />
-                            <TextBlock Text="{Binding ThreatNone}" TextWrapping="Wrap" Width="320" />
+                            <TextBlock Text="{Binding ThreatNone}" TextWrapping="Wrap" Width="296" />
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                             <controls:ThreatGlyph Band="1" Margin="0,0,10,0" VerticalAlignment="Top" />
-                            <TextBlock Text="{Binding ThreatLow}" TextWrapping="Wrap" Width="320" />
+                            <TextBlock Text="{Binding ThreatLow}" TextWrapping="Wrap" Width="296" />
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                             <controls:ThreatGlyph Band="2" Margin="0,0,10,0" VerticalAlignment="Top" />
-                            <TextBlock Text="{Binding ThreatMedium}" TextWrapping="Wrap" Width="320" />
+                            <TextBlock Text="{Binding ThreatMedium}" TextWrapping="Wrap" Width="296" />
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                             <controls:ThreatGlyph Band="3" Margin="0,0,10,0" VerticalAlignment="Top" />
-                            <TextBlock Text="{Binding ThreatHigh}" TextWrapping="Wrap" Width="320" />
+                            <TextBlock Text="{Binding ThreatHigh}" TextWrapping="Wrap" Width="296" />
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                             <controls:ThreatGlyph Band="4" Margin="0,0,10,0" VerticalAlignment="Top" />
-                            <TextBlock Text="{Binding ThreatVeryHigh}" TextWrapping="Wrap" Width="320" />
+                            <TextBlock Text="{Binding ThreatVeryHigh}" TextWrapping="Wrap" Width="296" />
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                             <controls:ThreatGlyph Band="5" Margin="0,0,10,0" VerticalAlignment="Top" />
-                            <TextBlock Text="{Binding ThreatExtreme}" TextWrapping="Wrap" Width="320" />
+                            <TextBlock Text="{Binding ThreatExtreme}" TextWrapping="Wrap" Width="296" />
                         </StackPanel>
                         <StackPanel Orientation="Horizontal">
                             <controls:ThreatGlyph Band="Unk" Margin="0,0,10,0" />
@@ -140,29 +141,29 @@
                 </ScrollViewer>
             </TabItem>
             <TabItem Header="{x:Static resources:UiText.ShortcutsTabRelationship}">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
-                    <StackPanel>
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="{StaticResource HelpContentInset}">
                         <TextBlock Text="{Binding RelationshipIntro}" Style="{StaticResource HelpParagraph}" />
                         <TextBlock Text="{Binding RelationshipShown}" Style="{StaticResource HelpParagraph}" />
                         <TextBlock Text="{Binding RelationshipNumber}" Style="{StaticResource HelpParagraph}" />
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                             <controls:ConfidenceGlyph Confidence="1" Margin="0,0,10,0" VerticalAlignment="Top" />
-                            <TextBlock Text="{Binding RelationshipLow}" TextWrapping="Wrap" Width="320" />
+                            <TextBlock Text="{Binding RelationshipLow}" TextWrapping="Wrap" Width="296" />
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                             <controls:ConfidenceGlyph Confidence="2" Margin="0,0,10,0" VerticalAlignment="Top" />
-                            <TextBlock Text="{Binding RelationshipMedium}" TextWrapping="Wrap" Width="320" />
+                            <TextBlock Text="{Binding RelationshipMedium}" TextWrapping="Wrap" Width="296" />
                         </StackPanel>
                         <StackPanel Orientation="Horizontal">
                             <controls:ConfidenceGlyph Confidence="3" Margin="0,0,10,0" VerticalAlignment="Top" />
-                            <TextBlock Text="{Binding RelationshipHigh}" TextWrapping="Wrap" Width="320" />
+                            <TextBlock Text="{Binding RelationshipHigh}" TextWrapping="Wrap" Width="296" />
                         </StackPanel>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
             <TabItem Header="{x:Static resources:UiText.ShortcutsTabGroup}">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
-                    <StackPanel>
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="{StaticResource HelpContentInset}">
                         <TextBlock Text="{Binding GroupIntro}" Style="{StaticResource HelpParagraph}" />
                         <TextBlock Text="{Binding GroupDirect}" Style="{StaticResource HelpParagraph}" />
                         <TextBlock Text="{Binding GroupChain}" Style="{StaticResource HelpParagraph}" />
@@ -170,7 +171,7 @@
                 </ScrollViewer>
             </TabItem>
             <TabItem Header="{x:Static resources:UiText.ShortcutsTabAbout}">
-                <StackPanel Margin="0,8,0,0">
+                <StackPanel Margin="{StaticResource HelpContentInset}">
                     <TextBlock Text="{Binding AboutVersion}" Style="{StaticResource HelpParagraph}" />
                 </StackPanel>
             </TabItem>
