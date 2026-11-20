@@ -65,6 +65,32 @@ public sealed class DocumentationLinkTests
         Assert.NotEmpty(body);
     }
 
+    [Fact]
+    public void Readme_RelativeLinksAndImages_Resolve()
+    {
+        var readme = ReadmePath();
+        var missing = RelativeTargets(File.ReadAllText(readme))
+            .Where(target => !Exists(Path.GetDirectoryName(readme)!, target))
+            .ToList();
+
+        Assert.True(missing.Count == 0, "Unresolved: " + string.Join(", ", missing));
+    }
+
+    [Fact]
+    public void Readme_FirstSectionAfterTitle_IsDownload()
+    {
+        var firstSection = File.ReadAllLines(ReadmePath())
+            .First(line => line.StartsWith("## ", StringComparison.Ordinal));
+
+        Assert.Equal("## Download", firstSection);
+    }
+
+    [Fact]
+    public void Readme_HasNoLocalPath()
+    {
+        Assert.DoesNotMatch(@"\b[A-Za-z]:[\\/](?![\\/])|\\Users\\|/Users/", File.ReadAllText(ReadmePath()));
+    }
+
     private static IEnumerable<string> RelativeTargets(string markdown) =>
         LinkPattern.Matches(markdown)
             .Select(match => match.Groups[1].Value)
@@ -78,7 +104,11 @@ public sealed class DocumentationLinkTests
         return File.Exists(path) || Directory.Exists(path);
     }
 
-    private static string GuidePath()
+    private static string GuidePath() => Path.Combine(RepositoryRoot(), "Docs", "User-Guide.md");
+
+    private static string ReadmePath() => Path.Combine(RepositoryRoot(), "README.md");
+
+    private static string RepositoryRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Docs", "User-Guide.md")))
@@ -87,6 +117,6 @@ public sealed class DocumentationLinkTests
         }
 
         Assert.NotNull(directory);
-        return Path.Combine(directory!.FullName, "Docs", "User-Guide.md");
+        return directory!.FullName;
     }
 }
