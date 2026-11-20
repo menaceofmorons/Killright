@@ -97,7 +97,6 @@ public static class UiText
 
     public static string WindowTitleShortcuts => Strings.Get("Window.Title.Shortcuts");
     public static string ShortcutsButtonClose => Strings.Get("Shortcuts.Button.Close");
-    public static string ShortcutsSizingWriteFailed => Strings.Get("Shortcuts.Sizing.WriteFailed");
     public static string ShortcutsTabShortcuts => Strings.Get("Shortcuts.Tab.Shortcuts");
     public static string ShortcutsKeyOpenMenu => Strings.Get("Shortcuts.Key.OpenMenu");
     public static string ShortcutsActionOpenMenu => Strings.Get("Shortcuts.Action.OpenMenu");

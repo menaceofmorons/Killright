@@ -29,6 +29,12 @@
       "rateLimitPauseSeconds": 60
     }
   },
+  "window": {
+    "f1": {
+      "width": 425,
+      "height": 424
+    }
+  },
   "database": {
     "busyTimeoutSeconds": 5,
     "pageCacheMegabytes": 64,

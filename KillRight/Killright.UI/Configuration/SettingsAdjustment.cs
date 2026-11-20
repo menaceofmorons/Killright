@@ -21,6 +21,16 @@ internal static class SettingsAdjustment
         return value;
     }
 
+    public static double SizeOrDefault(string name, double value, double minimum, double defaultValue, Action<string> log)
+    {
+        if (double.IsFinite(value) && value >= minimum)
+            return value;
+
+        log($"Setting '{name}' read as {value}; using the default {defaultValue} (not a size of at least {minimum}).");
+
+        return defaultValue;
+    }
+
     public static void LogMissing(string name, string defaultText, Action<string> log)
     {
         log($"Setting '{name}' read as missing; using the default {defaultText}.");

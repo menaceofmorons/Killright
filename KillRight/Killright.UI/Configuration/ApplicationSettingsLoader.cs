@@ -130,7 +130,8 @@ public static class ApplicationSettingsLoader
             Style = settings.Style,
             Timing = settings.Timing,
             Network = (settings.Network ?? new NetworkSettings()).Normalized(log),
-            Database = (settings.Database ?? new DatabaseSettings()).Normalized(log)
+            Database = (settings.Database ?? new DatabaseSettings()).Normalized(log),
+            Window = (settings.Window ?? new WindowSettings()).Normalized(log)
         };
     }
 
@@ -174,6 +175,8 @@ public static class ApplicationSettingsLoader
         ("network.zkill.rateLimitPauseSeconds", ZkillSettings.DefaultRateLimitPauseSeconds.ToString()),
         ("database.busyTimeoutSeconds", KillRightDatabaseOptions.DefaultBusyTimeoutSeconds.ToString()),
         ("database.pageCacheMegabytes", KillRightDatabaseOptions.DefaultPageCacheMegabytes.ToString()),
-        ("database.idleCheckpointSeconds", KillRightDatabaseOptions.DefaultIdleCheckpointSeconds.ToString())
+        ("database.idleCheckpointSeconds", KillRightDatabaseOptions.DefaultIdleCheckpointSeconds.ToString()),
+        ("window.f1.width", F1WindowSettings.DefaultWidth.ToString()),
+        ("window.f1.height", F1WindowSettings.DefaultHeight.ToString())
     };
 }
