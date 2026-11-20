@@ -33,6 +33,38 @@ public sealed class DocumentationLinkTests
         Assert.True(unreferenced.Count == 0, "Unreferenced: " + string.Join(", ", unreferenced));
     }
 
+    [Fact]
+    public void UserGuide_HasNoPlaceholderLine()
+    {
+        var text = File.ReadAllText(GuidePath());
+
+        Assert.DoesNotContain("This section is written separately.", text);
+    }
+
+    [Fact]
+    public void UserGuide_HasNoDeveloperReference()
+    {
+        Assert.DoesNotContain("Developer", File.ReadAllText(GuidePath()), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("## The grid")]
+    [InlineData("## Pilot Details")]
+    [InlineData("## Filters")]
+    [InlineData("## Menu")]
+    [InlineData("## Shortcuts")]
+    public void UserGuide_SectionHasBody(string heading)
+    {
+        var lines = File.ReadAllLines(GuidePath()).ToList();
+        var start = lines.IndexOf(heading);
+
+        Assert.True(start >= 0, heading + " is missing");
+        var body = lines.Skip(start + 1)
+            .TakeWhile(line => !line.StartsWith("## ", StringComparison.Ordinal))
+            .Where(line => line.Trim().Length > 0 && !line.StartsWith("![", StringComparison.Ordinal));
+        Assert.NotEmpty(body);
+    }
+
     private static IEnumerable<string> RelativeTargets(string markdown) =>
         LinkPattern.Matches(markdown)
             .Select(match => match.Groups[1].Value)
