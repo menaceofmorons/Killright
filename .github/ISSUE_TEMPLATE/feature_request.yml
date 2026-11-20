@@ -1,0 +1,32 @@
+name: Feature request
+description: Suggest a new feature or an improvement to an existing one
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem or need
+      description: What do you want to do that KillRight does not let you do, or does not do well enough today?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea
+      description: Describe the feature or change you would like, and how it would work.
+    validations:
+      required: true
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots or images
+      description: Drag images into this box to help show your idea, such as a screenshot, a sketch or a mock-up.
+    validations:
+      required: false
+  - type: textarea
+    id: other
+    attributes:
+      label: Anything else
+      description: Add any other detail or example.
+    validations:
+      required: false

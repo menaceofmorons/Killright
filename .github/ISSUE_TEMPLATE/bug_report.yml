@@ -1,0 +1,53 @@
+name: Bug report
+description: Report something that is not working as it should
+labels: ["bug"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: KillRight version
+      description: Shown in the application's About page.
+      placeholder: "0.1.0-beta.1"
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      description: For example Windows 11 23H2. Press Win+R and run winver to see it.
+      placeholder: "Windows 11 23H2"
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: Describe the problem in a few sentences, and what you expected to happen instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: List the steps that lead to the problem.
+      placeholder: |
+        1. Open ...
+        2. Click ...
+        3. See ...
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Log file
+      description: |
+        KillRight writes its log to `%LOCALAPPDATA%\KillRight\killright-engine.log`. Paste this path into the Windows Explorer address bar to open the folder, then drag the file into this box or paste the last lines of it. Check the file for personal information before you attach it.
+    validations:
+      required: false
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: Drag images into this box if they help show the problem.
+    validations:
+      required: false
