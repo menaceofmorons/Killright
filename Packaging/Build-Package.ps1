@@ -8,6 +8,11 @@ $out       = Join-Path $PSScriptRoot 'out'
 $appDir    = Join-Path $out 'app'
 $setupExe  = Join-Path $out "KillRight-v$version-Setup.exe"
 
+$guideSource  = Join-Path $codeRoot 'Docs\User-Guide.md'
+$imagesSource = Join-Path $codeRoot 'Docs\images'
+if (-not (Test-Path $guideSource -PathType Leaf)) { throw "User guide missing: $guideSource" }
+if (-not (Test-Path $imagesSource -PathType Container)) { throw "User guide images missing: $imagesSource" }
+
 if (Test-Path $out) { Remove-Item $out -Recurse -Force }
 New-Item -ItemType Directory -Path $appDir | Out-Null
 
@@ -23,7 +28,15 @@ if ($LASTEXITCODE -ne 0) { throw 'dotnet publish failed' }
 Copy-Item $engineDll (Join-Path $appDir 'killright_engine.dll') -Force
 if ((Get-FileHash $engineDll).Hash -ne (Get-FileHash (Join-Path $appDir 'killright_engine.dll')).Hash) { throw 'engine DLL copy mismatch' }
 
-$makensis = Join-Path $env:LOCALAPPDATA 'tauri\NSIS\makensis.exe'
+$docsDir = Join-Path $appDir 'Docs'
+New-Item -ItemType Directory -Path $docsDir | Out-Null
+Copy-Item $guideSource $docsDir
+Copy-Item $imagesSource (Join-Path $docsDir 'images') -Recurse
+foreach ($image in [regex]::Matches((Get-Content $guideSource -Raw), '\]\((images/[^)\s]+)\)') | ForEach-Object { $_.Groups[1].Value }) {
+    if (-not (Test-Path (Join-Path $docsDir $image))) { throw "Guide image missing from package: $image" }
+}
+
+$makensis =Join-Path $env:LOCALAPPDATA 'tauri\NSIS\makensis.exe'
 if (-not (Test-Path $makensis)) { throw "makensis.exe not found at $makensis" }
 & $makensis "/DAPP_DIR=$appDir" "/DOUT_FILE=$setupExe" "/DAPP_VERSION=$version" (Join-Path $PSScriptRoot 'KillRight.nsi')
 if ($LASTEXITCODE -ne 0) { throw 'makensis failed' }
