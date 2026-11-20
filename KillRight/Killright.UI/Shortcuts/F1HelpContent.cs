@@ -10,6 +10,8 @@ public sealed record F1ShortcutGroup(string Title, IReadOnlyList<F1ShortcutEntry
 
 public sealed class F1HelpContent
 {
+    private const double GangMinimumAttackers = 2;
+
     private F1HelpContent()
     {
     }
@@ -38,6 +40,10 @@ public sealed class F1HelpContent
 
     public string RelationshipIntro { get; private init; } = string.Empty;
 
+    public string RelationshipShown { get; private init; } = string.Empty;
+
+    public string RelationshipNumber { get; private init; } = string.Empty;
+
     public string RelationshipLow { get; private init; } = string.Empty;
 
     public string RelationshipMedium { get; private init; } = string.Empty;
@@ -54,30 +60,33 @@ public sealed class F1HelpContent
 
     public static F1HelpContent Create(ApplicationSettings settings, string version)
     {
-        var threatBands = settings.ThreatBands;
-        var relationshipBands = settings.RelationshipConfidenceBands;
-        var scoreMaximum = threatBands.Count == 0 ? 0 : threatBands[^1].MaximumScore;
+        var style = settings.Style;
 
         return new F1HelpContent
         {
             ShortcutGroups = BuildShortcutGroups(),
-            StyleGang = Format(UiText.ShortcutsStyleSizeGang, Number(settings.Style.BlobMinimumAverageAttackers)),
+            StyleFleet = Format(UiText.ShortcutsStyleSizeFleet, Number(style.FleetMinimumAverageAttackers)),
             StyleBlob = Format(
                 UiText.ShortcutsStyleSizeBlob,
-                Number(settings.Style.BlobMinimumAverageAttackers),
-                Number(settings.Style.FleetMinimumAverageAttackers)),
-            StyleFleet = Format(UiText.ShortcutsStyleSizeFleet, Number(settings.Style.FleetMinimumAverageAttackers)),
-            ThreatIntro = Format(UiText.ShortcutsThreatIntro, Number(scoreMaximum)),
+                Number(style.BlobMinimumAverageAttackers),
+                Number(style.FleetMinimumAverageAttackers - 1)),
+            StyleGang = Format(
+                UiText.ShortcutsStyleSizeGang,
+                Number(GangMinimumAttackers),
+                Number(style.BlobMinimumAverageAttackers - 1)),
+            ThreatIntro = UiText.ShortcutsThreatIntro,
             ThreatNone = UiText.ShortcutsThreatNone,
-            ThreatLow = BandLine(UiText.ShortcutsThreatLow, threatBands, 0),
-            ThreatMedium = BandLine(UiText.ShortcutsThreatMedium, threatBands, 1),
-            ThreatHigh = BandLine(UiText.ShortcutsThreatHigh, threatBands, 2),
-            ThreatVeryHigh = BandLine(UiText.ShortcutsThreatVeryHigh, threatBands, 3),
-            ThreatExtreme = BandLine(UiText.ShortcutsThreatExtreme, threatBands, 4),
+            ThreatLow = UiText.ShortcutsThreatLow,
+            ThreatMedium = UiText.ShortcutsThreatMedium,
+            ThreatHigh = UiText.ShortcutsThreatHigh,
+            ThreatVeryHigh = UiText.ShortcutsThreatVeryHigh,
+            ThreatExtreme = UiText.ShortcutsThreatExtreme,
             RelationshipIntro = UiText.ShortcutsRelationshipIntro,
-            RelationshipLow = BandLine(UiText.ShortcutsRelationshipLow, relationshipBands, 0),
-            RelationshipMedium = BandLine(UiText.ShortcutsRelationshipMedium, relationshipBands, 1),
-            RelationshipHigh = BandLine(UiText.ShortcutsRelationshipHigh, relationshipBands, 2),
+            RelationshipShown = UiText.ShortcutsRelationshipShown,
+            RelationshipNumber = UiText.ShortcutsRelationshipNumber,
+            RelationshipLow = UiText.ShortcutsRelationshipLow,
+            RelationshipMedium = UiText.ShortcutsRelationshipMedium,
+            RelationshipHigh = UiText.ShortcutsRelationshipHigh,
             GroupIntro = UiText.ShortcutsGroupIntro,
             GroupDirect = UiText.ShortcutsGroupDirect,
             GroupChain = UiText.ShortcutsGroupChain,
@@ -110,16 +119,6 @@ public sealed class F1HelpContent
                 new F1ShortcutEntry(UiText.ShortcutsKeyQuit, UiText.ShortcutsActionQuit)
             })
     };
-
-    private static string BandLine(string template, IReadOnlyList<ThreatBandSetting> bands, int index) =>
-        index < bands.Count
-            ? Format(template, Number(bands[index].MinimumScore), Number(bands[index].MaximumScore))
-            : Format(template, string.Empty, string.Empty);
-
-    private static string BandLine(string template, IReadOnlyList<RelationshipConfidenceBandSetting> bands, int index) =>
-        index < bands.Count
-            ? Format(template, Number(bands[index].MinimumScore), Number(bands[index].MaximumScore))
-            : Format(template, string.Empty, string.Empty);
 
     private static string Format(string template, params object[] arguments) =>
         string.Format(CultureInfo.InvariantCulture, template, arguments);
