@@ -56,7 +56,7 @@ What to expect:
 
 ![The grid columns](images/06-grid-columns.png)
 
-Columns can be sorted (Left-Click), sized, moved (Click-Drag), hidden (via Right-Click). To Unhide see ***Menu-Columns***.
+Columns can be sorted (*Left-Click*), sized, moved (*Click-Drag*), hidden (*Right-Click*). To Unhide see ***Menu-Columns***.
 
 | Column | What it shows |
 | --- | --- |
@@ -129,13 +129,13 @@ The Top half provides detailed statistics for the Pilot whilst the bottom descri
 - A Kill will show what they killed, with what ship/weapon, and how many attackers involved.
 - A Loss will show what ship they lost.
 
-Double-click a Pilot cell to open the pilot's zKillboard page in your browser; nothing opens for a pilot that could not be resolved. With Always on top on, the browser may open beneath KillRight.
+Double-click a Pilot cell to open the pilot's zKillboard page in your browser.
 
 ## Filters
 
 ![A grid with an Ignore and a Filter applied](images/09-filtered-grid.png)
 
-Filters change what the grid shows. They never change the scan, they are temporary, and they are never saved.
+You can activate grid filters to limit what you see:
 
 - **Ignore:** right-click a Corporation, Alliance, FW or Style cell and choose Ignore to hide every row with that value.
 - **Filter to:** the same menu. Choose Filter to to show only rows with that value.
