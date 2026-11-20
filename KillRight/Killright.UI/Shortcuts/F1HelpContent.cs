@@ -87,7 +87,7 @@ public sealed class F1HelpContent
             RelationshipShown = UiText.ShortcutsRelationshipShown,
             RelationshipNumber = UiText.ShortcutsRelationshipNumber,
             RelationshipNumberCode = UiText.ShortcutsRelationshipNumberCode,
-            RelationshipLow =UiText.ShortcutsRelationshipLow,
+            RelationshipLow = UiText.ShortcutsRelationshipLow,
             RelationshipMedium = UiText.ShortcutsRelationshipMedium,
             RelationshipHigh = UiText.ShortcutsRelationshipHigh,
             GroupIntro = UiText.ShortcutsGroupIntro,
