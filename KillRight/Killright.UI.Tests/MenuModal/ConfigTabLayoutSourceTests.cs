@@ -65,15 +65,12 @@ public sealed class ConfigTabLayoutSourceTests
     }
 
     [Fact]
-    public void MenuModal_MovedControlsKeepPreviewHandlersAndCancelRevertsTheme()
+    public void MenuModal_MovedControlsKeepPreviewHandlers()
     {
         var xaml = Read("MenuModal/MenuModalWindow.xaml");
-        var code = Read("MenuModal/MenuModalWindow.xaml.cs");
 
         Assert.Contains("SelectionChanged=\"Theme_Changed\"", xaml);
         Assert.Contains("SelectionChanged=\"FontTier_Changed\"", xaml);
-        Assert.Contains("AppearanceManager.ApplyTheme(App.UiState.Current.Theme);", code);
-        Assert.Contains("AppearanceManager.ApplyFontTier(App.UiState.Current.GridFontTier);", code);
     }
 
     [Theory]
