@@ -22,13 +22,17 @@ public sealed class WorkStream17IntegrationTests
     {
         Sta.Run(() =>
         {
-            UseRealSettings();
-            AppearanceManager.ApplyTheme(theme);
-
-            var window = new ShortcutsWindow();
+            var previousSettings = App.Settings;
+            var previousTheme = AppearanceManager.ResolvedTheme;
+            ShortcutsWindow? window = null;
 
             try
             {
+                UseRealSettings();
+                AppearanceManager.ApplyTheme(theme);
+
+                window = new ShortcutsWindow();
+
                 var settings = App.Settings.Window.F1;
 
                 Assert.Equal(settings.Width, window.Width);
@@ -59,7 +63,9 @@ public sealed class WorkStream17IntegrationTests
             }
             finally
             {
-                window.Close();
+                window?.Close();
+                AppearanceManager.ApplyTheme(previousTheme);
+                SetAppSettings(previousSettings);
             }
         });
     }
@@ -103,15 +109,44 @@ public sealed class WorkStream17IntegrationTests
     public void Grid_HasBoldHeaders_AGroupColumnThatDoesNotSort_AndTheHoldHandlerOnThePilotCell()
     {
         var xaml = ReadUiFile("MainWindow.xaml");
-        var code = ReadUiFile("MainWindow.xaml.cs");
 
         Assert.Matches(new Regex("x:Key=\"ColumnHeaderStyle\"[^>]*>(?:(?!</Style>).)*FontWeight\" Value=\"Bold\"", RegexOptions.Singleline), xaml);
         Assert.Matches("ColumnGroup[^>]*CanUserSort=\"False\"", xaml);
         Assert.DoesNotMatch("ColumnGroup[^>]*HeaderStyle=", xaml);
         Assert.Contains("PilotGrid_PreviewMouseLeftButtonDown", xaml);
-        Assert.Contains("_hold.ToggleHold(row)", code);
-        Assert.Contains("_hold.ReleaseHold()", code);
-        Assert.Contains("_hold.Reset()", code);
+    }
+
+    [Fact]
+    public void PilotHold_TogglesOnAndOffForTheSamePilot_ReleaseAndResetClearIt_AndAPilotWithoutAnIdCannotBeHeld()
+    {
+        var state = new PilotHoldState();
+        var pilot = new PilotReportRow { CharacterId = 1 };
+        var unresolved = new PilotReportRow { CharacterId = null };
+
+        Assert.True(state.ToggleHold(pilot));
+        Assert.Same(pilot, state.Held);
+        Assert.Same(pilot, state.HighlightPilot);
+
+        Assert.False(state.ToggleHold(pilot));
+        Assert.Null(state.Held);
+
+        Assert.False(state.ToggleHold(unresolved));
+        Assert.Null(state.Held);
+
+        state.ToggleHold(pilot);
+        state.ReleaseHold();
+
+        Assert.Null(state.Held);
+
+        state.ToggleHold(pilot);
+        state.Hover(unresolved);
+        state.SetFiltered(unresolved);
+        state.Reset();
+
+        Assert.Null(state.Held);
+        Assert.Null(state.Hovered);
+        Assert.Null(state.Filtered);
+        Assert.Null(state.RelationshipPilot);
     }
 
     [Fact]
@@ -151,9 +186,11 @@ public sealed class WorkStream17IntegrationTests
 
     private static void UseRealSettings()
     {
-        var settings = ApplicationSettingsLoader.Load(ApplicationSettingsLoader.GetDefaultSettingsPath()).Settings!;
-        typeof(App).GetProperty(nameof(App.Settings), BindingFlags.Public | BindingFlags.Static)!.GetSetMethod(nonPublic: true)!.Invoke(null, new object[] { settings });
+        SetAppSettings(ApplicationSettingsLoader.Load(ApplicationSettingsLoader.GetDefaultSettingsPath()).Settings!);
     }
+
+    private static void SetAppSettings(ApplicationSettings? settings) =>
+        typeof(App).GetProperty(nameof(App.Settings), BindingFlags.Public | BindingFlags.Static)!.GetSetMethod(nonPublic: true)!.Invoke(null, new object?[] { settings });
 
     private static SettingsLoadResult LoadJson(string json)
     {
