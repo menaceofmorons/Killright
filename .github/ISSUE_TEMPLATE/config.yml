@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and ideas
+    url: https://github.com/menaceofmorons/Killright/discussions
+    about: Ask a question or talk through an idea in Discussions.
+  - name: User guide
+    url: https://github.com/menaceofmorons/Killright/blob/main/Docs/User-Guide.md
+    about: Read the user guide before you open an issue.
