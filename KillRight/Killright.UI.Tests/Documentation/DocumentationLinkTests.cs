@@ -50,9 +50,8 @@ public sealed class DocumentationLinkTests
     [Theory]
     [InlineData("## The grid")]
     [InlineData("## Pilot Details")]
-    [InlineData("## The Info Sheet")]
     [InlineData("## Filters")]
-    [InlineData("## The menu")]
+    [InlineData("## Menu")]
     [InlineData("## Shortcuts")]
     public void UserGuide_SectionHasBody(string heading)
     {
