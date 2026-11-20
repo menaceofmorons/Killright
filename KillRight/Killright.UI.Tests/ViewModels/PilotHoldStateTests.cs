@@ -119,4 +119,19 @@ public sealed class PilotHoldStateTests
         Assert.Same(held, state.RelationshipPilot);
         Assert.Same(held, state.HighlightPilot);
     }
+
+    [Fact]
+    public void HoverUnderPilotFilter_FilteredPilotKeepsRelationship_HighlightStaysOff()
+    {
+        var state = new PilotHoldState();
+        var filtered = Pilot(3);
+        state.SetFiltered(filtered);
+
+        state.Hover(Pilot(2));
+
+        Assert.NotNull(state.Hovered);
+        Assert.Same(filtered, state.Filtered);
+        Assert.Same(filtered, state.RelationshipPilot);
+        Assert.Null(state.HighlightPilot);
+    }
 }
