@@ -13,6 +13,13 @@ using Xunit;
 
 namespace Killright.UI.Tests;
 
+[CollectionDefinition(SharedApplicationResourcesCollection.Name, DisableParallelization = true)]
+public sealed class SharedApplicationResourcesCollection
+{
+    public const string Name = "SharedApplicationResources";
+}
+
+[Collection(SharedApplicationResourcesCollection.Name)]
 public sealed class WorkStream17IntegrationTests
 {
     [Theory]
@@ -24,6 +31,7 @@ public sealed class WorkStream17IntegrationTests
         {
             var previousSettings = App.Settings;
             var previousTheme = AppearanceManager.ResolvedTheme;
+            var previousDictionaries = Application.Current.Resources.MergedDictionaries.ToArray();
             ShortcutsWindow? window = null;
 
             try
@@ -66,6 +74,12 @@ public sealed class WorkStream17IntegrationTests
                 window?.Close();
                 AppearanceManager.ApplyTheme(previousTheme);
                 SetAppSettings(previousSettings);
+
+                var merged = Application.Current.Resources.MergedDictionaries;
+                merged.Clear();
+
+                foreach (var dictionary in previousDictionaries)
+                    merged.Add(dictionary);
             }
         });
     }
