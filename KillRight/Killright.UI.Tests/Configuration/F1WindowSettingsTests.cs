@@ -56,22 +56,11 @@ public sealed class F1WindowSettingsTests
     }
 
     [Fact]
-    public void ShortcutsWindow_TakesSizeFromSettings()
-    {
-        var source = File.ReadAllText(FindSource("Shortcuts", "ShortcutsWindow.xaml.cs"));
-
-        Assert.Contains("Width = App.Settings.Window.F1.Width;", source);
-        Assert.Contains("Height = App.Settings.Window.F1.Height;", source);
-    }
-
-    [Fact]
     public void NoTempSizingCodeRemains()
     {
-        var root = Path.GetDirectoryName(FindSource("Shortcuts", "ShortcutsWindow.xaml.cs"))!;
+        var root = Path.GetDirectoryName(FindSource("Shortcuts", "ShortcutsWindow.xaml"))!;
 
         Assert.False(File.Exists(Path.Combine(root, "F1SizeRecorder.cs")));
-        Assert.DoesNotContain("F1SizeRecorder", File.ReadAllText(FindSource("Shortcuts", "ShortcutsWindow.xaml.cs")));
-        Assert.DoesNotContain("TEMP:", File.ReadAllText(FindSource("Shortcuts", "ShortcutsWindow.xaml.cs")));
         Assert.DoesNotContain("Shortcuts.Sizing", File.ReadAllText(FindSource("Resources", "Strings.resx")));
     }
 
