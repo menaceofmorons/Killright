@@ -32,6 +32,40 @@ public sealed class ApplicationSettings
     public NetworkSettings Network { get; init; } = new();
 
     public DatabaseSettings Database { get; init; } = new();
+
+    public WindowSettings Window { get; init; } = new();
+}
+
+public sealed record WindowSettings
+{
+    public F1WindowSettings F1 { get; init; } = new();
+
+    internal WindowSettings Normalized(Action<string> log)
+    {
+        return new WindowSettings { F1 = (F1 ?? new F1WindowSettings()).Normalized(log) };
+    }
+}
+
+public sealed record F1WindowSettings
+{
+    public const double DefaultWidth = 425;
+
+    public const double DefaultHeight = 424;
+
+    public const double MinimumSize = 60;
+
+    public double Width { get; init; } = DefaultWidth;
+
+    public double Height { get; init; } = DefaultHeight;
+
+    internal F1WindowSettings Normalized(Action<string> log)
+    {
+        return new F1WindowSettings
+        {
+            Width = SettingsAdjustment.SizeOrDefault("window.f1.width", Width, MinimumSize, DefaultWidth, log),
+            Height = SettingsAdjustment.SizeOrDefault("window.f1.height", Height, MinimumSize, DefaultHeight, log)
+        };
+    }
 }
 
 public sealed class ThreatBandSetting

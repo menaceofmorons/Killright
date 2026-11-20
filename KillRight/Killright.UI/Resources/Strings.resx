@@ -112,7 +112,6 @@
 
   <data name="Window.Title.Shortcuts" xml:space="preserve"><value>KillRight — Help</value></data>
   <data name="Shortcuts.Button.Close" xml:space="preserve"><value>Close</value></data>
-  <data name="Shortcuts.Sizing.WriteFailed" xml:space="preserve"><value>The window size could not be recorded: {0}</value></data>
   <data name="Shortcuts.Tab.Shortcuts" xml:space="preserve"><value>Shortcuts</value></data>
   <data name="Shortcuts.Key.OpenMenu" xml:space="preserve"><value>Ctrl+M</value></data>
   <data name="Shortcuts.Action.OpenMenu" xml:space="preserve"><value>Open menu</value></data>
