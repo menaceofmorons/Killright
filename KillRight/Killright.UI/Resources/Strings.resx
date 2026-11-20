@@ -135,14 +135,13 @@
   <data name="Shortcuts.StyleWord.Inactive" xml:space="preserve"><value>Inactive</value></data>
   <data name="Shortcuts.StyleCode.Solo" xml:space="preserve"><value>S</value></data>
   <data name="Shortcuts.StyleWord.Solo" xml:space="preserve"><value>Solo</value></data>
-  <data name="Shortcuts.StyleCode.Unknown" xml:space="preserve"><value>U</value></data>
-  <data name="Shortcuts.StyleWord.Unknown" xml:space="preserve"><value>Unknown</value></data>
   <data name="Shortcuts.StyleCode.Victim" xml:space="preserve"><value>V</value></data>
   <data name="Shortcuts.StyleWord.Victim" xml:space="preserve"><value>Victim</value></data>
   <data name="Shortcuts.Suffix.BeginnerCode" xml:space="preserve"><value>b</value></data>
-  <data name="Shortcuts.Suffix.BeginnerDescription" xml:space="preserve"><value>Suffix, indicates a Beginner in the main Style (e.g. Sb means Solo Beginner).</value></data>
+  <data name="Shortcuts.Suffix.Heading" xml:space="preserve"><value>Suffix</value></data>
+  <data name="Shortcuts.Suffix.BeginnerDescription" xml:space="preserve"><value>- Beginner</value></data>
   <data name="Shortcuts.Suffix.PodderCode" xml:space="preserve"><value>x</value></data>
-  <data name="Shortcuts.Suffix.PodderDescription" xml:space="preserve"><value>Suffix, indicates a podder (e.g. Sx means Solo podder).</value></data>
+  <data name="Shortcuts.Suffix.PodderDescription" xml:space="preserve"><value>- Podder</value></data>
   <data name="Shortcuts.Tab.Threat" xml:space="preserve"><value>Threat</value></data>
   <data name="Shortcuts.Tab.Relationship" xml:space="preserve"><value>Relationship</value></data>
   <data name="Shortcuts.Tab.Group" xml:space="preserve"><value>Group</value></data>
@@ -151,20 +150,22 @@
   <data name="Shortcuts.Group.Filters" xml:space="preserve"><value>Filters</value></data>
   <data name="Shortcuts.Group.General" xml:space="preserve"><value>General</value></data>
   <data name="Shortcuts.NumberFormat" xml:space="preserve"><value>0.##</value></data>
-  <data name="Shortcuts.StyleSize.Gang" xml:space="preserve"><value>Gang: an average of fewer than {0} attackers per kill.</value></data>
-  <data name="Shortcuts.StyleSize.Blob" xml:space="preserve"><value>Blob: an average of {0} to fewer than {1} attackers per kill.</value></data>
-  <data name="Shortcuts.StyleSize.Fleet" xml:space="preserve"><value>Fleet: an average of {0} or more attackers per kill.</value></data>
-  <data name="Shortcuts.Threat.Intro" xml:space="preserve"><value>Threat is a score from 0 to {0} for how dangerous a pilot is likely to be. It comes from kill history, how well the pilot survives, recent activity and security status. The label groups the score into a band.</value></data>
-  <data name="Shortcuts.Threat.None" xml:space="preserve"><value>None (0): no kill history, or only losses or inactivity.</value></data>
-  <data name="Shortcuts.Threat.Low" xml:space="preserve"><value>Low ({0}-{1}): little kill history, or an inactive or mostly victim record with a trace of recent activity.</value></data>
-  <data name="Shortcuts.Threat.Medium" xml:space="preserve"><value>Medium ({0}-{1}): some kills, or an inactive or victim record with real recent activity (such pilots never score higher).</value></data>
-  <data name="Shortcuts.Threat.High" xml:space="preserve"><value>High ({0}-{1}): an established killer with a solid record and steady activity.</value></data>
-  <data name="Shortcuts.Threat.VeryHigh" xml:space="preserve"><value>Very High ({0}-{1}): many kills with few losses, solo or in groups, and active recently.</value></data>
-  <data name="Shortcuts.Threat.Extreme" xml:space="preserve"><value>Extreme ({0}-{1}): a heavy kill history that rarely loses ships, and active right now.</value></data>
-  <data name="Shortcuts.Relationship.Intro" xml:space="preserve"><value>The Relationship number scores how strongly a pilot has flown with the pilot you hold, hover or filter on, counted from shared kills. The Low, Medium or High square beside it shows how far to trust that score.</value></data>
-  <data name="Shortcuts.Relationship.Low" xml:space="preserve"><value>Low ({0}-{1}): little evidence; the link may be chance.</value></data>
-  <data name="Shortcuts.Relationship.Medium" xml:space="preserve"><value>Medium ({0}-{1}): a believable link, not yet certain.</value></data>
-  <data name="Shortcuts.Relationship.High" xml:space="preserve"><value>High ({0}-{1}): strong evidence that the two fly together.</value></data>
+  <data name="Shortcuts.StyleSize.Fleet" xml:space="preserve"><value>Fleet: {0}+ Attackers</value></data>
+  <data name="Shortcuts.StyleSize.Blob" xml:space="preserve"><value>Blob: {0}-{1} Attackers</value></data>
+  <data name="Shortcuts.StyleSize.Gang" xml:space="preserve"><value>Gang: {0}-{1} Attackers</value></data>
+  <data name="Shortcuts.Threat.Intro" xml:space="preserve"><value>Threat is how dangerous a pilot is likely to be. The band is calculated from kill history, kill to loss ratio, recent activity and security status.</value></data>
+  <data name="Shortcuts.Threat.None" xml:space="preserve"><value>None: No kills on record, or only losses or inactivity</value></data>
+  <data name="Shortcuts.Threat.Low" xml:space="preserve"><value>Low: A few kills; or normally victim/inactive with recent kills</value></data>
+  <data name="Shortcuts.Threat.Medium" xml:space="preserve"><value>Medium: A real kill record: can be dangerous.</value></data>
+  <data name="Shortcuts.Threat.High" xml:space="preserve"><value>High: An established killer with a solid record.</value></data>
+  <data name="Shortcuts.Threat.VeryHigh" xml:space="preserve"><value>Very High: Many kills and few losses, solo or in groups.</value></data>
+  <data name="Shortcuts.Threat.Extreme" xml:space="preserve"><value>Extreme: The heaviest kill history; rarely loses a ship.</value></data>
+  <data name="Shortcuts.Relationship.Intro" xml:space="preserve"><value>Relationship looks at the number of shared kills and the confidence in those kills being the result of cooperation and not just coincidence.</value></data>
+  <data name="Shortcuts.Relationship.Shown" xml:space="preserve"><value>## {Band Graph}</value></data>
+  <data name="Shortcuts.Relationship.Number" xml:space="preserve"><value>##: the higher the number the more shared kills between the Pilots</value></data>
+  <data name="Shortcuts.Relationship.Low" xml:space="preserve"><value>Low: Weak connection, kills in mainly large groups</value></data>
+  <data name="Shortcuts.Relationship.Medium" xml:space="preserve"><value>Medium: A believable link, evidence of close cooperation</value></data>
+  <data name="Shortcuts.Relationship.High" xml:space="preserve"><value>High: Strong connection, they have a real history</value></data>
   <data name="Shortcuts.Group.Intro" xml:space="preserve"><value>The Group column counts the other pilots in this scan a pilot is linked to, shown as Direct/Chain, for example 3/-.</value></data>
   <data name="Shortcuts.Group.Direct" xml:space="preserve"><value>Direct: pilots who appear on the same kills as this pilot.</value></data>
   <data name="Shortcuts.Group.Chain" xml:space="preserve"><value>Chain: pilots linked only through exactly one other pilot, who need not be in the scan.</value></data>

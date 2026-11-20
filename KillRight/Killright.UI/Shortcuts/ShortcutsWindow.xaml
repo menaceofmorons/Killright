@@ -55,28 +55,31 @@
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
                     <StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                            <TextBlock Text="{x:Static resources:UiText.ShortcutsStyleCodeBlob}" FontWeight="Bold" Width="24" />
-                            <TextBlock Text="{Binding StyleBlob}" TextWrapping="Wrap" Width="320" />
-                        </StackPanel>
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                             <TextBlock Text="{x:Static resources:UiText.ShortcutsStyleCodeFleet}" FontWeight="Bold" Width="24" />
                             <TextBlock Text="{Binding StyleFleet}" TextWrapping="Wrap" Width="320" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                            <TextBlock Text="{x:Static resources:UiText.ShortcutsStyleCodeBlob}" FontWeight="Bold" Width="24" />
+                            <TextBlock Text="{Binding StyleBlob}" TextWrapping="Wrap" Width="320" />
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                             <TextBlock Text="{x:Static resources:UiText.ShortcutsStyleCodeGang}" FontWeight="Bold" Width="24" />
                             <TextBlock Text="{Binding StyleGang}" TextWrapping="Wrap" Width="320" />
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                            <TextBlock Text="{x:Static resources:UiText.ShortcutsStyleCodeInactive}" FontWeight="Bold" Width="24" />
-                            <TextBlock Text="{x:Static resources:UiText.ShortcutsStyleWordInactive}" />
-                        </StackPanel>
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                             <TextBlock Text="{x:Static resources:UiText.ShortcutsStyleCodeSolo}" FontWeight="Bold" Width="24" />
                             <TextBlock Text="{x:Static resources:UiText.ShortcutsStyleWordSolo}" />
                         </StackPanel>
+                        <Rectangle Height="1"
+                                   Width="160"
+                                   Margin="0,12,0,8"
+                                   HorizontalAlignment="Left"
+                                   Stroke="Gray"
+                                   StrokeThickness="1"
+                                   StrokeDashArray="2,2" />
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                            <TextBlock Text="{x:Static resources:UiText.ShortcutsStyleCodeUnknown}" FontWeight="Bold" Width="24" />
-                            <TextBlock Text="{x:Static resources:UiText.ShortcutsStyleWordUnknown}" />
+                            <TextBlock Text="{x:Static resources:UiText.ShortcutsStyleCodeInactive}" FontWeight="Bold" Width="24" />
+                            <TextBlock Text="{x:Static resources:UiText.ShortcutsStyleWordInactive}" />
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                             <TextBlock Text="{x:Static resources:UiText.ShortcutsStyleCodeVictim}" FontWeight="Bold" Width="24" />
@@ -89,6 +92,7 @@
                                    Stroke="Gray"
                                    StrokeThickness="1"
                                    StrokeDashArray="2,2" />
+                        <TextBlock Text="{x:Static resources:UiText.ShortcutsSuffixHeading}" FontWeight="Bold" Margin="0,0,0,4" />
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                             <TextBlock Text="{x:Static resources:UiText.ShortcutsSuffixBeginnerCode}" FontWeight="Bold" Width="24" />
                             <TextBlock Text="{x:Static resources:UiText.ShortcutsSuffixBeginnerDescription}" TextWrapping="Wrap" Width="320" />
@@ -139,6 +143,8 @@
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
                     <StackPanel>
                         <TextBlock Text="{Binding RelationshipIntro}" Style="{StaticResource HelpParagraph}" />
+                        <TextBlock Text="{Binding RelationshipShown}" Style="{StaticResource HelpParagraph}" />
+                        <TextBlock Text="{Binding RelationshipNumber}" Style="{StaticResource HelpParagraph}" />
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                             <controls:ConfidenceGlyph Confidence="1" Margin="0,0,10,0" VerticalAlignment="Top" />
                             <TextBlock Text="{Binding RelationshipLow}" TextWrapping="Wrap" Width="320" />

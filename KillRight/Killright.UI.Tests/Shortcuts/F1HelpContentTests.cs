@@ -23,9 +23,9 @@ public sealed class F1HelpContentTests
 
         var content = Create(settings);
 
-        Assert.Contains("fewer than 6", content.StyleGang);
-        Assert.Contains("6 to fewer than 14", content.StyleBlob);
-        Assert.Contains("14 or more", content.StyleFleet);
+        Assert.Equal("Fleet: 14+ Attackers", content.StyleFleet);
+        Assert.Equal("Blob: 6-13 Attackers", content.StyleBlob);
+        Assert.Equal("Gang: 2-5 Attackers", content.StyleGang);
     }
 
     [Fact]
@@ -33,34 +33,47 @@ public sealed class F1HelpContentTests
     {
         var content = Create();
 
-        Assert.Contains("fewer than 5", content.StyleGang);
-        Assert.Contains("5 to fewer than 11", content.StyleBlob);
-        Assert.Contains("11 or more", content.StyleFleet);
+        Assert.Equal("Fleet: 11+ Attackers", content.StyleFleet);
+        Assert.Equal("Blob: 5-10 Attackers", content.StyleBlob);
+        Assert.Equal("Gang: 2-4 Attackers", content.StyleGang);
     }
 
     [Fact]
-    public void ThreatExplanation_ShowsEveryBandRangeFromTheSettings()
+    public void ThreatExplanation_HasTheBandTextWithNoNumbers()
     {
         var content = Create();
 
-        Assert.Contains("0 to 100", content.ThreatIntro);
-        Assert.Contains("(1-20)", content.ThreatLow);
-        Assert.Contains("(21-40)", content.ThreatMedium);
-        Assert.Contains("(41-60)", content.ThreatHigh);
-        Assert.Contains("(61-80)", content.ThreatVeryHigh);
-        Assert.Contains("(81-100)", content.ThreatExtreme);
-        Assert.False(string.IsNullOrWhiteSpace(content.ThreatNone));
+        Assert.Equal("Threat is how dangerous a pilot is likely to be. The band is calculated from kill history, kill to loss ratio, recent activity and security status.", content.ThreatIntro);
+        Assert.Equal("None: No kills on record, or only losses or inactivity", content.ThreatNone);
+        Assert.Equal("Low: A few kills; or normally victim/inactive with recent kills", content.ThreatLow);
+        Assert.Equal("Medium: A real kill record: can be dangerous.", content.ThreatMedium);
+        Assert.Equal("High: An established killer with a solid record.", content.ThreatHigh);
+        Assert.Equal("Very High: Many kills and few losses, solo or in groups.", content.ThreatVeryHigh);
+        Assert.Equal("Extreme: The heaviest kill history; rarely loses a ship.", content.ThreatExtreme);
+
+        var all = new[] { content.ThreatIntro, content.ThreatNone, content.ThreatLow, content.ThreatMedium, content.ThreatHigh, content.ThreatVeryHigh, content.ThreatExtreme };
+        Assert.All(all, text => Assert.DoesNotMatch("[0-9]", text));
     }
 
     [Fact]
-    public void RelationshipExplanation_RelatesTheNumberToTheBandLabels()
+    public void RelationshipExplanation_HasTheBandTextAndTheLiteralShownLine()
     {
         var content = Create();
 
-        Assert.False(string.IsNullOrWhiteSpace(content.RelationshipIntro));
-        Assert.StartsWith("Low (1-25)", content.RelationshipLow);
-        Assert.StartsWith("Medium (26-75)", content.RelationshipMedium);
-        Assert.StartsWith("High (76-100)", content.RelationshipHigh);
+        Assert.Equal("Relationship looks at the number of shared kills and the confidence in those kills being the result of cooperation and not just coincidence.", content.RelationshipIntro);
+        Assert.Equal("## {Band Graph}", content.RelationshipShown);
+        Assert.Equal("##: the higher the number the more shared kills between the Pilots", content.RelationshipNumber);
+        Assert.Equal("Low: Weak connection, kills in mainly large groups", content.RelationshipLow);
+        Assert.Equal("Medium: A believable link, evidence of close cooperation", content.RelationshipMedium);
+        Assert.Equal("High: Strong connection, they have a real history", content.RelationshipHigh);
+    }
+
+    [Fact]
+    public void StyleTab_SuffixTextMatches()
+    {
+        Assert.Equal("Suffix", UiText.ShortcutsSuffixHeading);
+        Assert.Equal("- Beginner", UiText.ShortcutsSuffixBeginnerDescription);
+        Assert.Equal("- Podder", UiText.ShortcutsSuffixPodderDescription);
     }
 
     [Fact]

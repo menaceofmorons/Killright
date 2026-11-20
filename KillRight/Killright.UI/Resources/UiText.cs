@@ -120,10 +120,9 @@ public static class UiText
     public static string ShortcutsStyleWordInactive => Strings.Get("Shortcuts.StyleWord.Inactive");
     public static string ShortcutsStyleCodeSolo => Strings.Get("Shortcuts.StyleCode.Solo");
     public static string ShortcutsStyleWordSolo => Strings.Get("Shortcuts.StyleWord.Solo");
-    public static string ShortcutsStyleCodeUnknown => Strings.Get("Shortcuts.StyleCode.Unknown");
-    public static string ShortcutsStyleWordUnknown => Strings.Get("Shortcuts.StyleWord.Unknown");
     public static string ShortcutsStyleCodeVictim => Strings.Get("Shortcuts.StyleCode.Victim");
     public static string ShortcutsStyleWordVictim => Strings.Get("Shortcuts.StyleWord.Victim");
+    public static string ShortcutsSuffixHeading => Strings.Get("Shortcuts.Suffix.Heading");
     public static string ShortcutsSuffixBeginnerCode => Strings.Get("Shortcuts.Suffix.BeginnerCode");
     public static string ShortcutsSuffixBeginnerDescription => Strings.Get("Shortcuts.Suffix.BeginnerDescription");
     public static string ShortcutsSuffixPodderCode => Strings.Get("Shortcuts.Suffix.PodderCode");
@@ -146,6 +145,8 @@ public static class UiText
     public static string ShortcutsThreatHigh => Strings.Get("Shortcuts.Threat.High");
     public static string ShortcutsThreatVeryHigh => Strings.Get("Shortcuts.Threat.VeryHigh");
     public static string ShortcutsThreatExtreme => Strings.Get("Shortcuts.Threat.Extreme");
+    public static string ShortcutsRelationshipShown => Strings.Get("Shortcuts.Relationship.Shown");
+    public static string ShortcutsRelationshipNumber => Strings.Get("Shortcuts.Relationship.Number");
     public static string ShortcutsRelationshipIntro => Strings.Get("Shortcuts.Relationship.Intro");
     public static string ShortcutsRelationshipLow => Strings.Get("Shortcuts.Relationship.Low");
     public static string ShortcutsRelationshipMedium => Strings.Get("Shortcuts.Relationship.Medium");
