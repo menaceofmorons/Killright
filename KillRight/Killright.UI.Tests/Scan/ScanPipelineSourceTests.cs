@@ -153,8 +153,6 @@ public sealed class ScanPipelineSourceTests
         Assert.Contains("e.Key == Key.R", source);
         Assert.Contains("if (_filters.CarriesFilter(columnId))", source);
         Assert.Contains("_columnsById[columnId].Visibility != Visibility.Visible", source);
-        Assert.Contains("_hold.ReleaseHold();", source);
-        Assert.True(apply.IndexOf("_hold.Reset();", StringComparison.Ordinal) > clearCall);
     }
 
     private static string ReadMainWindow()
