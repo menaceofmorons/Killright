@@ -109,7 +109,7 @@ A dialog titled "KillRight cannot start" appears when startup fails, for example
 
 ### The log file
 
-The log file records what KillRight did and why something failed. Look in it when the startup dialog appears, when reference data will not load or when a scan does not behave as you expect.
+The log file is a plain text file named `killright-engine.log`. It sits in the KillRight folder inside your local application data folder, which is `%LOCALAPPDATA%\KillRight`. To open it, press Win+R, enter `%LOCALAPPDATA%\KillRight` and select OK, then open the file in any text editor. It records why something failed, so look in it when the startup dialog appears.
 
 ### Backups and restore
 
