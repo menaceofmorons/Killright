@@ -108,7 +108,7 @@ public sealed class DocumentationLinkTests
 
     private static string ReadmePath() => Path.Combine(RepositoryRoot(), "README.md");
 
-    private static string RepositoryRoot()
+    internal static string RepositoryRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Docs", "User-Guide.md")))
