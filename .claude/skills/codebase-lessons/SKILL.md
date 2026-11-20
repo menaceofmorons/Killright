@@ -43,3 +43,4 @@ metadata:
 - Tests that call `AppearanceManager.ApplyTheme` or `ApplyNewPilotColor` mutate the shared `Application.Resources`; put them in a serialised collection (`DisableParallelization = true`) and restore merged dictionaries, or theme-brush tests fail intermittently (WS-1.7)
 - A new UI test never asserts on `.xaml.cs` source text; put the logic in a testable class and assert its behaviour (WS-1.7)
 - A modal startup dialog blocks process-exit integration tests; the test must find and dismiss it (user32 `EnumWindows`) before asserting exit (WS-1.7)
+- An unshown WPF window can be laid out in tests by measuring and arranging its content; the custom `TabControl` template has no named content host, so find the row 1 `Border` of its `Grid` (WS-1.8)
