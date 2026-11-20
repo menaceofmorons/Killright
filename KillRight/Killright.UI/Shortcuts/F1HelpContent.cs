@@ -44,6 +44,8 @@ public sealed class F1HelpContent
 
     public string RelationshipNumber { get; private init; } = string.Empty;
 
+    public string RelationshipNumberCode { get; private init; } = string.Empty;
+
     public string RelationshipLow { get; private init; } = string.Empty;
 
     public string RelationshipMedium { get; private init; } = string.Empty;
@@ -84,7 +86,8 @@ public sealed class F1HelpContent
             RelationshipIntro = UiText.ShortcutsRelationshipIntro,
             RelationshipShown = UiText.ShortcutsRelationshipShown,
             RelationshipNumber = UiText.ShortcutsRelationshipNumber,
-            RelationshipLow = UiText.ShortcutsRelationshipLow,
+            RelationshipNumberCode = UiText.ShortcutsRelationshipNumberCode,
+            RelationshipLow =UiText.ShortcutsRelationshipLow,
             RelationshipMedium = UiText.ShortcutsRelationshipMedium,
             RelationshipHigh = UiText.ShortcutsRelationshipHigh,
             GroupIntro = UiText.ShortcutsGroupIntro,

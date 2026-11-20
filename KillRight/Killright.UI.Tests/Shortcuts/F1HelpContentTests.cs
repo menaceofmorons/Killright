@@ -62,9 +62,9 @@ public sealed class F1HelpContentTests
 
         Assert.Equal("Relationship looks at the number of shared kills and the confidence in those kills being the result of cooperation and not just coincidence.", content.RelationshipIntro);
         Assert.Equal("## {Band Graph}", content.RelationshipShown);
-        Assert.Equal("##: the higher the number the more shared kills between the Pilots", content.RelationshipNumber);
+        Assert.Equal("Larger number equals more shared kills", content.RelationshipNumber);
         Assert.Equal("Low: Weak connection, kills in mainly large groups", content.RelationshipLow);
-        Assert.Equal("Medium: A believable link, evidence of close cooperation", content.RelationshipMedium);
+        Assert.Equal("Medium: Likely link, evidence of cooperation", content.RelationshipMedium);
         Assert.Equal("High: Strong connection, they have a real history", content.RelationshipHigh);
     }
 
@@ -72,8 +72,8 @@ public sealed class F1HelpContentTests
     public void StyleTab_SuffixTextMatches()
     {
         Assert.Equal("Suffix", UiText.ShortcutsSuffixHeading);
-        Assert.Equal("- Beginner", UiText.ShortcutsSuffixBeginnerDescription);
-        Assert.Equal("- Podder", UiText.ShortcutsSuffixPodderDescription);
+        Assert.Equal("Beginner", UiText.ShortcutsSuffixBeginnerDescription);
+        Assert.Equal("Podder", UiText.ShortcutsSuffixPodderDescription);
     }
 
     [Fact]

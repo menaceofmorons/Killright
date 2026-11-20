@@ -139,9 +139,9 @@
   <data name="Shortcuts.StyleWord.Victim" xml:space="preserve"><value>Victim</value></data>
   <data name="Shortcuts.Suffix.BeginnerCode" xml:space="preserve"><value>b</value></data>
   <data name="Shortcuts.Suffix.Heading" xml:space="preserve"><value>Suffix</value></data>
-  <data name="Shortcuts.Suffix.BeginnerDescription" xml:space="preserve"><value>- Beginner</value></data>
+  <data name="Shortcuts.Suffix.BeginnerDescription" xml:space="preserve"><value>Beginner</value></data>
   <data name="Shortcuts.Suffix.PodderCode" xml:space="preserve"><value>x</value></data>
-  <data name="Shortcuts.Suffix.PodderDescription" xml:space="preserve"><value>- Podder</value></data>
+  <data name="Shortcuts.Suffix.PodderDescription" xml:space="preserve"><value>Podder</value></data>
   <data name="Shortcuts.Tab.Threat" xml:space="preserve"><value>Threat</value></data>
   <data name="Shortcuts.Tab.Relationship" xml:space="preserve"><value>Relationship</value></data>
   <data name="Shortcuts.Tab.Group" xml:space="preserve"><value>Group</value></data>
@@ -162,9 +162,10 @@
   <data name="Shortcuts.Threat.Extreme" xml:space="preserve"><value>Extreme: The heaviest kill history; rarely loses a ship.</value></data>
   <data name="Shortcuts.Relationship.Intro" xml:space="preserve"><value>Relationship looks at the number of shared kills and the confidence in those kills being the result of cooperation and not just coincidence.</value></data>
   <data name="Shortcuts.Relationship.Shown" xml:space="preserve"><value>## {Band Graph}</value></data>
-  <data name="Shortcuts.Relationship.Number" xml:space="preserve"><value>##: the higher the number the more shared kills between the Pilots</value></data>
+  <data name="Shortcuts.Relationship.Number" xml:space="preserve"><value>Larger number equals more shared kills</value></data>
+  <data name="Shortcuts.Relationship.NumberCode" xml:space="preserve"><value>##</value></data>
   <data name="Shortcuts.Relationship.Low" xml:space="preserve"><value>Low: Weak connection, kills in mainly large groups</value></data>
-  <data name="Shortcuts.Relationship.Medium" xml:space="preserve"><value>Medium: A believable link, evidence of close cooperation</value></data>
+  <data name="Shortcuts.Relationship.Medium" xml:space="preserve"><value>Medium: Likely link, evidence of cooperation</value></data>
   <data name="Shortcuts.Relationship.High" xml:space="preserve"><value>High: Strong connection, they have a real history</value></data>
   <data name="Shortcuts.Group.Intro" xml:space="preserve"><value>The Group column counts the other pilots in this scan a pilot is linked to, shown as Direct/Chain, for example 3/-.</value></data>
   <data name="Shortcuts.Group.Direct" xml:space="preserve"><value>Direct: pilots who appear on the same kills as this pilot.</value></data>
