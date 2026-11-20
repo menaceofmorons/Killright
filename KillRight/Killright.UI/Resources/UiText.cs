@@ -147,6 +147,7 @@ public static class UiText
     public static string ShortcutsThreatExtreme => Strings.Get("Shortcuts.Threat.Extreme");
     public static string ShortcutsRelationshipShown => Strings.Get("Shortcuts.Relationship.Shown");
     public static string ShortcutsRelationshipNumber => Strings.Get("Shortcuts.Relationship.Number");
+    public static string ShortcutsRelationshipNumberCode => Strings.Get("Shortcuts.Relationship.NumberCode");
     public static string ShortcutsRelationshipIntro => Strings.Get("Shortcuts.Relationship.Intro");
     public static string ShortcutsRelationshipLow => Strings.Get("Shortcuts.Relationship.Low");
     public static string ShortcutsRelationshipMedium => Strings.Get("Shortcuts.Relationship.Medium");

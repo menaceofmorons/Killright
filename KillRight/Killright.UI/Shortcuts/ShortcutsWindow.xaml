@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:Killright.UI.Controls"
         xmlns:resources="clr-namespace:Killright.UI.Resources"
+        xmlns:shortcuts="clr-namespace:Killright.UI.Shortcuts"
         Title="{x:Static resources:UiText.WindowTitleShortcuts}"
         ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner"
@@ -111,27 +112,27 @@
                         <TextBlock Text="{Binding ThreatIntro}" Style="{StaticResource HelpParagraph}" />
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                             <controls:ThreatGlyph Band="None" Margin="0,0,10,0" VerticalAlignment="Top" />
-                            <TextBlock Text="{Binding ThreatNone}" TextWrapping="Wrap" Width="296" />
+                            <TextBlock shortcuts:HelpLabelText.Text="{Binding ThreatNone}" TextWrapping="Wrap" Width="296" />
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                             <controls:ThreatGlyph Band="1" Margin="0,0,10,0" VerticalAlignment="Top" />
-                            <TextBlock Text="{Binding ThreatLow}" TextWrapping="Wrap" Width="296" />
+                            <TextBlock shortcuts:HelpLabelText.Text="{Binding ThreatLow}" TextWrapping="Wrap" Width="296" />
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                             <controls:ThreatGlyph Band="2" Margin="0,0,10,0" VerticalAlignment="Top" />
-                            <TextBlock Text="{Binding ThreatMedium}" TextWrapping="Wrap" Width="296" />
+                            <TextBlock shortcuts:HelpLabelText.Text="{Binding ThreatMedium}" TextWrapping="Wrap" Width="296" />
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                             <controls:ThreatGlyph Band="3" Margin="0,0,10,0" VerticalAlignment="Top" />
-                            <TextBlock Text="{Binding ThreatHigh}" TextWrapping="Wrap" Width="296" />
+                            <TextBlock shortcuts:HelpLabelText.Text="{Binding ThreatHigh}" TextWrapping="Wrap" Width="296" />
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                             <controls:ThreatGlyph Band="4" Margin="0,0,10,0" VerticalAlignment="Top" />
-                            <TextBlock Text="{Binding ThreatVeryHigh}" TextWrapping="Wrap" Width="296" />
+                            <TextBlock shortcuts:HelpLabelText.Text="{Binding ThreatVeryHigh}" TextWrapping="Wrap" Width="296" />
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                             <controls:ThreatGlyph Band="5" Margin="0,0,10,0" VerticalAlignment="Top" />
-                            <TextBlock Text="{Binding ThreatExtreme}" TextWrapping="Wrap" Width="296" />
+                            <TextBlock shortcuts:HelpLabelText.Text="{Binding ThreatExtreme}" TextWrapping="Wrap" Width="296" />
                         </StackPanel>
                         <StackPanel Orientation="Horizontal">
                             <controls:ThreatGlyph Band="Unk" Margin="0,0,10,0" />
@@ -144,19 +145,22 @@
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="{StaticResource HelpContentInset}">
                         <TextBlock Text="{Binding RelationshipIntro}" Style="{StaticResource HelpParagraph}" />
-                        <TextBlock Text="{Binding RelationshipShown}" Style="{StaticResource HelpParagraph}" />
-                        <TextBlock Text="{Binding RelationshipNumber}" Style="{StaticResource HelpParagraph}" />
+                        <TextBlock Text="{Binding RelationshipShown}" FontStyle="Italic" Style="{StaticResource HelpParagraph}" />
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                            <TextBlock Text="{Binding RelationshipNumberCode}" FontWeight="Bold" Width="22" />
+                            <TextBlock Text="{Binding RelationshipNumber}" TextWrapping="Wrap" Width="296" />
+                        </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                             <controls:ConfidenceGlyph Confidence="1" Margin="0,0,10,0" VerticalAlignment="Top" />
-                            <TextBlock Text="{Binding RelationshipLow}" TextWrapping="Wrap" Width="296" />
+                            <TextBlock shortcuts:HelpLabelText.Text="{Binding RelationshipLow}" TextWrapping="Wrap" Width="296" />
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                             <controls:ConfidenceGlyph Confidence="2" Margin="0,0,10,0" VerticalAlignment="Top" />
-                            <TextBlock Text="{Binding RelationshipMedium}" TextWrapping="Wrap" Width="296" />
+                            <TextBlock shortcuts:HelpLabelText.Text="{Binding RelationshipMedium}" TextWrapping="Wrap" Width="296" />
                         </StackPanel>
                         <StackPanel Orientation="Horizontal">
                             <controls:ConfidenceGlyph Confidence="3" Margin="0,0,10,0" VerticalAlignment="Top" />
-                            <TextBlock Text="{Binding RelationshipHigh}" TextWrapping="Wrap" Width="296" />
+                            <TextBlock shortcuts:HelpLabelText.Text="{Binding RelationshipHigh}" TextWrapping="Wrap" Width="296" />
                         </StackPanel>
                     </StackPanel>
                 </ScrollViewer>
@@ -165,8 +169,8 @@
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="{StaticResource HelpContentInset}">
                         <TextBlock Text="{Binding GroupIntro}" Style="{StaticResource HelpParagraph}" />
-                        <TextBlock Text="{Binding GroupDirect}" Style="{StaticResource HelpParagraph}" />
-                        <TextBlock Text="{Binding GroupChain}" Style="{StaticResource HelpParagraph}" />
+                        <TextBlock shortcuts:HelpLabelText.Text="{Binding GroupDirect}" Style="{StaticResource HelpParagraph}" />
+                        <TextBlock shortcuts:HelpLabelText.Text="{Binding GroupChain}" Style="{StaticResource HelpParagraph}" />
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
