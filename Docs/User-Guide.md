@@ -7,10 +7,11 @@
 - [First run](#first-run)
 - [Scanning](#scanning)
 - [The grid](#the-grid)
-- [Filters and the Ignore List](#filters-and-the-ignore-list)
+- [Pilot Details](#pilot-details)
 - [The Info Sheet](#the-info-sheet)
+- [Filters](#filters)
 - [The menu](#the-menu)
-- [Shortcuts and the F1 help](#shortcuts-and-the-f1-help)
+- [Shortcuts](#shortcuts)
 - [Good to know](#good-to-know)
 - [Troubleshooting](#troubleshooting)
 - [Report a problem](#report-a-problem)
@@ -56,15 +57,13 @@ What to expect:
 
 ![The grid columns](images/06-grid-columns.png)
 
-![Related rows tinted under the mouse](images/07-hover-highlight.png)
-
 Each row is one pilot. Select a column header to sort the grid by that column's value, not by the text shown. The header row is bold.
 
 | Column | What it shows |
 | --- | --- |
-| Threat (header T) | How dangerous the pilot is likely to be, as a glyph. See the Threat glyphs below. |
+| T - Threat | How dangerous the pilot is likely to be, as a glyph. |
 | Pilot | The pilot's name. An italic name means KillRight could not retrieve some of the pilot's data. |
-| Relationship (header R) | How strongly each row is connected to the pilot you hover, hold or filter to, with a confidence square. See Relationship below. |
+| R - Relationship | How strongly each row is connected to the pilot you hover, hold or filter to, with a confidence square. |
 | Style | The pilot's General and Recent Style, separated by a slash, for example `S/F`. |
 | Sec | Security status, shown to one decimal place and cut off, not rounded. A value that cuts to zero shows `0.0`. `Unk` means it could not be retrieved. |
 | Week | Kills this week, then solo kills this week, for example `4/2`. A dash stands for zero on either side, for example `5/-`. |
@@ -74,40 +73,39 @@ Each row is one pilot. Select a column header to sort the grid by that column's 
 | FW | The pilot's faction warfare militia code, followed by `(n)` when two or more scanned pilots are in the same militia. A dash means not enlisted. |
 | Last Kill | How long ago the pilot's last kill was: in hours first (at least `1h`), then in days, then a fixed over-limit text. A dash means no last kill, or the lookup failed. |
 
-Notes is a developer-only column, hidden by default, and is not described here.
+A dash means zero in every column, and it also shows where a value could not be retrieved. The failure itself is shown by the italic Pilot name.
 
-### Threat glyphs
+### Threat
 
-Threat is a small pie glyph, one per band: a dash for None, an empty amber circle for Low, a quarter-filled amber circle for Medium, a half-filled amber circle for High, a three-quarter-filled amber circle for Very High and a full red circle for Extreme. A question mark means Threat could not be worked out. The F1 help, Threat tab, explains each band.
+Threat shows how dangerous a pilot is likely to be. Press F1 and open the Threat tab for the glyphs and what each band means.
 
-### Style codes and suffixes
+![The F1 help, Threat tab](images/16-help-threat.png)
 
-Style has two codes, General then Recent, for example `S/F`. The codes are `S` (Solo), `G` (Gang), `B` (Blob), `F` (Fleet), `V` (Victim) and `I` (Inactive). Two suffixes can follow a code:
+### Style
 
-- `b` means Beginner. It appears only on the General code.
-- `x` means Podder. It can appear on either code after a `b`, and only on Solo, Gang and Blob, for example `Sbx/Gx`.
+Style has two codes, General then Recent, for example `S/F`. A suffix can follow a code: `b` means Beginner, on the General code only, and `x` means Podder, for example `Sbx/Gx`. The F1 help, Style tab, gives the codes and the size definitions for Gang, Blob and Fleet.
 
-The F1 help, Style tab, gives the size definitions for Gang, Blob and Fleet.
+![The F1 help, Style tab](images/15-help-style.png)
 
-### Relationship and the confidence square
+### Relationship
 
-The Relationship column is a dash until you hover a Pilot cell, hold a pilot or filter to a pilot. Then each row shows a number, the strength of its connection to that pilot, followed by a small grey square, the confidence that the shared kills are cooperation and not coincidence. The square is an outline for Low, half filled for Medium and fully filled for High. The column shows a dash for rows with no relationship, for rows in the same corporation or alliance, and for the hovered or held row itself. The F1 help, Relationship tab, explains the bands. The Relationship and Group columns cannot be sorted.
+The Relationship column is a dash until you hover a Pilot cell, hold a pilot (see Pilot hold) or filter to a pilot (see Filters). Then each row shows a number, the strength of its connection to that pilot, and a small grey square, the confidence that the shared kills are cooperation and not coincidence. The column shows a dash for rows with no relationship, for rows in the same corporation or alliance, and for the hovered or held row itself.
+
+![The F1 help, Relationship tab](images/17-help-relationship.png)
 
 ### Group
 
-The Group column counts every pilot in the scan this pilot is linked to, with no strength or confidence cut-off. Direct counts pilots who appear on the same kills. Chain counts pilots linked only through exactly one other pilot, who need not be in the scan. The F1 help, Group tab, repeats this.
+The Group column counts every pilot in the scan this pilot is linked to, shown as Direct/Chain. Direct counts pilots who appear on the same kills. Chain counts pilots linked only through exactly one other pilot, who need not be in the scan.
 
 ### Same-group counts
 
-A number in square brackets after a Corporation or Alliance name, for example `[3]`, is how many scanned pilots share it. It appears only when two or more do. Blank alliances and ignored pilots are never counted. The same-group, FW and Group counts are worked out from the whole scan and are not changed by filters.
-
-### Dashes and italic names
-
-A dash means zero in every column, and it also shows where a value could not be retrieved. The failure itself is shown by the italic Pilot name.
+A number in square brackets after a Corporation or Alliance name, for example `[3]`, is how many scanned pilots share it.
 
 ### The hover highlight
 
 Hover a Pilot cell for a moment and the rows related to that pilot are tinted. The hovered row takes the pilot colour. Rows in the same corporation or alliance take a lighter shade of it (darker on the light theme). Rows with a Direct or Chain relationship take the related colour. The tint clears when the mouse leaves the cell, and it is off while a Pilot Filter is on.
+
+![Related rows tinted under the mouse](images/07-hover-highlight.png)
 
 ### Pilot hold
 
@@ -117,35 +115,15 @@ Ctrl+left-click a Pilot cell to hold that pilot. While a pilot is held, the Rela
 
 After a scan, rows whose pilot was not in the previous scan are tinted in the new-pilot colour until the next scan. There is no tint on the first scan, or when the new scan shares no pilot with the previous one. The hover highlight replaces it while the highlight is active.
 
-### Opening pilots
+## Pilot Details
 
-Right-click a Pilot cell to open the Info Sheet. Double-click a Pilot cell to open the pilot's zKillboard page in your browser; nothing opens for a pilot that could not be resolved. With Always on top on, the browser may open beneath KillRight.
-
-## Filters and the Ignore List
-
-![A grid with an Ignore and a Filter applied](images/09-filtered-grid.png)
-
-![The Menu, Ignore List tab](images/13-menu-ignore-list.png)
-
-Filters change what the grid shows. They never change the scan, they are temporary, and they are never saved.
-
-- **Ignore:** right-click a Corporation, Alliance, FW or Style cell and choose Ignore to hide every row with that value.
-- **Filter to:** the same menu. Choose Filter to to show only rows with that value.
-- **Pilot Filter:** Ctrl+right-click a Pilot cell to show only that pilot and the rows that share its corporation or alliance or have a Direct or Chain relationship to it. While it is on, the Relationship column shows relationships to that pilot, the hover highlight is off, and Ctrl+right-click does nothing.
-
-For Style, the menu first asks for General or Recent. A Style filter matches the base code, so `S` matches `S`, `Sb`, `Sx` and `Sbx`. Blank alliances, `unk` corporations and blank FW cells cannot be filtered.
-
-Filters stack: each new filter applies to the rows still visible. A column that carries an Ignore shows `(I)` before its title and one that carries a Filter to shows `(F)`. While a Pilot Filter is on, `(F)` shows before Pilot.
-
-Filters clear when you press Ctrl+R, when a new scan starts, or when you hide a filtered column.
-
-The Ignore List is different. It is a saved list of pilots, corporations and alliances that are left out of every scan. See the Ignore List tab in the menu section. Ignore List changes take effect on the next scan.
+Right-click a Pilot cell to open the Info Sheet for that pilot. Double-click a Pilot cell to open the pilot's zKillboard page in your browser; nothing opens for a pilot that could not be resolved. With Always on top on, the browser may open beneath KillRight.
 
 ## The Info Sheet
 
 ![The Info Sheet for one pilot](images/10-info-sheet.png)
 
-Right-click a Pilot cell to open the Info Sheet for that pilot. It is a small window that opens at the cursor, below the row, and cannot be resized. Click anywhere else to close it.
+The Info Sheet is a small window that opens at the cursor, below the row, and cannot be resized. Click anywhere else to close it.
 
 The top half is titled "Stats for" followed by the pilot's name, and shows:
 
@@ -162,15 +140,29 @@ The bottom half is titled Last Activity and describes the pilot's single most re
 
 Birthday and Last Activity load when the sheet opens, and show "Loading…" until they are ready. If a source fails, the first line of the sheet reads "Error loading" followed by the source, Birthday or Last Activity, and the fields show placeholders. Last Activity is tried again the next time you open the sheet.
 
+## Filters
+
+![A grid with an Ignore and a Filter applied](images/09-filtered-grid.png)
+
+Filters change what the grid shows. They never change the scan, they are temporary, and they are never saved.
+
+- **Ignore:** right-click a Corporation, Alliance, FW or Style cell and choose Ignore to hide every row with that value.
+- **Filter to:** the same menu. Choose Filter to to show only rows with that value.
+- **Pilot Filter:** Ctrl+right-click a Pilot cell to show only that pilot and the rows that share its corporation or alliance or have a Direct or Chain relationship to it. While it is on, the Relationship column shows relationships to that pilot, the hover highlight is off, and Ctrl+right-click does nothing.
+
+For Style, the menu first asks for General or Recent. A Style filter matches the base code, so `S` matches `S`, `Sb`, `Sx` and `Sbx`. Blank alliances, `unk` corporations and blank FW cells cannot be filtered.
+
+Filters stack: each new filter applies to the rows still visible. A column that carries an Ignore shows `(I)` before its title and one that carries a Filter to shows `(F)`. While a Pilot Filter is on, `(F)` shows before Pilot.
+
+Filters clear when you press Ctrl+R, when a new scan starts, or when you hide a filtered column.
+
 ## The menu
-
-![The Menu, Config tab](images/11-menu-config.png)
-
-![The Menu, Columns tab](images/12-menu-columns.png)
 
 Press Ctrl+M to open the menu. It is a window that stays in front of the main window until you close it, and the grid keeps refreshing behind it. It always opens on its first tab. Every change previews live. Select OK to keep the changes or Cancel to undo every previewed change.
 
 ### Config tab
+
+![The Menu, Config tab](images/11-menu-config.png)
 
 - **Always on top** keeps KillRight above other windows.
 - **Theme** is Light, Dark or Follow Windows.
@@ -181,51 +173,27 @@ Press Ctrl+M to open the menu. It is a window that stays in front of the main wi
 
 ### Columns tab
 
+![The Menu, Columns tab](images/12-menu-columns.png)
+
 Choose which columns show and in what order. Pilot cannot be hidden but can be moved. Dragging a column header in the grid changes the same order. Right-click a header and choose Hide to hide a column straight away, outside the preview. Hiding the sorted column sorts the grid by Pilot again. Column widths do not follow the font size, and text that does not fit is cut off.
 
 ### Ignore List tab
 
-The list shows each entry's Name and Type (Pilot, Corp or Alliance) with an x to remove it. The List from Grid panel shows the Pilot, Corp and Alliance of the scanned pilots; select a cell to fill the entry box and Type. You can also type a name, choose the Type and select Add. KillRight checks the name with ESI and refuses a name it cannot find, or when ESI cannot be reached. Ignored entries are matched by ID, leave no row and no marker in the grid, and are not counted in the Group or same-group counts. Changes take effect on the next scan. The Ignore List is never reset by Reset Mine or Reset System.
+![The Menu, Ignore List tab](images/13-menu-ignore-list.png)
 
-### Developer tab
+The Ignore List is a saved list of pilots, corporations and alliances that are left out of every scan. It is separate from the temporary Ignore filter in the grid. The list shows each entry's Name and Type (Pilot, Corp or Alliance) with an x to remove it. The List from Grid panel shows the Pilot, Corp and Alliance of the scanned pilots; select a cell to fill the entry box and Type. You can also type a name, choose the Type and select Add. KillRight checks the name with ESI and refuses a name it cannot find, or when ESI cannot be reached. Ignored entries are matched by ID, leave no row and no marker in the grid, and are not counted in the Group or same-group counts. Changes take effect on the next scan. The Ignore List is never reset by Reset Mine or Reset System.
 
-There is a fourth tab, Developer. It is a hidden developer tool for diagnostics and is not described in this guide.
+## Shortcuts
 
-## Shortcuts and the F1 help
-
-![The F1 help, Shortcuts tab](images/14-help-shortcuts.png)
-
-![The F1 help, Style tab](images/15-help-style.png)
-
-![The F1 help, Threat tab](images/16-help-threat.png)
-
-![The F1 help, Relationship tab](images/17-help-relationship.png)
-
-![The F1 help, Group tab](images/18-help-group.png)
-
-Shortcuts work in the main window unless a scope is given.
-
-| Shortcut | Where | What it does |
-| --- | --- | --- |
-| Alt + drag | Main window | Move the window. |
-| Win+Down | Main window | Minimize the window. |
-| Ctrl+R | Main window | Clear every grid filter and release the held pilot. |
-| Ctrl+right-click | A Pilot cell | Filter to that pilot. |
-| Ctrl+left-click | A Pilot cell | Hold or release that pilot. |
-| Ctrl+M | Main window | Open the menu. |
-| Ctrl+Q | Main window or menu | Quit. Uncommitted menu changes are discarded; the backup on close still runs unless skipped. |
-| F1 | Main window or menu | Open the help. |
-| Ctrl+Shift+D | Menu | Show or hide the Developer tab (a hidden developer tool). |
-
-The F1 help window is titled "KillRight — Help". Its Shortcuts tab lists the shortcuts above except F1 and Ctrl+Shift+D. Its other tabs are Style, Threat, Relationship, Group and About. The help window has a fixed size.
-
-### The window
-
-KillRight has no title bar. Move it with Alt + drag anywhere in the window. Resize it from its borders, down to a minimum size. It cannot be maximized. Minimize with Win+Down or from the taskbar. Close with Ctrl+Q, Alt+F4 or from the taskbar. The window shows in the taskbar and in Alt+Tab. Always on top is set in the menu, Config tab.
-
-### The F1 help
-
-Use the F1 help for the exact Style size definitions (Gang, Blob and Fleet) and what each Threat, Relationship and Group band means.
+| Shortcut | What it does |
+| --- | --- |
+| Alt + drag | Move window |
+| Win+Down | Minimize window |
+| Ctrl+R | Clear grid filters |
+| Ctrl+right-click (Pilot cell) | Filter to pilot |
+| Ctrl+left-click (pilot row) | Hold pilot |
+| Ctrl+M | Open menu |
+| Ctrl+Q | Quit |
 
 ## Good to know
 

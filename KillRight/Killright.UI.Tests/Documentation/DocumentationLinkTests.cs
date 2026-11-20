@@ -41,12 +41,19 @@ public sealed class DocumentationLinkTests
         Assert.DoesNotContain("This section is written separately.", text);
     }
 
+    [Fact]
+    public void UserGuide_HasNoDeveloperReference()
+    {
+        Assert.DoesNotContain("Developer", File.ReadAllText(GuidePath()), StringComparison.OrdinalIgnoreCase);
+    }
+
     [Theory]
     [InlineData("## The grid")]
-    [InlineData("## Filters and the Ignore List")]
+    [InlineData("## Pilot Details")]
     [InlineData("## The Info Sheet")]
+    [InlineData("## Filters")]
     [InlineData("## The menu")]
-    [InlineData("## Shortcuts and the F1 help")]
+    [InlineData("## Shortcuts")]
     public void UserGuide_SectionHasBody(string heading)
     {
         var lines = File.ReadAllLines(GuidePath()).ToList();
