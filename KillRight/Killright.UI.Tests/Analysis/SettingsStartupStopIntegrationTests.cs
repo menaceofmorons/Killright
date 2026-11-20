@@ -1,5 +1,7 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using Killright.Storage.Diagnostics;
+using Killright.UI.Configuration;
 using Xunit;
 
 namespace Killright.UI.Tests.Analysis;
@@ -9,7 +11,7 @@ public sealed class SettingsStartupStopIntegrationTests
     private static readonly TimeSpan ExitTimeout = TimeSpan.FromSeconds(60);
 
     [Fact]
-    public void BuiltApplication_WithTheSettingsFileRemoved_LogsAndExitsWithoutOpeningAWindow()
+    public void BuiltApplication_WithTheSettingsFileRemoved_ShowsTheDialogLogsAndExitsOnOk()
     {
         var logged = RunBuiltApplication(appFolder => File.Delete(Path.Combine(appFolder, "config", "settings.json")));
 
@@ -46,12 +48,15 @@ public sealed class SettingsStartupStopIntegrationTests
                 UseShellExecute = false
             })!;
 
+            var dialogShown = ClickOkOnStartupFailureDialog(process);
+
             if (!process.WaitForExit(ExitTimeout))
             {
                 process.Kill(entireProcessTree: true);
                 Assert.Fail($"The application did not exit within {ExitTimeout.TotalSeconds} seconds.");
             }
 
+            Assert.True(dialogShown, "The startup failure dialog was not shown.");
             Assert.Equal(0, process.ExitCode);
 
             return ReadLinesCarrying(runMarker);
@@ -61,6 +66,73 @@ public sealed class SettingsStartupStopIntegrationTests
             Directory.Delete(appFolder, recursive: true);
         }
     }
+
+    private static bool ClickOkOnStartupFailureDialog(Process process)
+    {
+        var deadline = DateTime.UtcNow + ExitTimeout;
+
+        while (DateTime.UtcNow < deadline && !process.HasExited)
+        {
+            var dialog = FindDialog(process.Id, StartupFailureMessage.Title);
+
+            if (dialog != IntPtr.Zero)
+            {
+                var okButton = FindWindowEx(dialog, IntPtr.Zero, "Button", null);
+                SendMessage(okButton, BmClick, IntPtr.Zero, IntPtr.Zero);
+                return true;
+            }
+
+            Thread.Sleep(100);
+        }
+
+        return false;
+    }
+
+    private static IntPtr FindDialog(int processId, string title)
+    {
+        var found = IntPtr.Zero;
+
+        EnumWindows((window, _) =>
+        {
+            GetWindowThreadProcessId(window, out var owner);
+
+            if (owner != (uint)processId || !IsWindowVisible(window))
+                return true;
+
+            var text = new System.Text.StringBuilder(256);
+            GetWindowText(window, text, text.Capacity);
+
+            if (text.ToString() != title)
+                return true;
+
+            found = window;
+            return false;
+        }, IntPtr.Zero);
+
+        return found;
+    }
+
+    private const uint BmClick = 0x00F5;
+
+    private delegate bool EnumWindowsProc(IntPtr window, IntPtr parameter);
+
+    [DllImport("user32.dll")]
+    private static extern bool EnumWindows(EnumWindowsProc callback, IntPtr parameter);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
+
+    [DllImport("user32.dll")]
+    private static extern bool IsWindowVisible(IntPtr window);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetWindowText(IntPtr window, System.Text.StringBuilder text, int maxCount);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern IntPtr FindWindowEx(IntPtr parent, IntPtr after, string? className, string? title);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr SendMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
 
     private static string ReadLinesCarrying(string runMarker)
     {
