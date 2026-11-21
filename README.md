@@ -39,3 +39,5 @@ The full guide covers every column, the Info Sheet, filters, the menu and the sh
 - [Request a feature](https://github.com/menaceofmorons/Killright/issues/new/choose)
 - [Ask a question](https://github.com/menaceofmorons/Killright/discussions)
 - [Share an idea](https://github.com/menaceofmorons/Killright/discussions)
+
+And on Discord at: https://discord.gg/TAYpyuDzQd
