@@ -38,6 +38,7 @@ foreach ($image in [regex]::Matches((Get-Content $guideSource -Raw), '\]\((image
 
 $makensis =Join-Path $env:LOCALAPPDATA 'tauri\NSIS\makensis.exe'
 if (-not (Test-Path $makensis)) { throw "makensis.exe not found at $makensis" }
-& $makensis "/DAPP_DIR=$appDir" "/DOUT_FILE=$setupExe" "/DAPP_VERSION=$version" (Join-Path $PSScriptRoot 'KillRight.nsi')
+$numericVersion = (($version -replace '-.*$', '') + '.0')
+& $makensis "/DAPP_DIR=$appDir" "/DOUT_FILE=$setupExe" "/DAPP_VERSION=$version" "/DAPP_VERSION_NUMERIC=$numericVersion" (Join-Path $PSScriptRoot 'KillRight.nsi')
 if ($LASTEXITCODE -ne 0) { throw 'makensis failed' }
 Write-Host "Built $setupExe ($([math]::Round((Get-Item $setupExe).Length / 1MB, 1)) MB)"

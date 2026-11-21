@@ -14,7 +14,7 @@ InstallDirRegKey HKCU "Software\KillRight" "InstallDir"
 RequestExecutionLevel user
 BrandingText "KillRight v${APP_VERSION}"
 
-VIProductVersion "${APP_VERSION}.0"
+VIProductVersion "${APP_VERSION_NUMERIC}"
 VIAddVersionKey "ProductName" "${APP_NAME}"
 VIAddVersionKey "FileDescription" "${APP_NAME} v${APP_VERSION} Setup"
 VIAddVersionKey "FileVersion" "${APP_VERSION}"
