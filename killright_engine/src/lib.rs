@@ -1625,10 +1625,9 @@ mod tests {
     }
 
     fn shipped_settings_path() -> String {
-        format!(
-            "{}/../KillRight/Killright.UI/config/settings.json",
-            env!("CARGO_MANIFEST_DIR")
-        )
+        let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
+            .unwrap_or_else(|_| env!("CARGO_MANIFEST_DIR").to_string());
+        format!("{manifest_dir}/../KillRight/Killright.UI/config/settings.json")
     }
 
     fn temp_settings_file(label: &str, contents: &str) -> std::path::PathBuf {
