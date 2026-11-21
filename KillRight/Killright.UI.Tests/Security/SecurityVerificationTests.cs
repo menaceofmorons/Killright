@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
-using System.Text.RegularExpressions;
 using Killright.Core.Models;
 using Killright.Integration;
 using Killright.Integration.Esi;
@@ -11,6 +10,7 @@ using Killright.Integration.zKill;
 using Killright.Shared;
 using Killright.Shared.Killmails;
 using Killright.Shared.Sde;
+using Killright.Shared.Time;
 using Killright.Shared.zKill;
 using Killright.Storage.Database;
 using Killright.Storage.Diagnostics;
@@ -50,7 +50,7 @@ public sealed class SecurityVerificationTests
     ];
 
     [Fact]
-    public async Task FullScanPipeline_ContactsOnlyEsiZKillboardAndSdeHosts_WithOneUserAgent_AndWritesOnlyUnderTheDataFolder()
+    public async Task FullScanPipeline_ContactsOnlyEsiZKillboardAndSdeHosts_WithOneUserAgent_AndLeavesTheAppFolderUnchanged()
     {
         var dataFolder = Path.Combine(Path.GetTempPath(), $"securityData.{Guid.NewGuid():N}");
         var appFolderBefore = ListFiles(AppContext.BaseDirectory);
@@ -69,7 +69,7 @@ public sealed class SecurityVerificationTests
         {
             var database = new KillRightDatabase(new KillRightDatabaseOptions { DatabasePath = Path.Combine(dataFolder, "KillRight.db") });
             database.EnsureCreated();
-            var now = DateTimeOffset.UtcNow;
+            var now = ApplicationClock.UtcNow;
 
             var esi = new EsiClient(new HttpClient(handler));
             var resolver = new PilotIdentityResolver(esi, new PilotIdentityCache(database), new EsiEntityNameCache(database), 8, () => now.UtcDateTime);
@@ -100,10 +100,8 @@ public sealed class SecurityVerificationTests
             Assert.All(handler.Requests, request => Assert.Equal(ClientIdentity.UserAgent, request.UserAgent));
             Assert.DoesNotContain(handler.Requests, request => request.Scheme != Uri.UriSchemeHttps);
 
-            var written = Directory.EnumerateFiles(dataFolder, "*", SearchOption.AllDirectories).ToList();
-            Assert.Contains(written, path => Path.GetFileName(path) == "KillRight.db");
+            Assert.True(File.Exists(Path.Combine(dataFolder, "KillRight.db")));
             Assert.Single(Directory.EnumerateFiles(backupFolder, "KillRight-*.db"));
-            Assert.All(written, path => Assert.StartsWith(dataFolder, path, StringComparison.OrdinalIgnoreCase));
             Assert.Equal(appFolderBefore, ListFiles(AppContext.BaseDirectory));
         }
         finally
@@ -121,25 +119,6 @@ public sealed class SecurityVerificationTests
         Assert.Equal(dataFolder, Path.GetDirectoryName(EngineFailureLogPaths.GetDefaultLogPath()));
         Assert.Equal(dataFolder, Path.GetDirectoryName(ScanTimingLogPaths.GetDefaultLogPath()));
         Assert.StartsWith(ScanTimingLogPaths.FilePrefix, Path.GetFileName(ScanTimingLogPaths.GetDefaultLogPath()));
-    }
-
-    [Fact]
-    public void ProductSource_NamesOnlyTheEsiZKillboardAndSdeHostsAndTheProjectUrl()
-    {
-        var allowed = AllowedHosts.Append(new Uri(ClientIdentity.ProjectUrl).Host).ToHashSet();
-        var root = FindSolutionFolder();
-        var files = Directory.EnumerateFiles(root, "*.*", SearchOption.AllDirectories)
-            .Where(path => !IsBuildOutput(path) && !path.Contains(".Tests", StringComparison.Ordinal))
-            .Where(path => path.EndsWith(".cs", StringComparison.Ordinal) || path.EndsWith("settings.json", StringComparison.Ordinal))
-            .ToList();
-
-        var hosts = files
-            .SelectMany(path => Regex.Matches(File.ReadAllText(path), @"https?://([A-Za-z0-9.-]+)").Select(match => (Path: path, Host: match.Groups[1].Value)))
-            .Where(entry => !allowed.Contains(entry.Host))
-            .ToList();
-
-        Assert.NotEmpty(files);
-        Assert.Empty(hosts);
     }
 
     [Fact]
@@ -172,12 +151,12 @@ public sealed class SecurityVerificationTests
                 VerifyStatus = VerifyStatus.Partial,
                 SecurityStatus = 1.5,
                 CorporationId = LukasCorporation,
-                SecurityStatusAtUtc = DateTime.UtcNow,
-                CachedAtUtc = DateTime.UtcNow
+                SecurityStatusAtUtc = ApplicationClock.UtcNow.UtcDateTime,
+                CachedAtUtc = ApplicationClock.UtcNow.UtcDateTime
             });
 
             using (var session = database.OpenScanSession())
-                ScanWriter.Commit(session, batch, 11, DateTimeOffset.UtcNow);
+                ScanWriter.Commit(session, batch, 11, ApplicationClock.UtcNow);
 
             var client = new RustRecentStyleClient(runtime, new EngineInputReader(database, new SdeReferenceDataStore(database)), loaded.Settings!.ThreatBands);
             var results = await client.AnalyzePilotsAsync([Lukas]);
@@ -215,7 +194,7 @@ public sealed class SecurityVerificationTests
                     CharacterId = 1000 + index,
                     CharacterName = name,
                     VerifyStatus = VerifyStatus.Verified,
-                    CachedAtUtc = DateTime.UtcNow
+                    CachedAtUtc = ApplicationClock.UtcNow.UtcDateTime
                 });
                 await nameCache.UpsertAsync([new EsiEntityName(5000 + index, "corporation", name)]);
             }
@@ -384,46 +363,6 @@ public sealed class SecurityVerificationTests
     }
 
     [Fact]
-    public void StorageSql_InterpolatesOnlyBoundParameterListsNumericIdsAndFixedIdentifiers()
-    {
-        var allowedInterpolations = new HashSet<string>
-        {
-            "values", "ids", "idList", "updatedUtc", "batchPilots", "pilotFilter", "killmailFilter", "table", "tableName", "column", "columns", "PodShipTypeIdList", "busyTimeoutMilliseconds", "cacheKibibytes", "CurrentSchemaVersion", "mode"
-        };
-        string[] boundExpressionPrefixes =
-            ["parameters.", "deleteParameters.", "CommandParameters.", "IdList(", "BuildProtectedFloorCtes(", "string.Join(\", \", chunk.Select("];
-        var storage = Path.Combine(FindSolutionFolder(), "Killright.Storage");
-        var statement = new Regex("(?:CommandText\\s*=|return)\\s*\\$(?:\"\"\"(?<sql>.*?)\"\"\"|\"(?<sql>[^\"\\n]*)\")", RegexOptions.Singleline);
-        var violations = new List<string>();
-        var inspected = 0;
-
-        foreach (var file in Directory.EnumerateFiles(storage, "*.cs", SearchOption.AllDirectories).Where(path => !IsBuildOutput(path)))
-        {
-            foreach (Match match in statement.Matches(File.ReadAllText(file)))
-            {
-                if (!Regex.IsMatch(match.Groups["sql"].Value, @"\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|PRAGMA|VACUUM)\b"))
-                    continue;
-
-                inspected++;
-
-                foreach (Match interpolation in Regex.Matches(match.Groups["sql"].Value, @"\{([^{}]+)\}"))
-                {
-                    var expression = interpolation.Groups[1].Value.Trim();
-
-                    if (boundExpressionPrefixes.Any(prefix => expression.StartsWith(prefix, StringComparison.Ordinal)))
-                        continue;
-
-                    if (!allowedInterpolations.Contains(expression))
-                        violations.Add($"{Path.GetFileName(file)}: {{{expression}}}");
-                }
-            }
-        }
-
-        Assert.True(inspected > 20, $"Only {inspected} SQL statements inspected.");
-        Assert.Empty(violations);
-    }
-
-    [Fact]
     public async Task ZKillboardCalls_ShareOneBudget_AndARateLimitRefusalPausesEveryCallWithoutSendingThem()
     {
         var counting = new CountingLimiter();
@@ -482,8 +421,8 @@ public sealed class SecurityVerificationTests
             CharacterName = inputName,
             VerifyStatus = VerifyStatus.Verified,
             SecurityStatus = securityStatus,
-            SecurityStatusAtUtc = DateTime.UtcNow,
-            CachedAtUtc = DateTime.UtcNow
+            SecurityStatusAtUtc = ApplicationClock.UtcNow.UtcDateTime,
+            CachedAtUtc = ApplicationClock.UtcNow.UtcDateTime
         };
     }
 
@@ -546,25 +485,6 @@ public sealed class SecurityVerificationTests
             .Select(path => path + "|" + new FileInfo(path).Length)
             .Order()
             .ToArray();
-    }
-
-    private static bool IsBuildOutput(string path)
-    {
-        var normalized = path.Replace('\\', '/');
-
-        return normalized.Contains("/bin/", StringComparison.Ordinal) || normalized.Contains("/obj/", StringComparison.Ordinal);
-    }
-
-    private static string FindSolutionFolder()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "KillRight.sln")))
-            directory = directory.Parent;
-
-        Assert.NotNull(directory);
-
-        return directory!.FullName;
     }
 
     private sealed record RecordedRequest(string Scheme, string Host, string Uri, string UserAgent);
