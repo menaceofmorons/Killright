@@ -7,6 +7,21 @@ namespace Killright.UI.Tests;
 public class UiStateLoaderTests
 {
     [Fact]
+    public void GetDefaultStatePath_IsUnderLocalApplicationDataKillRightFolder()
+    {
+        var expected = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "KillRight",
+            "ui-state.json");
+        var roaming = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+
+        var path = UiStateLoader.GetDefaultStatePath();
+
+        Assert.Equal(expected, path);
+        Assert.False(path.StartsWith(Path.Combine(roaming, "KillRight"), StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void LoadOrDefault_MissingFile_ReturnsDefaultsNotCorrupt()
     {
         var path = Path.Combine(Path.GetTempPath(), $"ui-state-{Guid.NewGuid():N}.json");
