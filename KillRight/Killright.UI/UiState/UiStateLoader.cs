@@ -19,7 +19,7 @@ public static class UiStateLoader
     public static string GetDefaultStatePath()
     {
         return Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "KillRight",
             "ui-state.json");
     }
