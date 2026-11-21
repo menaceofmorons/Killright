@@ -45,3 +45,4 @@ metadata:
 - A modal startup dialog blocks process-exit integration tests; the test must find and dismiss it (user32 `EnumWindows`) before asserting exit (WS-1.7)
 - An unshown WPF window can be laid out in tests by measuring and arranging its content; the custom `TabControl` template has no named content host, so find the row 1 `Border` of its `Grid` (WS-1.8)
 - A C# named tuple element called `Rest` is rejected (CS8126); use another name (WS-1.8)
+- Test seed rows timestamped with SQL `unixepoch()` ignore `ApplicationClock`; take seed times from the application clock (WS-1.Integration)
