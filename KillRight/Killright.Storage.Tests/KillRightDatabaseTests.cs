@@ -182,7 +182,7 @@ public sealed class KillRightDatabaseTests
     }
 
     [Fact]
-    public void BeginWrite_DisposeWithoutCommit_RollsBackAndReleasesTheGate()
+    public async Task BeginWrite_DisposeWithoutCommit_RollsBackAndReleasesTheGate()
     {
         var database = CreateDatabase();
         database.EnsureCreated();
@@ -203,7 +203,8 @@ public sealed class KillRightDatabaseTests
                 scope.Commit();
             });
 
-            Assert.True(second.Wait(TimeSpan.FromSeconds(10)));
+            Assert.Same(second, await Task.WhenAny(second, Task.Delay(TimeSpan.FromSeconds(10))));
+            await second;
 
             using var reader = database.OpenConnection();
 
@@ -344,7 +345,7 @@ public sealed class KillRightDatabaseTests
     }
 
     [Fact]
-    public void Checkpoint_WhileWriteGateIsHeld_ReturnsWithinTheTestTimeLimit()
+    public async Task Checkpoint_WhileWriteGateIsHeld_ReturnsWithinTheTestTimeLimit()
     {
         var database = CreateDatabase();
         database.EnsureCreated();
@@ -355,7 +356,7 @@ public sealed class KillRightDatabaseTests
             using var scope = database.BeginWrite();
 
             var checkpoint = Task.Run(() => database.Checkpoint());
-            var finished = checkpoint.Wait(TimeSpan.FromSeconds(12));
+            var finished = await Task.WhenAny(checkpoint, Task.Delay(TimeSpan.FromSeconds(12))) == checkpoint;
 
             Assert.True(finished, "Checkpoint() did not return while the write gate was held.");
         }

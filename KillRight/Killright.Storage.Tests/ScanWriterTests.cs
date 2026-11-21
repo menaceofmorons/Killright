@@ -234,7 +234,7 @@ public sealed class ScanWriterTests
         var seed = new ScanWriteBatch();
         seed.AddIdentity(Identity("LUKAS NAARII", Lukas));
         seed.AddEntityNames([new EsiEntityName(98000001, EsiEntityTypes.Corporation, "Test Corp")]);
-        seed.AddStatistics(new PendingStatistics(Lukas, Statistics(), "Gang", false, DateTimeOffset.UtcNow));
+        seed.AddStatistics(new PendingStatistics(Lukas, Statistics(), "Gang", false, ApplicationClock.UtcNow));
         seed.AddActivity(new zKillActivity(Lukas, true, 3, 1, Now, zKillActivityType.Kill, Now));
 
         using (var seedSession = database.OpenScanSession())

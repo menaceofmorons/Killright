@@ -1,3 +1,4 @@
+using Killright.Shared.Time;
 using Microsoft.Data.Sqlite;
 using Killright.Shared.Sde;
 using Killright.Storage.Database;
@@ -51,7 +52,7 @@ public sealed class SdeReferenceDataStoreTests
             SolarSystems: [],
             NpcCorporationIds: [1000001],
             BuildNumber: 1,
-            UpdatedUtc: DateTimeOffset.UtcNow,
+            UpdatedUtc: ApplicationClock.UtcNow,
             Factions: [new SdeFaction(500001, "Caldari State")]));
 
         Assert.True(await store.HasReferenceDataAsync());
@@ -80,7 +81,7 @@ public sealed class SdeReferenceDataStoreTests
             SolarSystems: [],
             NpcCorporationIds: [],
             BuildNumber: 1,
-            UpdatedUtc: DateTimeOffset.UtcNow,
+            UpdatedUtc: ApplicationClock.UtcNow,
             Factions: [new SdeFaction(500001, "Caldari State"), new SdeFaction(500011, "Angel Cartel")]));
 
         Assert.Equal("Caldari State", store.GetFactionName(500001));
@@ -130,7 +131,7 @@ public sealed class SdeReferenceDataStoreTests
             SolarSystems: [],
             NpcCorporationIds: [1000001, 1000132],
             BuildNumber: 1,
-            UpdatedUtc: DateTimeOffset.UtcNow));
+            UpdatedUtc: ApplicationClock.UtcNow));
 
         var ids = store.GetNpcCorporationIds();
 
@@ -196,14 +197,14 @@ public sealed class SdeReferenceDataStoreTests
             SolarSystems: [new SdeSolarSystem(30000142, "Jita")],
             NpcCorporationIds: [1000001],
             BuildNumber: 1,
-            UpdatedUtc: DateTimeOffset.UtcNow));
+            UpdatedUtc: ApplicationClock.UtcNow));
 
         await store.ReplaceTablesAsync(new SdeReplacementData(
             Types: [new SdeType(11567, "Crow")],
             SolarSystems: [new SdeSolarSystem(30000144, "Perimeter")],
             NpcCorporationIds: [1000132],
             BuildNumber: 2,
-            UpdatedUtc: DateTimeOffset.UtcNow));
+            UpdatedUtc: ApplicationClock.UtcNow));
 
         Assert.Null(store.GetTypeName(587));
         Assert.Equal("Crow", store.GetTypeName(11567));
@@ -228,7 +229,7 @@ public sealed class SdeReferenceDataStoreTests
             SolarSystems: [new SdeSolarSystem(30000142, "Jita")],
             NpcCorporationIds: [1000001],
             BuildNumber: 1,
-            UpdatedUtc: DateTimeOffset.UtcNow,
+            UpdatedUtc: ApplicationClock.UtcNow,
             Factions: [new SdeFaction(500004, "Gallente Federation")]));
 
         await Assert.ThrowsAnyAsync<Exception>(() => store.ReplaceTablesAsync(new SdeReplacementData(
@@ -236,7 +237,7 @@ public sealed class SdeReferenceDataStoreTests
             SolarSystems: [new SdeSolarSystem(30000144, "Perimeter"), new SdeSolarSystem(30000144, "Perimeter Again")],
             NpcCorporationIds: [1000132],
             BuildNumber: 2,
-            UpdatedUtc: DateTimeOffset.UtcNow)));
+            UpdatedUtc: ApplicationClock.UtcNow)));
 
         Assert.Equal("Rifter", store.GetTypeName(587));
         Assert.Null(store.GetTypeName(11567));
@@ -528,7 +529,7 @@ public sealed class SdeReferenceDataStoreTests
             SolarSystems: systems ?? [],
             NpcCorporationIds: npcCorporationIds ?? [],
             BuildNumber: 1,
-            UpdatedUtc: DateTimeOffset.UtcNow,
+            UpdatedUtc: ApplicationClock.UtcNow,
             Factions: factions);
     }
 

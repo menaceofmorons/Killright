@@ -1,3 +1,4 @@
+using Killright.Shared.Time;
 using System.Diagnostics;
 using Microsoft.Data.Sqlite;
 using Killright.Shared.zKill;
@@ -17,7 +18,7 @@ public sealed class RecentKillmailCacheTests
     {
         var (database, cache) = CreateCache(recentWindowDays: 14);
 
-        InsertKillmail(database, 700001, DateTimeOffset.UtcNow.AddDays(-20), isQualifying: false);
+        InsertKillmail(database, 700001, ApplicationClock.UtcNow.AddDays(-20), isQualifying: false);
         InsertAttacker(database, 700001, ScannedCharacterId);
 
         await cache.RemoveExpiredAsync();
@@ -31,7 +32,7 @@ public sealed class RecentKillmailCacheTests
     {
         var (database, cache) = CreateCache(recentWindowDays: 14);
 
-        InsertKillmail(database, 700002, DateTimeOffset.UtcNow.AddDays(-20), isQualifying: true);
+        InsertKillmail(database, 700002, ApplicationClock.UtcNow.AddDays(-20), isQualifying: true);
         InsertAttacker(database, 700002, ScannedCharacterId);
         InsertAttacker(database, 700002, OtherCharacterId);
 
@@ -46,7 +47,7 @@ public sealed class RecentKillmailCacheTests
     {
         var (database, cache) = CreateCache(recentWindowDays: 14);
 
-        InsertKillmail(database, 700003, DateTimeOffset.UtcNow.AddDays(-5), isQualifying: false);
+        InsertKillmail(database, 700003, ApplicationClock.UtcNow.AddDays(-5), isQualifying: false);
         InsertAttacker(database, 700003, ScannedCharacterId);
 
         await cache.RemoveExpiredAsync();
@@ -60,7 +61,7 @@ public sealed class RecentKillmailCacheTests
         var (database, cache) = CreateCache(recentWindowDays: 14);
 
         InsertActivityCache(database, ScannedCharacterId);
-        InsertKillmail(database, 700011, DateTimeOffset.UtcNow.AddDays(-20), isQualifying: false);
+        InsertKillmail(database, 700011, ApplicationClock.UtcNow.AddDays(-20), isQualifying: false);
         InsertAttacker(database, 700011, ScannedCharacterId);
 
         await cache.RemoveExpiredAsync();
@@ -75,9 +76,9 @@ public sealed class RecentKillmailCacheTests
         var (database, cache) = CreateCache(recentWindowDays: 14);
 
         InsertActivityCache(database, ScannedCharacterId);
-        InsertKillmail(database, 700012, DateTimeOffset.UtcNow.AddDays(-25), isQualifying: false);
+        InsertKillmail(database, 700012, ApplicationClock.UtcNow.AddDays(-25), isQualifying: false);
         InsertAttacker(database, 700012, ScannedCharacterId);
-        InsertKillmail(database, 700013, DateTimeOffset.UtcNow.AddDays(-20), isQualifying: false);
+        InsertKillmail(database, 700013, ApplicationClock.UtcNow.AddDays(-20), isQualifying: false);
         InsertAttacker(database, 700013, ScannedCharacterId);
 
         await cache.RemoveExpiredAsync();
@@ -91,7 +92,7 @@ public sealed class RecentKillmailCacheTests
     {
         var (database, cache) = CreateCache(recentWindowDays: 14);
 
-        InsertKillmail(database, 700014, DateTimeOffset.UtcNow.AddDays(-20), isQualifying: false);
+        InsertKillmail(database, 700014, ApplicationClock.UtcNow.AddDays(-20), isQualifying: false);
         InsertAttacker(database, 700014, OtherCharacterId);
 
         await cache.RemoveExpiredAsync();
@@ -104,10 +105,10 @@ public sealed class RecentKillmailCacheTests
     {
         var (database, cache) = CreateCache(recentWindowDays: 14);
 
-        InsertKillmail(database, 700019, DateTimeOffset.UtcNow.AddDays(-3), isQualifying: true, victimCharacterId: OtherCharacterId, victimShipTypeId: 587);
+        InsertKillmail(database, 700019, ApplicationClock.UtcNow.AddDays(-3), isQualifying: true, victimCharacterId: OtherCharacterId, victimShipTypeId: 587);
         InsertAttacker(database, 700019, ScannedCharacterId);
 
-        InsertKillmail(database, 700020, DateTimeOffset.UtcNow.AddDays(-1), isQualifying: true, victimCharacterId: OtherCharacterId, victimShipTypeId: 670);
+        InsertKillmail(database, 700020, ApplicationClock.UtcNow.AddDays(-1), isQualifying: true, victimCharacterId: OtherCharacterId, victimShipTypeId: 670);
         InsertAttacker(database, 700020, ScannedCharacterId);
 
         var result = await cache.GetMostRecentKillmailAsync(ScannedCharacterId);
@@ -122,8 +123,8 @@ public sealed class RecentKillmailCacheTests
     {
         var (database, cache) = CreateCache(recentWindowDays: 14);
 
-        InsertKillmail(database, 700007, DateTimeOffset.UtcNow.AddDays(-1), isQualifying: true, victimCharacterId: ScannedCharacterId);
-        InsertKillmail(database, 700008, DateTimeOffset.UtcNow.AddDays(-3), isQualifying: true, victimCharacterId: OtherCharacterId);
+        InsertKillmail(database, 700007, ApplicationClock.UtcNow.AddDays(-1), isQualifying: true, victimCharacterId: ScannedCharacterId);
+        InsertKillmail(database, 700008, ApplicationClock.UtcNow.AddDays(-3), isQualifying: true, victimCharacterId: OtherCharacterId);
         InsertAttacker(database, 700008, ScannedCharacterId);
 
         var result = await cache.GetMostRecentKillmailAsync(ScannedCharacterId);
@@ -140,8 +141,8 @@ public sealed class RecentKillmailCacheTests
     {
         var (database, cache) = CreateCache(recentWindowDays: 14);
 
-        InsertKillmail(database, 700009, DateTimeOffset.UtcNow.AddDays(-3), isQualifying: true, victimCharacterId: ScannedCharacterId);
-        InsertKillmail(database, 700010, DateTimeOffset.UtcNow.AddDays(-1), isQualifying: true, victimCharacterId: OtherCharacterId);
+        InsertKillmail(database, 700009, ApplicationClock.UtcNow.AddDays(-3), isQualifying: true, victimCharacterId: ScannedCharacterId);
+        InsertKillmail(database, 700010, ApplicationClock.UtcNow.AddDays(-1), isQualifying: true, victimCharacterId: OtherCharacterId);
         InsertAttacker(database, 700010, ScannedCharacterId);
 
         var result = await cache.GetMostRecentKillmailAsync(ScannedCharacterId);
@@ -158,7 +159,7 @@ public sealed class RecentKillmailCacheTests
     {
         var (database, cache) = CreateCache(recentWindowDays: 14);
 
-        InsertKillmail(database, 700021, DateTimeOffset.UtcNow.AddDays(-1), isQualifying: true, victimCharacterId: OtherCharacterId);
+        InsertKillmail(database, 700021, ApplicationClock.UtcNow.AddDays(-1), isQualifying: true, victimCharacterId: OtherCharacterId);
         InsertAttacker(database, 700021, ScannedCharacterId, weaponTypeId: 3074);
 
         var result = await cache.GetMostRecentKillmailAsync(ScannedCharacterId);
@@ -172,7 +173,7 @@ public sealed class RecentKillmailCacheTests
     {
         var (database, cache) = CreateCache(recentWindowDays: 14);
 
-        InsertKillmail(database, 700022, DateTimeOffset.UtcNow.AddDays(-1), isQualifying: true, victimCharacterId: ScannedCharacterId);
+        InsertKillmail(database, 700022, ApplicationClock.UtcNow.AddDays(-1), isQualifying: true, victimCharacterId: ScannedCharacterId);
 
         var result = await cache.GetMostRecentKillmailAsync(ScannedCharacterId);
 
@@ -187,9 +188,9 @@ public sealed class RecentKillmailCacheTests
     {
         var (database, cache) = CreateCache(recentWindowDays: 14);
 
-        InsertKillmail(database, 700028, DateTimeOffset.UtcNow.AddDays(-3), isQualifying: true, victimCharacterId: OtherCharacterId, victimShipTypeId: 587);
+        InsertKillmail(database, 700028, ApplicationClock.UtcNow.AddDays(-3), isQualifying: true, victimCharacterId: OtherCharacterId, victimShipTypeId: 587);
         InsertAttacker(database, 700028, ScannedCharacterId);
-        InsertKillmail(database, 700029, DateTimeOffset.UtcNow.AddDays(-1), isQualifying: true, victimCharacterId: ScannedCharacterId, victimShipTypeId: podShipTypeId);
+        InsertKillmail(database, 700029, ApplicationClock.UtcNow.AddDays(-1), isQualifying: true, victimCharacterId: ScannedCharacterId, victimShipTypeId: podShipTypeId);
 
         var result = await cache.GetMostRecentKillmailAsync(ScannedCharacterId);
 
@@ -203,8 +204,8 @@ public sealed class RecentKillmailCacheTests
     {
         var (database, cache) = CreateCache(recentWindowDays: 14);
 
-        InsertKillmail(database, 700030, DateTimeOffset.UtcNow.AddDays(-3), isQualifying: true, victimCharacterId: ScannedCharacterId, victimShipTypeId: 11567);
-        InsertKillmail(database, 700031, DateTimeOffset.UtcNow.AddDays(-1), isQualifying: true, victimCharacterId: ScannedCharacterId, victimShipTypeId: 670);
+        InsertKillmail(database, 700030, ApplicationClock.UtcNow.AddDays(-3), isQualifying: true, victimCharacterId: ScannedCharacterId, victimShipTypeId: 11567);
+        InsertKillmail(database, 700031, ApplicationClock.UtcNow.AddDays(-1), isQualifying: true, victimCharacterId: ScannedCharacterId, victimShipTypeId: 670);
 
         var result = await cache.GetMostRecentKillmailAsync(ScannedCharacterId);
 
@@ -218,9 +219,9 @@ public sealed class RecentKillmailCacheTests
     {
         var (database, cache) = CreateCache(recentWindowDays: 14);
 
-        InsertKillmail(database, 700032, DateTimeOffset.UtcNow.AddDays(-2), isQualifying: true, victimCharacterId: OtherCharacterId, victimShipTypeId: 670);
+        InsertKillmail(database, 700032, ApplicationClock.UtcNow.AddDays(-2), isQualifying: true, victimCharacterId: OtherCharacterId, victimShipTypeId: 670);
         InsertAttacker(database, 700032, ScannedCharacterId);
-        InsertKillmail(database, 700033, DateTimeOffset.UtcNow.AddDays(-1), isQualifying: true, victimCharacterId: ScannedCharacterId, victimShipTypeId: 33328);
+        InsertKillmail(database, 700033, ApplicationClock.UtcNow.AddDays(-1), isQualifying: true, victimCharacterId: ScannedCharacterId, victimShipTypeId: 33328);
 
         var result = await cache.GetMostRecentKillmailAsync(ScannedCharacterId);
 
@@ -233,9 +234,9 @@ public sealed class RecentKillmailCacheTests
         var (database, cache) = CreateCache(recentWindowDays: 14);
 
         InsertActivityCache(database, ScannedCharacterId);
-        InsertKillmail(database, 700034, DateTimeOffset.UtcNow.AddDays(-25), isQualifying: false, victimCharacterId: OtherCharacterId, victimShipTypeId: 587);
+        InsertKillmail(database, 700034, ApplicationClock.UtcNow.AddDays(-25), isQualifying: false, victimCharacterId: OtherCharacterId, victimShipTypeId: 587);
         InsertAttacker(database, 700034, ScannedCharacterId);
-        InsertKillmail(database, 700035, DateTimeOffset.UtcNow.AddDays(-20), isQualifying: false, victimCharacterId: ScannedCharacterId, victimShipTypeId: 670);
+        InsertKillmail(database, 700035, ApplicationClock.UtcNow.AddDays(-20), isQualifying: false, victimCharacterId: ScannedCharacterId, victimShipTypeId: 670);
 
         await cache.RemoveExpiredAsync();
 
@@ -249,7 +250,7 @@ public sealed class RecentKillmailCacheTests
         var (database, cache) = CreateCache(recentWindowDays: 14);
 
         InsertActivityCache(database, ScannedCharacterId);
-        InsertKillmail(database, 700036, DateTimeOffset.UtcNow.AddDays(-25), isQualifying: false, victimCharacterId: OtherCharacterId, victimShipTypeId: 670);
+        InsertKillmail(database, 700036, ApplicationClock.UtcNow.AddDays(-25), isQualifying: false, victimCharacterId: OtherCharacterId, victimShipTypeId: 670);
         InsertAttacker(database, 700036, ScannedCharacterId);
 
         await cache.RemoveExpiredAsync();
@@ -273,7 +274,7 @@ public sealed class RecentKillmailCacheTests
         PurgePassStats? stats = null;
         var (database, cache) = CreateCache(recentWindowDays: 14, passCompleted: value => stats = value);
 
-        InsertNonQualifyingKillmails(database, 720001, 401, DateTimeOffset.UtcNow.AddDays(-20));
+        InsertNonQualifyingKillmails(database, 720001, 401, ApplicationClock.UtcNow.AddDays(-20));
 
         await cache.RemoveExpiredAsync();
 
@@ -290,7 +291,7 @@ public sealed class RecentKillmailCacheTests
         PurgePassStats? stats = null;
         var (database, cache) = CreateCache(recentWindowDays: 14, passCompleted: value => stats = value);
 
-        InsertKillmail(database, 720101, DateTimeOffset.UtcNow.AddDays(-5), isQualifying: false);
+        InsertKillmail(database, 720101, ApplicationClock.UtcNow.AddDays(-5), isQualifying: false);
 
         await cache.RemoveExpiredAsync();
 
@@ -316,7 +317,7 @@ public sealed class RecentKillmailCacheTests
                 command.ExecuteNonQuery();
             });
 
-        InsertNonQualifyingKillmails(database, 730001, 3, DateTimeOffset.UtcNow.AddDays(-20));
+        InsertNonQualifyingKillmails(database, 730001, 3, ApplicationClock.UtcNow.AddDays(-20));
 
         await cache.RemoveExpiredAsync();
 
@@ -340,9 +341,9 @@ public sealed class RecentKillmailCacheTests
                 InsertAttacker(database, 730011, ScannedCharacterId);
             });
 
-        InsertKillmail(database, 730011, DateTimeOffset.UtcNow.AddDays(-20), isQualifying: false);
+        InsertKillmail(database, 730011, ApplicationClock.UtcNow.AddDays(-20), isQualifying: false);
         InsertAttacker(database, 730011, OtherCharacterId);
-        InsertKillmail(database, 730012, DateTimeOffset.UtcNow.AddDays(-21), isQualifying: false);
+        InsertKillmail(database, 730012, ApplicationClock.UtcNow.AddDays(-21), isQualifying: false);
         InsertAttacker(database, 730012, OtherCharacterId);
 
         await cache.RemoveExpiredAsync();
@@ -357,13 +358,13 @@ public sealed class RecentKillmailCacheTests
     {
         var (database, cache) = CreateCache(recentWindowDays: 14);
 
-        InsertKillmail(database, 730021, DateTimeOffset.UtcNow.AddDays(-20), isQualifying: false);
+        InsertKillmail(database, 730021, ApplicationClock.UtcNow.AddDays(-20), isQualifying: false);
         InsertAttacker(database, 730021, OtherCharacterId);
         InsertAttacker(database, 730021, ScannedCharacterId);
-        InsertKillmail(database, 730022, DateTimeOffset.UtcNow.AddDays(-20), isQualifying: true);
+        InsertKillmail(database, 730022, ApplicationClock.UtcNow.AddDays(-20), isQualifying: true);
         InsertAttacker(database, 730022, OtherCharacterId);
         InsertAttacker(database, 730022, ScannedCharacterId);
-        InsertKillmail(database, 730023, DateTimeOffset.UtcNow.AddDays(-2), isQualifying: false);
+        InsertKillmail(database, 730023, ApplicationClock.UtcNow.AddDays(-2), isQualifying: false);
         InsertAttacker(database, 730023, OtherCharacterId);
 
         await cache.RemoveExpiredAsync();
@@ -388,7 +389,7 @@ public sealed class RecentKillmailCacheTests
                 Thread.Sleep(400);
             });
 
-        InsertNonQualifyingKillmails(database, 740001, 401, DateTimeOffset.UtcNow.AddDays(-20));
+        InsertNonQualifyingKillmails(database, 740001, 401, ApplicationClock.UtcNow.AddDays(-20));
 
         var pass = Task.Run(() => cache.RemoveExpiredAsync());
 
@@ -421,7 +422,7 @@ public sealed class RecentKillmailCacheTests
                     cancellation.Cancel();
             });
 
-        InsertNonQualifyingKillmails(database, 750001, 401, DateTimeOffset.UtcNow.AddDays(-20));
+        InsertNonQualifyingKillmails(database, 750001, 401, ApplicationClock.UtcNow.AddDays(-20));
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => cache.RemoveExpiredAsync(cancellation.Token));
 
@@ -448,7 +449,7 @@ public sealed class RecentKillmailCacheTests
                     freelistBeforeLastBatch = FreelistCount(database);
             });
 
-        InsertNonQualifyingKillmails(database, 760001, 401, DateTimeOffset.UtcNow.AddDays(-20));
+        InsertNonQualifyingKillmails(database, 760001, 401, ApplicationClock.UtcNow.AddDays(-20));
 
         await cache.RemoveExpiredAsync();
 
@@ -496,7 +497,7 @@ public sealed class RecentKillmailCacheTests
                                   ) VALUES (
                                       {killmailId}, 'hash{killmailId}', {killTimeUtc.ToUnixTimeSeconds()}, 30000142, 40000001,
                                       NULL, 587, 1,
-                                      0, 0, 0, {DateTimeOffset.UtcNow.ToUnixTimeSeconds()}
+                                      0, 0, 0, {ApplicationClock.UtcNow.ToUnixTimeSeconds()}
                                   );
                                   INSERT INTO main.zkill_killmail_attackers (
                                       killmail_id, character_id, corporation_id, alliance_id, ship_type_id, weapon_type_id
@@ -553,7 +554,7 @@ public sealed class RecentKillmailCacheTests
                               ) VALUES (
                                   {characterId},
                                   1,
-                                  {DateTimeOffset.UtcNow.ToUnixTimeSeconds()}
+                                  {ApplicationClock.UtcNow.ToUnixTimeSeconds()}
                               );
                               """;
         command.ExecuteNonQuery();
@@ -597,7 +598,7 @@ public sealed class RecentKillmailCacheTests
                                   {(isSolo ? "1" : "0")},
                                   0,
                                   {(isQualifying ? "1" : "0")},
-                                  {DateTimeOffset.UtcNow.ToUnixTimeSeconds()}
+                                  {ApplicationClock.UtcNow.ToUnixTimeSeconds()}
                               );
                               """;
         command.ExecuteNonQuery();

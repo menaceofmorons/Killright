@@ -1,3 +1,4 @@
+using Killright.Shared.Time;
 using Killright.Core.Models;
 using Killright.Core.Style;
 using Killright.Integration.zKill;
@@ -47,7 +48,7 @@ public sealed class PilotReportRowFactoryTests
     [Fact]
     public void FromPilot_KillsAndSolos_MatchWeekComponents()
     {
-        var activity = new zKillActivity(95465499, true, 4, 2, null, null, DateTimeOffset.UtcNow);
+        var activity = new zKillActivity(95465499, true, 4, 2, null, null, ApplicationClock.UtcNow);
 
         var row = PilotReportRowFactory.FromPilot(
             CreatePilot(), activity, null, StyleClassification.Solo, false, "1", false, false, null);
@@ -60,7 +61,7 @@ public sealed class PilotReportRowFactoryTests
     [Fact]
     public void FromPilot_InfoWeek_KillsAndSolosMatchGridWeekAndLossesComeFromDerivedActivity()
     {
-        var activity = new zKillActivity(95465499, true, 4, 2, null, null, DateTimeOffset.UtcNow);
+        var activity = new zKillActivity(95465499, true, 4, 2, null, null, ApplicationClock.UtcNow);
         var derived = new PilotDerivedActivity(true, 4, 2, null, null, null, 3);
 
         var row = PilotReportRowFactory.FromPilot(
@@ -75,7 +76,7 @@ public sealed class PilotReportRowFactoryTests
     [Fact]
     public void FromPilot_InfoWeekZeroOrMissing_DisplaysDash()
     {
-        var activity = new zKillActivity(95465499, true, 0, 2, null, null, DateTimeOffset.UtcNow);
+        var activity = new zKillActivity(95465499, true, 0, 2, null, null, ApplicationClock.UtcNow);
         var derived = new PilotDerivedActivity(true, 0, 2, null, null, null, 0);
 
         var row = PilotReportRowFactory.FromPilot(
@@ -96,7 +97,7 @@ public sealed class PilotReportRowFactoryTests
     [Fact]
     public void FromPilot_WeekSideIsZero_DisplaysDashPerZeroDisplayRule()
     {
-        var activity = new zKillActivity(95465499, true, 0, 2, null, null, DateTimeOffset.UtcNow);
+        var activity = new zKillActivity(95465499, true, 0, 2, null, null, ApplicationClock.UtcNow);
 
         var row = PilotReportRowFactory.FromPilot(
             CreatePilot(), activity, null, StyleClassification.Solo, false, "1", false, false, null);
@@ -234,7 +235,7 @@ public sealed class PilotReportRowFactoryTests
     [InlineData(false, false, true, "zKillboard recent killmails")]
     public void FromPilot_FailureFlags_ClassifyStatsFailureSource(bool engineFailed, bool statisticsCallFailed, bool recentCallFailed, string expectedSource)
     {
-        var activity = new zKillActivity(95465499, true, 1, 0, null, null, DateTimeOffset.UtcNow);
+        var activity = new zKillActivity(95465499, true, 1, 0, null, null, ApplicationClock.UtcNow);
 
         var row = PilotReportRowFactory.FromPilot(
             CreateAffiliatedPilot(),
@@ -262,7 +263,7 @@ public sealed class PilotReportRowFactoryTests
     [Fact]
     public void FromPilot_NoFailures_StatsFailureSourceIsNull()
     {
-        var activity = new zKillActivity(95465499, true, 1, 0, null, null, DateTimeOffset.UtcNow);
+        var activity = new zKillActivity(95465499, true, 1, 0, null, null, ApplicationClock.UtcNow);
 
         var row = PilotReportRowFactory.FromPilot(
             CreateAffiliatedPilot(), activity, null, StyleClassification.Unknown, false, "Unk", false, false, null);
@@ -273,7 +274,7 @@ public sealed class PilotReportRowFactoryTests
     [Fact]
     public void FromPilot_LatestActivityIsLossButRecentKillExists_LastKillShowsKillAge()
     {
-        var now = DateTimeOffset.UtcNow;
+        var now = ApplicationClock.UtcNow;
         var activity = new zKillActivity(
             95465499, true, 1, 0, now.AddHours(-2), zKillActivityType.Loss, now, LastKillUtc: now.AddDays(-3));
 
@@ -286,7 +287,7 @@ public sealed class PilotReportRowFactoryTests
     [Fact]
     public void FromPilot_LatestActivityIsLossAndNoKill_LastKillIsDash()
     {
-        var now = DateTimeOffset.UtcNow;
+        var now = ApplicationClock.UtcNow;
         var activity = new zKillActivity(
             95465499, true, 0, 0, now.AddHours(-2), zKillActivityType.Loss, now);
 
@@ -322,7 +323,7 @@ public sealed class PilotReportRowFactoryTests
     [Fact]
     public void FromPilot_LatestActivityIsKillAndLastKillIsSet_LastKillShowsTheStoredValue()
     {
-        var now = DateTimeOffset.UtcNow;
+        var now = ApplicationClock.UtcNow;
         var activity = new zKillActivity(
             95465499, true, 1, 0, now.AddHours(-4.5), zKillActivityType.Kill, now, LastKillUtc: now.AddHours(-4.5));
 
@@ -335,7 +336,7 @@ public sealed class PilotReportRowFactoryTests
     [Fact]
     public void FromPilot_LastKillIsNull_LastKillIsDashWhateverLastActiveUtcIs()
     {
-        var now = DateTimeOffset.UtcNow;
+        var now = ApplicationClock.UtcNow;
         var activity = new zKillActivity(
             95465499, true, 1, 0, now.AddHours(-4.5), zKillActivityType.Kill, now);
 
@@ -348,7 +349,7 @@ public sealed class PilotReportRowFactoryTests
     [Fact]
     public void FromPilot_StoredLastKillOlderThanThirtyDaysAndLatestActivityIsLoss_LastKillShowsOverflowMarker()
     {
-        var now = DateTimeOffset.UtcNow;
+        var now = ApplicationClock.UtcNow;
         var activity = new zKillActivity(
             95465499, true, 0, 0, now.AddHours(-2), zKillActivityType.Loss, now, LastKillUtc: now.AddDays(-90));
 
@@ -361,7 +362,7 @@ public sealed class PilotReportRowFactoryTests
     [Fact]
     public void FromPilot_LastKillKnownWithoutPublicActivityData_LastKillStillShowsTheAge()
     {
-        var now = DateTimeOffset.UtcNow;
+        var now = ApplicationClock.UtcNow;
         var activity = new zKillActivity(
             95465499, false, 0, 0, null, null, now, LastKillUtc: now.AddDays(-12));
 

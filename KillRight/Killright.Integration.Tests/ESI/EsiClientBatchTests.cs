@@ -188,7 +188,7 @@ public sealed class EsiClientBatchTests
 
         Assert.Null(await client.GetCharacterDetailsAsync(91321792));
         Assert.Null(await client.GetCharacterDetailsAsync(91321792));
-        Assert.Equal(1, handler.Requests.Count);
+        Assert.Single(handler.Requests);
         Assert.Equal(1, client.RequestCount);
 
         now = now.AddSeconds(31);
