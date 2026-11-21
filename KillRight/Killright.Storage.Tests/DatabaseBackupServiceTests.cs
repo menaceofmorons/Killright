@@ -147,6 +147,37 @@ public sealed class DatabaseBackupServiceTests
     }
 
     [Fact]
+    public async Task BackupAsync_ChangeOnlyInAStagingTable_DoesNotCreateANewCopy()
+    {
+        var clock = new FakeClock();
+        var fixture = CreateFixture(rotationCount: 5, clock);
+        InsertKillmail(fixture.Database, 800090);
+        Execute(fixture.Database, "CREATE TABLE main.sde_types_staging (type_id INTEGER NOT NULL PRIMARY KEY, name TEXT NOT NULL);");
+        await fixture.Service.BackupAsync();
+
+        Execute(fixture.Database, "INSERT INTO main.sde_types_staging (type_id, name) VALUES (587, 'Rifter');");
+        clock.Advance(TimeSpan.FromSeconds(5));
+        await fixture.Service.BackupAsync();
+
+        Assert.Single(BackupFiles(fixture.Folder));
+    }
+
+    [Fact]
+    public async Task BackupAsync_TableNameContainingAQuote_IsEscapedAndItsChangesTriggerACopy()
+    {
+        var clock = new FakeClock();
+        var fixture = CreateFixture(rotationCount: 5, clock);
+        Execute(fixture.Database, "CREATE TABLE main.\"odd\"\"name\" (id INTEGER NOT NULL PRIMARY KEY);");
+        await fixture.Service.BackupAsync();
+
+        Execute(fixture.Database, "INSERT INTO main.\"odd\"\"name\" (id) VALUES (1);");
+        clock.Advance(TimeSpan.FromSeconds(5));
+        await fixture.Service.BackupAsync();
+
+        Assert.Equal(2, BackupFiles(fixture.Folder).Length);
+    }
+
+    [Fact]
     public async Task BackupAsync_OldParquetFolders_AreIgnoredAndNeverDeleted()
     {
         var clock = new FakeClock();

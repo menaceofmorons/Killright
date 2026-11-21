@@ -12,6 +12,7 @@ public sealed class DatabaseBackupService : IDatabaseBackupService
     private const string BackupFilePrefix = "KillRight-";
     private const string BackupFileExtension = ".db";
     private const string FingerprintExtension = ".fingerprint";
+    private const string StagingSuffix = "_staging";
     private const string TemporaryExtension = ".tmp";
 
     private readonly KillRightDatabase _database;
@@ -179,7 +180,7 @@ public sealed class DatabaseBackupService : IDatabaseBackupService
             AppendText(hash, table);
 
             using var command = connection.CreateCommand();
-            command.CommandText = $"SELECT * FROM main.\"{table}\" ORDER BY rowid;";
+            command.CommandText = $"SELECT * FROM main.\"{table.Replace("\"", "\"\"")}\" ORDER BY rowid;";
 
             using var reader = command.ExecuteReader();
 
@@ -204,7 +205,12 @@ public sealed class DatabaseBackupService : IDatabaseBackupService
         using var reader = command.ExecuteReader();
 
         while (reader.Read())
-            tables.Add(reader.GetString(0));
+        {
+            var name = reader.GetString(0);
+
+            if (!name.EndsWith(StagingSuffix, StringComparison.Ordinal))
+                tables.Add(name);
+        }
 
         return tables;
     }
