@@ -35,4 +35,4 @@
 - Modules are split by feature, each with a `mod_<name>.rs`; contract types are re-exported with `pub use`; internals are `pub(crate)`.
 - Only `lib.rs` reads the clock; analysers take `now` as a parameter.
 - Tests are inline `#[cfg(test)] mod tests` with `use super::*;`, named by behaviour in snake_case.
-- `env!("CARGO_MANIFEST_DIR")` is fixed at compile time and can name a removed directory when a compiled test binary is reused; tests read `std::env::var("CARGO_MANIFEST_DIR")` at run time.
+- Tests use no compile-time absolute path (`env!("CARGO_MANIFEST_DIR")`, `file!()`-based paths): with a shared target directory a reused test binary names another checkout, or a removed one. Read `std::env::var("CARGO_MANIFEST_DIR")` at run time, with no `env!` fallback.

@@ -1626,7 +1626,7 @@ mod tests {
 
     fn shipped_settings_path() -> String {
         let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
-            .unwrap_or_else(|_| env!("CARGO_MANIFEST_DIR").to_string());
+            .expect("cargo sets CARGO_MANIFEST_DIR when it runs the tests");
         format!("{manifest_dir}/../KillRight/Killright.UI/config/settings.json")
     }
 
