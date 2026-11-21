@@ -4,6 +4,7 @@
 - File-scoped namespaces; the namespace matches the folder path, letter case included.
 - Classes and records are `sealed` unless built for inheritance.
 - Models are records with `required` and `init` members.
+- A tuple element is never named `Rest` (CS8126).
 - Private fields are `_camelCase`; braces on their own lines.
 
 ## Nullable

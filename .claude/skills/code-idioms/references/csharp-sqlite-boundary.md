@@ -15,6 +15,7 @@
 - Read nullable columns through the `GetNullable*` helpers; never read a nullable column with a non-null reader.
 - Parse stored enum text with `TryParse`, so a renamed member does not throw on read.
 - Times leave Storage for the engine as round-trip strings (`"O"`); sub-second precision is dropped on the way in.
+- SQLite columns are dynamically typed and `DataTable.Load` types each column from the first row; load into explicit string columns.
 
 ## Errors
 - Catch `SqliteException` only where there is a specific recovery (corruption quarantine); other storage failures throw to a caller that records them.

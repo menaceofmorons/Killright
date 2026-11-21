@@ -9,3 +9,4 @@
 - Schema version and the Alpha lock live in a `schema_metadata` table, not `user_version`.
 - Backup is `VACUUM INTO` a `.tmp` file, then a move; restore and quarantine move the `-wal` and `-shm` files with the database.
 - Tests use a temp-file database per test.
+- `PRAGMA data_version` is per connection and cannot show changes between runs; detect a whole-database change by hashing table content.

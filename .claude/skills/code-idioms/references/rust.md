@@ -11,6 +11,7 @@
 - Expected failures are `Result` values that end as a `failure` code in the JSON response.
 - Panic only on a bug; prefer `expect` with the reason it cannot fail over `unwrap`.
 - No panic reachable from request data: no unchecked indexing, lossy `as` casts or unchecked arithmetic on input (use `get`, `try_from`, `checked_*`).
+- `f64::max` and `f64::min` return the other operand when one is NaN, so check `is_finite()` before a clamp that precedes a checked numeric conversion.
 - Keep the cause: never a `map_err` that discards the original error.
 - `Drop` implementations never panic or block.
 
@@ -34,3 +35,4 @@
 - Modules are split by feature, each with a `mod_<name>.rs`; contract types are re-exported with `pub use`; internals are `pub(crate)`.
 - Only `lib.rs` reads the clock; analysers take `now` as a parameter.
 - Tests are inline `#[cfg(test)] mod tests` with `use super::*;`, named by behaviour in snake_case.
+- `env!("CARGO_MANIFEST_DIR")` is fixed at compile time and can name a removed directory when a compiled test binary is reused; tests read `std::env::var("CARGO_MANIFEST_DIR")` at run time.
