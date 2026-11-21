@@ -46,3 +46,4 @@ metadata:
 - An unshown WPF window can be laid out in tests by measuring and arranging its content; the custom `TabControl` template has no named content host, so find the row 1 `Border` of its `Grid` (WS-1.8)
 - A C# named tuple element called `Rest` is rejected (CS8126); use another name (WS-1.8)
 - Test seed rows timestamped with SQL `unixepoch()` ignore `ApplicationClock`; take seed times from the application clock (WS-1.Integration)
+- With the shared `CARGO_TARGET_DIR`, cargo reuses a test binary built in another worktree, so a path baked in with `env!("CARGO_MANIFEST_DIR")` can point at a removed worktree; read `std::env::var("CARGO_MANIFEST_DIR")` at run time in tests (WS-1.Integration)
