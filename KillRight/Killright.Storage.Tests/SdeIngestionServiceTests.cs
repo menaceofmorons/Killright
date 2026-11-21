@@ -1,3 +1,4 @@
+using Killright.Shared.Time;
 using System.IO.Compression;
 using System.Text;
 using Killright.Integration.Sde;
@@ -39,7 +40,7 @@ public sealed class SdeIngestionServiceTests
             SolarSystems: [],
             NpcCorporationIds: [],
             BuildNumber: 3542233,
-            UpdatedUtc: DateTimeOffset.UtcNow.AddDays(-1),
+            UpdatedUtc: ApplicationClock.UtcNow.AddDays(-1),
             Factions: [new SdeFaction(500001, "Caldari State")]));
 
         var client = new FakeSdeClient(manifestBuildNumber: 3542233, zipContentsFactory: BuildValidZip);
@@ -76,7 +77,7 @@ public sealed class SdeIngestionServiceTests
             SolarSystems: [],
             NpcCorporationIds: [],
             BuildNumber: 100,
-            UpdatedUtc: DateTimeOffset.UtcNow.AddDays(-2),
+            UpdatedUtc: ApplicationClock.UtcNow.AddDays(-2),
             Factions: [new SdeFaction(500001, "Caldari State")]));
 
         var client = new FakeSdeClient(manifestBuildNumber: 200, zipContentsFactory: BuildZipWithoutFactions);
@@ -100,8 +101,8 @@ public sealed class SdeIngestionServiceTests
             SolarSystems: [],
             NpcCorporationIds: [],
             BuildNumber: 3542233,
-            UpdatedUtc: DateTimeOffset.UtcNow));
-        await store.RecordCheckAsync(DateTimeOffset.UtcNow, "UpToDate", succeeded: true);
+            UpdatedUtc: ApplicationClock.UtcNow));
+        await store.RecordCheckAsync(ApplicationClock.UtcNow, "UpToDate", succeeded: true);
 
         Assert.False(await store.HasReferenceDataAsync());
 
@@ -119,7 +120,7 @@ public sealed class SdeIngestionServiceTests
     public async Task RunCheckAsync_CalledAgainWithinCheckInterval_SkipsManifestCallEntirely()
     {
         var (_, store) = CreateStore();
-        await store.RecordCheckAsync(DateTimeOffset.UtcNow, "UpToDate", succeeded: true);
+        await store.RecordCheckAsync(ApplicationClock.UtcNow, "UpToDate", succeeded: true);
 
         var client = new FakeSdeClient(manifestBuildNumber: 3542233, zipContentsFactory: BuildValidZip);
 
@@ -252,7 +253,7 @@ public sealed class SdeIngestionServiceTests
             SolarSystems: [],
             NpcCorporationIds: [],
             BuildNumber: 100,
-            UpdatedUtc: DateTimeOffset.UtcNow.AddDays(-2),
+            UpdatedUtc: ApplicationClock.UtcNow.AddDays(-2),
             Factions: [new SdeFaction(500001, "Caldari State")]));
     }
 

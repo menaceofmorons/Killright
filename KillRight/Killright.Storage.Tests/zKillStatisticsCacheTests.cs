@@ -1,4 +1,5 @@
 using Microsoft.Data.Sqlite;
+using Killright.Shared.Time;
 using Killright.Shared.zKill;
 using Killright.Storage.Database;
 using Killright.Storage.zKill;
@@ -142,7 +143,7 @@ public sealed class zKillStatisticsCacheTests
                 character_id, ships_destroyed, solo_kills, solo_ratio, avg_gang_size,
                 ships_lost, solo_losses, general_style, checked_at_utc
             ) VALUES (
-                {characterId}, 1, 0, 0.0, 0.0, 0, 0, 'Solo', unixepoch()
+                {characterId}, 1, 0, 0.0, 0.0, 0, 0, 'Solo', {ApplicationClock.UtcNow.ToUnixTimeSeconds()}
             );
             """;
         command.ExecuteNonQuery();
@@ -158,7 +159,7 @@ public sealed class zKillStatisticsCacheTests
                 character_id, ships_destroyed, solo_kills, solo_ratio, avg_gang_size,
                 ships_lost, solo_losses, general_style, months_processed, no_history_marker, checked_at_utc, pod_losses
             ) VALUES (
-                {characterId}, 40, 10, 60.0, 3.0, 5, 2, 'Solo', 1, 0, unixepoch(), 0
+                {characterId}, 40, 10, 60.0, 3.0, 5, 2, 'Solo', 1, 0, {ApplicationClock.UtcNow.ToUnixTimeSeconds()}, 0
             );
             """;
         command.ExecuteNonQuery();
@@ -174,7 +175,7 @@ public sealed class zKillStatisticsCacheTests
                 character_id, ships_destroyed, solo_kills, solo_ratio, avg_gang_size,
                 ships_lost, solo_losses, general_style, months_processed, no_history_marker, checked_at_utc, pod_kills
             ) VALUES (
-                {characterId}, 40, 10, 60.0, 3.0, 5, 2, 'Solo', 1, 0, unixepoch(), 1
+                {characterId}, 40, 10, 60.0, 3.0, 5, 2, 'Solo', 1, 0, {ApplicationClock.UtcNow.ToUnixTimeSeconds()}, 1
             );
             """;
         command.ExecuteNonQuery();
