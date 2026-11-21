@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Killright.Storage.Database;
 using Killright.Storage.Killmails;
+using Microsoft.Data.Sqlite;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -12,26 +13,50 @@ public sealed class PerformanceVerificationTests(ITestOutputHelper output)
     private const int AttackersPerKillmail = 5;
 
     [Fact]
+    [Trait("Category", "Performance")]
     public async Task LargeDatabase_StartupQuickCheckAndShutdownFingerprint_AreTimed()
     {
         var path = Path.Combine(Path.GetTempPath(), $"performanceVerification.{Guid.NewGuid():N}.db");
         var folder = Path.Combine(Path.GetTempPath(), $"performanceVerificationBackups.{Guid.NewGuid():N}");
-        var database = new KillRightDatabase(new KillRightDatabaseOptions { DatabasePath = path });
-        database.EnsureCreated();
-        Generate(database);
-        var service = new DatabaseBackupService(database, folder, 2);
+        try
+        {
+            var database = new KillRightDatabase(new KillRightDatabaseOptions { DatabasePath = path });
+            database.EnsureCreated();
+            Generate(database);
+            var service = new DatabaseBackupService(database, folder, 2);
 
-        var quickCheck = Time(() => Assert.False(database.QuarantineIfCorrupt()));
-        var firstBackup = await TimeAsync(() => service.BackupAsync());
-        var fingerprintOnly = await TimeAsync(() => service.BackupAsync());
+            var quickCheck = Time(() => Assert.False(database.QuarantineIfCorrupt()));
+            var firstBackup = await TimeAsync(() => service.BackupAsync());
+            var fingerprintOnly = await TimeAsync(() => service.BackupAsync());
 
-        var sizeMb = new FileInfo(path).Length / (1024.0 * 1024.0);
-        output.WriteLine($"generated: {KillmailCount} killmails, {KillmailCount * AttackersPerKillmail} attacker rows, {sizeMb:F1} MB");
-        output.WriteLine($"startup quick_check: {quickCheck.TotalMilliseconds:F0} ms");
-        output.WriteLine($"first backup (fingerprint + copy): {firstBackup.TotalMilliseconds:F0} ms");
-        output.WriteLine($"shutdown fingerprint, unchanged (skip): {fingerprintOnly.TotalMilliseconds:F0} ms");
+            var sizeMb = new FileInfo(path).Length / (1024.0 * 1024.0);
+            output.WriteLine($"generated: {KillmailCount} killmails, {KillmailCount * AttackersPerKillmail} attacker rows, {sizeMb:F1} MB");
+            output.WriteLine($"startup quick_check: {quickCheck.TotalMilliseconds:F0} ms");
+            output.WriteLine($"first backup (fingerprint + copy): {firstBackup.TotalMilliseconds:F0} ms");
+            output.WriteLine($"shutdown fingerprint, unchanged (skip): {fingerprintOnly.TotalMilliseconds:F0} ms");
 
-        Assert.Single(Directory.GetFiles(folder, "KillRight-*.db"));
+            Assert.Single(Directory.GetFiles(folder, "KillRight-*.db"));
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            DeleteDatabaseFiles(path);
+            if (Directory.Exists(folder))
+            {
+                Directory.Delete(folder, true);
+            }
+        }
+    }
+
+    private static void DeleteDatabaseFiles(string path)
+    {
+        foreach (var file in new[] { path, path + "-wal", path + "-shm", path + "-journal" })
+        {
+            if (File.Exists(file))
+            {
+                File.Delete(file);
+            }
+        }
     }
 
     private static void Generate(KillRightDatabase database)
