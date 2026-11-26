@@ -38,7 +38,7 @@ Every worktree builds in its own checkout, so a toolchain that keeps its build o
 
 | Toolchain | Redirect | Check | Requires |
 | --- | --- | --- | --- |
-| Rust | user variable `CARGO_TARGET_DIR` set to a folder outside any synced folder (`C:/BuildCache/cargo`) | `py -c "import os, sys; sys.exit(0 if os.environ.get('CARGO_TARGET_DIR') else 1)"` | `killright_engine/Cargo.toml` |
+| Rust | `sccache`: user variables `RUSTC_WRAPPER` = `sccache` and `SCCACHE_DIR` set to a folder outside any synced folder (`C:/BuildCache/sccache`) | `py -c "import os, sys; sys.exit(0 if os.environ.get('RUSTC_WRAPPER') == 'sccache' and not os.environ.get('CARGO_TARGET_DIR') else 1)"` | `killright_engine/Cargo.toml` |
 
 ## Package Test Commands (package agents / test-runner)
 | Purpose | Command | Requires |
